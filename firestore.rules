@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ユーザーは自分のドキュメントとサブコレクションのみ読み書き可能
+    match /users/{userId}/{documents=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // chatsコレクション（後方互換性のため）
+    match /chats/{userId}/{documents=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // conversationsコレクションは不要（users/{userId}/conversationsで管理）
+    // 念のため残しておくが、アクセス制限は厳しくする
+    match /conversations/{conversationId}/{documents=**} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+  }
+}

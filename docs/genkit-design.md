@@ -1,0 +1,95 @@
+# Genkit利用方針
+
+## 1. 概要
+
+本ドキュメントは、「Confluence仕様書要約チャットボット」のバックエンドロジックを実装する際に使用する **Genkit (core)** の利用方針、標準的な実装パターン、および規約を定義する。
+
+## 2. 基本方針（更新）
+
+* アプリケーションの主要なAI処理は、Genkitの core（`genkit`）を直接呼び出して実装する。
+* `@genkit-ai/flow` および `@genkit-ai/next` は使用しない。
+* Next.js の API Route (`app/api/**`) から、プレーンな関数（LLM生成・検索関数）を直接呼び出す。
+* Google Cloud 連携は `@genkit-ai/googleai` / `@genkit-ai/google-cloud` を利用し、`zod` で入出力のバリデーションを行う。
+
+## 3. Genkitの初期化 (genkit.ts)
+
+プロジェクト全体のGenkit設定は、以下の`src/ai/genkit.ts`の記述を標準とする。Google Cloudのテレメトリー（ロギング、トレース）は`enableGoogleCloudTelemetry()`を呼び出して有効化する。
+
+```typescript
+'use server';
+
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
+import { enableGoogleCloudTelemetry } from '@genkit-ai/google-cloud';
+
+// Google Cloudのロギングとトレースを有効化
+enableGoogleCloudTelemetry();
+
+// GenkitをGoogle AIプラグインで初期化
+export const ai = genkit({
+  plugins: [googleAI()],
+  logLevel: 'debug',
+  enableTracingAndMetrics: true,
+});
+```
+
+## 4. 標準実装（RAG：プレーン関数 + Next API）
+
+### 4.1 プレーン関数（例）
+
+```typescript
+// src/ai/flows/retrieve-relevant-docs.ts
+export async function retrieveRelevantDocs({ question }: { question: string }) {
+  // 省略: ベクトル生成 → Vector Search → Firestore内容取得
+  return results; // JSONシリアライズ可能な配列
+}
+
+// src/ai/flows/summarize-confluence-docs.ts
+export async function summarizeConfluenceDocs({ question, context, chatHistory }) {
+  // 省略: プロンプト生成 → ai.generate({ model, prompt })
+  return { answer, references };
+}
+```
+
+### 4.2 Next API Route
+
+```typescript
+// src/app/api/flow/[flow]/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
+import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs';
+
+export async function POST(req: NextRequest, { params }: { params: { flow: string } }) {
+  try {
+    const body = await req.json();
+    switch (params.flow) {
+      case 'retrieveRelevantDocs': {
+        const { question } = body ?? {};
+        if (!question) return NextResponse.json({ error: 'question is required' }, { status: 400 });
+        const docs = await retrieveRelevantDocs({ question });
+        return NextResponse.json(docs);
+      }
+      case 'summarizeConfluenceDocs': {
+        const result = await summarizeConfluenceDocs(body);
+        return NextResponse.json(result);
+      }
+      default:
+        return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
+    }
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Internal Error' }, { status: 500 });
+  }
+}
+```
+
+## 5. 環境変数と機密情報の管理
+
+APIキーやプロジェクトIDなどの機密情報は、`.env` / デプロイ先の環境変数で管理する。
+
+## 6. GCSとFirestoreの連携
+
+Vector Search実装におけるGCS/Firestoreの役割は従来方針（保存/メタデータ取得）に準ずる。
+
+---
+
+注: 旧方針（`@genkit-ai/flow` および `@genkit-ai/next` による Flow 実装例）は廃止。すべてプレーン関数 + Next API に統一する。
