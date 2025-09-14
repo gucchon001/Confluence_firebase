@@ -276,19 +276,9 @@ async function main() {
     }
   }
 
-  // Vector Searchへのアップロード（インデックスIDが設定されている場合のみ）
-  if (indexId) {
-    try {
-      await uploadToVectorSearch(output, projectId, location, indexId);
-      console.log(`[ingest] Vector Search upload complete for ${output.length} records`);
-    } catch (err) {
-      console.error('[ingest] Vector Search upload failed:', err);
-      console.log('[ingest] Continuing with local file only');
-    }
-  } else {
-    console.log('[ingest] VERTEX_AI_INDEX_ID not set, skipping Vector Search upload');
-    console.log('[ingest] To upload to Vector Search, set VERTEX_AI_INDEX_ID environment variable');
-  }
+  // Vector Searchへのアップロード（バッチ運用に統一のため、本スクリプトでは実行しない）
+  console.log('[ingest] Skipping Vector Search upload (upsertDatapoints is disabled).');
+  console.log('[ingest] Use folder-based import: convert-jsonl-to-json.ts -> upload-to-vector-search.ts');
   
   console.log(`[ingest] Processing complete: ${output.length} records processed`);
   return {
