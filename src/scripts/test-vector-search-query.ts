@@ -216,11 +216,27 @@ async function main() {
     // コマンドライン引数からクエリを取得
     const args = process.argv.slice(2);
     const query = args[0] || '教室登録の仕様について教えてください';
+    // フィルタ: --filter key=value[,key=value]
+    let filters: Record<string, string | string[]> | undefined;
+    const filterArgIdx = args.findIndex((a) => a === '--filter');
+    if (filterArgIdx !== -1) {
+      const spec = args[filterArgIdx + 1] || '';
+      const map: Record<string, string[]> = {};
+      spec.split(',').map((p) => p.trim()).filter(Boolean).forEach((kv) => {
+        const eq = kv.indexOf('=');
+        if (eq === -1) return;
+        const k = kv.slice(0, eq).trim();
+        const v = kv.slice(eq + 1).trim();
+        if (!k) return;
+        map[k] = map[k] ? [...map[k], v] : [v];
+      });
+      filters = Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v.length === 1 ? v[0] : v]));
+    }
     
     console.log(`Starting Vector Search query test with query: "${query}"`);
     
     // Vector Search APIでクエリを実行
-    await searchVectorIndex(query);
+    await searchVectorIndex(query, filters);
     
     console.log('\nVector Search query test completed successfully');
     

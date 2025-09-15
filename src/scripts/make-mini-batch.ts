@@ -20,11 +20,18 @@ async function main() {
   const file = storage.bucket(bucket).file(filePath);
   const [buf] = await file.download();
   const arr = JSON.parse(buf.toString('utf8')) as any[];
-  const sliced = arr.slice(0, count).map((r) => ({ id: r.id ?? r.datapointId, embedding: r.embedding ?? r.featureVector, restricts: r.restricts || [] }));
+  const sliced = arr
+    .slice(0, count)
+    .map((r) => ({
+      id: r.id ?? r.datapointId,
+      embedding: r.embedding ?? r.featureVector,
+      restricts: Array.isArray(r.restricts) ? r.restricts : [],
+    }));
 
+  // JSON ファイルだが内容は JSONL（1行=1レコード）として保存
   const local = path.resolve('temp', 'mini-data.json');
   fs.mkdirSync(path.dirname(local), { recursive: true });
-  fs.writeFileSync(local, JSON.stringify(sliced));
+  fs.writeFileSync(local, sliced.map((o) => JSON.stringify(o)).join('\n'), { encoding: 'utf8' });
 
   await storage.bucket(bucket).upload(local, { destination: destPath, contentType: 'application/json' });
   const outFolder = `gs://${bucket}/${baseDir}/${batchDir}/`;
