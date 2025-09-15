@@ -6,7 +6,7 @@
 
 ## 2. コレクション構造
 
-本アプリケーションのデータは、以下の2つの主要なコレクション構造で管理する。
+本アプリケーションのデータは、以下の主要なコレクション構造で管理する。
 
 ```
 [Root]
@@ -17,10 +17,6 @@
 │           └── {conversationId} (Document)
 │               // 会話のメタデータとメッセージ履歴
 │
-├── chunks (Collection)
-│   └── {pageId}-{chunkIndex} (Document)
-│       // Vector Search検索結果表示用のメタデータ
-│
 └── syncLogs (Collection)
     └── {logId} (Document)
         // バッチ同期やGCSアップロードなどの実行ログ
@@ -28,7 +24,6 @@
 
 * **users**: 全ユーザーの情報と会話履歴を格納するコレクション。
 * **conversations**: 各ユーザーに紐づく会話の履歴を格納するサブコレクション。
-* **chunks**: Vector Search検索結果表示用のチャンクメタデータを格納するコレクション。
 * **syncLogs**: 同期処理やアップロード処理の監視用ログを格納するコレクション（`operation`, `status`, `data`, `timestamp`）。
 
 ## 3. ドキュメントスキーマ
@@ -77,44 +72,27 @@
 | `spaceName`  | `string`   |      | 参照元のConfluenceスペース名。    |
 | `lastUpdated`| `string`   |      | 参照元ページの最終更新日時。      |
 
-### 3.3 `chunks/{pageId}-{chunkIndex}`
-
-Vector Search検索結果表示用のチャンクメタデータを格納する。
-
-| フィールド名   | データ型       | 必須 | 説明                                |
-| :------------- | :------------- | :--- | :---------------------------------- |
-| `pageId`       | `string`       | ✔    | Confluenceページの一意識別子。      |
-| `chunkIndex`   | `number`       | ✔    | ページ内でのチャンクの順序インデックス。 |
-| `title`        | `string`       | ✔    | ページのタイトル。                  |
-| `spaceKey`     | `string`       | ✔    | Confluenceスペースのキー。          |
-| `spaceName`    | `string`       | ✔    | Confluenceスペースの表示名。        |
-| `url`          | `string`       | ✔    | ページへのURL。                     |
-| `content`      | `string`       | ✔    | チャンクのテキスト内容。            |
-| `lastUpdated`  | `string`       | ✔    | ページの最終更新日時。              |
-| `labels`       | `Array<string>`|      | ページに付けられたラベル。          |
-| `createdAt`    | `Timestamp`    | ✔    | このドキュメントが作成（保存）された日時。  |
-
-## 4. GCSとFirestoreの連携
+## 4. LanceDBとFirestoreの役割分担
 
 ### 4.1 データフロー
 
 1. **データ同期時**
    - Confluenceからデータを取得し、チャンク分割
-   - 埋め込みベクトルを含むデータをGCSにJSONとして保存
-   - 埋め込みベクトルを除いたメタデータをFirestoreの`chunks`コレクションに保存
+   - 埋め込みベクトルとメタデータを含むデータをLanceDBに保存
+   - 同期ログをFirestoreの`syncLogs`コレクションに保存
 
 2. **検索時**
-   - Vector Search APIで関連チャンクのIDを取得
-   - IDをもとにFirestoreから詳細メタデータを取得
+   - LanceDBでベクトル検索を実行
+   - 検索結果（メタデータ含む）を直接取得
    - 検索結果をユーザーに表示
 
-### 4.2 GCSとFirestoreの役割分担
+### 4.2 LanceDBとFirestoreの役割分担
 
 | 保存先 | 保存データ | 用途 | 更新頻度 |
 | :----- | :--------- | :--- | :------- |
-| **GCS** | JSONファイル<br>（埋め込みベクトルを含む） | Vector Search APIのバッチ更新 | 1日1回 |
-| **Firestore** | チャンクメタデータ<br>（埋め込みベクトルなし） | 検索結果の詳細表示 | 1日1回 |
+| **LanceDB** | ベクトルデータ<br>メタデータ（タイトル、内容など） | ベクトル検索と検索結果表示 | 1日1回 |
 | **Firestore** | ユーザー情報と会話履歴 | ユーザーの会話管理 | リアルタイム |
+| **Firestore** | 同期ログ | バッチ処理の監視 | バッチ実行時 |
 
 ## 5. セキュリティルール方針
 
@@ -122,8 +100,7 @@ Firestoreのセキュリティルールは、以下の基本方針に基づい�
 
 1. **デフォルト拒否**: 明示的に許可されていないアクセスはすべて拒否する。
 2. **ユーザーデータの保護**: ユーザーは自分自身のデータ (`/users/{userId}`) にのみアクセス（読み書き）できる。
-3. **チャンクデータの読み取り**: 認証済みユーザーは`chunks`コレクションの読み取りのみ可能。
-4. **サーバーからのアクセス**: バックエンド（Cloud Functions）からのデータアクセスは、Admin SDKを使用するため、セキュリティルールの制約を受けない。
+3. **サーバーからのアクセス**: バックエンド（Cloud Functions）からのデータアクセスは、Admin SDKを使用するため、セキュリティルールの制約を受けない。
 
 ```
 rules_version = '2';
@@ -134,10 +111,9 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // 認証済みユーザーはchunksコレクションの読み取りのみ可能
-    match /chunks/{chunkId} {
-      allow read: if request.auth != null;
-      allow write: if false;  // Cloud Functions経由でのみ書き込み可能
+    // syncLogsはAdmin SDKからのみアクセス可能
+    match /syncLogs/{logId} {
+      allow read, write: if false;  // Cloud Functions経由でのみアクセス可能
     }
   }
 }
@@ -150,14 +126,6 @@ service cloud.firestore {
 1. **会話履歴の並び替え**
    - コレクション: `users/{userId}/conversations`
    - フィールド: `updatedAt` (降順)
-
-2. **チャンクのラベルフィルタリング**
-   - コレクション: `chunks`
-   - フィールド: `labels` (配列), `createdAt` (降順)
-
-3. **チャンクのスペースフィルタリング**
-   - コレクション: `chunks`
-   - フィールド: `spaceKey`, `createdAt` (降順)
 
 ## 7. データ移行計画
 

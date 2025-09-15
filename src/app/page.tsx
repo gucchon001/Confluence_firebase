@@ -1,40 +1,12 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Bot } from 'lucide-react';
-import { AuthProviderWrapper, useAuthWrapper } from '@/hooks/use-auth-wrapper';
-import ChatPage from '@/components/chat-page';
-
-function HomeContent() {
-  const { user, loading } = useAuthWrapper();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [loading, user, router]);
-
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Bot className="h-12 w-12 animate-pulse text-primary" />
-      </div>
-    );
-  }
-
-  if (user) {
-    return <ChatPage user={user} />;
-  }
-
-  return null;
-}
+import { SearchForm } from './components/SearchForm';
 
 export default function Home() {
   return (
-    <AuthProviderWrapper>
-      <HomeContent />
-    </AuthProviderWrapper>
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
+        <h1 className="text-4xl font-bold mb-8">Confluence 検索</h1>
+        <SearchForm />
+      </div>
+    </main>
   );
 }

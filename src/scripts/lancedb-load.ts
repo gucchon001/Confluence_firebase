@@ -8,13 +8,16 @@ import path from 'path';
 import * as lancedb from '@lancedb/lancedb';
 
 type InputRecord = {
-  id: string;
-  embedding: number[];
+  id?: string;
+  pageId?: string;
+  chunkIndex?: number;
+  embedding?: number[];
   featureVector?: number[];
   restricts?: any[];
   space_key?: string;
   title?: string;
   labels?: string[];
+  text?: string;
 };
 
 async function readJsonOrJsonl(filePath: string): Promise<InputRecord[]> {
@@ -49,38 +52,63 @@ async function main() {
     return;
   }
 
-  const db = await lancedb.connect(path.resolve('.lancedb'));
+  console.log(`Read ${rows.length} records from ${src}`);
+
+  // LanceDBに接続
+  console.log('Connecting to LanceDB...');
+  const db = await lancedb.connect('.lancedb');
   const tableName = 'confluence';
 
-  const data = rows.map((r) => ({
-    id: r.id,
-    vector: (r.embedding || r.featureVector) as number[],
-    space_key: r.space_key || extractRestrict(r.restricts, 'space_key') || null,
-    title: r.title || extractRestrict(r.restricts, 'title')?.[0] || null,
-    labels: r.labels || extractRestrict(r.restricts, 'label') || [],
-  }));
+  // データの準備
+  const data = rows.map((r) => {
+    // Generate ID if not present
+    const id = r.id || (r.pageId && r.chunkIndex !== undefined ? `${r.pageId}-${r.chunkIndex}` : undefined);
+    
+    // Get embedding vector
+    const vector = r.embedding || r.featureVector;
+    
+    return {
+      id: id || `unknown-${Math.random().toString(36).substring(2, 11)}`,
+      vector: vector,
+      space_key: r.space_key || extractRestrict(r.restricts, 'space_key') || '',
+      title: r.title || extractRestrict(r.restricts, 'title')?.[0] || '',
+      labels: Array.isArray(r.labels) ? r.labels : 
+              Array.isArray(extractRestrict(r.restricts, 'label')) ? 
+              extractRestrict(r.restricts, 'label') : []
+      // textフィールドは削除（既存スキーマと不整合のため）
+    };
+  });
 
-  const schema = {
-    id: 'utf8',
-    vector: { type: 'fixed_size_list', listSize: (data[0]?.vector?.length || 768), field: { type: 'float32' } },
-    space_key: 'utf8',
-    title: 'utf8',
-    labels: { type: 'list', field: { type: 'utf8' } },
-  } as any;
+  console.log(`Prepared ${data.length} records for LanceDB`);
 
-  const exists = (await db.tableNames()).includes(tableName);
-  const tbl = exists
-    ? await db.openTable(tableName)
-    : await db.createTable(tableName, data.slice(0, 0), { schema });
-
-  if (!exists) {
-    await tbl.add(data);
-  } else {
-    // upsert by id
-    await tbl.mergeInsert(data, ['id']);
+  try {
+    // テーブルが存在するか確認
+    const tableNames = await db.tableNames();
+    const exists = tableNames.includes(tableName);
+    
+    if (exists) {
+      console.log(`Table '${tableName}' already exists, opening...`);
+      const tbl = await db.openTable(tableName);
+      
+      // 既存テーブルにデータをマージ
+      console.log(`Merging ${data.length} records into table...`);
+      await tbl.add(data);
+      console.log(`Successfully merged data into table '${tableName}'`);
+      
+      // テーブル情報を表示
+      const stats = await tbl.countRows();
+      console.log(`Table now contains ${stats} rows`);
+    } else {
+      console.log(`Creating new table '${tableName}'...`);
+      const tbl = await db.createTable(tableName, data);
+      console.log(`Successfully created table '${tableName}' with ${data.length} records`);
+    }
+    
+    console.log(`Loaded ${data.length} records into .lancedb/${tableName}`);
+  } catch (error) {
+    console.error('Error working with LanceDB:', error);
+    process.exit(1);
   }
-
-  console.log(`Loaded ${data.length} records into .lancedb/${tableName}`);
 }
 
 function extractRestrict(restricts: any[] | undefined, key: string): any {
@@ -93,5 +121,3 @@ main().catch((e) => {
   console.error(e?.message || e);
   process.exit(1);
 });
-
-

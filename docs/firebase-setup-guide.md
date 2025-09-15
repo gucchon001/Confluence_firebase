@@ -31,9 +31,8 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
 NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 
-# Vertex AI 関連の設定
-VERTEX_AI_PROJECT=your-gcp-project-id
-VERTEX_AI_LOCATION=asia-northeast1
+# 埋め込みモデル設定
+EMBEDDINGS_PROVIDER=local
 ```
 
 ## 2. Firebase認証の設定
@@ -73,18 +72,14 @@ VERTEX_AI_LOCATION=asia-northeast1
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ユーザー認証が必要
-    match /chats/{userId}/{document=**} {
+    // ユーザーは自分のドキュメントとサブコレクションのみ読み書き可能
+    match /users/{userId}/{documents=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    match /conversations/{conversationId} {
-      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-    
-    match /conversations/{conversationId}/messages/{messageId} {
-      allow read, write: if request.auth != null && 
-        get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+    // syncLogsはAdmin SDKからのみアクセス可能
+    match /syncLogs/{logId} {
+      allow read, write: if false;  // Cloud Functions経由でのみアクセス可能
     }
   }
 }
@@ -196,7 +191,7 @@ npm run dev
 
 ## 7. 次のステップ
 
-1. Vertex AI APIの設定
+1. LanceDBの設定
 2. Confluence APIの設定
 3. データ同期バッチの実装
 4. RAG Flowの実装

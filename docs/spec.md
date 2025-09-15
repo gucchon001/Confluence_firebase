@@ -26,25 +26,28 @@ AIによる開発支援、各種Firebaseサービスとのシームレスな統�
 | USR-004 | 参照元リンク表示   | 回答の生成元となったConfluenceのページURLを明記し、ユーザーが一次情報を確認できるようにする。            | 高     |
 | USR-005 | 深掘り質問         | 提示された回答に対して、追加の質問を投げかけることで、会話の文脈を維持したまま詳細な情報を引き出せる。 | 中     |
 | USR-006 | 会話履歴の表示     | 過去の質疑応答の履歴を一覧で確認し、特定の会話を呼び出すことができる。                                 | 中     |
+| USR-007 | 関連ページ表示     | 検索結果に関連する他のConfluenceページを表示し、関連情報へのアクセスを容易にする。                     | 中     |
 
 ## 2.2 システム・管理機能
 
 | ID      | 機能名                 | 機能概要                                                                                             |
 | :------ | :--------------------- | :--------------------------------------------------------------------------------------------------- |
 | SYS-001 | Confluenceデータ同期   | Atlassian APIを介して、指定されたConfluenceスペースから仕様書データを定期的に取得する。                |
-| SYS-002 | ベクトルデータベース更新 | 取得した仕様書データを分割・ベクトル化し、ベクトルデータベースに保存・更新する。この処理は1日1回、夜間に自動実行される。 |
+| SYS-002 | ベクトルデータベース更新 | 取得した仕様書データを分割・ベクトル化し、LanceDBに保存・更新する。この処理は1日1回、夜間に自動実行される。 |
+| SYS-003 | メタデータ一元管理     | 検索に必要なメタデータ（タイトル、スペースキー、ラベルなど）をLanceDBに統合して管理する。            |
 
 # 3. 非機能要件
 
 | 項目         | 要件                                                                                             |
 | :----------- | :----------------------------------------------------------------------------------------------- |
-| パフォーマンス | ユーザーの質問から5秒以内に回答を返すことを目標とする。                                          |
+| パフォーマンス | ユーザーの質問から3秒以内に回答を返すことを目標とする。ベクトル検索は平均7-23msで完了する。      |
 | セキュリティ | ユーザー認証を行い、許可されたユーザーのみが利用できるようにする。Atlassian APIキーなどの機密情報は適切に管理する。 |
 | 可用性       | Firebaseのインフラに準拠し、安定したサービス稼働を目指す。                                         |
+| 拡張性       | 最大10,000ページのConfluenceコンテンツに対応できるスケーラビリティを確保する。                    |
 
 # 4. システムアーキテクチャ
 
-Firebase Studioを開発環境とし、各種FirebaseサービスとGoogle Cloudのサービスを連携させて構築する。
+Firebase Studioを開発環境とし、各種FirebaseサービスとLanceDBを連携させて構築する。
 
 ```mermaid
 graph TD
@@ -52,25 +55,27 @@ graph TD
         A[ブラウザ]
     end
 
-    subgraph Firebase / Google Cloud
-        B[Firebase Hosting] --> C{Firebase Authentication};
-        A --> B[静的Webサイト<br>(React/Next.js)];
-        B --> D[Next.js API Routes<br>(チャットAPI / Genkitで実装)];
-        D --> C;
-        D --> E[Firestore<br>(会話履歴)];
-        D --> F[Vertex AI<br>(Gemini API)];
-        D --> G[Vertex AI Vector Search<br>(ベクトルDB)];
+    subgraph Firebase / Local Development
+        B[Firebase Hosting] --> C{Firebase Authentication}
+        A --> B["静的Webサイト(React/Next.js)"]
+        B --> D["Next.js API Routes(チャットAPI/Genkit実装)"]
+        D --> C
+        D --> E["Firestore(会話履歴・ユーザーデータ)"]
+        D --> F["Google AI(Gemini API)"]
+        D --> G["LanceDB(ローカルベクトルDB)"]
 
-        H[Cloud Scheduler] -- 1日1回実行 --> I[Cloud Functions for Firebase<br>(データ同期バッチ)];
-        I --> J[Atlassian API];
-        J -- Confluenceデータ --> I;
-        I --> F;
-        I --> G;
+        H["Node.js Scheduler"] -- 1日1回実行 --> I["Node.js Scripts(データ同期バッチ)"]
+        I --> J["Atlassian API"]
+        J -- Confluenceデータ --> I
+        I --> K["@xenova/transformers"]
+        K -- 埋め込みベクトル --> I
+        I --> G
     end
 
     subgraph External Service
-        J[Atlassian Confluence];
+        J["Atlassian Confluence"]
     end
+```
 
 # 4.1 使用技術スタック
 
@@ -78,20 +83,48 @@ graph TD
 
 フロントエンド: React (Next.js)
 
-バックエンド: Next.js API Routes + Firebase Cloud Functions
+バックエンド: Next.js API Routes + Node.js Scripts
 
 AIフレームワーク: Genkit (core)
 
 認証: Firebase Authentication
 
-データベース (会話履歴): Firestore
+データベース (会話履歴・ユーザーデータ): Firestore
 
-LLM / Embedding: Google AI - Gemini API (Vertex AI)
-- LLM: gemini-2.5-flash (Gemini Pro)
-- Embedding: text-embedding-004
+LLM / Embedding:
+- LLM: Google AI - Gemini API (gemini-2.5-flash)
+- Embedding: @xenova/transformers (Xenova/all-mpnet-base-v2)
+  - 768次元のベクトル生成
+  - ローカル実行によるコスト削減
+  - API依存なしでオフライン動作可能
+  - 初回ロード後の高速な処理（8-14ms）
 
-ベクトルデータベース: Vertex AI Vector Search
+ベクトルデータベース: LanceDB (ローカルベクトルDB)
+- 高速なローカルベクトル検索
+- 検索時間: 平均7-23ms
+- メモリ効率: 低消費（100回の検索で約0.5MB増加）
+- メタデータ統合管理: 検索結果に必要なメタデータを直接格納
 
-自動化: Cloud Scheduler
+自動化: Node.jsスクリプト + cron
 
 外部API: Atlassian API
+
+# 4.2 データフロー
+
+1. **データ取得・処理フロー**
+   - Confluenceからページデータを取得
+   - HTMLからテキストを抽出
+   - テキストをチャンク分割（1000文字程度、100文字オーバーラップ）
+   - @xenova/transformersによる埋め込みベクトル生成（768次元）
+   - LanceDBにベクトルとメタデータを保存
+
+2. **検索フロー**
+   - ユーザークエリを@xenova/transformersで埋め込みベクトルに変換
+   - LanceDBで類似ベクトル検索
+   - 検索結果（ベクトル+メタデータ）を直接取得
+   - 関連ページの特定と表示
+   - Gemini APIで回答生成
+
+3. **ユーザーデータフロー**
+   - Firebase Authenticationでユーザー認証
+   - Firestoreでユーザー情報と会話履歴を管理
