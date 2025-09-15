@@ -1,20 +1,43 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ユーザーは自分のドキュメントとサブコレクションのみ読み書き可能
-    match /users/{userId}/{documents=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // 認証済みかつ許可されたドメインのユーザーのみアクセス可能
+    function isAllowedUser() {
+      return request.auth != null 
+        && request.auth.token.email_verified == true
+        && (
+          request.auth.token.email.endsWith('@tomonokai-corp.com') || 
+          request.auth.token.email.endsWith('@des')
+        );
     }
-    
-    // chatsコレクション（後方互換性のため）
-    match /chats/{userId}/{documents=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    // 全てのドキュメントに対するアクセス制御
+    match /{document=**} {
+      allow read, write: if isAllowedUser();
     }
-    
-    // conversationsコレクションは不要（users/{userId}/conversationsで管理）
-    // 念のため残しておくが、アクセス制限は厳しくする
-    match /conversations/{conversationId}/{documents=**} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+
+    // チャンクデータ
+    match /chunks/{chunkId} {
+      allow read: if isAllowedUser();
+      allow write: if isAllowedUser();
+    }
+
+    // 同期ログ
+    match /syncLogs/{logId} {
+      allow read: if isAllowedUser();
+      allow write: if isAllowedUser();
+    }
+
+    // ユーザープロファイル
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // チャット履歴
+    match /chats/{chatId} {
+      allow read: if isAllowedUser() && resource.data.userId == request.auth.uid;
+      allow write: if isAllowedUser() && request.resource.data.userId == request.auth.uid;
     }
   }
 }

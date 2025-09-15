@@ -1,59 +1,134 @@
-# Confluence Spec Chat
+# Confluence Firebase
 
-This is a Next.js application that provides a chatbot interface to summarize Confluence specifications and documentation using AI.
+Confluence のコンテンツを Firebase と LanceDB を使って検索・チャットできるアプリケーション
 
-## Core Features
+## 機能
 
-- **Google Authentication**: Secure login with Google accounts.
-- **AI-Powered Chat**: Ask questions about your Confluence documents and get summarized answers.
-- **Source Citing**: Responses include links to the original Confluence pages for reference.
-- **Chat History**: Conversations are saved and loaded from Firestore.
+- Confluence ページのベクトル検索
+- RAG (Retrieval Augmented Generation) によるチャット応答
+- ローカル開発環境のサポート
+- Google アカウントによる認証とドメイン制限
 
-## Getting Started
+## セットアップ
 
-### 1. Set up Environment Variables
+### 前提条件
 
-First, you need to configure your Firebase project details. Create a file named `.env.local` in the root of the project and add your Firebase configuration:
+- Node.js 18 以上
+- Firebase CLI
+- Firebase プロジェクト
+- Confluence API トークン
+
+### 環境変数
+
+`.env` ファイルを作成し、以下の変数を設定:
+
+```
+# Firebase設定
+FIREBASE_PROJECT_ID=confluence-copilot-xxxx
+
+# 埋め込み設定
+EMBEDDINGS_PROVIDER=local  # local / vertex
+
+# Confluence API設定
+CONFLUENCE_BASE_URL=https://<your-domain>.atlassian.net
+CONFLUENCE_USER_EMAIL=<your-email>
+CONFLUENCE_API_TOKEN=<your-api-token>
+CONFLUENCE_SPACE_KEY=<your-space-key>
+
+# Vertex AI設定（EMBEDDINGS_PROVIDER=vertex の場合のみ使用）
+VERTEX_AI_PROJECT_ID=confluence-copilot-xxxx
+VERTEX_AI_LOCATION=asia-northeast1
+VERTEX_AI_EMBEDDING_MODEL=text-embedding-004
+```
+
+### インストール
 
 ```bash
-# You can find these values in your Firebase project settings under "General"
-NEXT_PUBLIC_FIREBASE_API_KEY="your-api-key"
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="your-project-id.firebaseapp.com"
-NEXT_PUBLIC_FIREBASE_PROJECT_ID="your-project-id"
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="your-project-id.appspot.com"
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="your-sender-id"
-NEXT_PUBLIC_FIREBASE_APP_ID="your-app-id"
-```
-
-### 2. Set up Firebase
-
-- **Authentication**: Go to the Firebase console, navigate to the "Authentication" section, and enable the "Google" sign-in provider.
-- **Firestore**: Go to the "Firestore Database" section and create a database.
-
-### 3. Firestore Security Rules
-
-To ensure that users can only access their own chat history, you must set up Firestore security rules. Go to the "Rules" tab in the Firestore section of your Firebase console and paste the following:
-
-```
-rules_version = '2';
-
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Users can only read and write to their own chat history
-    match /chats/{userId}/{documents=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
-
-### 4. Run the Development Server
-
-Now you can install dependencies and run the app.
-
-```bash
+# 依存関係のインストール
 npm install
+
+# Firebase 設定
+firebase login
+firebase use <your-project-id>
+
+# 開発サーバー起動
 npm run dev
 ```
 
-Open [http://localhost:9002](http://localhost:9002) with your browser to see the result.
+## データ同期
+
+### Confluence データの取得と埋め込み
+
+```bash
+# 全データ同期
+npm run sync:confluence:batch
+
+# 差分同期
+npm run sync:confluence:differential
+```
+
+### LanceDB データベースの構築
+
+```bash
+# 既存の埋め込みデータをLanceDBに投入
+npx tsx src/scripts/lancedb-load.ts data/embeddings-CLIENTTOMO.json
+```
+
+## 開発
+
+### ローカル開発サーバー
+
+```bash
+npm run dev
+```
+
+### テスト
+
+```bash
+# 単体テスト
+npm test
+
+# E2Eテスト
+npm run test:e2e
+```
+
+### ビルド
+
+```bash
+npm run build
+```
+
+## デプロイ
+
+### Firebase へのデプロイ
+
+```bash
+# プレビューチャネルへのデプロイ
+firebase hosting:channel:deploy preview
+
+# 本番環境へのデプロイ
+firebase deploy
+```
+
+## アーキテクチャ
+
+### コンポーネント
+
+- **Next.js**: フロントエンド・API
+- **Firebase Authentication**: ユーザー認証
+- **Firestore**: メタデータ・アクセス制御
+- **LanceDB**: ローカルベクトルデータベース
+- **GenKit**: 埋め込み生成・LLM統合
+
+### データフロー
+
+1. Confluence API からデータ取得
+2. テキスト抽出・チャンク分割
+3. 埋め込みベクトル生成（ローカルまたはVertex AI）
+4. LanceDB へのベクトル保存
+5. Firestore へのメタデータ保存
+6. クエリ時にLanceDBで近傍検索→Firestoreでメタデータ取得
+
+## ライセンス
+
+Copyright (c) 2025 Your Company
