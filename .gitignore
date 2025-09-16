@@ -54,3 +54,6 @@ firestore-debug.log
 # artifacts
 debug.log
 \ntemp_build/\n
+
+# LanceDB data
+/.lancedb/

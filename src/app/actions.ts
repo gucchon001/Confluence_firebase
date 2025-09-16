@@ -11,7 +11,7 @@ const SummarizeFlowOutputSchema = z.object({
     title: z.string(),
     url: z.string(),
     spaceName: z.string().optional(),
-    lastUpdated: z.string().optional()
+    lastUpdated: z.string().nullable().optional()
   })).default([]),
 });
 
@@ -20,7 +20,7 @@ const SummarizeFlowOutputSchema = z.object({
 export type AskQuestionOutput = z.infer<typeof SummarizeFlowOutputSchema>;
 
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:9002';
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:9003';
 
 // 汎用的なフロー呼び出し関数 (変更なし)
 async function callFlow<T>(flowId: string, input: any): Promise<T> {
@@ -67,12 +67,26 @@ export async function askQuestion(question: string, chatHistory: any[]): Promise
     );
 
     // ===== [修正点 2] =====
+    // レスポンス構造を確認してログに出力
+    console.log('[askQuestion Action] Raw response structure:', JSON.stringify(summaryResponse, null, 2));
+
+    // sourcesをreferencesに変換（必要な場合）
+    if (summaryResponse && summaryResponse.sources && !summaryResponse.references) {
+      summaryResponse.references = summaryResponse.sources;
+      delete summaryResponse.sources;
+    }
+
     // 修正したZodスキーマでレスポンスを検証
     const parsedResult = SummarizeFlowOutputSchema.safeParse(summaryResponse);
 
     if (!parsedResult.success) {
       console.error('[askQuestion Action Validation Error]', parsedResult.error.flatten());
-      throw new Error('Invalid response structure from the summarize flow.');
+      
+      // 検証に失敗した場合、最小限の構造を返す
+      return {
+        answer: summaryResponse.answer || '回答の取得に失敗しました。',
+        references: summaryResponse.references || summaryResponse.sources || []
+      };
     }
     
     // ===== [修正点 3] =====
