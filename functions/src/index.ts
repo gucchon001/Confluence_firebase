@@ -1,13 +1,11 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import axios from 'axios';
-import { GoogleAuth } from 'google-auth-library';
 // 以下のインポートは一時的にコメントアウト
 // import { testVectorSearchUploadV3 } from './minimal-test-v3';
 // import { testVectorSearchUploadV4 } from './minimal-test-v4';
 // バッチ更新に必要なライブラリをインポート
-import { Storage } from '@google-cloud/storage';
-import { IndexServiceClient } from '@google-cloud/aiplatform/build/src/v1';
+// removed GCS usage
+// Vertex AI 依存は削除
 
 // Firebase初期化
 admin.initializeApp();
@@ -177,50 +175,8 @@ async function getAllSpaceContent(spaceKey: string, type: string = 'page', limit
 
 // 埋め込みベクトルを生成する関数
 async function generateEmbedding(text: string): Promise<number[]> {
-  // Firebase config から直接環境変数を取得
-  const config = functions.config();
-  
-  const projectId = config.vertexai?.project_id || process.env.VERTEX_AI_PROJECT_ID;
-  if (!projectId) {
-    throw new Error('環境変数 VERTEX_AI_PROJECT_ID が設定されていません。');
-  }
-  
-  const location = config.vertexai?.location || process.env.VERTEX_AI_LOCATION;
-  if (!location) {
-    throw new Error('環境変数 VERTEX_AI_LOCATION が設定されていません。');
-  }
-  
-  const auth = new GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/cloud-platform']
-  });
-  
-  const client = await auth.getClient();
-  const token = await client.getAccessToken();
-  const accessToken = token.token;
-  
-  const apiEndpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/text-embedding-004:predict`;
-  
-  try {
-    const response = await axios.post(
-      apiEndpoint,
-      {
-        instances: [{ content: text }]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    const embedding = response.data.predictions[0].embeddings.values;
-    console.log(`[embedding] Generated embedding with ${embedding.length} dimensions`);
-    return embedding;
-  } catch (error) {
-    console.error('[embedding] Error generating embedding:', error);
-    throw error;
-  }
+  // Vertex AI を使った埋め込み生成は削除
+  return [];
 }
 
 // Vector Searchへのアップロード（バッチ更新方式）
@@ -405,19 +361,10 @@ async function syncConfluenceDataImpl() {
     throw new Error('環境変数 CONFLUENCE_SPACE_KEY が設定されていません。');
   }
   
-  // Vertex AI 設定
-  const projectId = config.vertexai?.project_id || process.env.VERTEX_AI_PROJECT_ID;
-  if (!projectId) {
-    throw new Error('環境変数 VERTEX_AI_PROJECT_ID が設定されていません。');
-  }
-  
-  const location = config.vertexai?.location || process.env.VERTEX_AI_LOCATION;
-  if (!location) {
-    throw new Error('環境変数 VERTEX_AI_LOCATION が設定されていません。');
-  }
-  
-  // Vector Search インデックスID
-  const indexId = config.vertexai?.index_id || process.env.VERTEX_AI_INDEX_ID || '';
+  // Vertex AI 設定は削除
+  const projectId = '';
+  const location = '';
+  const indexId = '';
 
   console.log(`[ingest] Start ingest for space: ${spaceKey}`);
 
@@ -485,18 +432,7 @@ async function syncConfluenceDataImpl() {
   }
 
   // Vector Searchへのアップロード（インデックスIDが設定されている場合のみ）
-  if (indexId) {
-    try {
-      await uploadToVectorSearch(output, projectId, location, indexId);
-      console.log(`[ingest] Vector Search upload complete for ${output.length} records`);
-    } catch (err) {
-      console.error('[ingest] Vector Search upload failed:', err);
-      // エラーがあっても処理は継続
-    }
-  } else {
-    console.log('[ingest] VERTEX_AI_INDEX_ID not set, skipping Vector Search upload');
-    console.log('[ingest] To upload to Vector Search, set VERTEX_AI_INDEX_ID environment variable');
-  }
+  console.log('[ingest] Skipping Vector Search upload (Vertex AI removed)');
   
   console.log(`[ingest] Processing complete: ${output.length} records processed`);
   return {

@@ -5,8 +5,7 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import * as confluenceService from './confluence-service';
 import * as embeddingService from './embedding-service';
-import * as gcsService from './gcs-service';
-import * as vectorSearchService from './vector-search-service';
+// removed Vertex AI vector search usage
 import * as firestoreService from './firestore-service';
 import * as config from './config';
 
@@ -65,14 +64,10 @@ export const syncConfluenceData = functions.pubsub
       // バケット名を決定
       const bucketName = process.env.VERTEX_AI_STORAGE_BUCKET || config.vertexai?.storage_bucket || `${numericProjectId}-vector-search`;
       
-      // バケットが存在するか確認し、なければ作成
-      await gcsService.ensureBucketExists(bucketName);
+      // GCS関連は削除
+      const filename = '';
       
-      // GCSにアップロード
-      const filename = await gcsService.uploadToGCS(recordsWithEmbeddings, bucketName);
-      
-      // Vector Searchにバッチアップロード
-      await vectorSearchService.uploadToVectorSearch(filename, bucketName);
+      // Vertex AI vector search 連携は削除
       
       // Firestoreにメタデータを保存
       await firestoreService.saveMetadataToFirestore(recordsWithEmbeddings);
@@ -154,14 +149,10 @@ export const manualSyncConfluenceData = functions.https.onRequest(async (req, re
     // バケット名を決定
     const bucketName = process.env.VERTEX_AI_STORAGE_BUCKET || config.vertexai?.storage_bucket || `${numericProjectId}-vector-search`;
     
-    // バケットが存在するか確認し、なければ作成
-    await gcsService.ensureBucketExists(bucketName);
+    // GCS関連は削除
+    const filename = '';
     
-    // GCSにアップロード
-    const filename = await gcsService.uploadToGCS(recordsWithEmbeddings, bucketName);
-    
-    // Vector Searchにバッチアップロード
-    await vectorSearchService.uploadToVectorSearch(filename, bucketName);
+    // Vertex AI vector search 連携は削除
     
     // Firestoreにメタデータを保存
     await firestoreService.saveMetadataToFirestore(recordsWithEmbeddings);

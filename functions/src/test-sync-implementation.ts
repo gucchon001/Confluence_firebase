@@ -5,8 +5,7 @@ import * as dotenv from 'dotenv';
 import * as admin from 'firebase-admin';
 import * as confluenceService from './confluence-service';
 import * as embeddingService from './embedding-service';
-import * as gcsService from './gcs-service';
-import * as vectorSearchService from './vector-search-service';
+// removed Vertex AI vector search usage
 import * as firestoreService from './firestore-service';
 import * as config from './config';
 
@@ -50,7 +49,7 @@ async function main() {
     
     // バケットが存在するか確認し、なければ作成
     console.log('\n1. GCSバケットの確認/作成');
-    await gcsService.ensureBucketExists(bucketName);
+    // GCS削除済み
     
     // テスト用に一部のページのみ取得
     console.log('\n2. Confluenceからページデータを取得（テスト用に最大5件）');
@@ -91,7 +90,7 @@ async function main() {
     
     // GCSにアップロード
     console.log('\n5. GCSへのJSONLファイルのアップロード');
-    const filename = await gcsService.uploadToGCS(recordsWithEmbeddings, bucketName);
+    const filename = '';
     
     console.log(`[main] Uploaded file to gs://${bucketName}/${filename}`);
     

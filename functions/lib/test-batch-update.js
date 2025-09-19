@@ -39,7 +39,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv = __importStar(require("dotenv"));
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
-const gcsService = __importStar(require("./gcs-service"));
 const storage_1 = require("@google-cloud/storage");
 const vectorSearchBatch = __importStar(require("./vector-search-service-batch"));
 // 環境変数の読み込み

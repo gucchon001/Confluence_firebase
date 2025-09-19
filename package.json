@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 9002",
+    "dev": "next dev -p 9003",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
@@ -29,15 +29,20 @@
     "test:lancedb:performance": "vitest run src/tests/lancedb-performance-tests.ts",
     "test:lancedb:integration": "vitest run src/tests/lancedb-integration-tests.ts",
     "test:lancedb:all": "vitest run src/tests/lancedb-*.ts",
+    "test:differential": "vitest run src/tests/unit/differential-sync.test.ts",
+    "test:differential:integration": "vitest run src/tests/integration/batch-sync-differential.test.ts",
+    "test:differential:e2e": "vitest run src/tests/e2e/differential-sync-e2e.test.ts",
+    "test:differential:all": "vitest run src/tests/**/differential*.test.ts",
     "ingest:confluence": "tsx src/scripts/ingest-confluence.ts",
     "sync:confluence:batch": "tsx src/scripts/batch-sync-confluence.ts",
     "sync:confluence:differential": "tsx src/scripts/batch-sync-confluence.ts --differential",
     "sync:confluence:no-delete": "tsx src/scripts/batch-sync-confluence.ts --skip-deleted",
     "sync:confluence:diff-no-delete": "tsx src/scripts/batch-sync-confluence.ts --differential --skip-deleted",
-    "upload:gcs": "tsx src/scripts/upload-jsonl-to-gcs.ts",
     "upload:vector-search": "tsx src/scripts/upload-to-vector-search.ts",
     "test:vector-search-query": "tsx src/scripts/test-vector-search-query.ts",
-    "read:datapoints:rest": "tsx src/scripts/read-datapoints-rest.ts"
+    "read:datapoints:rest": "tsx src/scripts/read-datapoints-rest.ts",
+    "recreate:lancedb": "tsx src/scripts/recreate-lancedb-table.ts",
+    "sync:confluence": "tsx src/scripts/batch-sync-confluence.ts --all"
   },
   "dependencies": {
     "@chroma-core/default-embed": "^0.1.8",
@@ -94,7 +99,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
-    "@types/node": "^20",
+    "@types/node": "^20.19.16",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
@@ -102,8 +107,9 @@
     "genkit-cli": "^1.19.2",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
     "tsx": "^4.20.5",
-    "typescript": "^5",
+    "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   },
   "_type": "module"

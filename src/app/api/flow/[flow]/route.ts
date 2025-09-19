@@ -2,25 +2,27 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
-import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs';
+import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { flow: string } }
+  context: { params: Promise<{ flow: string }> }
 ) {
   try {
     const body = await req.json();
+    const params = await context.params;
+    const flow = params.flow;
 
-    switch (params.flow) {
+    switch (flow) {
       case 'retrieveRelevantDocs': {
-        const { question } = body ?? {};
+        const { question, labels, labelFilters } = body ?? {};
         if (typeof question !== 'string' || question.length === 0) {
           return NextResponse.json(
             { error: 'Invalid input: question is required' },
             { status: 400 }
           );
         }
-        const docs = await retrieveRelevantDocs({ question });
+        const docs = await retrieveRelevantDocs({ question, labels, labelFilters });
         return NextResponse.json(docs);
       }
       case 'summarizeConfluenceDocs': {

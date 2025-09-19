@@ -5,7 +5,6 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import * as confluenceService from './confluence-service';
 import * as embeddingService from './embedding-service';
-import * as gcsService from './gcs-service';
 import * as firestoreService from './firestore-service';
 import * as config from './config';
 
@@ -65,7 +64,8 @@ export const syncConfluenceData = functions
         throw new Error('GCS bucket name not configured');
       }
       
-      const filename = await gcsService.uploadToGCS(recordsWithEmbeddings, bucketName);
+      // GCSアップロードは削除
+      const filename = '';
       console.log(`[syncConfluenceData] Uploaded file to gs://${bucketName}/${filename}`);
       
       // Firestoreにメタデータを保存

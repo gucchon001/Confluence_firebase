@@ -4,7 +4,6 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as gcsService from './gcs-service';
 import { Storage } from '@google-cloud/storage';
 import * as vectorSearchBatch from './vector-search-service-batch';
 
@@ -25,7 +24,7 @@ async function main() {
     
     // バケットが存在するか確認し、なければ作成
     console.log('\n1. GCSバケットの確認/作成');
-    await gcsService.ensureBucketExists(bucketName);
+    // GCS削除済み
     
     // テスト用のデータポイントを作成
     console.log('\n2. テスト用データの作成');

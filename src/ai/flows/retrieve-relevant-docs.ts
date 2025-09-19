@@ -1,8 +1,8 @@
 /**
- * 関連ドキュメント検索（プレーン関数版）
+ * 関連ドキュメント検索（LanceDB版）
  */
 import * as z from 'zod';
-import { defaultVectorSearchClient } from '@/lib/vector-search-client';
+import { defaultLanceDBSearchClient } from '@/lib/lancedb-search-client';
 import * as admin from 'firebase-admin';
 import { ai } from '@/ai/genkit';
 
@@ -23,9 +23,9 @@ if (typeof window === 'undefined' && !admin.apps.length) {
 }
 
 /**
- * Confluenceドキュメント検索ツール (内部ヘルパー関数)
+ * LanceDBを使用したConfluenceドキュメント検索ツール
  */
-async function confluenceRetrieverTool(
+async function lancedbRetrieverTool(
   query: string,
   filters?: {
     spaceKey?: string;
@@ -33,16 +33,11 @@ async function confluenceRetrieverTool(
   }
 ): Promise<any[]> {
   try {
-    console.log(
-      `[confluenceRetrieverTool] Retrieving documents for query: ${query}`
-    );
+    console.log(`[lancedbRetrieverTool] Retrieving documents for query: ${query}`);
 
     // テスト環境の場合はモックデータを返す
     if (process.env.NODE_ENV === 'test') {
-      console.log('[confluenceRetrieverTool] Using test mock data');
-      
-      // テスト環境でもEmbeddingを生成する（テスト用のモックを呼び出すため）
-      await generateEmbedding(query);
+      console.log('[lancedbRetrieverTool] Using test mock data');
       
       // クエリに基づいてモックデータを返す
       if (query.includes('ログイン')) {
@@ -107,156 +102,45 @@ async function confluenceRetrieverTool(
       }
     }
 
-    const embeddingVector = await generateEmbedding(query);
-    const searchFilters: { [key: string]: string | string[] } = {};
-
+    // フィルターの構築
+    let filterQuery = '';
     if (filters?.spaceKey) {
-      searchFilters.space_key = filters.spaceKey;
+      filterQuery = `space_key = '${filters.spaceKey}'`;
     }
     if (filters?.labels && filters.labels.length > 0) {
-      searchFilters.label = filters.labels;
+      // LanceDBのフィルター構文に変換
+      const labelConditions = filters.labels.map(label => `labels LIKE '%${label}%'`).join(' OR ');
+      filterQuery = filterQuery ? `${filterQuery} AND (${labelConditions})` : `(${labelConditions})`;
     }
 
-    const searchResults = await defaultVectorSearchClient.search({
-      embeddingVector,
-      neighborCount: 20,
-      filters: searchFilters,
+    // LanceDBで検索を実行
+    const searchResults = await defaultLanceDBSearchClient.search({
+      query,
+      topK: 20,
+      tableName: 'confluence',
+      filter: filterQuery || undefined
     });
 
-    console.log(
-      `[confluenceRetrieverTool] Found ${searchResults.length} relevant documents from vector search`
-    );
+    console.log(`[lancedbRetrieverTool] Found ${searchResults.length} relevant documents from LanceDB`);
 
     if (searchResults.length === 0) {
       return [];
     }
 
-    const contents = await fetchContentsFromFirestore(searchResults);
-    return contents;
-  } catch (error: any) {
-    console.error(
-      `[confluenceRetrieverTool] Error retrieving documents: ${error.message}`
-    );
-    throw new Error(`Failed to retrieve documents: ${error.message}`);
-  }
-}
-
-/**
- * テキストの埋め込みベクトルを生成する (内部ヘルパー関数)
- */
-async function generateEmbedding(text: string): Promise<number[]> {
-  try {
-    const res = await ai.embed({ embedder: 'googleai/text-embedding-004', content: text });
-    const vector = Array.isArray(res)
-      ? (res[0] as any).embedding
-      : (res as any).embedding;
-    return vector as number[];
-  } catch (error: any) {
-    console.error(
-      `[generateEmbedding] Error generating embedding: ${error.message}`
-    );
-    throw new Error(`Failed to generate embedding: ${error.message}`);
-  }
-}
-
-/**
- * FirestoreドキュメントをJSONシリアライズ可能な形式に変換する
- */
-function sanitizeFirestoreDocument(
-  docData: admin.firestore.DocumentData | null | undefined
-): any {
-  if (!docData) return null;
-  const sanitized: { [key: string]: any } = {};
-  for (const key in docData) {
-    const value = docData[key];
-    // FirestoreのTimestampオブジェクトをISO文字列に変換
-    if (value && typeof value.toDate === 'function') {
-      sanitized[key] = value.toDate().toISOString();
-    } else {
-      sanitized[key] = value;
-    }
-  }
-  return sanitized;
-}
-
-/**
- * Firestoreから検索結果のコンテンツを取得する (内部ヘルパー関数)
- */
-async function fetchContentsFromFirestore(
-  searchResults: any[]
-): Promise<any[]> {
-  try {
-    if (typeof window !== 'undefined' || !admin.apps.length) {
-      console.error(
-        '[fetchContentsFromFirestore] Firebase Admin not initialized or running on client side'
-      );
-      return searchResults.map((result) => ({
-        ...result,
-        content: '内容を取得できませんでした。',
-      }));
-    }
-
-    const db = admin.firestore();
-    if (searchResults.length === 0) {
-      return [];
-    }
-
-    const ids = searchResults.map((result) => result.id);
-    const documentDataMap = new Map<
-      string,
-      admin.firestore.DocumentData | null
-    >();
-    const idChunks: string[][] = [];
-    for (let i = 0; i < ids.length; i += 30) {
-      idChunks.push(ids.slice(i, i + 30));
-    }
-
-    await Promise.all(
-      idChunks.map(async (chunk) => {
-        const snapshot = await db
-          .collection('chunks')
-          .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
-          .get();
-        snapshot.forEach((doc) => {
-          documentDataMap.set(doc.id, sanitizeFirestoreDocument(doc.data()));
-        });
-      })
-    );
-
-    return searchResults.map((result) => {
-      const chunk = documentDataMap.get(result.id) || null;
-
-      if (!chunk) {
-        return {
-          ...result,
-          content: '内容が見つかりませんでした。',
-          url: result.url || '',
-          lastUpdated: null,
-          spaceName: 'Unknown',
-          title: result.title || 'No Title',
-          labels: [],
-        };
-      }
-
-      // サニタイズされたので、すべてのTimestampはISO文字列になっている
-      return {
-        ...result, // vector searchからのidやdistanceを保持
-        content: chunk.content || '',
-        url: chunk.url || '',
-        lastUpdated: chunk.lastUpdated || null,
-        spaceName: chunk.spaceName || 'Unknown',
-        title: chunk.title || result.title || 'No Title',
-        labels: chunk.labels || [],
-      };
-    });
-  } catch (error: any) {
-    console.error(
-      `[fetchContentsFromFirestore] Error fetching contents: ${error.message}`
-    );
-    return searchResults.map((result) => ({
-      ...result,
-      content: 'エラーが発生したため内容を取得できませんでした。',
+    // LanceDBの結果を整形
+    return searchResults.map(result => ({
+      id: result.id,
+      content: result.content || '',
+      url: result.url || '',
+      lastUpdated: result.lastUpdated || null,
+      spaceName: result.space_key || 'Unknown',
+      title: result.title || 'No Title',
+      labels: result.labels || [],
+      distance: result.distance
     }));
+  } catch (error: any) {
+    console.error(`[lancedbRetrieverTool] Error retrieving documents: ${error.message}`);
+    throw new Error(`Failed to retrieve documents: ${error.message}`);
   }
 }
 
@@ -286,14 +170,11 @@ export async function retrieveRelevantDocs({
 }): Promise<any[]> {
   try {
     console.log(`[retrieveRelevantDocs] Searching for question: ${question}`);
-    const results = await confluenceRetrieverTool(question);
-    console.log(
-      `[retrieveRelevantDocs] Found ${results.length} relevant documents`
-    );
+    const results = await lancedbRetrieverTool(question);
+    console.log(`[retrieveRelevantDocs] Found ${results.length} relevant documents`);
     return results;
   } catch (error: any) {
     console.error(`[retrieveRelevantDocs] Error: ${error.message}`);
     throw new Error(`Failed to retrieve relevant documents: ${error.message}`);
   }
 }
-

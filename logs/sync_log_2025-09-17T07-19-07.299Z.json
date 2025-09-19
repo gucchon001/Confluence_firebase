@@ -1,0 +1,10 @@
+{
+  "operation": "complete",
+  "status": "complete",
+  "data": {
+    "totalPages": 1141,
+    "totalChunks": 2472,
+    "totalEmbeddings": 2472
+  },
+  "timestamp": "2025-09-17T07:19:07.299Z"
+}

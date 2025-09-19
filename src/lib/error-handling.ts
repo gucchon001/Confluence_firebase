@@ -1,4 +1,6 @@
 import * as admin from 'firebase-admin';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * エラーコードの定義
@@ -57,7 +59,7 @@ export class ErrorHandler {
     
     console.error(JSON.stringify(errorDetails));
     
-    // Firestoreにエラーログを保存
+    // Firestoreにエラーログを保存（ユーザー、チャット、ログ機能は維持）
     try {
       if (admin.apps.length) {
         const db = admin.firestore();
@@ -65,6 +67,21 @@ export class ErrorHandler {
           ...errorDetails,
           createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
+      }
+      
+      // ローカルファイルにもエラーログを保存
+      try {
+        const logDir = path.resolve(process.cwd(), 'logs');
+        if (!fs.existsSync(logDir)) {
+          fs.mkdirSync(logDir, { recursive: true });
+        }
+        
+        const logFileName = `error_${new Date().toISOString().replace(/:/g, '-')}.json`;
+        const logFilePath = path.join(logDir, logFileName);
+        
+        fs.writeFileSync(logFilePath, JSON.stringify(errorDetails, null, 2));
+      } catch (fileError) {
+        console.error('Failed to save error log to file:', fileError);
       }
     } catch (logError) {
       // ログ保存自体のエラーは標準エラー出力のみ
@@ -147,49 +164,59 @@ export class ErrorHandler {
     idempotencyKey: string,
     processFn: () => Promise<T>
   ): Promise<T> {
-    if (!admin.apps.length) {
-      // Firebase初期化されていない場合は単純に実行
-      return processFn();
+    // 冪等性キャッシュファイルのパス
+    const cacheDir = path.resolve(process.cwd(), '.cache');
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
     }
+    const cacheFilePath = path.join(cacheDir, `idempotency_${idempotencyKey.replace(/[^a-zA-Z0-9]/g, '_')}.json`);
     
-    const db = admin.firestore();
-    const stateRef = db.collection('processingState').doc(idempotencyKey);
-    
-    // 処理状態を確認
-    const stateDoc = await stateRef.get();
-    
-    if (stateDoc.exists && stateDoc.data()?.status === 'completed') {
-      console.log(`Operation ${operation} with key ${idempotencyKey} already completed, skipping`);
-      return stateDoc.data()?.result;
+    // キャッシュファイルを確認
+    if (fs.existsSync(cacheFilePath)) {
+      try {
+        const cacheData = JSON.parse(fs.readFileSync(cacheFilePath, 'utf-8'));
+        if (cacheData.status === 'completed') {
+          console.log(`Operation ${operation} with key ${idempotencyKey} already completed, skipping`);
+          return cacheData.result;
+        }
+      } catch (error) {
+        console.warn(`Failed to read idempotency cache file: ${error}`);
+        // キャッシュファイルが壊れている場合は続行
+      }
     }
     
     // 処理開始を記録
-    await stateRef.set({
+    const processingState = {
       operation,
       idempotencyKey,
       status: 'processing',
-      startedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+      startedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(cacheFilePath, JSON.stringify(processingState, null, 2));
     
     try {
       // 処理実行
       const result = await processFn();
       
       // 処理完了を記録
-      await stateRef.update({
+      const completedState = {
+        ...processingState,
         status: 'completed',
         result,
-        completedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+        completedAt: new Date().toISOString()
+      };
+      fs.writeFileSync(cacheFilePath, JSON.stringify(completedState, null, 2));
       
       return result;
     } catch (error: any) {
       // エラー状態を記録
-      await stateRef.update({
+      const failedState = {
+        ...processingState,
         status: 'failed',
         error: error.message,
-        failedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+        failedAt: new Date().toISOString()
+      };
+      fs.writeFileSync(cacheFilePath, JSON.stringify(failedState, null, 2));
       
       throw error;
     }

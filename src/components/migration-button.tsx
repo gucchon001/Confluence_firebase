@@ -26,7 +26,16 @@ export default function MigrationButton({ user, onComplete }: MigrationButtonPro
   const checkMigrationStatus = async () => {
     try {
       const status = await getMigrationStatus(user.uid);
-      setMigrationStatus(status);
+      if (status) {
+        // 型アサーションを使用して期待される型に変換
+        const migrationData = {
+          completed: false,
+          timestamp: new Date(),
+          conversationCount: 0,
+          ...status // 既存のプロパティで上書き
+        };
+        setMigrationStatus(migrationData);
+      }
       return status;
     } catch (error) {
       console.error('Failed to check migration status:', error);
@@ -41,10 +50,10 @@ export default function MigrationButton({ user, onComplete }: MigrationButtonPro
     try {
       // 既に移行済みかチェック
       const status = await checkMigrationStatus();
-      if (status?.completed) {
+      if (status && 'completed' in status && status.completed) {
         toast({
           title: 'すでに移行済みです',
-          description: `${status.conversationCount}件の会話が移行済みです（${status.timestamp.toLocaleString()}）`,
+          description: `${'conversationCount' in status ? status.conversationCount : 0}件の会話が移行済みです（${'timestamp' in status && status.timestamp ? status.timestamp.toLocaleString() : '不明'}）`,
           variant: 'default',
         });
         setIsMigrating(false);

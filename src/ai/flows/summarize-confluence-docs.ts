@@ -14,11 +14,13 @@ const PROMPT_TEMPLATE = `
 
 # ルール (Rules)
 1. 回答は、必ず「提供された参考情報」セクションの記述のみを根拠としてください。
-2. 「提供された参考情報」に質問と関連する記述がない場合は、情報をでっち上げたりせず、正直に「参考情報の中に関連する記述が見つかりませんでした。」と回答してください。
-3. 回答は、ユーザーの質問に対して簡潔かつ明確に要約してください。
-4. 回答の最後には、根拠として利用した情報の出典を「参照元」として、タイトル、スペース名、最終更新日、URLのリスト形式で必ず記載してください。
-5. ユーザーからの挨拶や感謝には、フレンドリーに返答してください。
-6. 提供された参考情報にあるラベルやスペース情報も活用して、より関連性の高い回答を提供してください。
+2. 「提供された参考情報」に質問と明確に関連する記述がある場合のみ、具体的な回答を提供してください。
+3. 「提供された参考情報」に質問と関連する記述がない場合は、「参考情報の中に関連する記述が見つかりませんでした」と回答し、関連しそうなドキュメントのタイトルを3件程度示してください。
+4. 回答は、ユーザーの質問に対して簡潔かつ明確に要約してください。
+5. 回答には参照元情報をテキストとして含めないでください。参照元は別途処理されます。
+6. ユーザーからの挨拶や感謝には、フレンドリーに返答してください。
+7. 提供された参考情報にあるラベルやスペース情報も活用して、より関連性の高い回答を提供してください。
+8. 情報の確実性が低い場合は、推測や不確かな情報を提供するのではなく、「この点についての詳細な情報は見つかりませんでした」と正直に伝えてください。
 
 # 提供された参考情報 (Context)
 {{context}}
@@ -78,7 +80,7 @@ export async function summarizeConfluenceDocs({
   try {
     if (!documents || documents.length === 0) {
       return {
-        answer: '申し訳ありませんが、参考情報の中に求人詳細画面に関する具体的な記述が見つかりませんでした。別のキーワードで検索するか、より具体的な質問をお試しください。',
+        answer: '申し訳ありませんが、検索クエリに関連するドキュメントが見つかりませんでした。別のキーワードで検索するか、より具体的な質問をお試しください。',
         references: [],
       };
     }
@@ -164,15 +166,40 @@ ${doc.content}`
     // 応答が空または非常に短い場合のフォールバック
     if (!answer || answer.trim().length < 10) {
       console.log('[summarizeConfluenceDocs] Response too short, using fallback');
-      answer = '申し訳ありませんが、検索結果から適切な回答を生成できませんでした。検索結果には関連情報が含まれていますが、質問に直接対応する内容が見つかりませんでした。別の質問方法をお試しください。';
+      
+      // 検索結果のタイトルから関連しそうなものを抽出
+      const relevantTitles = documents
+        .slice(0, 3)
+        .map(doc => `- ${doc.title}`)
+        .join('\n');
+      
+      answer = `申し訳ありませんが、検索結果から質問「${question}」に直接対応する内容が見つかりませんでした。\n\n以下のドキュメントが関連している可能性がありますが、詳細な情報は含まれていません：\n\n${relevantTitles}\n\n別のキーワードで検索するか、より具体的な質問をお試しください。`;
     }
 
-    const references = documents.map((doc) => ({
-      title: doc.title,
-      url: doc.url,
-      spaceName: doc.spaceName,
-      lastUpdated: doc.lastUpdated,
-    }));
+    // 参照元テキストを除去する後処理
+    if (answer) {
+      // 「参照元」で始まる行以降を除去
+      const lines = answer.split('\n');
+      const referenceStartIndex = lines.findIndex(line => 
+        line.trim().startsWith('参照元') || 
+        line.trim().startsWith('*') && line.includes('Title:') ||
+        line.trim().match(/^\*\s*Title:/)
+      );
+      
+      if (referenceStartIndex !== -1) {
+        answer = lines.slice(0, referenceStartIndex).join('\n').trim();
+        console.log('[summarizeConfluenceDocs] Removed reference text from answer');
+      }
+    }
+
+  const references = documents.map((doc) => ({
+    title: doc.title,
+    url: doc.url,
+    spaceName: doc.spaceName,
+    lastUpdated: doc.lastUpdated,
+    distance: doc.distance, // 距離（類似度スコア）を追加
+    source: doc.source, // 検索ソース（vector/keyword）を追加
+  }));
 
     return { answer, references };
   } catch (error: any) {

@@ -41,7 +41,6 @@ const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const confluenceService = __importStar(require("./confluence-service"));
 const embeddingService = __importStar(require("./embedding-service"));
-const gcsService = __importStar(require("./gcs-service"));
 const vectorSearchService = __importStar(require("./vector-search-service"));
 const firestoreService = __importStar(require("./firestore-service"));
 const config = __importStar(require("./config"));

@@ -1,0 +1,10 @@
+{
+  "operation": "batch_complete",
+  "status": "complete",
+  "data": {
+    "batch": 15,
+    "pages": 50,
+    "chunks": 83
+  },
+  "timestamp": "2025-09-18T08:29:49.290Z"
+}

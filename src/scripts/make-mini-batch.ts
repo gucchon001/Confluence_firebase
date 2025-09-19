@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Storage } from '@google-cloud/storage';
+// removed GCS usage
 import * as path from 'path';
 import * as fs from 'fs';
 

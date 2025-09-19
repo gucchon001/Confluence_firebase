@@ -5,8 +5,10 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const PROVIDER = process.env.EMBEDDINGS_PROVIDER || 'local';
+// Xenova提供の多言語モデル（日本語対応・384次元）
+// 参考: https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2
+const MODEL_ID = process.env.EMBEDDINGS_MODEL || 'Xenova/paraphrase-multilingual-MiniLM-L12-v2';
 
-// 768次元モデル（Xenova/all-mpnet-base-v2）
 import { pipeline } from '@xenova/transformers';
 let extractor: any | null = null;
 
@@ -24,9 +26,8 @@ export async function getEmbeddings(text: string): Promise<number[]> {
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    extractor = await pipeline('feature-extraction', 'Xenova/all-mpnet-base-v2');
+    extractor = await pipeline('feature-extraction', MODEL_ID);
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
-  // 既に正規化済み
-  return Array.from(output.data); // 768次元
+  return Array.from(output.data); // 既に正規化済み
 }

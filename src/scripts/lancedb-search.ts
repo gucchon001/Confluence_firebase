@@ -12,7 +12,7 @@ async function main() {
   const args = process.argv.slice(2);
   let query = '';
   let tableName = 'confluence';
-  let vectorDim = 10; // デフォルトの次元数
+  let vectorDim = 768; // デフォルトの次元数（LanceDBのベクトル次元数に合わせる）
   
   // 検索クエリ（最初の引数）
   if (args.length > 0 && !args[0].startsWith('--')) {
@@ -43,9 +43,9 @@ async function main() {
     const fullVector = await getEmbeddings(query);
     console.log(`埋め込みベクトル生成完了 (${fullVector.length} 次元)`);
     
-    // 指定された次元数に切り詰め
-    const vector = fullVector.slice(0, vectorDim);
-    console.log(`次元数を ${vectorDim} に切り詰めました`);
+    // 埋め込みベクトルをそのまま使用（次元数の一致が必要）
+    const vector = fullVector;
+    console.log(`ベクトル次元数: ${vector.length}`);
     
     // LanceDBに接続
     console.log('LanceDBに接続中...');

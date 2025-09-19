@@ -6,7 +6,7 @@ import * as minimist from 'minimist';
 import * as lancedb from '@lancedb/lancedb';
 import { getEmbeddings } from '../lib/embeddings';
 import { ErrorHandler } from '../lib/error-handling';
-import { createConfluenceSampleData, ConfluenceSchema, MinimalLanceDBSchema } from '../lib/lancedb-schema';
+import { createConfluenceSampleData, ConfluenceSchema, FullLanceDBSchema } from '../lib/lancedb-schema';
 
 interface ConfluencePage {
   id: string;
@@ -28,7 +28,7 @@ function extractTextFromHtml(html: string): string {
  * テキストをチャンクに分割する
  */
 function splitTextIntoChunks(text: string): string[] {
-  const CHUNK_SIZE = 1000;
+  const CHUNK_SIZE = 1800; // パフォーマンス改善のため拡大
   const chunks: string[] = [];
   for (let i = 0; i < text.length; i += CHUNK_SIZE) {
     const chunk = text.substring(i, i + CHUNK_SIZE).trim();
@@ -82,6 +82,64 @@ async function getConfluencePages(
     }
     throw error;
   }
+}
+
+/**
+ * ページIDからラベル一覧を取得（必要に応じてページング）
+ */
+async function getConfluenceLabels(pageId: string): Promise<string[]> {
+  const baseUrl = process.env.CONFLUENCE_BASE_URL;
+  const username = process.env.CONFLUENCE_USER_EMAIL;
+  const apiToken = process.env.CONFLUENCE_API_TOKEN;
+  if (!baseUrl || !username || !apiToken) {
+    throw new Error('Confluence API credentials not configured');
+  }
+
+  const endpoint = `${baseUrl}/wiki/rest/api/content/${pageId}/label`;
+  const labels: string[] = [];
+  let start = 0;
+  const limit = 200;
+
+  // リトライ設定
+  const maxRetries = 3;
+  const initialDelayMs = 500;
+
+  async function fetchPage(startParam: number, attempt: number): Promise<any> {
+    try {
+      const res = await axios.get(endpoint, {
+        params: { start: startParam, limit },
+        auth: { username, password: apiToken }
+      });
+      return res;
+    } catch (err: any) {
+      const isAxios = axios.isAxiosError(err);
+      const status = isAxios ? err.response?.status : undefined;
+      const shouldRetry = status === 401 || status === 403 || (status !== undefined && status >= 500);
+      const delay = initialDelayMs * Math.pow(2, attempt - 1);
+      console.warn(`[getConfluenceLabels] pageId=${pageId} start=${startParam} attempt=${attempt} failed: ${err?.message || err}. status=${status}. willRetry=${shouldRetry}`);
+      if (shouldRetry && attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, delay));
+        return fetchPage(startParam, attempt + 1);
+      }
+      throw err;
+    }
+  }
+
+  while (true) {
+    const res = await fetchPage(start, 1);
+    const results = res?.data?.results || [];
+    for (const r of results) {
+      if (typeof r?.name === 'string' && r.name.trim().length > 0) {
+        labels.push(r.name.trim());
+      }
+    }
+    const size = res?.data?.size ?? results.length;
+    if (results.length < limit || size === 0) break;
+    start += limit;
+  }
+  const unique = Array.from(new Set(labels));
+  console.log(`[getConfluenceLabels] pageId=${pageId} labels=${JSON.stringify(unique)}`);
+  return unique;
 }
 
 /**
@@ -164,7 +222,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
     let tbl: any;
     
     if (!tableNames.includes(tableName)) {
-      console.log(`Creating LanceDB table '${tableName}' with explicit minimal schema`);
+      console.log(`Creating LanceDB table '${tableName}' with full schema`);
       
       // サンプルデータを使用してテーブルを作成
       const sampleData = [createConfluenceSampleData()] as unknown as Record<string, unknown>[];
@@ -218,7 +276,15 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
           const text = extractTextFromHtml(page.body?.storage?.value || '');
           const chunks = splitTextIntoChunks(text);
           totalChunks += chunks.length;
-          const labels = page.metadata?.labels?.results?.map(l => l.name) || [];
+          // ラベルを確実に取得（metadataが空でも別APIで補完）
+          let labels: string[] = [];
+          try {
+            const metaLabels = page.metadata?.labels?.results?.map((l: any) => l?.name).filter((x: any) => typeof x === 'string' && x.trim().length > 0) || [];
+            const apiLabels = await getConfluenceLabels(page.id);
+            labels = Array.from(new Set([...(metaLabels as string[]), ...apiLabels]));
+          } catch (e) {
+            labels = [];
+          }
           for (let i = 0; i < chunks.length; i++) {
             recordsForBatch.push({
               id: `${page.id}-${i}`, 
@@ -247,7 +313,15 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
                 const EMBEDDING_BATCH_SIZE = 5; // 処理バッチサイズ
                 for (let i = 0; i < recordsToEmbed.length; i += EMBEDDING_BATCH_SIZE) {
                     const batchOfRecords = recordsToEmbed.slice(i, i + EMBEDDING_BATCH_SIZE);
-                    const contents = batchOfRecords.map(r => r.content);
+                    // 埋め込み入力にタイトル・ラベルを含める
+                    const contents = batchOfRecords.map(r => {
+                      const title = String(r.title || '');
+                      const labels = Array.isArray(r.labels) ? r.labels.join(' ') : '';
+                      const content = String(r.content || '');
+                      // シンプルな正規化（全角スペース→半角、連続空白圧縮）
+                      const normalize = (t: string) => t.replace(/\u3000/g, ' ').replace(/\s+/g, ' ').trim();
+                      return normalize(`${title} ${labels} ${content}`);
+                    });
                     
                     // 複数テキストの埋め込み処理
                     const embeddings = [];
@@ -288,15 +362,53 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
                 id: String(record.id ?? ''),
                 vector: Array.from(record.embedding as number[]),
                 title: String(record.title ?? ''),
-                content: String(record.content ?? '')
+                content: String(record.content ?? ''),
+                space_key: String(record.spaceKey ?? ''),
+                labels: Array.isArray(record.labels) ? record.labels : [],
+                pageId: String(record.pageId ?? ''),
+                chunkIndex: Number(record.chunkIndex ?? 0),
+                url: String(record.url ?? '#'),
+                lastUpdated: String(record.lastUpdated ?? '')
               }));
             
             if (lancedbRecords.length > 0) {
               try {
-                await tbl.add(lancedbRecords);
-                console.log(`Successfully saved ${lancedbRecords.length} records to LanceDB`);
+                // 各レコードを文字列に変換して保存
+                const stringifiedRecords = lancedbRecords.map(record => ({
+                  id: record.id,
+                  vector: record.vector,
+                  title: record.title,
+                  content: record.content,
+                  space_key: record.space_key,
+                  labels: record.labels,
+                  pageId: record.pageId,
+                  chunkIndex: record.chunkIndex,
+                  url: record.url,
+                  lastUpdated: record.lastUpdated
+                }));
+                
+                // レコードを1件ずつ追加して、エラー時にはスキップする
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (const record of stringifiedRecords) {
+                  try {
+                    await tbl.add([record]);
+                    successCount++;
+                  } catch (recordError: any) {
+                    errorCount++;
+                    console.error(`Error saving record ${record.id}: ${recordError.message}`);
+                    // エラーログを詳細に記録
+                    await ErrorHandler.logError('lancedb_save_record', recordError, { 
+                      recordId: record.id,
+                      title: record.title.substring(0, 50)
+                    });
+                  }
+                }
+                
+                console.log(`LanceDB save results: ${successCount} success, ${errorCount} errors`);
               } catch (error: any) {
-                console.error(`Error saving to LanceDB: ${error.message}`);
+                console.error(`Error in LanceDB batch save process: ${error.message}`);
                 await ErrorHandler.logError('lancedb_save', error, { batchCount });
               }
             } else {
@@ -308,8 +420,9 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
         
         await saveSyncLog('batch_complete', { batch: batchCount, pages: pages.length, chunks: allRecordsForBatch.length });
         console.log(`Batch ${batchCount} completed.`);
-
-        hasMore = false; // テストのため、1バッチでループを抜ける
+        
+        // 全件取り込み用に修正（テストのための制限を解除）
+        // hasMore = false; // テストのため、1バッチでループを抜ける
       } catch (batchError: any) {
         console.error(`Error in batch ${batchCount}:`, batchError.message);
         await saveSyncLog('batch_error', { batch: batchCount, message: batchError.message });
@@ -380,4 +493,4 @@ async function main() {
 main();
 
 // テスト用にエクスポート
-export { batchSyncConfluence, getLastSyncTime, getConfluencePages };
+export { batchSyncConfluence, getLastSyncTime, getConfluencePages, getConfluenceLabels };

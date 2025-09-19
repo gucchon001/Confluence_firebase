@@ -1,0 +1,8 @@
+{
+  "operation": "error",
+  "status": "complete",
+  "data": {
+    "message": "Table 'confluence' was not found"
+  },
+  "timestamp": "2025-09-18T08:18:56.443Z"
+}

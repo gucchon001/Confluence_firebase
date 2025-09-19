@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Menu, Settings } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useAuthWrapper } from '@/hooks/use-auth-wrapper';
@@ -51,7 +52,7 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                         参照元
                     </h4>
                     <div className="flex flex-col gap-2 w-full">
-                        {msg.sources.map((source, index) => (
+                        {msg.sources.map((source: any, index) => (
                         <a
                             key={index}
                             href={source.url}
@@ -61,6 +62,12 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                         >
                             <LinkIcon className="h-3 w-3 shrink-0" />
                             <span className="truncate">{source.title}</span>
+                            <span className="text-xs text-muted-foreground ml-1">
+                                ({source.distance ? (source.distance * 100).toFixed(0) : '??'}% 一致)
+                            </span>
+                            <span className="text-xs ml-1 font-bold" style={{color: 'blue'}}>
+                                {source.source === 'keyword' ? '⌨️' : '🔍'}
+                            </span>
                         </a>
                         ))}
                     </div>
@@ -112,6 +119,12 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [conversations, setConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string }>>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  
+  // ラベルフィルタの状態
+  const [labelFilters, setLabelFilters] = useState({
+    includeMeetingNotes: false,
+    includeArchived: false
+  });
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -172,7 +185,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   // テキストエリアの参照を保持するためのref
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
     e?.preventDefault();
     if (!input.trim() || isLoading) return;
 
@@ -196,12 +209,38 @@ export default function ChatPage({ user }: ChatPageProps) {
 
     // 非同期処理を実行
     try {
-      const res = await askQuestion(currentInput, messages);
+      const res = await askQuestion(currentInput, messages, labelFilters);
+      console.log('[handleSubmit] Response from askQuestion:', JSON.stringify(res, null, 2));
+      
+      // デバッグ用：ブラウザのコンソールにもログを出力
+      console.log('DEBUG - askQuestion response:', res);
+      
+      // レスポンスの参照元をログ出力
+      if (res.references && res.references.length > 0) {
+        console.log('[handleSubmit] References from response:');
+        res.references.forEach((ref: any, idx: number) => {
+          console.log(`[handleSubmit] Reference ${idx+1}: title=${ref.title}, source=${ref.source}`);
+        });
+      }
+      
+      // デバッグ用：参照元の詳細をログに出力
+      console.log('[handleSubmit] Mapping references to sources:');
+      const mappedSources = res.references.map((ref: any) => {
+        const source = {
+          title: ref.title || 'No Title',
+          url: ref.url || '#',
+          distance: ref.distance,
+          source: ref.source
+        };
+        console.log(`[handleSubmit] Mapped source: ${JSON.stringify(source)}`);
+        return source;
+      });
+      
       const assistantMessage: Message = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
           content: res.answer,
-          sources: res.references,
+          sources: mappedSources,
           createdAt: new Date().toISOString()
       };
       setMessages((prev: Message[]) => [...prev, assistantMessage]);
@@ -471,31 +510,55 @@ export default function ChatPage({ user }: ChatPageProps) {
       </main>
       <footer className="border-t p-4 bg-white/80 backdrop-blur-sm">
         {!showSettings && (
-          <form onSubmit={handleSubmit} className="mx-auto max-w-3xl flex items-start gap-2">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
-              placeholder="Confluenceドキュメントについて質問..."
-              className="flex-1 resize-none bg-white"
-              rows={1}
-              onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              disabled={isLoading}
-            />
-            <Button 
-              type="submit" 
-              disabled={isLoading || !input.trim()} 
-              size="icon" 
-              className={`${isLoading ? 'bg-muted' : 'bg-accent hover:bg-accent/90'}`}
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
-          </form>
+          <div className="mx-auto max-w-3xl">
+            {/* ラベルフィルタ */}
+            <div className="flex gap-4 mb-3 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={labelFilters.includeMeetingNotes}
+                  onCheckedChange={(checked) => 
+                    setLabelFilters(prev => ({ ...prev, includeMeetingNotes: !!checked }))
+                  }
+                />
+                <span>議事録を含める</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={labelFilters.includeArchived}
+                  onCheckedChange={(checked) => 
+                    setLabelFilters(prev => ({ ...prev, includeArchived: !!checked }))
+                  }
+                />
+                <span>アーカイブを含める</span>
+              </label>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="flex items-start gap-2">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
+                placeholder="Confluenceドキュメントについて質問..."
+                className="flex-1 resize-none bg-white"
+                rows={1}
+                onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                disabled={isLoading}
+              />
+              <Button 
+                type="submit" 
+                disabled={isLoading || !input.trim()} 
+                size="icon" 
+                className={`${isLoading ? 'bg-muted' : 'bg-accent hover:bg-accent/90'}`}
+              >
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </form>
+          </div>
         )}
       </footer>
       </div>

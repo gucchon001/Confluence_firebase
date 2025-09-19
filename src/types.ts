@@ -2,7 +2,12 @@ export type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: { title: string; url: string }[];
+  sources?: { 
+    title: string; 
+    url: string;
+    distance?: number;
+    source?: 'vector' | 'keyword';
+  }[];
   createdAt: string; // ISO string date
   user?: {
     displayName: string | null;
@@ -18,7 +23,12 @@ export type FirestoreMessage = {
   role: 'user' | 'assistant'; // 仕様書では'user'または'ai'となっているが、実装では'assistant'を使用
   content: string;
   timestamp: any; // Firestore Timestamp
-  sources?: { title: string; url: string }[];
+  sources?: { 
+    title: string; 
+    url: string;
+    distance?: number;
+    source?: 'vector' | 'keyword';
+  }[];
   user?: {
     displayName: string | null;
     photoURL: string | null;

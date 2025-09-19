@@ -1,14 +1,14 @@
 import { NextRequest } from 'next/server';
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
-import { getEmbeddings } from '../../lib/embeddings';
+import { getEmbeddings } from '../../../lib/embeddings';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const query: string = body?.query || '';
     const topK: number = body?.topK || 5;
-    const tableName: string = body?.tableName || 'search_test';
+    const tableName: string = body?.tableName || 'confluence';
     
     if (!query) {
       return new Response(JSON.stringify({ error: 'query is required' }), { status: 400 });
@@ -20,9 +20,9 @@ export async function POST(req: NextRequest) {
     const fullVector = await getEmbeddings(query);
     console.log(`Generated embedding vector (${fullVector.length} dimensions)`);
     
-    // テーブルに合わせて次元数を調整（テスト用テーブルは10次元）
-    const vector = fullVector.slice(0, 10);
-    console.log(`Truncated to 10 dimensions for testing`);
+    // フルサイズのベクトルを使用（768次元）
+    const vector = fullVector;
+    console.log(`Using full vector with ${vector.length} dimensions`);
 
     // 2. LanceDBに接続
     const dbPath = path.resolve(process.cwd(), '.lancedb');
@@ -50,9 +50,13 @@ export async function POST(req: NextRequest) {
       // 5. 結果を整形
       const formattedResults = results.map(result => ({
         id: result.id,
-        title: result.title,
-        content: result.content,
-        distance: result._distance
+        title: result.title || 'No Title',
+        content: result.content || '',
+        distance: result._distance,
+        space_key: result.space_key || '',
+        labels: result.labels || [],
+        url: result.url || '#',
+        lastUpdated: result.lastUpdated || null
       }));
 
       // 6. レスポンス返却

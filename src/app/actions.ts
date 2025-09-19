@@ -11,7 +11,9 @@ const SummarizeFlowOutputSchema = z.object({
     title: z.string(),
     url: z.string(),
     spaceName: z.string().optional(),
-    lastUpdated: z.string().nullable().optional()
+    lastUpdated: z.string().nullable().optional(),
+    distance: z.number().optional(), // 距離（類似度スコア）を追加
+    source: z.enum(['vector', 'keyword']).optional() // 検索ソース（vector/keyword）を追加
   })).default([]),
 });
 
@@ -42,7 +44,7 @@ async function callFlow<T>(flowId: string, input: any): Promise<T> {
   return result as T;
 }
 
-export async function askQuestion(question: string, chatHistory: any[]): Promise<AskQuestionOutput> {
+export async function askQuestion(question: string, chatHistory: any[], labelFilters?: { includeMeetingNotes: boolean; includeArchived: boolean }): Promise<AskQuestionOutput> {
   if (!question) {
     throw new Error('Question is required.');
   }
@@ -50,7 +52,7 @@ export async function askQuestion(question: string, chatHistory: any[]): Promise
   try {
     // 1. ドキュメントを検索 (リトライ付き) (変更なし)
     const relevantDocs = await withRetry(
-      () => callFlow<any[]>('retrieveRelevantDocs', { question }),
+      () => callFlow<any[]>('retrieveRelevantDocs', { question, labelFilters }),
       {
         maxRetries: 2,
         onRetry: (error, retryCount, delay) => {
@@ -69,6 +71,14 @@ export async function askQuestion(question: string, chatHistory: any[]): Promise
     // ===== [修正点 2] =====
     // レスポンス構造を確認してログに出力
     console.log('[askQuestion Action] Raw response structure:', JSON.stringify(summaryResponse, null, 2));
+    
+    // レスポンスの詳細をログ出力
+    if (summaryResponse && summaryResponse.references) {
+      console.log('[askQuestion Action] References details:');
+      summaryResponse.references.forEach((ref: any, idx: number) => {
+        console.log(`[askQuestion Action] Reference ${idx+1}: title=${ref.title}, source=${ref.source}`);
+      });
+    }
 
     // sourcesをreferencesに変換（必要な場合）
     if (summaryResponse && summaryResponse.sources && !summaryResponse.references) {
@@ -83,9 +93,17 @@ export async function askQuestion(question: string, chatHistory: any[]): Promise
       console.error('[askQuestion Action Validation Error]', parsedResult.error.flatten());
       
       // 検証に失敗した場合、最小限の構造を返す
+      const fallbackAnswer = summaryResponse.answer || '回答の取得に失敗しました。';
+      const fallbackReferences = summaryResponse.references || summaryResponse.sources || [];
+      
+      console.log('[askQuestion Action] Using fallback response:', {
+        answer: fallbackAnswer,
+        referencesCount: fallbackReferences.length
+      });
+      
       return {
-        answer: summaryResponse.answer || '回答の取得に失敗しました。',
-        references: summaryResponse.references || summaryResponse.sources || []
+        answer: fallbackAnswer,
+        references: fallbackReferences
       };
     }
     

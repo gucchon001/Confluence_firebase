@@ -1,0 +1,38 @@
+[
+  {
+    "id": "sample-1",
+    "vector": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    "space_key": "TEST",
+    "title": "Confluence ガイド",
+    "labels": ["マニュアル", "ガイド", "Confluence"],
+    "content": "Confluenceの使い方ガイドです。このスペースでは、Confluenceの基本的な使い方を説明します。",
+    "pageId": "sample-page-1",
+    "chunkIndex": 0,
+    "url": "https://example.com/confluence-guide",
+    "lastUpdated": "2025-09-15T12:00:00.000Z"
+  },
+  {
+    "id": "sample-2",
+    "vector": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.1],
+    "space_key": "TEST",
+    "title": "スペースの作成方法",
+    "labels": ["マニュアル", "スペース", "Confluence"],
+    "content": "Confluenceでスペースを作成する方法を説明します。スペースは、チームのコラボレーションの中心となります。",
+    "pageId": "sample-page-2",
+    "chunkIndex": 0,
+    "url": "https://example.com/create-space",
+    "lastUpdated": "2025-09-15T12:30:00.000Z"
+  },
+  {
+    "id": "sample-3",
+    "vector": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.1, 0.2],
+    "space_key": "TEST",
+    "title": "ページの編集方法",
+    "labels": ["マニュアル", "ページ", "編集"],
+    "content": "Confluenceでページを編集する方法を説明します。マークダウン記法を使って効率的に編集できます。",
+    "pageId": "sample-page-3",
+    "chunkIndex": 0,
+    "url": "https://example.com/edit-page",
+    "lastUpdated": "2025-09-15T13:00:00.000Z"
+  }
+]

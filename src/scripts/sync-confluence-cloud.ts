@@ -8,8 +8,7 @@
 
 import 'dotenv/config';
 import { getAllSpaceContent } from '@/lib/confluence-client';
-import axios from 'axios';
-import { GoogleAuth } from 'google-auth-library';
+// removed Vertex AI and axios usage
 
 // 環境変数の確認
 function assertEnv(name: string): string {
@@ -77,103 +76,13 @@ function chunkText(text: string, maxChunkSize: number = 1000): string[] {
   return chunks.filter(Boolean);
 }
 
-// Vector Searchへのアップロード
-async function uploadToVectorSearch(records: EmbeddingRecord[], projectId: string, location: string, indexId: string) {
-  if (!indexId) {
-    console.warn('[ingest] VERTEX_AI_INDEX_ID not set, skipping Vector Search upload');
-    return;
-  }
-
-  console.log(`[ingest] Uploading ${records.length} records to Vector Search index ${indexId}`);
-  console.log(`[ingest] Project: ${projectId}, Location: ${location}`);
-  
-  try {
-    // アクセストークンの取得
-    let accessToken;
-    try {
-      // Google Cloud SDK がインストールされている場合
-      const { execSync } = require('child_process');
-      accessToken = execSync('gcloud auth print-access-token 2>nul').toString().trim();
-    } catch (error) {
-      console.log('[ingest] Failed to get access token via gcloud CLI. Using ADC instead.');
-      
-      // ADC から直接取得する方法（本番環境用）
-      const auth = new GoogleAuth({
-        scopes: ['https://www.googleapis.com/auth/cloud-platform']
-      });
-      const client = await auth.getClient();
-      const token = await client.getAccessToken();
-      accessToken = token.token;
-    }
-    
-    // インデックスの完全名
-    const indexName = `projects/${projectId}/locations/${location}/indexes/${indexId}`;
-    console.log(`[ingest] Using index: ${indexName}`);
-    
-    // REST APIのエンドポイント
-    const apiEndpoint = `https://${location}-aiplatform.googleapis.com/v1/${indexName}:upsertDatapoints`;
-    
-    // データポイントの準備
-    const datapoints = records.map((record) => {
-      // Vector Search APIの仕様に合わせた最小限のデータ形式
-      return {
-        datapoint_id: `${record.pageId}-${record.chunkIndex}`,
-        feature_vector: record.embedding,
-        // restrictsは必要最小限に
-        restricts: [
-          { namespace: 'source', allow_list: ['confluence'] }
-        ]
-      };
-    });
-    
-    // バッチサイズを設定（APIの制限に合わせて調整）
-    const BATCH_SIZE = 100;
-    const batches = [];
-    
-    for (let i = 0; i < datapoints.length; i += BATCH_SIZE) {
-      batches.push(datapoints.slice(i, i + BATCH_SIZE));
-    }
-    
-    console.log(`[ingest] Uploading in ${batches.length} batches`);
-    
-    // バッチごとにアップロード
-    for (let i = 0; i < batches.length; i++) {
-      const batch = batches[i];
-      console.log(`[ingest] Uploading batch ${i + 1}/${batches.length} (${batch.length} records)`);
-      
-      // REST APIリクエスト
-      const response = await axios.post(
-        apiEndpoint,
-        { datapoints: batch },
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      
-      console.log(`[ingest] Batch ${i + 1} upload complete: Status ${response.status}`);
-    }
-    
-    console.log(`[ingest] Vector Search upload complete: ${records.length} records processed`);
-    return records.length;
-  } catch (err) {
-    console.error('[ingest] Vector Search upload error:', err);
-    if (err.response && err.response.data) {
-      console.error('[ingest] Error details:', JSON.stringify(err.response.data, null, 2));
-    }
-    throw err;
-  }
-}
 
 async function main() {
   const spaceKey = assertEnv('CONFLUENCE_SPACE_KEY');
-  // Vertex AI 用（ADC 前提）
-  const projectId = assertEnv('VERTEX_AI_PROJECT_ID');
-  const location = assertEnv('VERTEX_AI_LOCATION');
-  // Vector Search インデックスID（任意）
-  const indexId = process.env.VERTEX_AI_INDEX_ID || '';
+  // Vertex AI 関連は削除
+  const projectId = '';
+  const location = '';
+  const indexId = '';
 
   console.log(`[ingest] Start ingest for space: ${spaceKey}`);
 
@@ -235,32 +144,8 @@ async function main() {
         content = `${title} (チャンク ${i+1}/${chunks.length})`;
       }
       
-      // 埋め込みベクトルの生成
-      // Vertex AI APIを使用して埋め込みベクトルを生成
-      const auth = new GoogleAuth({
-        scopes: ['https://www.googleapis.com/auth/cloud-platform']
-      });
-      
-      const client = await auth.getClient();
-      const token = await client.getAccessToken();
-      const accessToken = token.token;
-      
-      const apiEndpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/text-embedding-004:predict`;
-      
-      const response = await axios.post(
-        apiEndpoint,
-        {
-          instances: [{ content: content }]
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      const embedding = response.data.predictions[0].embeddings.values;
+      // 埋め込みベクトルの生成（ダミー/または別実装に置換）
+      const embedding = [] as number[];
       
       // 出力データに追加
       output.push({

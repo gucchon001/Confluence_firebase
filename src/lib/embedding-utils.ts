@@ -19,10 +19,12 @@ export async function embedWithRetry(
   // バッチが1件の場合は単純に処理
   if (batchOfRecords.length === 1) {
     try {
-      const contentsToEmbed = batchOfRecords.map(r => ({ text: r.content }));
+      // 最新のGenkitのai.embedメソッドに合わせて修正
+      // 単一テキストの場合は直接文字列を渡す
+      const content = batchOfRecords.map(r => r.content).join('\n');
       const embeddingResponses = await ai.embed({
         embedder: 'googleai/text-embedding-004',
-        content: contentsToEmbed, // ★★★ APIの仕様に合わせて不要なラップを削除 ★★★
+        text: content,
       }) as any[];
       
       return embeddingResponses;
@@ -42,10 +44,12 @@ export async function embedWithRetry(
   
   while (retries <= maxRetries) {
     try {
-      const contentsToEmbed = batchOfRecords.map(r => ({ text: r.content }));
+      // 最新のGenkitのai.embedメソッドに合わせて修正
+      // 単一テキストの場合は直接文字列を渡す
+      const content = batchOfRecords.map(r => r.content).join('\n');
       const embeddingResponses = await ai.embed({
         embedder: 'googleai/text-embedding-004',
-        content: contentsToEmbed, // ★★★ APIの仕様に合わせて不要なラップを削除 ★★★
+        text: content,
       }) as any[];
       
       return embeddingResponses;
@@ -106,10 +110,12 @@ export async function generateEmbeddingsWithDynamicBatch(recordsToEmbed: any[]):
     const batchOfRecords = recordsToEmbed.slice(i, i + FIXED_BATCH_SIZE);
     try {
       // ★★★ 問題切り分けのため、一時的にリトライロジックをバイパスし、直接呼び出す ★★★
-      const contentsToEmbed = batchOfRecords.map(r => ({ text: r.content }));
+      // 最新のGenkitのai.embedメソッドに合わせて修正
+      // 単一テキストの場合は直接文字列を渡す
+      const content = batchOfRecords.map(r => r.content).join('\n');
       const embeddingResponses = await ai.embed({
         embedder: 'googleai/text-embedding-004',
-        content: contentsToEmbed,
+        text: content,
       }) as any[];
       // const embeddingResponses = await embedWithRetry(batchOfRecords);
 
