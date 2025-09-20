@@ -30,7 +30,7 @@ async function recreateLanceDBTable() {
       console.log(`テーブル '${tableName}' を削除しました`);
     }
     
-    // 完全なスキーマでテーブルを再作成
+    // 完全なスキーマでテーブルを再作成（pageId は Int64）
     console.log(`完全なスキーマでテーブル '${tableName}' を作成します...`);
     const sampleData = [createConfluenceSampleData()] as unknown as Record<string, unknown>[];
     const tbl = await db.createTable(tableName, sampleData);

@@ -82,7 +82,7 @@ async function main() {
     if (!tableExists) {
       // サンプルデータを使用してテーブルを作成
       console.log('サンプルデータでテーブルを新規作成します');
-      tbl = await db.createTable(tableName, [record]);
+      tbl = await db.createTable(tableName, [record as any]);
       console.log(`テーブル '${tableName}' を作成しました`);
     } else {
       console.log('既存のテーブルを開きます');

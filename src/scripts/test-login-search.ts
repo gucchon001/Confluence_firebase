@@ -26,6 +26,51 @@ async function testLoginSearch() {
       console.log(`     埋め込みベクトル長: ${r.vector?.length || 0}`);
       console.log(`     URL: ${r.url}`);
     });
+
+    // 追加検証: 数値比較とタイトルLIKE検索
+    console.log('\n1b. ページID 703889475 (数値比較) の詳細確認:');
+    const pageResultsNumeric = await tbl.query()
+      .where(`"pageId" = 703889475`)
+      .toArray();
+    console.log(`見つかったレコード数(数値比較): ${pageResultsNumeric.length}`);
+    pageResultsNumeric.forEach((r, i) => {
+      console.log(`  ${i+1}. タイトル: ${r.title}`);
+      console.log(`     pageId: ${r.pageId}`);
+      console.log(`     URL: ${r.url}`);
+    });
+
+    console.log('\n1c. タイトルLIKEでの確認 ("会員ログイン"):');
+    const pageResultsTitle = await tbl.query()
+      .where(`title LIKE '%会員ログイン%'`)
+      .toArray();
+    console.log(`見つかったレコード数(タイトルLIKE): ${pageResultsTitle.length}`);
+    pageResultsTitle.forEach((r, i) => {
+      console.log(`  ${i+1}. タイトル: ${r.title}`);
+      console.log(`     pageId: ${r.pageId}`);
+      console.log(`     URL: ${r.url}`);
+    });
+
+    console.log('\n1d. pageId 等価(識別子をクオートしない)での確認:');
+    const pageResultsUnquoted = await tbl.query()
+      .where(`pageId = '703889475'`)
+      .toArray();
+    console.log(`見つかったレコード数(非クオート識別子): ${pageResultsUnquoted.length}`);
+    pageResultsUnquoted.forEach((r, i) => {
+      console.log(`  ${i+1}. タイトル: ${r.title}`);
+      console.log(`     pageId: ${r.pageId}`);
+      console.log(`     URL: ${r.url}`);
+    });
+
+    console.log('\n1e. CAST で型を合わせて等価比較 (Int64):');
+    const pageResultsCast = await tbl.query()
+      .where(`CAST("pageId" AS Int64) = 703889475`)
+      .toArray();
+    console.log(`見つかったレコード数(CAST): ${pageResultsCast.length}`);
+    pageResultsCast.forEach((r, i) => {
+      console.log(`  ${i+1}. タイトル: ${r.title}`);
+      console.log(`     pageId: ${r.pageId}`);
+      console.log(`     URL: ${r.url}`);
+    });
     
     // 検索クエリをテスト
     const testQueries = [
@@ -54,12 +99,12 @@ async function testLoginSearch() {
         
         console.log(`結果数: ${searchResults.length}`);
         searchResults.forEach((r, i) => {
-          const isTargetPage = r.pageId === '703889475';
+          const isTargetPage = r.pageId === 703889475;
           console.log(`  ${i+1}. ${isTargetPage ? '🎯' : '  '} ${r.title} (pageId: ${r.pageId}, distance: ${r.distance?.toFixed(3)})`);
         });
         
         // ページID 703889475が含まれているかチェック
-        const hasTargetPage = searchResults.some(r => r.pageId === '703889475');
+        const hasTargetPage = searchResults.some(r => r.pageId === 703889475);
         console.log(`ページID 703889475が含まれている: ${hasTargetPage ? '✅' : '❌'}`);
         
       } catch (searchError) {

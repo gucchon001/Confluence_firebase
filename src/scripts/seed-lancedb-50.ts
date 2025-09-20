@@ -41,7 +41,7 @@ async function main() {
         spaceKey,
         title,
         content,
-        pageId,
+        parseInt(pageId),
         chunkIndex,
         url,
         lastUpdated,

@@ -91,9 +91,14 @@ async function syncSpecificPage(pageId: string) {
     
     // LanceDBに保存
     console.log(`${records.length}件のレコードをLanceDBに保存中...`);
-    await tbl.add(records);
-    
-    console.log('✅ 同期完了');
+    try {
+      await tbl.add(records);
+      console.log('✅ 同期完了');
+    } catch (error: any) {
+      console.error(`LanceDBへの保存中にエラーが発生しました: ${error.message}`);
+      console.error('エラーの詳細:', error);
+      return;
+    }
     
     // 確認
     const verifyResults = await tbl.query()

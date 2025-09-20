@@ -78,13 +78,13 @@ async function main() {
         spaceKey,
         title,
         chunks[i],
-        pageId,
+        parseInt(pageId),
         i,
         url,
         lastUpdated,
         labels
       );
-      await tbl.add([record]);
+      await tbl.add([record as any]);
     }
     console.log(` - Upserted ${chunks.length} chunks`);
   }

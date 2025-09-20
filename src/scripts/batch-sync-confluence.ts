@@ -7,6 +7,14 @@ import * as lancedb from '@lancedb/lancedb';
 import { getEmbeddings } from '../lib/embeddings';
 import { ErrorHandler } from '../lib/error-handling';
 import { createConfluenceSampleData, ConfluenceSchema, FullLanceDBSchema } from '../lib/lancedb-schema';
+import { 
+  compareDates, 
+  isNewerThan, 
+  isEqual, 
+  getDateComparisonDebugInfo,
+  formatDateForDisplay,
+  getRelativeTime
+} from '../lib/date-comparison-utils';
 
 interface ConfluencePage {
   id: string;
@@ -64,9 +72,9 @@ async function getConfluencePages(
       limit
     };
     if (lastSyncTime) {
-      console.log(`Fetching pages updated after ${lastSyncTime}`);
-      // CQL (Confluence Query Language) を使用してフィルタリング
-      params.cql = `lastModified >= "${lastSyncTime}" AND space = "${spaceKey}"`;
+      console.log(`⚠️  CQLクエリが機能しないため、全ページを取得して手動でフィルタリングします`);
+      // CQLクエリは機能しないため、全ページを取得して後で手動でフィルタリング
+      // params.cql = `lastModified >= "${lastSyncTime}" AND space = "${spaceKey}"`;
     }
     const response = await axios.get(endpoint, {
       params,
@@ -140,6 +148,73 @@ async function getConfluenceLabels(pageId: string): Promise<string[]> {
   const unique = Array.from(new Set(labels));
   console.log(`[getConfluenceLabels] pageId=${pageId} labels=${JSON.stringify(unique)}`);
   return unique;
+}
+
+/**
+ * LanceDBから既存のページデータを取得
+ */
+async function getExistingLanceDBData(table: any): Promise<Map<string, { lastUpdated: string; title: string; }>> {
+  try {
+    console.log('📊 LanceDBから既存データを取得中...');
+    const existingData = new Map<string, { lastUpdated: string; title: string; }>();
+    
+    const records = await table.query().select(['pageId', 'lastUpdated', 'title']).toArray();
+    
+    for (const record of records) {
+      const pageId = String(record.pageId || '');
+      if (pageId && pageId !== '0') { // 0や空文字列を除外
+        existingData.set(pageId, {
+          lastUpdated: String(record.lastUpdated || ''),
+          title: String(record.title || '')
+        });
+      }
+    }
+    
+    console.log(`✅ LanceDB既存データ取得完了: ${existingData.size}ページ`);
+    return existingData;
+  } catch (error) {
+    console.error('❌ LanceDB既存データ取得エラー:', error);
+    return new Map();
+  }
+}
+
+/**
+ * ページの更新日時を比較して更新が必要かどうかを判定
+ */
+function shouldUpdatePage(confluencePage: ConfluencePage, lancedbData: { lastUpdated: string; title: string; }): {
+  needsUpdate: boolean;
+  debugInfo: any;
+} {
+  const confluenceLastModified = confluencePage.version?.when;
+  const lancedbLastUpdated = lancedbData.lastUpdated;
+
+  const debugInfo = getDateComparisonDebugInfo(
+    confluenceLastModified,
+    lancedbLastUpdated,
+    'Confluence',
+    'LanceDB'
+  );
+
+  // 日時が無効な場合は更新が必要と判定
+  if (!confluenceLastModified || !lancedbLastUpdated) {
+    console.log(`⚠️  日時情報が不完全: ${confluencePage.title}`);
+    console.log(`   Confluence: ${confluenceLastModified || 'N/A'}`);
+    console.log(`   LanceDB: ${lancedbLastUpdated || 'N/A'}`);
+    return { needsUpdate: true, debugInfo };
+  }
+
+  const needsUpdate = isNewerThan(confluenceLastModified, lancedbLastUpdated);
+  
+  if (needsUpdate) {
+    console.log(`📝 更新が必要: ${confluencePage.title}`);
+    console.log(`   Confluence: ${debugInfo.date1.display} (${getRelativeTime(confluenceLastModified)})`);
+    console.log(`   LanceDB: ${debugInfo.date2.display} (${getRelativeTime(lancedbLastUpdated)})`);
+    console.log(`   差分: ${debugInfo.comparison.differenceMs}ms`);
+  } else {
+    console.log(`✅ 更新不要: ${confluencePage.title}`);
+  }
+
+  return { needsUpdate, debugInfo };
 }
 
 /**
@@ -239,19 +314,10 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
     if (isDifferentialSync) lastSyncTime = await getLastSyncTime();
     await saveSyncLog('start', { message: 'Sync started', lastSyncTime });
 
-    // LanceDBから既存のページIDを取得
-    const existingIds = new Set<string>();
-    try {
-      const existingRecords = await tbl.query().select(['pageId']).toArray();
-      for (const record of existingRecords) {
-        if (record.pageId) {
-          existingIds.add(String(record.pageId));
-        }
-      }
-      console.log(`Found ${existingIds.size} existing page IDs in LanceDB`);
-    } catch (error) {
-      console.warn('Failed to retrieve existing page IDs from LanceDB:', error);
-    }
+    // LanceDBから既存のページデータを取得（日時比較用）
+    const existingLanceDBData = await getExistingLanceDBData(tbl);
+    const existingIds = new Set<string>(existingLanceDBData.keys());
+    console.log(`Found ${existingIds.size} existing page IDs in LanceDB`);
     
     const processedPageIds = new Set<string>();
     
@@ -269,10 +335,55 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
           break;
         }
 
-        totalPages += pages.length;
+        // 差分同期の場合は正確な日時比較でフィルタリング
+        let filteredPages = pages;
+        if (isDifferentialSync) {
+          const pagesToProcess: ConfluencePage[] = [];
+          let updateCount = 0;
+          let insertCount = 0;
+          let skipCount = 0;
+
+          for (const page of pages) {
+            const pageId = page.id;
+            const existingData = existingLanceDBData.get(pageId);
+            
+            if (existingData) {
+              // 既存ページ - 日時比較で更新が必要かチェック
+              const { needsUpdate } = shouldUpdatePage(page, existingData);
+              if (needsUpdate) {
+                pagesToProcess.push(page);
+                updateCount++;
+              } else {
+                skipCount++;
+              }
+            } else {
+              // 新規ページ
+              console.log(`➕ 新規追加: ${page.title}`);
+              pagesToProcess.push(page);
+              insertCount++;
+            }
+          }
+          
+          filteredPages = pagesToProcess;
+          console.log(`📊 バッチ ${batchCount}: 全${pages.length}件 → 更新${updateCount}件, 新規${insertCount}件, スキップ${skipCount}件`);
+        }
+
+        totalPages += filteredPages.length;
         const recordsForBatch: any[] = [];
-        for (const page of pages) {
+        for (const page of filteredPages) {
           processedPageIds.add(page.id);
+          
+          // 既存ページの場合は古いレコードを削除
+          if (existingLanceDBData.has(page.id)) {
+            try {
+              // pageIdは数値型なので、文字列比較ではなく数値比較を使用
+              await tbl.delete(`"pageId" = ${page.id}`);
+              console.log(`🗑️  既存レコードを削除: ${page.title}`);
+            } catch (error) {
+              console.warn(`⚠️  既存レコード削除エラー: ${page.title}`, error);
+            }
+          }
+          
           const text = extractTextFromHtml(page.body?.storage?.value || '');
           const chunks = splitTextIntoChunks(text);
           totalChunks += chunks.length;
@@ -493,4 +604,11 @@ async function main() {
 main();
 
 // テスト用にエクスポート
-export { batchSyncConfluence, getLastSyncTime, getConfluencePages, getConfluenceLabels };
+export { 
+  batchSyncConfluence, 
+  getLastSyncTime, 
+  getConfluencePages, 
+  getConfluenceLabels,
+  getExistingLanceDBData,
+  shouldUpdatePage
+};

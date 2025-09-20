@@ -27,7 +27,7 @@ async function main() {
     const spaceKey = 'SEED';
     const title = `Seed Title ${i}`;
     const content = `Seed content ${i}`;
-    const pageId = `seed-page-${i}`;
+    const pageId = 1000000000 + i;
     const chunkIndex = 0;
     const url = `https://example.com/seed/${i}`;
     const lastUpdated = new Date().toISOString();

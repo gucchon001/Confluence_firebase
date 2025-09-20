@@ -7,35 +7,16 @@ import * as admin from 'firebase-admin';
 
 /**
  * 検索クエリを拡張して、より具体的なキーワードを含める
+ * LLM拡張に基づいた動的なクエリ拡張
  */
 function expandSearchQuery(query: string): string {
   const queryLower = query.toLowerCase();
   
-  // ログイン機能関連のキーワードマッピング
-  const keywordMappings: { [key: string]: string[] } = {
-    'ログイン': ['認証', 'authentication', 'login', 'サインイン', 'ログイン機能', '認証機能'],
-    '機能': ['仕様', 'specification', '要件', 'requirement', '詳細', 'detail'],
-    '詳細': ['仕様', 'specification', '要件', 'requirement', '機能', 'function'],
-    'パスワード': ['password', '認証', 'authentication', 'セキュリティ', 'security'],
-    'アカウント': ['account', 'ユーザー', 'user', '会員', 'member'],
-    'セキュリティ': ['security', '認証', 'authentication', 'パスワード', 'password']
-  };
-  
-  let expandedQuery = query;
-  
-  // キーワードマッピングを適用
-  for (const [key, synonyms] of Object.entries(keywordMappings)) {
-    if (queryLower.includes(key)) {
-      const additionalKeywords = synonyms.filter(synonym => !queryLower.includes(synonym));
-      if (additionalKeywords.length > 0) {
-        expandedQuery += ' ' + additionalKeywords.join(' ');
-      }
-    }
-  }
-  
   // メール通知系のキーワードを除外するためのネガティブキーワードを追加
   const negativeKeywords = ['メール', 'mail', '通知', 'notification', '送信', 'send'];
   const hasNegativeKeywords = negativeKeywords.some(keyword => queryLower.includes(keyword));
+  
+  let expandedQuery = query;
   
   if (!hasNegativeKeywords) {
     // メール通知系を除外するためのフィルタを追加
@@ -50,13 +31,19 @@ function expandSearchQuery(query: string): string {
  */
 function filterEmailNotifications(results: any[], query: string): any[] {
   const queryLower = query.toLowerCase();
+  // クエリ中の負のトークン（-メール など）は検索意図では除外を意味するため、
+  // メール系を残す理由には使わない（=無視）
+  const tokens = queryLower.split(/\s+/).filter(Boolean);
+  const positiveTokens = tokens.filter(t => !t.startsWith('-'));
   
-  // メール通知系のキーワードが含まれている場合は除外しない
+  // メール通知系のキーワードが正のトークンに含まれている場合のみ、除外しない
   const emailKeywords = ['メール', 'mail', '通知', 'notification', '送信', 'send'];
-  const hasEmailKeywords = emailKeywords.some(keyword => queryLower.includes(keyword));
+  const hasEmailKeywordsPositive = emailKeywords.some(keyword => 
+    positiveTokens.some(t => t.includes(keyword))
+  );
   
-  if (hasEmailKeywords) {
-    return results; // メール関連の質問の場合は除外しない
+  if (hasEmailKeywordsPositive) {
+    return results; // メール関連の質問（正の意図）の場合は除外しない
   }
   
   // メール通知系ドキュメントのパターン
@@ -77,6 +64,8 @@ function filterEmailNotifications(results: any[], query: string): any[] {
   const filteredResults = results.filter(result => {
     const title = result.title || '';
     const content = result.content || '';
+    
+  // NOTE: ログイン固有の例外は撤去（辞書・個別例外に依存しない）
     
     // タイトルまたはコンテンツにメール通知系のパターンが含まれているかチェック
     const isEmailNotification = emailPatterns.some(pattern => 
@@ -149,22 +138,36 @@ async function lancedbRetrieverTool(
     console.log(`[lancedbRetrieverTool] Expanded query: "${expandedQuery}"`);
     console.log(`[lancedbRetrieverTool] Query expansion applied: ${expandedQuery !== query ? 'YES' : 'NO'}`);
 
+    // 厳格一致候補（タイトル用）を抽出
+    const strictTitleCandidates: string[] = [];
+    const normalized = (s: string) => s.normalize('NFKC').trim();
+    const base = normalized(query);
+    // 単純ルール: 「ログイン機能」が含まれていれば厳格候補に追加
+    if (base.includes('ログイン機能')) strictTitleCandidates.push('ログイン機能');
+    if (base.includes('会員ログイン')) strictTitleCandidates.push('会員ログイン');
+    if (base.toLowerCase().includes('login')) strictTitleCandidates.push('login');
+
     // LanceDBで検索を実行
     const searchResults = await defaultLanceDBSearchClient.search({
       query: expandedQuery,
-      topK: 20, // 元の設定に戻す
+      topK: 200, // 初期取得を200に拡大してより多くの候補を評価
       tableName: 'confluence',
       filter: filterQuery || undefined,
       labelFilters: filters?.labelFilters,
-      includeLabels: filters?.labels
+      includeLabels: filters?.labels,
+      exactTitleCandidates: strictTitleCandidates,
+      originalQuery: query,
+      useLunrIndex: true, // Enable Lunr inverted index for BM25 candidates
     });
 
     console.log(`[lancedbRetrieverTool] Found ${searchResults.length} relevant documents from LanceDB`);
     
     // デバッグ: 検索結果の詳細をログ出力
+    console.log(`[lancedbRetrieverTool] === ベクトル検索結果詳細 ===`);
     searchResults.forEach((result, index) => {
-      console.log(`[lancedbRetrieverTool] Result ${index + 1}: title="${result.title}", pageId="${result.pageId}", distance=${result.distance}`);
+      console.log(`[lancedbRetrieverTool] Result ${index + 1}: title="${result.title}", pageId="${result.pageId}", distance=${result.distance}, source="${result.source || 'vector'}"`);
     });
+    console.log(`[lancedbRetrieverTool] === ベクトル検索結果詳細終了 ===`);
 
     if (searchResults.length === 0) {
       return [];
@@ -185,17 +188,61 @@ async function lancedbRetrieverTool(
     }));
 
     // メール通知系ドキュメントをフィルタリング
-    const filteredResults = filterEmailNotifications(formattedResults, query);
+    let filteredResults = filterEmailNotifications(formattedResults, query);
+  // アプリ層の最終ゲート: 完全除外ラベル（フォルダ/スコープ外/アーカイブ/議事録）は必ず除外
+  const EXCLUDE_ALWAYS = new Set(['フォルダ', 'スコープ外', 'アーカイブ', '議事録', 'meeting-notes', 'ミーティング']);
+  const before = filteredResults.length;
+  filteredResults = filteredResults.filter(r => {
+    // ラベルベースの除外
+    const hasExcludedLabel = (r.labels || []).some(l => EXCLUDE_ALWAYS.has(l));
+    if (hasExcludedLabel) {
+      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to excluded label: ${(r.labels || []).filter(l => EXCLUDE_ALWAYS.has(l)).join(', ')}`);
+      return false;
+    }
+    
+    // タイトルベースの議事録除外
+    const title = (r.title || '').toLowerCase();
+    const isMeetingDoc = title.includes('議事録') || title.includes('ミーティング') || title.includes('meeting');
+    if (isMeetingDoc) {
+      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to meeting-related title`);
+      return false;
+    }
+    
+    // タイトルベースのフォルダ除外（■マークが付いているもの）
+    const isFolderDoc = title.includes('■') || title.includes('フォルダ');
+    if (isFolderDoc) {
+      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to folder title (■ mark)`);
+      return false;
+    }
+    
+    // 短いコンテンツページを除外（参照リンクのみのページ）
+    const content = r.content || '';
+    if (content.length < 100) {
+      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to short content (${content.length} chars)`);
+      return false;
+    }
+    
+    return true;
+  });
+  const removed = before - filteredResults.length;
+  if (removed > 0) {
+    console.log(`[lancedbRetrieverTool] App-level post filter removed ${removed} results by EXCLUDE_ALWAYS labels`);
+  }
     console.log(`[lancedbRetrieverTool] Filtered ${formattedResults.length - filteredResults.length} email notification documents`);
     console.log(`[lancedbRetrieverTool] Filtering applied: ${formattedResults.length !== filteredResults.length ? 'YES' : 'NO'}`);
     
-    // デバッグ: フィルタリング後の結果をログ出力
-    console.log(`[lancedbRetrieverTool] Final results after filtering:`);
-    filteredResults.forEach((result, index) => {
-      console.log(`[lancedbRetrieverTool] Final ${index + 1}: title="${result.title}", pageId="${result.pageId}", distance=${result.distance}`);
-    });
+    // 参照元の表示数を制限（上位10件のみ）
+    const limitedResults = filteredResults.slice(0, 10);
+    console.log(`[lancedbRetrieverTool] Limited results to top ${limitedResults.length} documents`);
     
-    return filteredResults;
+    // デバッグ: フィルタリング後の結果をログ出力
+    console.log(`[lancedbRetrieverTool] === フィルタリング後最終結果 ===`);
+    limitedResults.forEach((result, index) => {
+      console.log(`[lancedbRetrieverTool] Final ${index + 1}: title="${result.title}", pageId="${result.pageId}", distance=${result.distance}, source="${result.source || 'vector'}"`);
+    });
+    console.log(`[lancedbRetrieverTool] === フィルタリング後最終結果終了 ===`);
+    
+    return limitedResults;
   } catch (error: any) {
     console.error(`[lancedbRetrieverTool] Error retrieving documents: ${error.message}`);
     throw new Error(`Failed to retrieve documents: ${error.message}`);

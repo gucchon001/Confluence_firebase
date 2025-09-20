@@ -24,7 +24,7 @@ export async function embedWithRetry(
       const content = batchOfRecords.map(r => r.content).join('\n');
       const embeddingResponses = await ai.embed({
         embedder: 'googleai/text-embedding-004',
-        text: content,
+        content: content,
       }) as any[];
       
       return embeddingResponses;
@@ -49,7 +49,7 @@ export async function embedWithRetry(
       const content = batchOfRecords.map(r => r.content).join('\n');
       const embeddingResponses = await ai.embed({
         embedder: 'googleai/text-embedding-004',
-        text: content,
+        content: content,
       }) as any[];
       
       return embeddingResponses;
@@ -115,7 +115,7 @@ export async function generateEmbeddingsWithDynamicBatch(recordsToEmbed: any[]):
       const content = batchOfRecords.map(r => r.content).join('\n');
       const embeddingResponses = await ai.embed({
         embedder: 'googleai/text-embedding-004',
-        text: content,
+        content: content,
       }) as any[];
       // const embeddingResponses = await embedWithRetry(batchOfRecords);
 

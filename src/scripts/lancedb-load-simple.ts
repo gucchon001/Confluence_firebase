@@ -40,7 +40,7 @@ async function main() {
       
       // サンプルクエリを実行
       console.log('Running sample query...');
-      const results = await tbl.search(new Array(768).fill(0.1)).limit(1).execute();
+      const results = await tbl.search(new Array(768).fill(0.1)).limit(1).toArray();
       console.log('Query results:', results);
     } else {
       console.log(`Creating new table '${tableName}'...`);

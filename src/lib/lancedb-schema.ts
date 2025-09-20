@@ -29,7 +29,7 @@ export const FullLanceDBSchema: SchemaDefinition = {
   title: { type: 'string', nullable: false },
   labels: { type: 'list', valueType: 'string', nullable: false },
   content: { type: 'string', nullable: false },
-  pageId: { type: 'string', nullable: false },
+  pageId: { type: 'int64', nullable: false },
   chunkIndex: { type: 'int32', nullable: false },
   url: { type: 'string', nullable: false },
   lastUpdated: { type: 'string', nullable: false }
@@ -43,7 +43,7 @@ export interface ConfluenceSchema {
   title: string;
   labels: string[];
   content: string;
-  pageId: string;
+  pageId: number;
   chunkIndex: number;
   url: string;
   lastUpdated: string;
@@ -61,7 +61,7 @@ export function createConfluenceSampleData(): ConfluenceSchema {
     title: 'Sample Title',
     labels: ['sample'],
     content: 'Sample content',
-    pageId: 'sample-page-1',
+    pageId: 1000000000,
     chunkIndex: 0,
     url: 'https://example.com',
     lastUpdated: new Date().toISOString()
@@ -88,7 +88,7 @@ export function createConfluenceRecord(
   spaceKey: string,
   title: string,
   content: string,
-  pageId: string,
+  pageId: number,
   chunkIndex: number,
   url: string,
   lastUpdated: string,

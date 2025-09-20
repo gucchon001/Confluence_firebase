@@ -1,10 +1,22 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
   typescript: {
-    ignoreBuildErrors: true,
+    // 型チェックを有効化（エラーを修正してから有効化）
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
+  },
+  webpack: (config, { isServer }) => {
+    // LanceDBのネイティブバイナリモジュールをWebpackから除外
+    if (isServer) {
+      config.externals.push({
+        '@lancedb/lancedb': 'commonjs @lancedb/lancedb',
+        '@lancedb/lancedb-win32-x64-msvc': 'commonjs @lancedb/lancedb-win32-x64-msvc'
+      });
+    }
+    return config;
   },
   serverExternalPackages: [
     '@genkit-ai/core',
@@ -12,6 +24,8 @@ const nextConfig = {
     '@genkit-ai/googleai',
     '@genkit-ai/next',
     'genkit',
+    '@lancedb/lancedb',
+    '@lancedb/lancedb-win32-x64-msvc',
   ],
   images: {
     remotePatterns: [

@@ -24,6 +24,9 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   return await getLocalEmbeddings(text);
 }
 
+// デフォルトエクスポートも追加
+export default { getEmbeddings };
+
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
     extractor = await pipeline('feature-extraction', MODEL_ID);

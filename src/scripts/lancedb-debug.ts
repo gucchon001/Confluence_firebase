@@ -44,7 +44,7 @@ async function main() {
     console.log('\n5. サンプルデータの取得（最初の3件）');
     // ダミーベクトルで検索して最初の3件を取得
     const dummyVector = new Array(768).fill(0);
-    const results = await tbl.search(dummyVector).limit(3).execute();
+    const results = await tbl.search(dummyVector).limit(3).toArray();
     
     // 結果を配列として取得
     const sampleData: any[] = [];
@@ -116,7 +116,7 @@ async function main() {
       console.log('検索実行中...');
       const searchResults = await tbl.search(normalizedQueryVector)
         .limit(5)
-        .execute();
+        .toArray();
       
       // 結果を配列として取得
       const resultArray: any[] = [];
@@ -182,7 +182,7 @@ async function main() {
       console.log('検索実行中...');
       const realSearchResults = await tbl.search(normalizedVec)
         .limit(5)
-        .execute();
+        .toArray();
       
       // 結果を配列として取得
       const realResultArray: any[] = [];

@@ -63,7 +63,9 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                             <LinkIcon className="h-3 w-3 shrink-0" />
                             <span className="truncate">{source.title}</span>
                             <span className="text-xs text-muted-foreground ml-1">
-                                ({source.distance ? (source.distance * 100).toFixed(0) : '??'}% 一致)
+                                ({source.distance !== undefined && source.distance !== null
+                                  ? Math.max(0, Math.min(100, Math.round(source.distance)))
+                                  : '??'}% 一致)
                             </span>
                             <span className="text-xs ml-1 font-bold" style={{color: 'blue'}}>
                                 {source.source === 'keyword' ? '⌨️' : '🔍'}

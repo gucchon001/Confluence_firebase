@@ -57,7 +57,7 @@ async function main() {
     const startTime = Date.now();
     
     try {
-      await tbl.compact_files();
+      // await tbl.compact_files(); // メソッドが存在しないためコメントアウト
       
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
@@ -70,13 +70,13 @@ async function main() {
     // インデックス情報の取得（存在する場合）
     console.log('\n6. インデックス情報');
     try {
-      const indices = await tbl.list_indices();
+      const indices = await tbl.listIndices();
       
       if (indices && indices.length > 0) {
         console.log(`${indices.length}個のインデックスが見つかりました:`);
         
         for (const index of indices) {
-          console.log(`- ${index.name} (タイプ: ${index.type})`);
+          console.log(`- ${index.name} (タイプ: ${(index as any).type || 'unknown'})`);
         }
       } else {
         console.log('インデックスが見つかりませんでした。');
