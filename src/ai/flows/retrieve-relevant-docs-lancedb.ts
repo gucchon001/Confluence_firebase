@@ -10,20 +10,8 @@ import * as admin from 'firebase-admin';
  * LLM拡張に基づいた動的なクエリ拡張
  */
 function expandSearchQuery(query: string): string {
-  const queryLower = query.toLowerCase();
-  
-  // メール通知系のキーワードを除外するためのネガティブキーワードを追加
-  const negativeKeywords = ['メール', 'mail', '通知', 'notification', '送信', 'send'];
-  const hasNegativeKeywords = negativeKeywords.some(keyword => queryLower.includes(keyword));
-  
-  let expandedQuery = query;
-  
-  if (!hasNegativeKeywords) {
-    // メール通知系を除外するためのフィルタを追加
-    expandedQuery += ' -メール -mail -通知 -notification';
-  }
-  
-  return expandedQuery.trim();
+  // スクリプトと同一挙動に合わせ、アプリ層でのネガティブ拡張は行わない
+  return query.trim();
 }
 
 /**
@@ -147,17 +135,17 @@ async function lancedbRetrieverTool(
     if (base.includes('会員ログイン')) strictTitleCandidates.push('会員ログイン');
     if (base.toLowerCase().includes('login')) strictTitleCandidates.push('login');
 
-    // LanceDBで検索を実行
+    // LanceDBで検索を実行（スクリプトと同じパラメータに統一）
     const searchResults = await defaultLanceDBSearchClient.search({
       query: expandedQuery,
-      topK: 200, // 初期取得を200に拡大してより多くの候補を評価
+      topK: 12, // スクリプトと同じ値に統一
       tableName: 'confluence',
       filter: filterQuery || undefined,
       labelFilters: filters?.labelFilters,
       includeLabels: filters?.labels,
       exactTitleCandidates: strictTitleCandidates,
       originalQuery: query,
-      useLunrIndex: true, // Enable Lunr inverted index for BM25 candidates
+      useLunrIndex: false, // スクリプトと同じ設定に統一
     });
 
     console.log(`[lancedbRetrieverTool] Found ${searchResults.length} relevant documents from LanceDB`);
@@ -187,52 +175,8 @@ async function lancedbRetrieverTool(
       source: result.source // 検索ソース（vector/keyword）を追加
     }));
 
-    // メール通知系ドキュメントをフィルタリング
-    let filteredResults = filterEmailNotifications(formattedResults, query);
-  // アプリ層の最終ゲート: 完全除外ラベル（フォルダ/スコープ外/アーカイブ/議事録）は必ず除外
-  const EXCLUDE_ALWAYS = new Set(['フォルダ', 'スコープ外', 'アーカイブ', '議事録', 'meeting-notes', 'ミーティング']);
-  const before = filteredResults.length;
-  filteredResults = filteredResults.filter(r => {
-    // ラベルベースの除外
-    const hasExcludedLabel = (r.labels || []).some(l => EXCLUDE_ALWAYS.has(l));
-    if (hasExcludedLabel) {
-      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to excluded label: ${(r.labels || []).filter(l => EXCLUDE_ALWAYS.has(l)).join(', ')}`);
-      return false;
-    }
-    
-    // タイトルベースの議事録除外
-    const title = (r.title || '').toLowerCase();
-    const isMeetingDoc = title.includes('議事録') || title.includes('ミーティング') || title.includes('meeting');
-    if (isMeetingDoc) {
-      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to meeting-related title`);
-      return false;
-    }
-    
-    // タイトルベースのフォルダ除外（■マークが付いているもの）
-    const isFolderDoc = title.includes('■') || title.includes('フォルダ');
-    if (isFolderDoc) {
-      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to folder title (■ mark)`);
-      return false;
-    }
-    
-    // 短いコンテンツページを除外（参照リンクのみのページ）
-    const content = r.content || '';
-    if (content.length < 100) {
-      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to short content (${content.length} chars)`);
-      return false;
-    }
-    
-    return true;
-  });
-  const removed = before - filteredResults.length;
-  if (removed > 0) {
-    console.log(`[lancedbRetrieverTool] App-level post filter removed ${removed} results by EXCLUDE_ALWAYS labels`);
-  }
-    console.log(`[lancedbRetrieverTool] Filtered ${formattedResults.length - filteredResults.length} email notification documents`);
-    console.log(`[lancedbRetrieverTool] Filtering applied: ${formattedResults.length !== filteredResults.length ? 'YES' : 'NO'}`);
-    
-    // 参照元の表示数を制限（上位10件のみ）
-    const limitedResults = filteredResults.slice(0, 10);
+    // スクリプトと同一: アプリ層での追加除外は行わない（ラベルフィルタはsearchクライアントで実施済み）
+    const limitedResults = formattedResults.slice(0, 12);
     console.log(`[lancedbRetrieverTool] Limited results to top ${limitedResults.length} documents`);
     
     // デバッグ: フィルタリング後の結果をログ出力

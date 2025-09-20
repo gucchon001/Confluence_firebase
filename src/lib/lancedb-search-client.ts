@@ -767,9 +767,21 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // 3. 結果の結合（キーワード検索は無効化されているため、ベクトル検索結果のみ使用）
     const combinedResults = [...vectorResults];
     
+    // 重複除去処理を追加（タイトルベースで重複を除去）
+    const uniqueResults = new Map<string, any>();
+    for (const result of combinedResults) {
+      const title = String(result.title || '').trim();
+      if (title && !uniqueResults.has(title)) {
+        uniqueResults.set(title, result);
+      }
+    }
+    const deduplicatedResults = Array.from(uniqueResults.values());
+    
+    console.log(`[searchLanceDB] Removed ${combinedResults.length - deduplicatedResults.length} duplicate results`);
+    
     // すでにハイブリッドスコアでソート済みなので、ここではソートしない
     // 上位の結果を取得
-    const finalResults = combinedResults.slice(0, topK);
+    const finalResults = deduplicatedResults.slice(0, topK);
     console.log(`[searchLanceDB] Returning top ${finalResults.length} results based on hybrid score`);
     
     // 結果を整形
@@ -801,7 +813,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
            const bm25 = result._bm25Score ?? result._keywordScore ?? 0;
            scoreKind = 'bm25';
            scoreRaw = bm25;
-           scoreText = `BM25 ${bm25.toFixed(2)}`;
+           // 実際のスコアが0の場合は0と表示、それ以外は実際の値を表示
+           scoreText = bm25 > 0 ? `BM25 ${bm25.toFixed(2)}` : `BM25 0.00`;
          }
 
          const formattedResult = {

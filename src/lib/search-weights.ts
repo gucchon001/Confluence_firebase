@@ -527,7 +527,7 @@ export function calculateKeywordScore(
         
         // デバッグ: タイトルマッチングの詳細をログ出力
         if (lowerKeyword === 'ログイン' || lowerKeyword === 'ログイン機能') {
-          console.log(`[calculateKeywordScore] DEBUG - Keyword: "${lowerKeyword}", Title: "${lowerTitle}", Contains check: ${lowerTitle.includes('ログイン')}`);
+          console.log(`[calculateKeywordScore] DEBUG - Keyword: "${lowerKeyword}", Title: "${lowerTitle}", Contains check: ${lowerTitle.includes(lowerKeyword)}`);
         }
     
     // ラベルに一致する場合

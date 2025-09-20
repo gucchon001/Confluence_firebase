@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
+import { answerWithRag } from '@/lib/rag-engine';
 
 export async function POST(
   req: NextRequest,
@@ -27,6 +28,17 @@ export async function POST(
       }
       case 'summarizeConfluenceDocs': {
         const result = await summarizeConfluenceDocs(body);
+        return NextResponse.json(result);
+      }
+      case 'answerWithRag': {
+        const { question, labelFilters } = body ?? {};
+        if (typeof question !== 'string' || question.length === 0) {
+          return NextResponse.json(
+            { error: 'Invalid input: question is required' },
+            { status: 400 }
+          );
+        }
+        const result = await answerWithRag(question, { labelFilters });
         return NextResponse.json(result);
       }
       default:

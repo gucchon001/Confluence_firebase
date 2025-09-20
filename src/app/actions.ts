@@ -2,6 +2,7 @@
 
 import * as z from 'zod';
 import { withRetry } from '@/lib/retry-utils';
+import { testLogger } from '@/app/login/test-logger';
 
 // ===== [修正点 1] =====
 // フローの実際の出力に合わせたZodスキーマを定義
@@ -13,7 +14,10 @@ const SummarizeFlowOutputSchema = z.object({
     spaceName: z.string().optional(),
     lastUpdated: z.string().nullable().optional(),
     distance: z.number().optional(), // 距離（類似度スコア）を追加
-    source: z.enum(['vector', 'keyword']).optional() // 検索ソース（vector/keyword）を追加
+    // 検索ソース（vector/keyword/bm25/hybrid）を許容
+    source: z.enum(['vector', 'keyword', 'bm25', 'hybrid']).optional(),
+    // スコア表示用テキスト
+    scoreText: z.string().optional()
   })).default([]),
 });
 
@@ -49,79 +53,70 @@ export async function askQuestion(question: string, chatHistory: any[], labelFil
     throw new Error('Question is required.');
   }
 
+  const startTime = Date.now();
+  testLogger.startTest('askQuestion', question);
+
   try {
-    // 1. ドキュメントを検索 (リトライ付き) (変更なし)
-    const relevantDocs = await withRetry(
-      () => callFlow<any[]>('retrieveRelevantDocs', { question, labelFilters }),
+    testLogger.logRagProcess('Calling answerWithRag API', { question, labelFilters });
+    
+    // スクリプトと同一フロー: answerWithRag を直接呼ぶ
+    const rag = await withRetry(
+      () => callFlow<any>('answerWithRag', { question, labelFilters }),
       {
-        maxRetries: 2,
+        maxRetries: 1,
         onRetry: (error, retryCount, delay) => {
-          console.log(`[Retry] Retrieving documents (${retryCount}/2) after ${delay}ms due to: ${error.message}`);
+          console.log(`[Retry] answerWithRag (${retryCount}/1) after ${delay}ms due to: ${error.message}`);
+          testLogger.log('DEBUG', `Retry ${retryCount}/1`, { error: error.message, delay });
         }
       }
     );
 
-    // 2. ドキュメントを要約 (変更なし)
-    // 修正された 'summarizeConfluenceDocs' フローを呼び出す
-    const summaryResponse = await callFlow<any>(
-      'summarizeConfluenceDocs', 
-      { question, context: relevantDocs, chatHistory }
-    );
+    testLogger.logRagProcess('Received RAG response', { 
+      hasSummary: !!rag?.summary, 
+      citationsCount: rag?.citations?.length || 0 
+    });
 
-    // ===== [修正点 2] =====
-    // レスポンス構造を確認してログに出力
-    console.log('[askQuestion Action] Raw response structure:', JSON.stringify(summaryResponse, null, 2));
+    // rag-engine.ts の出力 { summary, bullets, citations } をUI期待形に変換
+    const answer = String(rag?.summary || '');
+    const references = Array.isArray(rag?.citations)
+      ? rag.citations.map((c: any) => ({
+          title: c.title,
+          url: c.url || '',
+          spaceName: c.spaceName || '',
+          lastUpdated: c.lastUpdated || null,
+          distance: undefined,
+          source: c.source || 'vector',
+          // スコア表示用（UI側で利用できるよう残す）
+          scoreText: c.scoreText
+        }))
+      : [];
+
+    testLogger.logSearchResults(references);
+
+    // スキーマ検証（安全側）
+    const parsed = SummarizeFlowOutputSchema.safeParse({ answer, references });
+    if (!parsed.success) {
+      console.error('[askQuestion Action Validation Error]', parsed.error.flatten());
+      testLogger.logError(new Error('Schema validation failed'), 'askQuestion');
+      return { answer, references } as AskQuestionOutput;
+    }
+
+    const duration = Date.now() - startTime;
+    testLogger.endTest('askQuestion', true, duration);
     
-    // レスポンスの詳細をログ出力
-    if (summaryResponse && summaryResponse.references) {
-      console.log('[askQuestion Action] References details:');
-      summaryResponse.references.forEach((ref: any, idx: number) => {
-        console.log(`[askQuestion Action] Reference ${idx+1}: title=${ref.title}, source=${ref.source}`);
-      });
-    }
-
-    // sourcesをreferencesに変換（必要な場合）
-    if (summaryResponse && summaryResponse.sources && !summaryResponse.references) {
-      summaryResponse.references = summaryResponse.sources;
-      delete summaryResponse.sources;
-    }
-
-    // 修正したZodスキーマでレスポンスを検証
-    const parsedResult = SummarizeFlowOutputSchema.safeParse(summaryResponse);
-
-    if (!parsedResult.success) {
-      console.error('[askQuestion Action Validation Error]', parsedResult.error.flatten());
-      
-      // 検証に失敗した場合、最小限の構造を返す
-      const fallbackAnswer = summaryResponse.answer || '回答の取得に失敗しました。';
-      const fallbackReferences = summaryResponse.references || summaryResponse.sources || [];
-      
-      console.log('[askQuestion Action] Using fallback response:', {
-        answer: fallbackAnswer,
-        referencesCount: fallbackReferences.length
-      });
-      
-      return {
-        answer: fallbackAnswer,
-        references: fallbackReferences
-      };
-    }
-    
-    // ===== [修正点 3] =====
-    // 検証済みのデータをそのまま返す (型はAskQuestionOutputと一致)
-    return parsedResult.data;
+    return parsed.data;
 
   } catch (error: any) {
     console.error('[askQuestion Action Error]', error);
+    testLogger.logError(error, 'askQuestion');
     
-    // 構造化されたエラーを返す (変更なし)
-    const structuredError = {
-      error: {
-        code: 'flow_execution_error',
-        message: error.message || 'An unknown error occurred in the askQuestion action.'
-      }
-    };
+    const duration = Date.now() - startTime;
+    testLogger.endTest('askQuestion', false, duration);
     
-    throw new Error(JSON.stringify(structuredError));
+    // 例外ではなく安全なフォールバックを返す（UIエラー抑止）
+    return {
+      answer: '申し訳ありません。回答の生成に失敗しました。もう一度お試しください。',
+      references: []
+    } as AskQuestionOutput;
   }
 }

@@ -62,11 +62,15 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                         >
                             <LinkIcon className="h-3 w-3 shrink-0" />
                             <span className="truncate">{source.title}</span>
-                            <span className="text-xs text-muted-foreground ml-1">
+                            {source.scoreText ? (
+                              <span className="text-xs text-muted-foreground ml-1">({source.scoreText})</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground ml-1">
                                 ({source.distance !== undefined && source.distance !== null
                                   ? Math.max(0, Math.min(100, Math.round(source.distance)))
                                   : '??'}% 一致)
-                            </span>
+                              </span>
+                            )}
                             <span className="text-xs ml-1 font-bold" style={{color: 'blue'}}>
                                 {source.source === 'keyword' ? '⌨️' : '🔍'}
                             </span>
@@ -113,6 +117,22 @@ const SkeletonMessage = () => (
 
 export default function ChatPage({ user }: ChatPageProps) {
   const { signOut } = useAuthWrapper();
+  // Firestoreに保存できない undefined を除去するユーティリティ
+  function sanitizeForFirestore<T>(value: T): T {
+    if (Array.isArray(value)) {
+      // @ts-ignore
+      return value.map((v) => sanitizeForFirestore(v)) as any;
+    }
+    if (value && typeof value === 'object') {
+      const out: any = {};
+      for (const [k, v] of Object.entries(value as any)) {
+        if (v === undefined) continue;
+        out[k] = sanitizeForFirestore(v);
+      }
+      return out;
+    }
+    return value;
+  }
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -228,12 +248,13 @@ export default function ChatPage({ user }: ChatPageProps) {
       // デバッグ用：参照元の詳細をログに出力
       console.log('[handleSubmit] Mapping references to sources:');
       const mappedSources = res.references.map((ref: any) => {
-        const source = {
+        const source = sanitizeForFirestore({
           title: ref.title || 'No Title',
           url: ref.url || '#',
-          distance: ref.distance,
-          source: ref.source
-        };
+          distance: ref.distance ?? null,
+          source: ref.source ?? null,
+          scoreText: (ref as any).scoreText ?? null,
+        });
         console.log(`[handleSubmit] Mapped source: ${JSON.stringify(source)}`);
         return source;
       });
@@ -250,24 +271,31 @@ export default function ChatPage({ user }: ChatPageProps) {
       // Firestoreに会話履歴を保存
       if (currentConversationId) {
         // 既存の会話に追加
-        await addMessageToConversation(user.uid, currentConversationId, 
-          { role: 'user', content: userMessage.content, user: userMessage.user }
+        await addMessageToConversation(
+          user.uid,
+          currentConversationId,
+          sanitizeForFirestore({ role: 'user', content: userMessage.content, user: userMessage.user })
         );
-        await addMessageToConversation(user.uid, currentConversationId, 
-          { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+        await addMessageToConversation(
+          user.uid,
+          currentConversationId,
+          sanitizeForFirestore({ role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources })
         );
         console.log(`[handleSubmit] Added messages to existing conversation: ${currentConversationId}`);
       } else {
         // 新しい会話を作成
         try {
           // まずユーザーメッセージで会話を作成
-          const newConversationId = await createConversation(user.uid, 
-            { role: 'user', content: userMessage.content, user: userMessage.user }
+          const newConversationId = await createConversation(
+            user.uid,
+            sanitizeForFirestore({ role: 'user', content: userMessage.content, user: userMessage.user })
           );
           
           // AIの応答を追加
-          await addMessageToConversation(user.uid, newConversationId, 
-            { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+          await addMessageToConversation(
+            user.uid,
+            newConversationId,
+            sanitizeForFirestore({ role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources })
           );
           
           // 現在の会話IDを更新
@@ -282,10 +310,13 @@ export default function ChatPage({ user }: ChatPageProps) {
           console.error("Failed to create new conversation:", error);
           
           // 従来の方法でメッセージを保存（フォールバック）
-          await addMessageBatch(user.uid, [
-            { role: 'user', content: userMessage.content, user: userMessage.user },
-            { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-          ]);
+          await addMessageBatch(
+            user.uid,
+            sanitizeForFirestore([
+              { role: 'user', content: userMessage.content, user: userMessage.user },
+              { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+            ]) as any
+          );
           console.log('[handleSubmit] Saved messages using legacy method');
         }
       }

@@ -90,9 +90,9 @@ async function extractWithKuromoji(text: string): Promise<string[]> {
 
 async function expandWithLLM(baseQuery: string, baseKeywords: string[]): Promise<string[]> {
   try {
-    if (process.env.USE_LLM_EXPANSION !== 'true') return [];
+    // デフォルトでAPIキーがあれば有効化（明示的に false の場合のみ無効）
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) return [];
+    if (process.env.USE_LLM_EXPANSION === 'false' || !apiKey) return [];
 
     // 動的import（未インストールなら無視）
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
@@ -125,6 +125,16 @@ async function expandWithLLM(baseQuery: string, baseKeywords: string[]): Promise
 
 export async function extractKeywordsHybrid(query: string): Promise<ExtractResult> {
   const stripped = query.replace(/-\S+/g, ' ').trim();
+  // 共通サニタイズ関数（末尾の助詞/記号を除去）
+  const sanitize = (s: string): string => {
+    return s
+      .replace(/[\s\u3000]+$/g, '')
+      // よく付く終端助詞・助詞句を除去
+      .replace(/(の仕様は|の仕様|の設定箇所は|の設定|の詳細は|の詳細|の機能は|の機能|の手順は|の手順|について|とは|は)$/g, '')
+      .replace(/(の)$/g, '')
+      .replace(/[。、．\.\,;；:：]+$/g, '')
+      .trim();
+  };
   // 形態素解析優先（kuromoji）→tiny-segmenter→n-gram
   const baseKeywords = await extractWithKuromoji(stripped);
 
@@ -176,10 +186,10 @@ export async function extractKeywordsHybrid(query: string): Promise<ExtractResul
   // コア語抽出（改良版）
   const core = (() => {
   // より積極的に修飾語を除去
-  const q = stripped
-    .replace(/(の仕様は|の仕様|の設定箇所は|の設定|を教えて|について|とは|は|の詳細|の機能|の方法|の手順)$/g, '')
-    .replace(/(機能|仕様|設定箇所|設定|詳細|方法|手順|プロセス|管理|システム|機能)$/g, '')
-    .trim();
+    const q = sanitize(stripped)
+      // 終端の一般語からは「管理」は除外しない（教室管理などを保持）
+      .replace(/(の方法|の手順|の設定箇所|設定箇所|設定|詳細|方法|手順|プロセス|システム|機能|仕様)$/g, '')
+      .trim();
   
   // 「仕様」を含むクエリの場合は、関連キーワードを追加
   if (stripped.includes('仕様')) {
@@ -196,26 +206,37 @@ export async function extractKeywordsHybrid(query: string): Promise<ExtractResul
     
     // より長い語を優先的に抽出
     const words: string[] = (q.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z0-9]{2,}/gu) as string[]) || [];
+    // 名詞の複合語化（教室+管理 など）
+    if (words.length >= 2) {
+      const joinedPairs: string[] = [];
+      for (let i = 0; i < words.length - 1; i++) {
+        const pair = sanitize(words[i] + words[i + 1]);
+        if (pair.length >= 2) joinedPairs.push(pair);
+      }
+      // クエリに含まれる既知の複合を優先
+      const priority = joinedPairs.find(p => q.includes(p));
+      if (priority) return priority;
+    }
     if (words.length > 0) {
       // 長い語を優先
       const sortedWords = words.sort((a, b) => b.length - a.length);
-      return sortedWords[0];
+      return sanitize(sortedWords[0]);
     }
     
     // LLM同義語にシンプルな候補があれば優先
     const simpleLLM = llmSynonyms.find(s => s.length <= 8 && !/\s/.test(s));
-    return simpleLLM || compact[0] || stripped;
+    return sanitize(simpleLLM || compact[0] || stripped);
   })();
   
   // キーワードをより厳選（コア語を最優先、重複除去）
   const finalKeywords = [core];
   for (const kw of compact) {
     if (kw !== core && !finalKeywords.some(k => k.includes(kw) || kw.includes(k))) {
-      finalKeywords.push(kw);
+      finalKeywords.push(sanitize(kw));
     }
     if (finalKeywords.length >= 3) break;
   }
-  const keywords = uniquePreserveOrder(finalKeywords);
+  const keywords = uniquePreserveOrder(finalKeywords.map(sanitize).filter(k => k.length >= 2));
 
   // デバッグ
   try {
