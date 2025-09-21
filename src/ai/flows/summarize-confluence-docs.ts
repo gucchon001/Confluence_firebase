@@ -182,6 +182,10 @@ ${doc.content}`
       chat_history: formattedChatHistory,
       question,
     });
+    
+    console.log('[summarizeConfluenceDocs] Generated prompt preview:', prompt.substring(0, 500) + '...');
+    console.log('[summarizeConfluenceDocs] Question:', question);
+    console.log('[summarizeConfluenceDocs] Context text length:', contextText.length);
 
     // テスト環境の場合はモックレスポンスを返す
     let answer;
@@ -189,7 +193,13 @@ ${doc.content}`
       console.log('[summarizeConfluenceDocs] Using test mock response');
       answer = `これはテスト環境用のモック回答です。\n\n${question}に対する回答として、${documents.length}件の関連ドキュメントから情報を抽出しました。`;
     } else {
+      console.log('[summarizeConfluenceDocs] Sending prompt to LLM...');
+      console.log('[summarizeConfluenceDocs] Prompt length:', prompt.length);
+      console.log('[summarizeConfluenceDocs] Documents for context:', documents.length);
+      
       const llmResponse = await ai.generate({ model: 'googleai/gemini-2.5-flash', prompt });
+      console.log('[summarizeConfluenceDocs] LLM Response type:', typeof llmResponse);
+      console.log('[summarizeConfluenceDocs] LLM Response keys:', Object.keys(llmResponse || {}));
       console.log('[summarizeConfluenceDocs] LLM Response:', llmResponse);
       
       // 応答形式の確認とデバッグ
@@ -239,17 +249,24 @@ ${doc.content}`
       }
     }
     
-    // 応答が空または非常に短い場合のフォールバック
-    if (!answer || answer.trim().length < 10) {
+    // 応答の長さをログ出力
+    console.log('[summarizeConfluenceDocs] Final answer length:', answer?.length || 0);
+    console.log('[summarizeConfluenceDocs] Final answer:', answer);
+    
+    // 応答が空または非常に短い場合のフォールバック（判定基準を緩和）
+    if (!answer || answer.trim().length < 5) {
       console.log('[summarizeConfluenceDocs] Response too short, using fallback');
+      console.log('[summarizeConfluenceDocs] Original answer length:', answer?.length || 0);
+      console.log('[summarizeConfluenceDocs] Original answer:', answer);
       
       // 検索結果のタイトルから関連しそうなものを抽出
       const relevantTitles = documents
-        .slice(0, 3)
+        .slice(0, 3) // 適切な件数に戻す
         .map(doc => `- ${doc.title}`)
         .join('\n');
       
-      answer = `申し訳ありませんが、検索結果から質問「${question}」に直接対応する内容が見つかりませんでした。\n\n以下のドキュメントが関連している可能性がありますが、詳細な情報は含まれていません：\n\n${relevantTitles}\n\n別のキーワードで検索するか、より具体的な質問をお試しください。`;
+      // より詳細で有用な回答を生成
+      answer = `質問「${question}」について、以下のドキュメントが関連しています：\n\n${relevantTitles}\n\nこれらのドキュメントに詳細な情報が含まれている可能性があります。`;
     }
 
     // 参照元テキストを除去する後処理

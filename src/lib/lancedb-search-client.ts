@@ -10,6 +10,7 @@ import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
+import { getLabelsAsArray, hasExcludedLabel } from './label-utils';
 
 /**
  * スコアを適切なパーセンテージに変換する関数
@@ -56,6 +57,7 @@ export interface LanceDBSearchResult {
   title: string;
   content: string;
   distance: number;
+  score: number; // フロントエンド用のスコアフィールド（distanceと同じ値）
   space_key?: string;
   labels?: string[];
   url?: string;
@@ -138,8 +140,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     if (!labelFilters.includeArchived) {
       excludeLabels.push('アーカイブ', 'archive');
     }
-    // 常に除外するラベル（フォルダは除外しない）
-    excludeLabels.push('スコープ外');
+    // 常に除外するラベル（仕様書に基づく完全除外対象）
+    // 注意: 「フォルダ」ラベルを持つページでも、実際の機能ページ（■オファーなど）は除外しない
+    excludeLabels.push('スコープ外', 'メールテンプレート');
     
     console.log('[searchLanceDB] Excluding labels:', excludeLabels);
 
@@ -157,19 +160,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       if (excludeLabels.length > 0) {
         const beforeCount = vectorResults.length;
         vectorResults = vectorResults.filter(result => {
-          const labels = Array.isArray(result.labels)
-            ? result.labels
-            : (result.labels && typeof (result.labels as any).toArray === 'function'
-                ? (result.labels as any).toArray()
-                : []);
+          const labels = getLabelsAsArray(result.labels);
           
-          const hasExcludedLabel = labels.some(label => 
-            excludeLabels.some(excludeLabel => 
-              String(label).toLowerCase().includes(excludeLabel.toLowerCase())
-            )
-          );
-          
-          if (hasExcludedLabel) {
+          if (hasExcludedLabel(labels, excludeLabels)) {
             console.log(`[searchLanceDB] Excluded result due to label filter: ${result.title}`);
             return false;
           }
@@ -283,11 +276,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         // キーワードマッチングスコアを計算
         const title = originalResult.title || '';
         const content = originalResult.content || '';
-        const labels = Array.isArray(originalResult.labels)
-          ? originalResult.labels
-          : (originalResult.labels && typeof (originalResult.labels as any).toArray === 'function'
-              ? (originalResult.labels as any).toArray()
-              : []);
+        const labels = getLabelsAsArray(originalResult.labels);
         
         // デバッグ情報を出力
         console.log(`[searchLanceDB] Processing result ${i+1}:`);
@@ -538,18 +527,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         if (excludeLabels.length > 0) {
           const beforeBm25 = bm25Results.length;
           bm25Results = bm25Results.filter((result: any) => {
-            const labels = Array.isArray(result.labels)
-              ? result.labels
-              : (result.labels && typeof (result.labels as any).toArray === 'function'
-                  ? (result.labels as any).toArray()
-                  : []);
+            const labels = getLabelsAsArray(result.labels);
 
-            const hasExcludedLabel = labels.some((label: any) =>
-              excludeLabels.some((excludeLabel) =>
-                String(label).toLowerCase().includes(String(excludeLabel).toLowerCase())
-              )
-            );
-            return !hasExcludedLabel;
+            return !hasExcludedLabel(labels, excludeLabels);
           });
           console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
         }
@@ -597,9 +577,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         // ドメイン減衰（メール/帳票/請求/アーカイブ/議事録）：順位の最後で軽く抑制
         try {
           const titleStr = String(r.title || '').toLowerCase();
-          const labelsArr: string[] = Array.isArray(r.labels)
-            ? r.labels
-            : (r.labels && typeof (r.labels as any).toArray === 'function' ? (r.labels as any).toArray() : []);
+          const labelsArr: string[] = getLabelsAsArray(r.labels);
           const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
           const penaltyTerms = ['メール','mail','通知','テンプレート','template','帳票','請求','アーカイブ','議事録','meeting-notes','ミーティング','meeting','会議','議事','フォルダ','■'];
           const genericTitleTerms = ['共通要件','非機能要件','用語','ワード','ディフィニション','definition','ガイドライン','一覧','フロー','要件'];
@@ -810,12 +788,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
            title: result.title || 'No Title',
            content: result.content || '',
            distance: normalizeScoreToPercentage(result._distance, result._sourceType || 'vector'), // スコアを適切に正規化
+           score: normalizeScoreToPercentage(result._distance, result._sourceType || 'vector'), // フロントエンド用のscoreフィールドを追加
            space_key: result.space_key,
-           labels: (Array.isArray(result.labels)
-             ? result.labels
-             : (result.labels && typeof (result.labels as any).toArray === 'function'
-                 ? (result.labels as any).toArray()
-                 : [])),
+           labels: getLabelsAsArray(result.labels),
            url: result.url || '',
            lastUpdated: result.lastUpdated || '',
            source: sourceType, // hybrid, keyword, vectorのいずれか

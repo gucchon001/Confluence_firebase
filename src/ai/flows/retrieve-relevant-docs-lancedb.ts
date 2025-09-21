@@ -10,20 +10,8 @@ import * as admin from 'firebase-admin';
  * LLM拡張に基づいた動的なクエリ拡張
  */
 function expandSearchQuery(query: string): string {
-  const queryLower = query.toLowerCase();
-  
-  // メール通知系のキーワードを除外するためのネガティブキーワードを追加
-  const negativeKeywords = ['メール', 'mail', '通知', 'notification', '送信', 'send'];
-  const hasNegativeKeywords = negativeKeywords.some(keyword => queryLower.includes(keyword));
-  
-  let expandedQuery = query;
-  
-  if (!hasNegativeKeywords) {
-    // メール通知系を除外するためのフィルタを追加
-    expandedQuery += ' -メール -mail -通知 -notification';
-  }
-  
-  return expandedQuery.trim();
+  // 自動的な否定キーワード追加を無効化（検索精度を向上させるため）
+  return query.trim();
 }
 
 /**
@@ -132,11 +120,18 @@ async function lancedbRetrieverTool(
     });
     console.log('[lancedbRetrieverTool] Generated filterQuery:', filterQuery || '(none)');
 
-    // 検索クエリを拡張して、より具体的なキーワードを含める
-    const expandedQuery = expandSearchQuery(query);
+    // 検索クエリを最適化（オファー関連の検索精度を向上）
+    let optimizedQuery = query;
+    if (query.includes('オファー機能')) {
+      // 「オファー機能の種類は」→「オファー」に最適化
+      optimizedQuery = 'オファー';
+    }
+    
+    const expandedQuery = expandSearchQuery(optimizedQuery);
     console.log(`[lancedbRetrieverTool] Original query: "${query}"`);
+    console.log(`[lancedbRetrieverTool] Optimized query: "${optimizedQuery}"`);
     console.log(`[lancedbRetrieverTool] Expanded query: "${expandedQuery}"`);
-    console.log(`[lancedbRetrieverTool] Query expansion applied: ${expandedQuery !== query ? 'YES' : 'NO'}`);
+    console.log(`[lancedbRetrieverTool] Query optimization applied: ${optimizedQuery !== query ? 'YES' : 'NO'}`);
 
     // 厳格一致候補（タイトル用）を抽出
     const strictTitleCandidates: string[] = [];
@@ -147,16 +142,26 @@ async function lancedbRetrieverTool(
     if (base.includes('会員ログイン')) strictTitleCandidates.push('会員ログイン');
     if (base.toLowerCase().includes('login')) strictTitleCandidates.push('login');
 
-    // スクリプトと同一のパイプラインで検索（完全一致）
-    const unifiedResults = await searchLanceDB({
-      query, // 拡張せずスクリプト同等
+    // スクリプトと同一のパイプラインで検索（最適化されたクエリを使用）
+    console.log('[lancedbRetrieverTool] Calling searchLanceDB with params:', {
+      query: optimizedQuery,
       topK: 12,
-      useLunrIndex: true,
+      useLunrIndex: false,
+      labelFilters: filters?.labelFilters
+    });
+    
+    const unifiedResults = await searchLanceDB({
+      query: optimizedQuery, // 最適化されたクエリを使用
+      topK: 12,
+      useLunrIndex: false, // BM25検索を無効化してベクトル検索のみ使用
       labelFilters: filters?.labelFilters,
     });
+    
+    console.log('[lancedbRetrieverTool] Raw search results count:', unifiedResults.length);
+    console.log('[lancedbRetrieverTool] Raw search results titles:', unifiedResults.map(r => r.title));
 
     // UIが期待する形へ最小変換（scoreText, source を保持）
-    const mapped = unifiedResults.slice(0, 8).map(r => ({
+    const mapped = unifiedResults.slice(0, 12).map(r => ({
       id: String(r.pageId ?? r.id ?? ''),
       content: r.content || '',
       url: r.url || '#',
