@@ -16,7 +16,7 @@ LanceDBでは、以下のインデックスタイプが利用可能です：
 ```typescript
 // IVF-Flatインデックスの作成
 await tbl.createIndex({
-  vectors: { vector: 768 },
+  vectors: { vector: 384 },
   config: lancedb.index.ivfFlat({
     numPartitions: 256,  // データサイズに応じて調整
     distanceType: "cosine"
@@ -25,7 +25,7 @@ await tbl.createIndex({
 
 // HNSWインデックスの作成
 await tbl.createIndex({
-  vectors: { vector: 768 },
+  vectors: { vector: 384 },
   config: lancedb.index.hnsw({
     M: 16,  // グラフの次数（通常は12-48）
     efConstruction: 100,  // 構築時の探索幅（高いほど精度が上がるが時間がかかる）

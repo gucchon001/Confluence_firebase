@@ -1,5 +1,5 @@
-import { ai } from '../ai/genkit.js';
 import { ErrorHandler, ErrorCode } from './error-handling';
+import { getEmbeddings } from './embeddings';
 
 /**
  * リトライ機能付きのEmbedding生成関数
@@ -22,12 +22,8 @@ export async function embedWithRetry(
       // 最新のGenkitのai.embedメソッドに合わせて修正
       // 単一テキストの場合は直接文字列を渡す
       const content = batchOfRecords.map(r => r.content).join('\n');
-      const embeddingResponses = await ai.embed({
-        embedder: 'googleai/text-embedding-004',
-        content: content,
-      }) as any[];
-      
-      return embeddingResponses;
+      const vec = await getEmbeddings(content);
+      return [{ embedding: vec }];
     } catch (error: any) {
       await ErrorHandler.logError('embedding_generation_single', error, {
         recordCount: 1,
@@ -47,12 +43,8 @@ export async function embedWithRetry(
       // 最新のGenkitのai.embedメソッドに合わせて修正
       // 単一テキストの場合は直接文字列を渡す
       const content = batchOfRecords.map(r => r.content).join('\n');
-      const embeddingResponses = await ai.embed({
-        embedder: 'googleai/text-embedding-004',
-        content: content,
-      }) as any[];
-      
-      return embeddingResponses;
+      const vec = await getEmbeddings(content);
+      return [{ embedding: vec }];
     } catch (error: any) {
       retries++;
       
@@ -113,10 +105,8 @@ export async function generateEmbeddingsWithDynamicBatch(recordsToEmbed: any[]):
       // 最新のGenkitのai.embedメソッドに合わせて修正
       // 単一テキストの場合は直接文字列を渡す
       const content = batchOfRecords.map(r => r.content).join('\n');
-      const embeddingResponses = await ai.embed({
-        embedder: 'googleai/text-embedding-004',
-        content: content,
-      }) as any[];
+      const vec = await getEmbeddings(content);
+      const embeddingResponses = [{ embedding: vec }];
       // const embeddingResponses = await embedWithRetry(batchOfRecords);
 
       const processedBatch = batchOfRecords.map((record, index) => {

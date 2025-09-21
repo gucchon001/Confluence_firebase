@@ -12,8 +12,11 @@ const SummarizeFlowOutputSchema = z.object({
     url: z.string(),
     spaceName: z.string().optional(),
     lastUpdated: z.string().nullable().optional(),
-    distance: z.number().optional(), // 距離（類似度スコア）を追加
-    source: z.enum(['vector', 'keyword']).optional() // 検索ソース（vector/keyword）を追加
+    distance: z.number().optional(),
+    // 検索ソース（vector / keyword / bm25 / hybrid）を許可
+    source: z.enum(['vector', 'keyword', 'bm25', 'hybrid']).optional(),
+    // 表示用のスコア文字列（例: "BM25 19.97" や "類似度 59.5%"）
+    scoreText: z.string().optional()
   })).default([]),
 });
 
@@ -63,9 +66,10 @@ export async function askQuestion(question: string, chatHistory: any[], labelFil
 
     // 2. ドキュメントを要約 (変更なし)
     // 修正された 'summarizeConfluenceDocs' フローを呼び出す
+    // スクリプトと同じ件数(8)で要約対象を統一
     const summaryResponse = await callFlow<any>(
       'summarizeConfluenceDocs', 
-      { question, context: relevantDocs, chatHistory }
+      { question, context: (relevantDocs || []).slice(0, 8), chatHistory }
     );
 
     // ===== [修正点 2] =====

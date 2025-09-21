@@ -16,7 +16,7 @@
 ### 2.2 検索（並列）
 - 空間制約: `space_key=CLIENTTOMO` で基本絞り込み。
 - 並列実行と候補拡大：
-  - Vector 検索 topK=100（原文クエリ/軽量拡張クエリを並列）。
+  - Vector 検索 topK=100（原文クエリ/軽量拡張クエリを並列, 384次元）。
   - BM25/キーワード検索 topK=100。
   - タイトル/ラベル厳格一致（ログイン/ログアウト/認証）topK=50。
 - フィルタ/重み：
@@ -26,7 +26,7 @@
 - マージ: 同一 `pageId` は先頭チャンク優遇、重複統合。
 
 ### 2.3 再ランク
-- 軽量版（ルール/重み）→可能なら cross-encoder による rerank。
+- 軽量版（ルール/重み; 実装は `search-weights.ts` の `calculateKeywordScore`/`calculateLabelScore`/`calculateHybridScore`）→ 可能なら cross-encoder による rerank。
 - ブースト: タイトル完全一致 > タイトル部分一致 > ラベル一致 > 本文一致。
 - 見出し近接ブースト、ソース多様性制御（同一機能群の過集中抑制）。
 

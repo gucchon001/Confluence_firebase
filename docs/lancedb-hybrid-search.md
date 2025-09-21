@@ -4,9 +4,36 @@
 
 ハイブリッド検索は、ベクトル検索（意味的類似性）とキーワード検索（正確なマッチング）を組み合わせた検索手法です。これにより、検索の精度と関連性を向上させることができます。
 
-## 2. ハイブリッド検索の種類
+## 2. 現行実装の中核（概要）
 
-### 2.1 フィルタリングによるハイブリッド検索
+本プロジェクトの中核は `src/lib/lancedb-search-client.ts` の `searchLanceDB` です。実行ステップは次の通りです。
+
+1) 事前処理（並列）
+- 埋め込み生成（384次元）: `getEmbeddings(query)`
+- キーワード抽出: `extractKeywordsHybrid(query)`（高/低優先語）
+- LanceDB接続とテーブルオープン（`.lancedb/`）
+
+2) 候補取得（早期ラベル除外）
+- ベクトル: `executeVectorSearch`
+- キーワード: `executeKeywordSearch`（LIKE）
+- BM25/Lunr: `executeBM25Search`（準備済みなら候補→`pageId`で join）
+- タイトル厳格一致: `executeTitleExactSearch`
+
+3) スコア付与と融合
+- キーワード: `calculateKeywordScore`
+- ラベル: `calculateLabelScore`
+- ハイブリッド: `calculateHybridScore(distance, keywordScore, labelScore)`
+
+4) 再ランク/整形
+- 重複除去（タイトル）→ 表示用フィールド付与 → 上位 `topK` を返却
+
+パラメータ例: `query`, `topK`, `useLunrIndex`, `labelFilters`, `tableName`
+
+注意: Lunrが未初期化の場合、LIKE検索へフォールバックします。
+
+## 3. ハイブリッド検索の種類
+
+### 3.1 フィルタリングによるハイブリッド検索
 
 最も基本的なハイブリッド検索は、ベクトル検索の結果をキーワードでフィルタリングする方法です：
 
@@ -18,7 +45,7 @@ const results = await tbl.search(vector)
   .toArray();
 ```
 
-### 2.2 スコア結合によるハイブリッド検索
+### 3.2 スコア結合によるハイブリッド検索
 
 ベクトル検索のスコアとキーワード検索のスコアを結合する方法もあります。LanceDBのJavaScript APIでは直接サポートされていないため、以下のように実装します：
 
@@ -40,7 +67,7 @@ const hybridResults = vectorResults
   .slice(0, 5);
 ```
 
-## 3. リランキングによるハイブリッド検索
+## 4. リランキングによるハイブリッド検索
 
 ベクトル検索の結果を、より高度なモデルを使用してリランキングする方法も効果的です：
 
@@ -65,9 +92,9 @@ async function rerank(query: string, results: any[]) {
 const rerankedResults = await rerank(queryText, vectorResults);
 ```
 
-## 4. フィルタリングの最適化
+## 5. フィルタリングの最適化
 
-### 4.1 インデックスを使用したフィルタリング
+### 5.1 インデックスを使用したフィルタリング
 
 LanceDBでは、フィルタリングに使用するフィールドにインデックスを作成することで、パフォーマンスを向上させることができます：
 
@@ -85,7 +112,7 @@ const results = await tbl.search(vector)
   .toArray();
 ```
 
-### 4.2 複合フィルタリング
+### 5.2 複合フィルタリング
 
 複数の条件を組み合わせたフィルタリングも可能です：
 
@@ -97,7 +124,23 @@ const results = await tbl.search(vector)
   .toArray();
 ```
 
-## 5. 実装例：高度なハイブリッド検索API
+## 6. 実装例：API/ユースケース
+
+### 6.1 推奨: 中核関数 `searchLanceDB` を直接利用
+
+```typescript
+import { searchLanceDB } from '../lib/lancedb-search-client';
+
+const results = await searchLanceDB({
+  query: 'ログイン 仕様',
+  topK: 12,
+  useLunrIndex: true,
+  labelFilters: { includeMeetingNotes: false, includeArchived: false },
+  tableName: 'confluence',
+});
+```
+
+### 6.2 参考: ベクトル単体の簡易検索API
 
 ```typescript
 import { NextRequest } from 'next/server';

@@ -3,7 +3,7 @@
 ## 1. 実装済み機能
 
 ### 1.1 LanceDBへの移行
-- ✅ Vertex AIからLanceDBへのデータ移行
+- ✅ ローカルLanceDBへのデータ移行
 - ✅ LanceDBのスキーマ定義
 - ✅ LanceDBを使用した検索機能
 - ✅ Confluenceデータの同期処理
@@ -89,7 +89,7 @@ require.extensions is not supported by webpack. Use a loader instead.
 4. 検索機能の改善
 
 ### 5.2 中期計画（1-2ヶ月）
-1. ハイブリッド検索の実装
+1. ハイブリッド検索の高度化（BM25/Lunrの安定運用）
 2. UI/UX改善
 3. 大規模データセットテスト
 4. パフォーマンス最適化

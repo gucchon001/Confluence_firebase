@@ -90,7 +90,7 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     extractor = await pipeline('feature-extraction', 'Xenova/all-mpnet-base-v2');
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
-  return Array.from(output.data); // 768次元
+  return Array.from(output.data); // 384次元
 }
 ```
 

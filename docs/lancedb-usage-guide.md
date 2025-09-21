@@ -43,7 +43,7 @@ interface SchemaDefinition {
 // 最小限のスキーマ定義（エラー切り分け用）
 export const MinimalLanceDBSchema: SchemaDefinition = {
   id: { type: 'string', nullable: false },
-  vector: { type: 'vector', valueType: 'float32', dimensions: 768, nullable: false },
+  vector: { type: 'vector', valueType: 'float32', dimensions: 384, nullable: false },
   title: { type: 'string', nullable: false },
   content: { type: 'string', nullable: false }
 };
@@ -51,7 +51,7 @@ export const MinimalLanceDBSchema: SchemaDefinition = {
 // 完全なスキーマ定義
 export const FullLanceDBSchema: SchemaDefinition = {
   id: { type: 'string', nullable: false },
-  vector: { type: 'vector', valueType: 'float32', dimensions: 768, nullable: false },
+  vector: { type: 'vector', valueType: 'float32', dimensions: 384, nullable: false },
   space_key: { type: 'string', nullable: false },
   title: { type: 'string', nullable: false },
   labels: { type: 'list', valueType: 'string', nullable: false },
@@ -159,7 +159,7 @@ await tbl.createIndex({
   vector: { 
     type: 'vector', 
     valueType: 'float32', 
-    dimensions: 768 
+    dimensions: 384 
   }
 });
 ```

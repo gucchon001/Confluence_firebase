@@ -17,7 +17,7 @@ async function createLanceDBIndex() {
     vector: { 
       type: 'vector', 
       valueType: 'float32', 
-      dimensions: 768 
+      dimensions: 384 
     }
   });
   console.log('Index created successfully');
@@ -31,7 +31,7 @@ async function createLanceDBIndex() {
 - **検索結果のランキング改善**: 関連性スコアの調整とカスタマイズ
 
 ```typescript
-// ハイブリッド検索の例
+// ハイブリッド検索の例（中核は searchLanceDB を利用）
 async function hybridSearch(query: string, filters?: Record<string, any>) {
   const vector = await getEmbeddings(query);
   const keywords = extractKeywords(query);

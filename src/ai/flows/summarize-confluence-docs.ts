@@ -134,6 +134,10 @@ export const SummarizeOutputSchema = z.object({
       url: z.string(),
       spaceName: z.string().optional(),
       lastUpdated: z.string().nullable().optional(),
+      // 追加情報（検索スコアとソース種別）
+      distance: z.number().optional(),
+      source: z.enum(['vector', 'keyword', 'bm25', 'hybrid']).optional(),
+      scoreText: z.string().optional(),
     })
   ),
 });
@@ -269,8 +273,9 @@ ${doc.content}`
     url: doc.url,
     spaceName: doc.spaceName,
     lastUpdated: doc.lastUpdated,
-    distance: (doc as any).distance, // 距離（類似度スコア）を追加
-    source: (doc as any).source, // 検索ソース（vector/keyword）を追加
+    distance: (doc as any).distance,
+    source: (doc as any).source, // vector / keyword / bm25 / hybrid
+    scoreText: (doc as any).scoreText,
   }));
 
     return { answer, references };

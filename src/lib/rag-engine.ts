@@ -68,6 +68,7 @@ export async function answerWithRag(
       content: r.content || '',
       distance: r.distance,
       source: r.source || 'vector',
+      scoreText: r.scoreText,
     }));
 
     const llm = await summarizeConfluenceDocs({

@@ -4,7 +4,7 @@
 
 - Google Authentication: Allow users to log in securely with their Google accounts.
 - Question Submission: Provide a text input field for users to submit questions about Confluence documentation.
-- Confluence Data Retrieval via Vector Search: Use Vertex AI Vector Search to efficiently retrieve relevant Confluence specification data based on user questions.
+- Confluence Data Retrieval via Vector Search: Use local LanceDB to retrieve relevant Confluence specification data based on user questions.
 - AI-Powered Summarization Tool: Leverage the Gemini model to generate concise summaries of the retrieved Confluence data relevant to the user's query.
 - Response Display: Display the summarized answer, along with a list of source Confluence page titles and URLs for reference.
 - Chat History: Save and load conversation history using Firestore.

@@ -15,7 +15,7 @@
 - 主キー: `id = <pageId>-<chunkIndex>`
 - LanceDB テーブル例 `confluence`:
   - `id: string`
-  - `vector: number[768]`
+  - `vector: number[384]`
   - `space_key: string`
   - `title: string`
   - `labels: string[]`

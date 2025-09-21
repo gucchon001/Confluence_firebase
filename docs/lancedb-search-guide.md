@@ -39,7 +39,7 @@ const results = await tbl.search(vector).limit(5).toArray();
 ```typescript
 // インデックスの作成
 await tbl.createIndex({
-  vectors: { vector: 768 },
+  vectors: { vector: 384 },
   config: lancedb.index.ivfFlat({
     numPartitions: 256,
     distanceType: "cosine"
@@ -76,9 +76,19 @@ const results = await tbl.search(vector)
   .toArray();
 ```
 
-## 4. ハイブリッド検索
+## 4. ハイブリッド検索（本プロジェクトの実装方針）
 
-ベクトル検索とフルテキスト検索を組み合わせたハイブリッド検索も可能です。LanceDBでは、以下の方法でハイブリッド検索を実装できます：
+中核は `src/lib/lancedb-search-client.ts` の `searchLanceDB` で実装されています。概要:
+
+- 埋め込み（384次元）生成、キーワード抽出、LanceDB接続を並列実行
+- 候補取得: ベクトル / キーワード（LIKE）/ BM25（Lunr）/ タイトル厳格一致
+- 早期ラベル除外（議事録/アーカイブ/スコープ外 等）
+- スコア付与: `calculateKeywordScore` / `calculateLabelScore` / `calculateHybridScore`
+- 重複除去（タイトル）→ 表示用フィールド整形 → 上位 `topK` 返却
+
+パラメータ例: `{ query, topK, useLunrIndex, labelFilters, tableName }`
+
+Lunr未初期化時はLIKEにフォールバックします。
 
 ### 4.1 フィルタリングによるハイブリッド検索
 
@@ -146,7 +156,7 @@ results.forEach(record => {
 ```typescript
 // インデックスの最適化
 await tbl.createIndex({
-  vectors: { vector: 768 },
+  vectors: { vector: 384 },
   config: lancedb.index.hnsw({
     M: 16,
     efConstruction: 100,

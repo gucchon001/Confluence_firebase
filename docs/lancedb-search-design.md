@@ -77,20 +77,14 @@ const metadata = {
 };
 ```
 
-### 2.3 埋め込みベクトル生成
+### 2.3 埋め込みベクトル生成（ローカル）
 
-環境変数 `EMBEDDINGS_PROVIDER` に基づいて埋め込みプロバイダを選択：
-
-1. `local`: @xenova/transformers を使用したローカル埋め込み（デフォルト）
-2. `vertex`: Vertex AI Embedding API（googleai/text-embedding-004）
+@xenova/transformers によるローカル埋め込みを使用します（384次元、正規化）。
 
 ```typescript
-// 埋め込みモデル設定
 const embeddingConfig = {
-  provider: process.env.EMBEDDINGS_PROVIDER || 'local',
-  localModel: 'Xenova/all-MiniLM-L6-v2',
-  vertexModel: 'googleai/text-embedding-004',
-  dimension: provider === 'local' ? 384 : 768
+  model: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+  dimension: 384
 };
 ```
 
@@ -133,9 +127,9 @@ const lancedbConfig = {
   tableName: 'confluence',
   schema: {
     id: 'utf8',
-    vector: { 
+  vector: { 
       type: 'fixed_size_list', 
-      listSize: embeddingConfig.dimension, 
+      listSize: 384, 
       field: { type: 'float32' } 
     },
     space_key: 'utf8',
@@ -298,7 +292,7 @@ export const getEmbeddings = async (text: string): Promise<number[]> => {
    const data = rows.map((r) => ({
      id: r.id,
      vector: r.embedding,
-     space_key: r.space_key || r.spaceKey,
+    space_key: r.space_key || r.spaceKey,
      title: r.title,
      labels: r.labels || [],
    }));
@@ -394,8 +388,8 @@ npx tsx src/scripts/lancedb-load.ts data/embeddings-CLIENTTOMO.json
 ### 8.3 環境変数
 
 ```
-# 埋め込みプロバイダ設定
-EMBEDDINGS_PROVIDER=local  # local / vertex
+# 埋め込みモデル設定（ローカル）
+EMBEDDINGS_MODEL=Xenova/paraphrase-multilingual-MiniLM-L12-v2
 
 # Firebaseプロジェクト設定
 FIREBASE_PROJECT_ID=confluence-copilot-ppjye

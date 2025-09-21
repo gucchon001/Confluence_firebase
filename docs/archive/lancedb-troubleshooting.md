@@ -210,7 +210,7 @@ const filteredResults = results.filter(r => r.title && r.title.includes('テス�
 ```typescript
 console.log('Table opened successfully');
 console.log('Inserting test record...');
-await tbl.add([{id: 'test-1', vector: new Array(768).fill(0), title: 'Test Title', content: 'Test content'}]);
+await tbl.add([{id: 'test-1', vector: new Array(384).fill(0), title: 'Test Title', content: 'Test content'}]);
 console.log('Record inserted successfully');
 const count = await tbl.countRows();
 console.log('Table has ' + count + ' rows');

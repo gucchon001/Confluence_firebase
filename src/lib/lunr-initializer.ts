@@ -35,6 +35,16 @@ export class LunrInitializer {
       console.log('[LunrInitializer] Starting Lunr index initialization...');
       const startTime = Date.now();
 
+      // まずはキャッシュからロードを試みる（再インデックス回避）
+      const loaded = await lunrSearchClient.loadFromDisk();
+      if (loaded) {
+        this.status.isInitialized = true;
+        this.status.documentCount = await lunrSearchClient.getDocumentCount();
+        this.status.lastUpdated = new Date();
+        console.log('[LunrInitializer] Loaded Lunr from cache. Skipping reindex.');
+        return;
+      }
+
       // LanceDBからドキュメントを取得
       const lancedb = await import('@lancedb/lancedb');
       const db = await lancedb.connect('.lancedb');
@@ -84,6 +94,8 @@ export class LunrInitializer {
 
       // Lunrインデックスを初期化
       await lunrSearchClient.initialize(lunrDocs);
+      // キャッシュに保存
+      await lunrSearchClient.saveToDisk(lunrDocs);
 
       const duration = Date.now() - startTime;
       this.status.isInitialized = true;

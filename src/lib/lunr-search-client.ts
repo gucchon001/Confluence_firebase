@@ -4,6 +4,8 @@
  */
 
 import lunr from 'lunr';
+import path from 'path';
+import { promises as fs } from 'fs';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
 
 export interface LunrDocument {
@@ -33,6 +35,7 @@ export class LunrSearchClient {
   private index: lunr.Index | null = null;
   private documents: Map<string, LunrDocument> = new Map();
   private isInitialized = false;
+  private defaultCachePath = path.join('.cache', 'lunr-index.json');
 
   async initialize(documents: LunrDocument[]): Promise<void> {
     try {
@@ -84,6 +87,38 @@ export class LunrSearchClient {
       console.error('[LunrSearchClient] Initialization failed:', error);
       throw error;
     }
+  }
+
+  async loadFromDisk(cachePath: string = this.defaultCachePath): Promise<boolean> {
+    try {
+      const filePath = path.resolve(cachePath);
+      const json = JSON.parse(await fs.readFile(filePath, 'utf-8')) as {
+        index: any;
+        documents: LunrDocument[];
+      };
+
+      this.index = lunr.Index.load(json.index);
+      this.documents.clear();
+      for (const doc of json.documents) {
+        this.documents.set(doc.id, doc);
+      }
+      this.isInitialized = true;
+      console.log(`[LunrSearchClient] Loaded index from cache: ${filePath} (docs=${this.documents.size})`);
+      return true;
+    } catch (error) {
+      console.log('[LunrSearchClient] No cache found or failed to load. Will rebuild.');
+      return false;
+    }
+  }
+
+  async saveToDisk(documents: LunrDocument[], cachePath: string = this.defaultCachePath): Promise<void> {
+    if (!this.index) return;
+    const filePath = path.resolve(cachePath);
+    const dir = path.dirname(filePath);
+    await fs.mkdir(dir, { recursive: true });
+    const payload = JSON.stringify({ index: this.index.toJSON(), documents }, null, 0);
+    await fs.writeFile(filePath, payload, 'utf-8');
+    console.log(`[LunrSearchClient] Saved index cache: ${filePath}`);
   }
 
   async searchCandidates(

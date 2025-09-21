@@ -2,7 +2,7 @@
  * 関連ドキュメント検索（LanceDB版）
  */
 import * as z from 'zod';
-import { defaultLanceDBSearchClient } from '@/lib/lancedb-search-client';
+import { searchLanceDB } from '@/lib/lancedb-search-client';
 import * as admin from 'firebase-admin';
 
 /**
@@ -147,102 +147,29 @@ async function lancedbRetrieverTool(
     if (base.includes('会員ログイン')) strictTitleCandidates.push('会員ログイン');
     if (base.toLowerCase().includes('login')) strictTitleCandidates.push('login');
 
-    // LanceDBで検索を実行
-    const searchResults = await defaultLanceDBSearchClient.search({
-      query: expandedQuery,
-      topK: 200, // 初期取得を200に拡大してより多くの候補を評価
-      tableName: 'confluence',
-      filter: filterQuery || undefined,
+    // スクリプトと同一のパイプラインで検索（完全一致）
+    const unifiedResults = await searchLanceDB({
+      query, // 拡張せずスクリプト同等
+      topK: 12,
+      useLunrIndex: true,
       labelFilters: filters?.labelFilters,
-      includeLabels: filters?.labels,
-      exactTitleCandidates: strictTitleCandidates,
-      originalQuery: query,
-      useLunrIndex: true, // Enable Lunr inverted index for BM25 candidates
     });
 
-    console.log(`[lancedbRetrieverTool] Found ${searchResults.length} relevant documents from LanceDB`);
-    
-    // デバッグ: 検索結果の詳細をログ出力
-    console.log(`[lancedbRetrieverTool] === ベクトル検索結果詳細 ===`);
-    searchResults.forEach((result, index) => {
-      console.log(`[lancedbRetrieverTool] Result ${index + 1}: title="${result.title}", pageId="${result.pageId}", distance=${result.distance}, source="${result.source || 'vector'}"`);
-    });
-    console.log(`[lancedbRetrieverTool] === ベクトル検索結果詳細終了 ===`);
-
-    if (searchResults.length === 0) {
-      return [];
-    }
-
-    // LanceDBの結果を整形
-    const formattedResults = searchResults.map(result => ({
-      id: result.id,
-      pageId: result.pageId, // pageIdフィールドを追加
-      content: result.content || '',
-      url: result.url || '#', // URLが空の場合は'#'をデフォルト値として使用
-      lastUpdated: result.lastUpdated || null,
-      spaceName: result.space_key || 'Unknown', // 変更なし - フロントエンドはspaceNameを期待
-      title: result.title || 'No Title',
-      labels: result.labels || [],
-      distance: result.distance,
-      source: result.source // 検索ソース（vector/keyword）を追加
+    // UIが期待する形へ最小変換（scoreText, source を保持）
+    const mapped = unifiedResults.slice(0, 8).map(r => ({
+      id: String(r.pageId ?? r.id ?? ''),
+      content: r.content || '',
+      url: r.url || '#',
+      lastUpdated: (r as any).lastUpdated || null,
+      spaceName: (r as any).space_key || 'Unknown',
+      title: r.title || 'No Title',
+      labels: r.labels || [],
+      distance: (r as any).distance,
+      source: r.source as any,
+      scoreText: r.scoreText,
     }));
 
-    // メール通知系ドキュメントをフィルタリング
-    let filteredResults = filterEmailNotifications(formattedResults, query);
-  // アプリ層の最終ゲート: 完全除外ラベル（フォルダ/スコープ外/アーカイブ/議事録）は必ず除外
-  const EXCLUDE_ALWAYS = new Set(['フォルダ', 'スコープ外', 'アーカイブ', '議事録', 'meeting-notes', 'ミーティング']);
-  const before = filteredResults.length;
-  filteredResults = filteredResults.filter(r => {
-    // ラベルベースの除外
-    const hasExcludedLabel = (r.labels || []).some(l => EXCLUDE_ALWAYS.has(l));
-    if (hasExcludedLabel) {
-      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to excluded label: ${(r.labels || []).filter(l => EXCLUDE_ALWAYS.has(l)).join(', ')}`);
-      return false;
-    }
-    
-    // タイトルベースの議事録除外
-    const title = (r.title || '').toLowerCase();
-    const isMeetingDoc = title.includes('議事録') || title.includes('ミーティング') || title.includes('meeting');
-    if (isMeetingDoc) {
-      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to meeting-related title`);
-      return false;
-    }
-    
-    // タイトルベースのフォルダ除外（■マークが付いているもの）
-    const isFolderDoc = title.includes('■') || title.includes('フォルダ');
-    if (isFolderDoc) {
-      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to folder title (■ mark)`);
-      return false;
-    }
-    
-    // 短いコンテンツページを除外（参照リンクのみのページ）
-    const content = r.content || '';
-    if (content.length < 100) {
-      console.log(`[lancedbRetrieverTool] App-level filter: Excluding "${r.title}" due to short content (${content.length} chars)`);
-      return false;
-    }
-    
-    return true;
-  });
-  const removed = before - filteredResults.length;
-  if (removed > 0) {
-    console.log(`[lancedbRetrieverTool] App-level post filter removed ${removed} results by EXCLUDE_ALWAYS labels`);
-  }
-    console.log(`[lancedbRetrieverTool] Filtered ${formattedResults.length - filteredResults.length} email notification documents`);
-    console.log(`[lancedbRetrieverTool] Filtering applied: ${formattedResults.length !== filteredResults.length ? 'YES' : 'NO'}`);
-    
-    // 参照元の表示数を制限（上位10件のみ）
-    const limitedResults = filteredResults.slice(0, 10);
-    console.log(`[lancedbRetrieverTool] Limited results to top ${limitedResults.length} documents`);
-    
-    // デバッグ: フィルタリング後の結果をログ出力
-    console.log(`[lancedbRetrieverTool] === フィルタリング後最終結果 ===`);
-    limitedResults.forEach((result, index) => {
-      console.log(`[lancedbRetrieverTool] Final ${index + 1}: title="${result.title}", pageId="${result.pageId}", distance=${result.distance}, source="${result.source || 'vector'}"`);
-    });
-    console.log(`[lancedbRetrieverTool] === フィルタリング後最終結果終了 ===`);
-    
-    return limitedResults;
+    return mapped;
   } catch (error: any) {
     console.error(`[lancedbRetrieverTool] Error retrieving documents: ${error.message}`);
     throw new Error(`Failed to retrieve documents: ${error.message}`);
@@ -270,6 +197,8 @@ export const DocumentOutputSchema = z.object({
   title: z.string(),
   labels: z.array(z.string()),
   distance: z.number().optional(),
+  source: z.enum(['vector','keyword','bm25','hybrid']).optional(),
+  scoreText: z.string().optional(),
 });
 
 export const RetrieveDocsOutputSchema = z.array(DocumentOutputSchema);
