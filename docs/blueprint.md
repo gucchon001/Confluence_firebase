@@ -1,4 +1,4 @@
-# **App Name**: Confluence Copilot
+# **App Name**: Confluence Spec-Finder
 
 ## Core Features:
 
