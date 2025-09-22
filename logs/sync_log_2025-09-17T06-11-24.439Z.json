@@ -1,9 +1,0 @@
-{
-  "operation": "start",
-  "status": "complete",
-  "data": {
-    "message": "Sync started",
-    "lastSyncTime": null
-  },
-  "timestamp": "2025-09-17T06:11:24.439Z"
-}
