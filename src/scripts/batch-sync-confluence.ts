@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as minimist from 'minimist';
 import * as lancedb from '@lancedb/lancedb';
+// ConfluenceDataServiceは削除されました
 import { getEmbeddings } from '../lib/embeddings';
 import { ErrorHandler } from '../lib/error-handling';
 import { createConfluenceSampleData, ConfluenceSchema, FullLanceDBSchema } from '../lib/lancedb-schema';
@@ -29,17 +30,41 @@ interface ConfluencePage {
  * HTMLからテキストを抽出する
  */
 function extractTextFromHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!html) return '';
+  
+  // HTML特殊文字をデコード
+  const htmlEntities: { [key: string]: string } = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&nbsp;': ' ',
+    '&apos;': "'"
+  };
+  
+  let text = html;
+  for (const [entity, char] of Object.entries(htmlEntities)) {
+    text = text.replace(new RegExp(entity, 'g'), char);
+  }
+  
+  // HTMLタグを削除して空白に置換
+  const withoutTags = text.replace(/<[^>]*>/g, ' ');
+  
+  // 連続する空白を1つにまとめる
+  const normalizedSpaces = withoutTags.replace(/\s+/g, ' ');
+  
+  // 前後の空白を削除
+  return normalizedSpaces.trim();
 }
 
 /**
  * テキストをチャンクに分割する
  */
-function splitTextIntoChunks(text: string): string[] {
-  const CHUNK_SIZE = 1800; // パフォーマンス改善のため拡大
+function splitTextIntoChunks(text: string, chunkSize: number = 1800): string[] {
   const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
-    const chunk = text.substring(i, i + CHUNK_SIZE).trim();
+  for (let i = 0; i < text.length; i += chunkSize) {
+    const chunk = text.substring(i, i + chunkSize).trim();
     if (chunk) {
       chunks.push(chunk);
     }
@@ -48,38 +73,34 @@ function splitTextIntoChunks(text: string): string[] {
 }
 
 /**
- * Confluenceからページを取得する
+ * Confluenceからページ一覧を取得する
  */
-async function getConfluencePages(
-  spaceKey: string, 
-  start: number, 
-  limit: number,
-  lastSyncTime?: string
-): Promise<ConfluencePage[]> {
+async function getConfluencePages(spaceKey: string, start: number = 0, limit: number = 50): Promise<ConfluencePage[]> {
   try {
     console.log(`Fetching Confluence pages from ${start} to ${start + limit - 1}...`);
-    const baseUrl = process.env.CONFLUENCE_BASE_URL;
-    const username = process.env.CONFLUENCE_USER_EMAIL;
-    const apiToken = process.env.CONFLUENCE_API_TOKEN;
-    if (!baseUrl || !username || !apiToken) {
-      throw new Error('Confluence API credentials not configured');
-    }
-    const endpoint = `${baseUrl}/wiki/rest/api/content`;
+    
+    const endpoint = `${process.env.CONFLUENCE_BASE_URL}/wiki/rest/api/content`;
+    
+    // スペースキーが指定されている場合はスペースで絞り込み、そうでなければ全スペースから取得
     const params: any = {
-      spaceKey,
       expand: 'body.storage,version,space,metadata.labels',
       start,
-      limit
+      limit,
+      type: 'page' // ページのみを取得
     };
-    if (lastSyncTime) {
-      console.log(`⚠️  CQLクエリが機能しないため、全ページを取得して手動でフィルタリングします`);
-      // CQLクエリは機能しないため、全ページを取得して後で手動でフィルタリング
-      // params.cql = `lastModified >= "${lastSyncTime}" AND space = "${spaceKey}"`;
+    
+    if (spaceKey) {
+      params.spaceKey = spaceKey;
     }
+
     const response = await axios.get(endpoint, {
       params,
-      auth: { username, password: apiToken }
+      auth: { 
+        username: process.env.CONFLUENCE_USER_EMAIL, 
+        password: process.env.CONFLUENCE_API_TOKEN 
+      }
     });
+
     if (!response.data || !response.data.results) return [];
     console.log(`Retrieved ${response.data.results.length} pages`);
     return response.data.results;
@@ -96,81 +117,69 @@ async function getConfluencePages(
  * ページIDからラベル一覧を取得（必要に応じてページング）
  */
 async function getConfluenceLabels(pageId: string): Promise<string[]> {
-  const baseUrl = process.env.CONFLUENCE_BASE_URL;
-  const username = process.env.CONFLUENCE_USER_EMAIL;
-  const apiToken = process.env.CONFLUENCE_API_TOKEN;
-  if (!baseUrl || !username || !apiToken) {
-    throw new Error('Confluence API credentials not configured');
-  }
+  try {
+    const endpoint = `${process.env.CONFLUENCE_BASE_URL}/wiki/rest/api/content/${pageId}/label`;
+    let allLabels: string[] = [];
+    let start = 0;
+    const limit = 50;
 
-  const endpoint = `${baseUrl}/wiki/rest/api/content/${pageId}/label`;
-  const labels: string[] = [];
-  let start = 0;
-  const limit = 200;
-
-  // リトライ設定
-  const maxRetries = 3;
-  const initialDelayMs = 500;
-
-  async function fetchPage(startParam: number, attempt: number): Promise<any> {
-    try {
-      const res = await axios.get(endpoint, {
-        params: { start: startParam, limit },
-        auth: { username, password: apiToken }
+    while (true) {
+      const response = await axios.get(endpoint, {
+        params: { start, limit },
+        auth: { 
+          username: process.env.CONFLUENCE_USER_EMAIL, 
+          password: process.env.CONFLUENCE_API_TOKEN 
+        }
       });
-      return res;
-    } catch (err: any) {
-      const isAxios = axios.isAxiosError(err);
-      const status = isAxios ? err.response?.status : undefined;
-      const shouldRetry = status === 401 || status === 403 || (status !== undefined && status >= 500);
-      const delay = initialDelayMs * Math.pow(2, attempt - 1);
-      console.warn(`[getConfluenceLabels] pageId=${pageId} start=${startParam} attempt=${attempt} failed: ${err?.message || err}. status=${status}. willRetry=${shouldRetry}`);
-      if (shouldRetry && attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, delay));
-        return fetchPage(startParam, attempt + 1);
-      }
-      throw err;
-    }
-  }
 
-  while (true) {
-    const res = await fetchPage(start, 1);
-    const results = res?.data?.results || [];
-    for (const r of results) {
-      if (typeof r?.name === 'string' && r.name.trim().length > 0) {
-        labels.push(r.name.trim());
-      }
+      if (!response.data || !response.data.results) break;
+      
+      const labels = response.data.results.map((label: any) => label.name);
+      allLabels = allLabels.concat(labels);
+      
+      if (response.data.results.length < limit) break;
+      start += limit;
     }
-    const size = res?.data?.size ?? results.length;
-    if (results.length < limit || size === 0) break;
-    start += limit;
+
+    console.log(`[getConfluenceLabels] pageId=${pageId} labels=[${allLabels.join(',')}]`);
+    return allLabels;
+  } catch (error: any) {
+    console.error(`Error fetching labels for page ${pageId}:`, error.message);
+    return [];
   }
-  const unique = Array.from(new Set(labels));
-  console.log(`[getConfluenceLabels] pageId=${pageId} labels=${JSON.stringify(unique)}`);
-  return unique;
 }
 
 /**
  * LanceDBから既存のページデータを取得
  */
-async function getExistingLanceDBData(table: any): Promise<Map<string, { lastUpdated: string; title: string; }>> {
+async function getExistingLanceDBData(table: any): Promise<Map<number, { lastUpdated: string; title: string; }>> {
   try {
     console.log('📊 LanceDBから既存データを取得中...');
-    const existingData = new Map<string, { lastUpdated: string; title: string; }>();
+    const existingData = new Map<number, { lastUpdated: string; title: string; }>();
     
     const records = await table.query().select(['pageId', 'lastUpdated', 'title']).toArray();
     
     for (const record of records) {
-      const pageId = String(record.pageId || '');
-      if (pageId && pageId !== '0') { // 0や空文字列を除外
-        existingData.set(pageId, {
-          lastUpdated: String(record.lastUpdated || ''),
-          title: String(record.title || '')
-        });
+      const pageId = Number(record.pageId);
+      if (pageId && pageId > 0) { // 0や負数を除外
+        const recordData = {
+          lastUpdated: record.lastUpdated || '',
+          title: record.title || ''
+        };
+        
+        // 重複するpageIdがある場合、最新のlastUpdatedを持つレコードを保持
+        if (existingData.has(pageId)) {
+          const existingRecord = existingData.get(pageId)!;
+          if (recordData.lastUpdated > existingRecord.lastUpdated) {
+            existingData.set(pageId, recordData);
+          }
+        } else {
+          existingData.set(pageId, recordData);
+        }
       }
     }
     
-    console.log(`✅ LanceDB既存データ取得完了: ${existingData.size}ページ`);
+    console.log(`✅ LanceDB既存データ取得完了: ${existingData.size}ページ（重複除去後）`);
     return existingData;
   } catch (error) {
     console.error('❌ LanceDB既存データ取得エラー:', error);
@@ -322,17 +331,33 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
     const processedPageIds = new Set<string>();
     
     let totalPages = 0, totalChunks = 0, totalEmbeddings = 0, batchCount = 0;
-    const batchSize = 50;
+        const batchSize = 100; // 100件ずつでページネーション
     let start = 0;
     let hasMore = true;
+    let totalProcessed = 0;
 
     while (hasMore) {
       batchCount++;
       try {
-        const pages = await getConfluencePages(spaceKey, start, batchSize, isDifferentialSync ? lastSyncTime : undefined);
+        const pages = await getConfluencePages('CLIENTTOMO', start, batchSize); // CLIENTTOMOスペースのみ取得
+        console.log(`📥 API Response: ${pages.length} pages (start=${start}, limit=${batchSize})`);
+        
         if (pages.length === 0) {
+          console.log(`🔚 No more pages found at start=${start}, stopping sync`);
           hasMore = false;
           break;
+        }
+        
+        totalProcessed += pages.length;
+        console.log(`📊 Total processed so far: ${totalProcessed} pages`);
+        
+        // 次のバッチのためにstartを更新
+        start += pages.length; // 実際に取得したページ数だけ進める
+        
+        // ページネーション継続条件のチェック
+        if (pages.length < batchSize) {
+          console.log(`🔚 Last batch detected: ${pages.length} pages (less than batch size ${batchSize})`);
+          hasMore = false;
         }
 
         // 差分同期の場合は正確な日時比較でフィルタリング
@@ -344,7 +369,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
           let skipCount = 0;
 
           for (const page of pages) {
-            const pageId = page.id;
+            const pageId = parseInt(page.id);
             const existingData = existingLanceDBData.get(pageId);
             
             if (existingData) {
@@ -373,11 +398,12 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
         for (const page of filteredPages) {
           processedPageIds.add(page.id);
           
-          // 既存ページの場合は古いレコードを削除
-          if (existingLanceDBData.has(page.id)) {
+          // 全件同期時のみ既存レコードを削除（差分同期時は削除しない）
+          const pageId = parseInt(page.id);
+          if (!isDifferentialSync && existingLanceDBData.has(pageId)) {
             try {
               // pageIdは数値型なので、文字列比較ではなく数値比較を使用
-              await tbl.delete(`"pageId" = ${page.id}`);
+              await tbl.delete(`"pageId" = ${pageId}`);
               console.log(`🗑️  既存レコードを削除: ${page.title}`);
             } catch (error) {
               console.warn(`⚠️  既存レコード削除エラー: ${page.title}`, error);
@@ -385,24 +411,34 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
           }
           
           const text = extractTextFromHtml(page.body?.storage?.value || '');
-          const chunks = splitTextIntoChunks(text);
+          let chunks = splitTextIntoChunks(text);
+          
+          // 空のコンテンツでも最小限のチャンクを作成
+          if (chunks.length === 0) {
+            chunks = [page.title || 'No content'];
+          }
+          
           totalChunks += chunks.length;
-          // ラベルを確実に取得（metadataが空でも別APIで補完）
+          // ラベルを取得（metadataから取得、API呼び出しは最小限に）
           let labels: string[] = [];
           try {
             const metaLabels = page.metadata?.labels?.results?.map((l: any) => l?.name).filter((x: any) => typeof x === 'string' && x.trim().length > 0) || [];
-            const apiLabels = await getConfluenceLabels(page.id);
-            labels = Array.from(new Set([...(metaLabels as string[]), ...apiLabels]));
+            // metadataにラベルがない場合のみAPI呼び出し
+            if (metaLabels.length === 0) {
+              const apiLabels = await getConfluenceLabels(page.id);
+              labels = apiLabels;
+            } else {
+              labels = metaLabels;
+            }
           } catch (e) {
             labels = [];
           }
           for (let i = 0; i < chunks.length; i++) {
             recordsForBatch.push({
               id: `${page.id}-${i}`, 
-              pageId: page.id, 
+              pageId: parseInt(page.id), 
               title: page.title,
               spaceKey: page.space?.key || '', 
-              spaceName: page.space?.name || '',
               url: `${process.env.CONFLUENCE_BASE_URL}/wiki/spaces/${page.space?.key}/pages/${page.id}`,
               lastUpdated: page.version?.when || '', 
               chunkIndex: i, 
@@ -476,7 +512,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
                 content: String(record.content ?? ''),
                 space_key: String(record.spaceKey ?? ''),
                 labels: Array.isArray(record.labels) ? record.labels : [],
-                pageId: String(record.pageId ?? ''),
+                pageId: Number(record.pageId ?? 0),
                 chunkIndex: Number(record.chunkIndex ?? 0),
                 url: String(record.url ?? '#'),
                 lastUpdated: String(record.lastUpdated ?? '')
@@ -538,7 +574,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
         console.error(`Error in batch ${batchCount}:`, batchError.message);
         await saveSyncLog('batch_error', { batch: batchCount, message: batchError.message });
       }
-      start += batchSize;
+      // start += batchSize; // 重複更新を削除（345行目で既に更新済み）
     }
 
     if (shouldDelete && existingIds.size > 0) {
@@ -555,13 +591,37 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
       console.log(`Found ${deletedPagesCount} deleted pages`);
       
       if (deletedPagesCount > 0) {
-        // LanceDBから削除されたページのデータを削除
+        // LanceDBから削除されたページのデータを削除（バッチ処理で最適化）
         try {
           const deletedIds = Array.from(deletedPageIds);
-          for (const pageId of deletedIds) {
-            await tbl.delete(`pageId = '${pageId}'`);
+          const batchSize = 100; // バッチサイズを100に設定
+          let deletedCount = 0;
+          
+          console.log(`Starting deletion of ${deletedPagesCount} pages in batches of ${batchSize}...`);
+          
+          for (let i = 0; i < deletedIds.length; i += batchSize) {
+            const batch = deletedIds.slice(i, i + batchSize);
+            const deleteConditions = batch.map(pageId => `"pageId" = ${parseInt(pageId)}`).join(' OR ');
+            
+            try {
+              await tbl.delete(deleteConditions);
+              deletedCount += batch.length;
+              console.log(`Deleted batch ${Math.floor(i / batchSize) + 1}: ${batch.length} pages (Total: ${deletedCount}/${deletedPagesCount})`);
+            } catch (batchError: any) {
+              console.warn(`Batch deletion error: ${batchError.message}`);
+              // バッチ処理が失敗した場合、個別削除にフォールバック
+              for (const pageId of batch) {
+                try {
+                  await tbl.delete(`"pageId" = ${parseInt(pageId)}`);
+                  deletedCount++;
+                } catch (individualError: any) {
+                  console.warn(`Failed to delete pageId ${pageId}: ${individualError.message}`);
+                }
+              }
+            }
           }
-          console.log(`Deleted data for ${deletedPagesCount} pages from LanceDB`);
+          
+          console.log(`Successfully deleted data for ${deletedCount} pages from LanceDB`);
         } catch (error: any) {
           console.error(`Error deleting data from LanceDB: ${error.message}`);
         }
@@ -583,11 +643,11 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
  */
 async function main() {
   const argv = minimist.default ? minimist.default(process.argv.slice(2)) : minimist(process.argv.slice(2));
-  const isAllSync = argv.all || false; // --all フラグをチェック
-
-  // isDifferentialSync は isAllSync の逆
-  const isDifferentialSync = !isAllSync; 
-  const shouldDelete = isDifferentialSync; 
+  
+  // コマンドライン引数から差分同期フラグを取得
+  const isDifferentialSync = argv.differential || argv.d || false;
+  const isAllSync = !isDifferentialSync;
+  const shouldDelete = false; // 削除は常に無効 
 
   console.log(`Starting sync: All=${isAllSync}, Differential=${isDifferentialSync}, Delete=${shouldDelete}`);
 
@@ -607,8 +667,14 @@ main();
 export { 
   batchSyncConfluence, 
   getLastSyncTime, 
-  getConfluencePages, 
-  getConfluenceLabels,
   getExistingLanceDBData,
   shouldUpdatePage
+};
+
+// 関数をエクスポート
+export { 
+  getConfluencePages, 
+  getConfluenceLabels,
+  extractTextFromHtml,
+  splitTextIntoChunks
 };

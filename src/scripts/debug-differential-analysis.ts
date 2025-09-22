@@ -7,6 +7,7 @@ import 'dotenv/config';
 import axios from 'axios';
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
+import { getConfluencePages } from './batch-sync-confluence';
 import { 
   compareDates, 
   isNewerThan, 
@@ -22,39 +23,7 @@ interface ConfluencePage {
   space?: { key: string; };
 }
 
-/**
- * Confluenceからページを取得する
- */
-async function getConfluencePages(spaceKey: string, start: number, limit: number): Promise<ConfluencePage[]> {
-  try {
-    const baseUrl = process.env.CONFLUENCE_BASE_URL;
-    const username = process.env.CONFLUENCE_USER_EMAIL;
-    const apiToken = process.env.CONFLUENCE_API_TOKEN;
-    
-    if (!baseUrl || !username || !apiToken) {
-      throw new Error('Confluence API credentials not configured');
-    }
-    
-    const endpoint = `${baseUrl}/wiki/rest/api/content`;
-    const params = {
-      spaceKey,
-      expand: 'version,space',
-      start,
-      limit
-    };
-    
-    const response = await axios.get(endpoint, {
-      params,
-      auth: { username, password: apiToken }
-    });
-    
-    if (!response.data || !response.data.results) return [];
-    return response.data.results;
-  } catch (error: any) {
-    console.error('Error fetching Confluence pages:', error.message);
-    throw error;
-  }
-}
+// getConfluencePages関数はbatch-sync-confluenceからインポート
 
 /**
  * LanceDBから既存のページデータを取得
