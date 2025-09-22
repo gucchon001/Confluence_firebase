@@ -4,13 +4,14 @@
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 import { getEmbeddings } from './embeddings';
-import { calculateKeywordScore, calculateHybridScore, calculateLabelScore, LabelFilterOptions } from './search-weights';
+import { calculateKeywordScore, calculateHybridScore, LabelFilterOptions } from './search-weights';
 import { extractKeywordsHybrid } from './keyword-extractor';
 import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
-import { getLabelsAsArray, hasExcludedLabel } from './label-utils';
+import { getLabelsAsArray } from './label-utils';
+import { labelManager } from './label-manager';
 
 /**
  * スコアを適切なパーセンテージに変換する関数
@@ -124,26 +125,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     let keywordResults: any[] = [];
     let bm25Results: any[] = [];
     
-    // ラベルフィルタリングの準備（処理速度向上のため事前に適用）
-    const defaultLabelFilters: LabelFilterOptions = {
-      includeMeetingNotes: false,
-      includeArchived: false
-    };
-    const labelFilters = params.labelFilters || defaultLabelFilters;
+    // ラベルフィルタリングの準備（統一されたLabelManagerを使用）
+    const labelFilters = params.labelFilters || labelManager.getDefaultFilterOptions();
+    const excludeLabels = labelManager.buildExcludeLabels(labelFilters);
+    
     console.log('[searchLanceDB] Using labelFilters:', labelFilters);
-    
-    // 除外するラベルを準備
-    const excludeLabels = [];
-    if (!labelFilters.includeMeetingNotes) {
-      excludeLabels.push('議事録', 'meeting-notes');
-    }
-    if (!labelFilters.includeArchived) {
-      excludeLabels.push('アーカイブ', 'archive');
-    }
-    // 常に除外するラベル（仕様書に基づく完全除外対象）
-    // 注意: 「フォルダ」ラベルを持つページでも、実際の機能ページ（■オファーなど）は除外しない
-    excludeLabels.push('スコープ外', 'メールテンプレート');
-    
     console.log('[searchLanceDB] Excluding labels:', excludeLabels);
 
     // 1. ベクトル検索の実行
@@ -160,9 +146,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       if (excludeLabels.length > 0) {
         const beforeCount = vectorResults.length;
         vectorResults = vectorResults.filter(result => {
-          const labels = getLabelsAsArray(result.labels);
-          
-          if (hasExcludedLabel(labels, excludeLabels)) {
+          if (labelManager.isExcluded(result.labels, excludeLabels)) {
             console.log(`[searchLanceDB] Excluded result due to label filter: ${result.title}`);
             return false;
           }
@@ -295,8 +279,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           }
         }
 
-        // ラベルスコアを計算（除外は既に適用済み）
-        const labelScoreResult = calculateLabelScore(labels, labelFilters);
+        // ラベルスコアは使用しない（0に固定）
         
         // 検索重み付け関数を使用してスコアを計算
         const scoreResult = calculateKeywordScore(title, content, labels, keywords, { highPriority, lowPriority });
@@ -305,20 +288,20 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const labelMatches = scoreResult.labelMatches;
         const contentMatches = scoreResult.contentMatches;
         
-        console.log(`  Score details: keyword=${keywordScore}, title=${titleMatches}, label=${labelMatches}, content=${contentMatches}, labelScore=${labelScoreResult.score}`);
+        console.log(`  Score details: keyword=${keywordScore}, title=${titleMatches}, label=${labelMatches}, content=${contentMatches}, labelScore=0`);
         
         // キーワードマッチがある場合はカウント
         if (keywordScore > 0) {
           keywordMatchCount++;
         }
         
-        // ベクトル距離、キーワードスコア、ラベルスコアを組み合わせた複合スコア
-        const hybridScore = calculateHybridScore(resultWithScore._distance, keywordScore, labelScoreResult.score);
-        console.log(`  Hybrid score: ${hybridScore} (vector: ${resultWithScore._distance}, keyword: ${keywordScore}, label: ${labelScoreResult.score})`);
+        // ベクトル距離、キーワードスコアを組み合わせた複合スコア（ラベルスコアは使用しない）
+        const hybridScore = calculateHybridScore(resultWithScore._distance, keywordScore, 0);
+        console.log(`  Hybrid score: ${hybridScore} (vector: ${resultWithScore._distance}, keyword: ${keywordScore}, label: 0)`);
         
         // スコア情報を追加
         resultWithScore._keywordScore = keywordScore;
-        resultWithScore._labelScore = labelScoreResult.score;
+        resultWithScore._labelScore = 0;  // ラベルスコアは使用しない
         resultWithScore._hybridScore = hybridScore;
         resultWithScore._sourceType = keywordScore > 0 ? 'hybrid' : 'vector';
         resultWithScore._matchDetails = {
@@ -527,9 +510,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         if (excludeLabels.length > 0) {
           const beforeBm25 = bm25Results.length;
           bm25Results = bm25Results.filter((result: any) => {
-            const labels = getLabelsAsArray(result.labels);
-
-            return !hasExcludedLabel(labels, excludeLabels);
+            return !labelManager.isExcluded(result.labels, excludeLabels);
           });
           console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
         }

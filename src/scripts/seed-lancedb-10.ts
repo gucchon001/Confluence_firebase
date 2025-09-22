@@ -6,7 +6,32 @@ async function main() {
   const dbPath = path.resolve(process.cwd(), '.lancedb');
   const tableName = 'confluence';
   const db = await lancedb.connect(dbPath);
-  const tbl = await db.openTable(tableName);
+  
+  // テーブルが存在するかチェック
+  const tableNames = await db.tableNames();
+  let tbl;
+  
+  if (tableNames.includes(tableName)) {
+    console.log(`テーブル '${tableName}' が存在します。開きます...`);
+    tbl = await db.openTable(tableName);
+  } else {
+    console.log(`テーブル '${tableName}' が存在しません。作成します...`);
+    // 最初のレコードでテーブルを作成
+    const firstRecord = createConfluenceRecord(
+      'seed-0',
+      new Array(384).fill(0).map((_, j) => Math.sin(j * 0.01)),
+      'SEED',
+      'Seed Title 0',
+      'Seed content 0',
+      1000000000,
+      0,
+      'https://example.com/0',
+      new Date().toISOString(),
+      ['機能要件', '重要']
+    );
+    tbl = await db.createTable(tableName, [firstRecord]);
+    console.log(`テーブル '${tableName}' を作成しました。`);
+  }
 
   const labelsPool = [
     ['機能要件', '重要'],
@@ -22,7 +47,7 @@ async function main() {
   ];
 
   const records = [] as any[];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 1; i < 10; i++) {
     const id = `seed-${i}`;
     const spaceKey = 'SEED';
     const title = `Seed Title ${i}`;

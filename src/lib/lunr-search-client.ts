@@ -7,6 +7,8 @@ import lunr from 'lunr';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
+import { hasIncludedLabel } from './label-utils';
+import { labelManager } from './label-manager';
 
 export interface LunrDocument {
   id: string;
@@ -200,9 +202,7 @@ export class LunrSearchClient {
           const doc = this.documents.get(result.ref);
           if (!doc) return false;
           
-          return filters.labels!.some(label => 
-            doc.labels.includes(label)
-          );
+          return hasIncludedLabel(doc.labels, filters.labels!);
         });
       }
 
@@ -211,9 +211,7 @@ export class LunrSearchClient {
           const doc = this.documents.get(result.ref);
           if (!doc) return false;
           
-          return !filters.excludeLabels!.some(label => 
-            doc.labels.includes(label)
-          );
+          return !labelManager.isExcluded(doc.labels, filters.excludeLabels!);
         });
       }
 

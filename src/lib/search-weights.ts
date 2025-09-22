@@ -14,41 +14,6 @@ export interface LabelFilterOptions {
   includeArchived: boolean;
 }
 
-// ラベル分類と重み付け
-export const LABEL_WEIGHTS = {
-  // 仕様・要件系（高優先度）
-  SPECIFICATION: {
-    '機能要件': 0.6,        // 重みを上げる
-    '共通要件': 0.5,        // 重みを上げる
-    '非機能要件': 0.4,      // 重みを上げる
-    'テスト要件': 0.3,      // 重みを上げる
-    'テスト計画': 0.2,      // 重みを上げる
-    '仕様書': 0.7,          // 新規追加
-    '設計書': 0.6,          // 新規追加
-    '要件定義': 0.5,        // 新規追加
-    '機能仕様': 0.6,        // 新規追加
-    'システム仕様': 0.5     // 新規追加
-  },
-  
-  // 文書種別（中優先度）
-  DOCUMENT_TYPE: {
-    '帳票': 0.1,
-    'メールテンプレート': 0.02,  // 重みを下げる
-    'ワークフロー': 0.1,
-    'API仕様': 0.4,         // 新規追加
-    'データベース仕様': 0.3, // 新規追加
-    '画面仕様': 0.3         // 新規追加
-  },
-  
-  // 除外対象（完全除外）
-  EXCLUDE_ALWAYS: ['フォルダ', 'スコープ外', 'アーカイブ'],
-  
-  // 条件付き除外
-  EXCLUDE_CONDITIONAL: {
-    '議事録': 'includeMeetingNotes',
-    'meeting-notes': 'includeMeetingNotes'
-  }
-};
 
 // 汎用語の重みを極小化するための設定（検索精度を下げる可能性のある汎用語）
 export const GENERIC_TERMS = [
@@ -376,46 +341,6 @@ export const WEIGHTS = {
  */
 // NOTE: 設定ベースの特別ブーストは撤去（辞書運用を廃止し再ランクへ移行）
 
-/**
- * ラベルスコアを計算する
- * @param labels ラベル配列
- * @param filterOptions フィルタオプション
- * @returns スコアと除外フラグ
- */
-export function calculateLabelScore(
-  labels: string[],
-  filterOptions: LabelFilterOptions
-): { score: number; shouldExclude: boolean } {
-  let score = 0;
-  let shouldExclude = false;
-
-  for (const label of labels) {
-    // 完全除外ラベルチェック
-    if (LABEL_WEIGHTS.EXCLUDE_ALWAYS.includes(label)) {
-      shouldExclude = true;
-      return { score: 0, shouldExclude: true };
-    }
-
-    // 条件付き除外ラベルチェック
-    const conditionalKey = LABEL_WEIGHTS.EXCLUDE_CONDITIONAL[label];
-    if (conditionalKey) {
-      const shouldInclude = filterOptions[conditionalKey as keyof LabelFilterOptions];
-      if (!shouldInclude) {
-        shouldExclude = true;
-        return { score: 0, shouldExclude: true };
-      }
-    }
-
-    // 重み付けスコア計算
-    if (LABEL_WEIGHTS.SPECIFICATION[label]) {
-      score += LABEL_WEIGHTS.SPECIFICATION[label];
-    } else if (LABEL_WEIGHTS.DOCUMENT_TYPE[label]) {
-      score += LABEL_WEIGHTS.DOCUMENT_TYPE[label];
-    }
-  }
-
-  return { score, shouldExclude };
-}
 
 /**
  * ハイブリッドスコアを計算する

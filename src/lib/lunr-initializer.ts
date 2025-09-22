@@ -5,6 +5,7 @@
 
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
+import { getLabelsAsArray } from './label-utils';
 
 interface LunrInitializerStatus {
   isInitialized: boolean;
@@ -66,11 +67,7 @@ export class LunrInitializer {
           // ラベルを配列として処理
           let labels: string[] = [];
           if (doc.labels) {
-            if (Array.isArray(doc.labels)) {
-              labels = doc.labels.map(l => String(l || '')).filter(l => l.length > 0);
-            } else {
-              labels = [String(doc.labels)].filter(l => l.length > 0);
-            }
+            labels = getLabelsAsArray(doc.labels);
           }
 
           lunrDocs.push({

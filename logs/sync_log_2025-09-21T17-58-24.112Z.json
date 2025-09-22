@@ -1,0 +1,9 @@
+{
+  "operation": "batch_error",
+  "status": "complete",
+  "data": {
+    "batch": 9205,
+    "message": "Cannot read properties of undefined (reading 'data')"
+  },
+  "timestamp": "2025-09-21T17:58:24.112Z"
+}

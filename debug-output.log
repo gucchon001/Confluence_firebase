@@ -1,0 +1,129 @@
+=== デバッグ出力確認テスト開始 ===
+時刻: 2025-09-21T23:23:46.308Z
+[askQuestion Action] Raw response structure: {
+  "answer": "オファー機能には「パーソナルオファー」と「自動オファー」の2種類があります。パーソナルオファーはクライアント企業が任意のタイミングで会員へ送付でき、送信可能数に制限がありますが、自動オファーはシステムが定めたタイミングで送付され、送信可能数に制限がありません。\n\n### オファー機能の定義\nオファー機能は、希望条件に合う会員に対して応募を促すために通知を送る機能であり、パーソナルオファーと自動オファーの2種類があります。\n\n*   **パーソナルオファー**: サービスサイトでは「スカウト」と表記されます。クライアント企業が任意のタイミングで送付でき、1ヶ月あたりの送信可能数に制限があります。\n*   **自動オファー**: サービスサイトでは「マッチ」と表記されます。本システムが定めたタイミングで送付され、1ヶ月あたりの送信可能数に制限がありません。\n\n### 各オファー機能の詳細\n| 項目 | 自動オファー | パーソナルオファー |\n| :---------- | :---------- | :---------- |\n| **送信タイミング** | 希望条件にマッチした会員が発生したタイミング（送付時間の指定は不可） | クライアント企業向け管理画面にて実行したタイミング |\n| **送信可能数** | 希望条件にマッチした会員数 | 契約している商品の条件による |\n| **メッセージ編集可否** | 不可（定型文のみ） | 可 |\n| **同一会員への送信間隔** | 前回の送信から120日間後 | 前回の送信から45日間後 |\n| **過去に自社に応募があった会員への送付** | 送付されない | 送付されない |\n| **紐付け対象** | 企業 | 企業＋教室 |\n\n自動オファーの設定情報は「自動オファー設定情報番号」などによって管理され、新規登録時にシステムで一意の連番が発行されます。オファー履歴では、これらパーソナルオファーと自動オファー双方の履歴情報が管理されており、自動オファーの場合は送信時に指定した送信対象者の市区町村または都道府県で募集中の求人の「教室PRタイトル」がメッセージ件名に自動設定されます。\n\n#### 引用\n*   ワード・ディフィニション\n*   【FIX】オファー設定情報（自動オファー）\n*   521_オファー機能利用条件\n*   【FIX】オファー履歴\n\n#### 参考情報（Low）\n*   【FIX】オファー候補会員検索条件（パーソナルオファー）",
+  "references": [
+    {
+      "title": "【FIX】オファー設定情報（自動オファー）",
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/697827329",
+      "spaceName": "CLIENTTOMO",
+      "lastUpdated": "2024-03-26T05:22:14.754Z",
+      "distance": 0,
+      "source": "bm25",
+      "scoreText": "BM25 24.56"
+    },
+    {
+      "title": "【FIX】オファー候補会員検索条件（パーソナルオファー）",
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/697958401",
+      "spaceName": "CLIENTTOMO",
+      "lastUpdated": "2024-04-02T10:18:53.793Z",
+      "distance": 2,
+      "source": "bm25",
+      "scoreText": "BM25 13.42"
+    },
+    {
+      "title": "【FIX】オプション申込・登録・解除フロー",
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674431004",
+      "spaceName": "CLIENTTOMO",
+      "lastUpdated": "2023-04-26T05:47:01.315Z",
+      "distance": 2,
+      "source": "bm25",
+      "scoreText": "BM25 11.66"
+    },
+    {
+      "title": "ワード・ディフィニション",
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927116",
+      "spaceName": "CLIENTTOMO",
+      "lastUpdated": "2024-04-08T05:00:04.014Z",
+      "distance": 2,
+      "source": "bm25",
+      "scoreText": "BM25 11.63"
+    },
+    {
+      "title": "521_オファー機能利用条件",
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/686686292",
+      "spaceName": "CLIENTTOMO",
+      "lastUpdated": "2025-02-10T08:54:22.848Z",
+      "distance": 0,
+      "source": "bm25",
+      "scoreText": "BM25 22.80"
+    },
+    {
+      "title": "【FIX】オファー履歴",
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/692092953",
+      "spaceName": "CLIENTTOMO",
+      "lastUpdated": "2024-04-25T08:12:21.450Z",
+      "distance": 0,
+      "source": "bm25",
+      "scoreText": "BM25 23.91"
+    },
+    {
+      "title": "【FIX】採用後在籍確認フロー",
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674496577",
+      "spaceName": "CLIENTTOMO",
+      "lastUpdated": "2023-03-29T07:47:45.941Z",
+      "distance": 3,
+      "source": "bm25",
+      "scoreText": "BM25 8.59"
+    },
+    {
+      "title": "【FIX】オファー・応募・選考・採用フロー",
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674234399",
+      "spaceName": "CLIENTTOMO",
+      "lastUpdated": "2023-04-28T13:10:50.254Z",
+      "distance": 2,
+      "source": "bm25",
+      "scoreText": "BM25 10.41"
+    }
+  ]
+}
+[askQuestion Action] References details:
+[askQuestion Action] Reference 1: title=【FIX】オファー設定情報（自動オファー）, source=bm25
+[askQuestion Action] Reference 2: title=【FIX】オファー候補会員検索条件（パーソナルオファー）, source=bm25
+[askQuestion Action] Reference 3: title=【FIX】オプション申込・登録・解除フロー, source=bm25
+[askQuestion Action] Reference 4: title=ワード・ディフィニション, source=bm25
+[askQuestion Action] Reference 5: title=521_オファー機能利用条件, source=bm25
+[askQuestion Action] Reference 6: title=【FIX】オファー履歴, source=bm25
+[askQuestion Action] Reference 7: title=【FIX】採用後在籍確認フロー, source=bm25
+[askQuestion Action] Reference 8: title=【FIX】オファー・応募・選考・採用フロー, source=bm25
+
+=== 最終結果 ===
+Answer: オファー機能には「パーソナルオファー」と「自動オファー」の2種類があります。パーソナルオファーはクライアント企業が任意のタイミングで会員へ送付でき、送信可能数に制限がありますが、自動オファーはシステムが定めたタイミングで送付され、送信可能数に制限がありません。
+
+### オファー機能の定義
+オファー機能は、希望条件に合う会員に対して応募を促すために通知を送る機能であり、パーソナルオファーと自動オファーの2種類があります。
+
+*   **パーソナルオファー**: サービスサイトでは「スカウト」と表記されます。クライアント企業が任意のタイミングで送付でき、1ヶ月あたりの送信可能数に制限があります。
+*   **自動オファー**: サービスサイトでは「マッチ」と表記されます。本システムが定めたタイミングで送付され、1ヶ月あたりの送信可能数に制限がありません。
+
+### 各オファー機能の詳細
+| 項目 | 自動オファー | パーソナルオファー |
+| :---------- | :---------- | :---------- |
+| **送信タイミング** | 希望条件にマッチした会員が発生したタイミング（送付時間の指定は不可） | クライアント企業向け管理画面にて実行したタイミング |
+| **送信可能数** | 希望条件にマッチした会員数 | 契約している商品の条件による |
+| **メッセージ編集可否** | 不可（定型文のみ） | 可 |
+| **同一会員への送信間隔** | 前回の送信から120日間後 | 前回の送信から45日間後 |
+| **過去に自社に応募があった会員への送付** | 送付されない | 送付されない |
+| **紐付け対象** | 企業 | 企業＋教室 |
+
+自動オファーの設定情報は「自動オファー設定情報番号」などによって管理され、新規登録時にシステムで一意の連番が発行されます。オファー履歴では、これらパーソナルオファーと自動オファー双方の履歴情報が管理されており、自動オファーの場合は送信時に指定した送信対象者の市区町村または都道府県で募集中の求人の「教室PRタイトル」がメッセージ件名に自動設定されます。
+
+#### 引用
+*   ワード・ディフィニション
+*   【FIX】オファー設定情報（自動オファー）
+*   521_オファー機能利用条件
+*   【FIX】オファー履歴
+
+#### 参考情報（Low）
+*   【FIX】オファー候補会員検索条件（パーソナルオファー）
+Answer length: 1067
+References count: 8
+Reference 1: 【FIX】オファー設定情報（自動オファー）
+Reference 2: 【FIX】オファー候補会員検索条件（パーソナルオファー）
+Reference 3: 【FIX】オプション申込・登録・解除フロー
+Reference 4: ワード・ディフィニション
+Reference 5: 521_オファー機能利用条件
+Reference 6: 【FIX】オファー履歴
+Reference 7: 【FIX】採用後在籍確認フロー
+Reference 8: 【FIX】オファー・応募・選考・採用フロー
+=== テスト完了 ===

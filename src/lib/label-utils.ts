@@ -52,20 +52,6 @@ export function getLabelsAsArray(labels: any): string[] {
   return [];
 }
 
-/**
- * ラベル配列が除外ラベルを含むかチェック
- */
-export function hasExcludedLabel(labels: string[], excludeLabels: string[]): boolean {
-  if (!labels || labels.length === 0 || !excludeLabels || excludeLabels.length === 0) {
-    return false;
-  }
-  
-  return labels.some(label => 
-    excludeLabels.some(excludeLabel => 
-      String(label).toLowerCase() === excludeLabel.toLowerCase()
-    )
-  );
-}
 
 /**
  * ラベル配列をフィルタリング

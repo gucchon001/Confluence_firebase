@@ -5,7 +5,9 @@ import { LanceDBSearchParams, LanceDBSearchResult } from './lancedb-search-clien
 import { LabelFilterOptions } from './search-weights';
 import { lunrSearchClient } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
-import { calculateKeywordScore, calculateHybridScore, calculateLabelScore } from './search-weights';
+import { calculateKeywordScore, calculateHybridScore } from './search-weights';
+import { getLabelsAsArray } from './label-utils';
+import { labelManager } from './label-manager';
 
 /**
  * ベクトル検索を実行する
@@ -27,23 +29,11 @@ export async function executeVectorSearch(
     let vectorResults = await vectorQuery.limit(topK * 2).toArray();
     console.log(`[executeVectorSearch] Vector search found ${vectorResults.length} results before filtering`);
     
-    // ラベルフィルタリングを適用
+    // ラベルフィルタリングを適用（統一されたLabelManagerを使用）
     if (excludeLabels.length > 0) {
       const beforeCount = vectorResults.length;
       vectorResults = vectorResults.filter(result => {
-        const labels = Array.isArray(result.labels)
-          ? result.labels
-          : (result.labels && typeof (result.labels as any).toArray === 'function'
-              ? (result.labels as any).toArray()
-              : []);
-        
-        const hasExcludedLabel = labels.some(label => 
-          excludeLabels.some(excludeLabel => 
-            String(label).toLowerCase().includes(excludeLabel.toLowerCase())
-          )
-        );
-        
-        if (hasExcludedLabel) {
+        if (labelManager.isExcluded(result.labels, excludeLabels)) {
           console.log(`[executeVectorSearch] Excluded result due to label filter: ${result.title}`);
           return false;
         }
@@ -92,19 +82,7 @@ export async function executeKeywordSearch(
       if (excludeLabels.length > 0) {
         const beforeCount = keywordResults.length;
         keywordResults = keywordResults.filter(result => {
-          const labels = Array.isArray(result.labels)
-            ? result.labels
-            : (result.labels && typeof (result.labels as any).toArray === 'function'
-                ? (result.labels as any).toArray()
-                : []);
-          
-          const hasExcludedLabel = labels.some(label => 
-            excludeLabels.some(excludeLabel => 
-              String(label).toLowerCase().includes(excludeLabel.toLowerCase())
-            )
-          );
-          
-          return !hasExcludedLabel;
+          return !labelManager.isExcluded(result.labels, excludeLabels);
         });
         console.log(`[executeKeywordSearch] Keyword search filtered from ${beforeCount} to ${keywordResults.length} results`);
       }
@@ -170,17 +148,7 @@ export async function executeBM25Search(
           // ラベルフィルタリング（保険）
           if (excludeLabels.length > 0) {
             bm25Results = detailedResults.filter(result => {
-              const labels = Array.isArray(result.labels)
-                ? result.labels
-                : (result.labels && typeof (result.labels as any).toArray === 'function'
-                    ? (result.labels as any).toArray()
-                    : []);
-              const hasExcludedLabel = labels.some(label => 
-                excludeLabels.some(excludeLabel => 
-                  String(label).toLowerCase().includes(excludeLabel.toLowerCase())
-                )
-              );
-              return !hasExcludedLabel;
+              return !labelManager.isExcluded(result.labels, excludeLabels);
             });
           } else {
             bm25Results = detailedResults;
@@ -231,19 +199,7 @@ export async function executeTitleExactSearch(
       if (excludeLabels.length > 0) {
         const beforeCount = titleExactResults.length;
         titleExactResults = titleExactResults.filter(result => {
-          const labels = Array.isArray(result.labels)
-            ? result.labels
-            : (result.labels && typeof (result.labels as any).toArray === 'function'
-                ? (result.labels as any).toArray()
-                : []);
-          
-          const hasExcludedLabel = labels.some(label => 
-            excludeLabels.some(excludeLabel => 
-              String(label).toLowerCase().includes(excludeLabel.toLowerCase())
-            )
-          );
-          
-          return !hasExcludedLabel;
+          return !labelManager.isExcluded(result.labels, excludeLabels);
         });
         console.log(`[executeTitleExactSearch] Title exact search filtered from ${beforeCount} to ${titleExactResults.length} results`);
       }
@@ -269,11 +225,7 @@ export function calculateSearchScores(
 ): any[] {
   return results.map(result => {
     // ラベルスコアの計算
-    const labels = Array.isArray(result.labels)
-      ? result.labels
-      : (result.labels && typeof (result.labels as any).toArray === 'function'
-          ? (result.labels as any).toArray()
-          : []);
+    const labels = getLabelsAsArray(result.labels);
     
     // キーワードスコアの計算
     const keywordScoreInfo = calculateKeywordScore(
@@ -287,19 +239,17 @@ export function calculateSearchScores(
       }
     );
     
-    const { score: labelScore } = calculateLabelScore(labels, labelFilters);
-    
-    // ハイブリッドスコアの計算
+    // ハイブリッドスコアの計算（ラベルスコアは0に固定）
     const hybridScore = calculateHybridScore(
       result._distance || 0,
       keywordScoreInfo.score,
-      labelScore
+      0  // ラベルスコアは使用しない
     );
     
     return {
       ...result,
       _keywordScore: keywordScoreInfo.score,
-      _labelScore: labelScore,
+      _labelScore: 0,  // ラベルスコアは使用しない
       _hybridScore: hybridScore
     };
   });

@@ -27,15 +27,20 @@ async function main() {
     const testData = [
       {
         id: 'test-1',
-        vector: new Float32Array(Array(768).fill(0).map(() => Math.random())),
+        vector: new Float32Array(Array(384).fill(0).map(() => Math.random())),
         title: 'テストタイトル1',
         labels: ['テスト', 'ラベル1']
       }
     ];
     
-    // テーブル作成（データからスキーマを推論）
+    // テーブル作成（明示的にスキーマを指定）
     console.log(`テーブル '${tableName}' を作成します...`);
-    const tbl = await db.createTable(tableName, testData);
+    const tbl = await db.createTable(tableName, testData, {
+      id: { type: 'string', nullable: false },
+      vector: { type: 'vector', valueType: 'float32', dimensions: 384, nullable: false },
+      title: { type: 'string', nullable: false },
+      labels: { type: 'list', valueType: 'string', nullable: false }
+    });
     console.log(`テーブル '${tableName}' を作成しました。`);
     
     // テーブル情報を表示
@@ -45,7 +50,7 @@ async function main() {
     // データを追加
     const newData = {
       id: 'test-2',
-      vector: new Float32Array(Array(768).fill(0).map(() => Math.random())),
+      vector: new Float32Array(Array(384).fill(0).map(() => Math.random())),
       title: 'テストタイトル2',
       labels: ['テスト', 'ラベル2']
     };
