@@ -3,7 +3,7 @@
  * デバッグログなし、ハードコーディングなし、ドメイン知識活用
  */
 
-import { DomainKnowledgeLoader } from './domain-knowledge-loader';
+import { KeywordListsLoader } from './keyword-lists-loader';
 
 type ExtractResult = {
   keywords: string[];
@@ -51,20 +51,21 @@ function extractBasicKeywords(query: string): string[] {
 }
 
 function extractDomainKeywords(query: string): string[] {
-  const domainKnowledgeLoader = DomainKnowledgeLoader.getInstance();
+  const keywordLoader = KeywordListsLoader.getInstance();
   
-  // ドメイン知識が読み込まれていない場合は初期化
-  if (!domainKnowledgeLoader.isLoaded()) {
+  // キーワードリストが読み込まれていない場合は初期化
+  if (!keywordLoader.isLoaded()) {
     try {
-      domainKnowledgeLoader.loadDomainKnowledge();
+      keywordLoader.loadKeywordLists();
     } catch (error) {
-      console.warn('[keyword-extractor] ドメイン知識の読み込みに失敗、フォールバックを使用');
+      console.warn('[keyword-extractor] キーワードリストの読み込みに失敗、フォールバックを使用');
       return extractDomainKeywordsFallback(query);
     }
   }
   
-  // ドメイン知識からキーワードを抽出
-  const domainKeywords = domainKnowledgeLoader.extractDomainKeywords(query);
+  // キーワードリストからキーワードを抽出
+  const extractedKeywords = keywordLoader.extractKeywords(query);
+  const domainKeywords = [...extractedKeywords.domainNames, ...extractedKeywords.functionNames];
   
   // フォールバック: 基本的なエンティティ抽出も追加
   const fallbackKeywords = extractDomainKeywordsFallback(query);
