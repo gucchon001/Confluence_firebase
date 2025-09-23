@@ -14,6 +14,37 @@ import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
 
 /**
+ * タイトルが除外パターンにマッチするかチェック
+ */
+function isTitleExcluded(title: string, excludePatterns: string[]): boolean {
+  if (!title || !excludePatterns || excludePatterns.length === 0) {
+    return false;
+  }
+  
+  return excludePatterns.some(pattern => {
+    // パターンが末尾に*がある場合は前方一致
+    if (pattern.endsWith('*')) {
+      const prefix = pattern.slice(0, -1);
+      return title.startsWith(prefix);
+    }
+    // パターンが先頭に*がある場合は後方一致
+    else if (pattern.startsWith('*')) {
+      const suffix = pattern.slice(1);
+      return title.endsWith(suffix);
+    }
+    // パターンが*で囲まれている場合は部分一致
+    else if (pattern.startsWith('*') && pattern.endsWith('*')) {
+      const substring = pattern.slice(1, -1);
+      return title.includes(substring);
+    }
+    // 完全一致
+    else {
+      return title === pattern;
+    }
+  });
+}
+
+/**
  * スコアを適切なパーセンテージに変換する関数
  */
 function normalizeScoreToPercentage(score: number, source: string): number {
@@ -47,6 +78,7 @@ export interface LanceDBSearchParams {
   exactTitleCandidates?: string[]; // タイトル厳格一致で必ず候補に合流させたい文字列
   useLunrIndex?: boolean; // Feature flag for Lunr inverted index
   originalQuery?: string; // 展開前の原文クエリ（優先度制御用）
+  excludeTitlePatterns?: string[]; // タイトル除外パターン
 }
 
 /**
@@ -129,8 +161,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const labelFilters = params.labelFilters || labelManager.getDefaultFilterOptions();
     const excludeLabels = labelManager.buildExcludeLabels(labelFilters);
     
+    // タイトル除外パターンの準備
+    const excludeTitlePatterns = params.excludeTitlePatterns || ['xxx_*'];
+    
     console.log('[searchLanceDB] Using labelFilters:', labelFilters);
     console.log('[searchLanceDB] Excluding labels:', excludeLabels);
+    console.log('[searchLanceDB] Excluding title patterns:', excludeTitlePatterns);
 
     // 1. ベクトル検索の実行
     try {
@@ -153,6 +189,19 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           return true;
         });
         console.log(`[searchLanceDB] Excluded ${beforeCount - vectorResults.length} results due to label filtering`);
+      }
+      
+      // タイトル除外フィルタリングを適用
+      if (excludeTitlePatterns.length > 0) {
+        const beforeCount = vectorResults.length;
+        vectorResults = vectorResults.filter(result => {
+          if (isTitleExcluded(result.title, excludeTitlePatterns)) {
+            console.log(`[searchLanceDB] Excluded result due to title pattern: ${result.title}`);
+            return false;
+          }
+          return true;
+        });
+        console.log(`[searchLanceDB] Excluded ${beforeCount - vectorResults.length} results due to title pattern filtering`);
       }
       
       // 結果数を制限
@@ -514,6 +563,15 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           });
           console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
         }
+        
+        // タイトル除外フィルタリングをBM25結果にも適用
+        if (excludeTitlePatterns.length > 0) {
+          const beforeBm25 = bm25Results.length;
+          bm25Results = bm25Results.filter((result: any) => {
+            return !isTitleExcluded(result.title, excludeTitlePatterns);
+          });
+          console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to title pattern filtering`);
+        }
             
             console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows to candidates for keywords=[${searchKeywords.join(', ')}]`);
           }
@@ -553,14 +611,14 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const kr = kwRank.get(r.id) ?? 1000000;
         const tr = titleRank.get(r.id); // 厳格タイトルはある場合のみ加点
         const br = bm25Rank.get(r.id);
-        // 重み: vector=1.0, keyword=0.2, title-exact=0.7, bm25=0.45
-        let rrf = (1 / (kRrf + vr)) + 0.2 * (1 / (kRrf + kr)) + (tr ? 0.7 * (1 / (kRrf + tr)) : 0) + (br ? 0.45 * (1 / (kRrf + br)) : 0);
+        // 重み: vector=1.5, keyword=0.2, title-exact=0.7, bm25=0.35
+        let rrf = (1.5 / (kRrf + vr)) + 0.2 * (1 / (kRrf + kr)) + (tr ? 0.7 * (1 / (kRrf + tr)) : 0) + (br ? 0.35 * (1 / (kRrf + br)) : 0);
         // ドメイン減衰（メール/帳票/請求/アーカイブ/議事録）：順位の最後で軽く抑制
         try {
           const titleStr = String(r.title || '').toLowerCase();
           const labelsArr: string[] = getLabelsAsArray(r.labels);
           const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
-          const penaltyTerms = ['メール','mail','通知','テンプレート','template','帳票','請求','アーカイブ','議事録','meeting-notes','ミーティング','meeting','会議','議事','フォルダ','■'];
+          const penaltyTerms = ['メール','mail','通知','テンプレート','template','帳票','請求','アーカイブ','議事録','meeting-notes','ミーティング','meeting','会議','議事','フォルダ'];
           const genericTitleTerms = ['共通要件','非機能要件','用語','ワード','ディフィニション','definition','ガイドライン','一覧','フロー','要件'];
           const hasPenalty = penaltyTerms.some(t => titleStr.includes(t)) || lowerLabels.some(l => penaltyTerms.some(t => l.includes(t)));
           const isGenericDoc = genericTitleTerms.some(t => titleStr.includes(t));

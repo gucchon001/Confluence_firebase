@@ -155,6 +155,7 @@ async function lancedbRetrieverTool(
       topK: 12,
       useLunrIndex: false, // BM25検索を無効化してベクトル検索のみ使用
       labelFilters: filters?.labelFilters,
+      excludeTitlePatterns: ['xxx_*'], // xxx_で始まるページを除外
     });
     
     console.log('[lancedbRetrieverTool] Raw search results count:', unifiedResults.length);

@@ -325,10 +325,10 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
 
     // LanceDBから既存のページデータを取得（日時比較用）
     const existingLanceDBData = await getExistingLanceDBData(tbl);
-    const existingIds = new Set<string>(existingLanceDBData.keys());
+    const existingIds = new Set<number>(existingLanceDBData.keys());
     console.log(`Found ${existingIds.size} existing page IDs in LanceDB`);
     
-    const processedPageIds = new Set<string>();
+    const processedPageIds = new Set<number>();
     
     let totalPages = 0, totalChunks = 0, totalEmbeddings = 0, batchCount = 0;
         const batchSize = 100; // 100件ずつでページネーション
@@ -396,7 +396,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
         totalPages += filteredPages.length;
         const recordsForBatch: any[] = [];
         for (const page of filteredPages) {
-          processedPageIds.add(page.id);
+          processedPageIds.add(parseInt(page.id));
           
           // 全件同期時のみ既存レコードを削除（差分同期時は削除しない）
           const pageId = parseInt(page.id);
@@ -580,7 +580,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
     if (shouldDelete && existingIds.size > 0) {
       // 削除されたページの処理
       console.log('\nChecking for deleted pages...');
-      const deletedPageIds = new Set<string>();
+      const deletedPageIds = new Set<number>();
       for (const pageId of existingIds) {
         if (!processedPageIds.has(pageId)) {
           deletedPageIds.add(pageId);
@@ -601,7 +601,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
           
           for (let i = 0; i < deletedIds.length; i += batchSize) {
             const batch = deletedIds.slice(i, i + batchSize);
-            const deleteConditions = batch.map(pageId => `"pageId" = ${parseInt(pageId)}`).join(' OR ');
+            const deleteConditions = batch.map(pageId => `"pageId" = ${pageId}`).join(' OR ');
             
             try {
               await tbl.delete(deleteConditions);
@@ -612,7 +612,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
               // バッチ処理が失敗した場合、個別削除にフォールバック
               for (const pageId of batch) {
                 try {
-                  await tbl.delete(`"pageId" = ${parseInt(pageId)}`);
+                  await tbl.delete(`"pageId" = ${pageId}`);
                   deletedCount++;
                 } catch (individualError: any) {
                   console.warn(`Failed to delete pageId ${pageId}: ${individualError.message}`);

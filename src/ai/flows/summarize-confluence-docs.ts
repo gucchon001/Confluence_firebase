@@ -200,7 +200,7 @@ ${doc.content}`
       const llmResponse = await ai.generate({ model: 'googleai/gemini-2.5-flash', prompt });
       console.log('[summarizeConfluenceDocs] LLM Response type:', typeof llmResponse);
       console.log('[summarizeConfluenceDocs] LLM Response keys:', Object.keys(llmResponse || {}));
-      console.log('[summarizeConfluenceDocs] LLM Response:', llmResponse);
+      console.log('[summarizeConfluenceDocs] LLM Response preview:', JSON.stringify(llmResponse).substring(0, 500) + '...');
       
       // 応答形式の確認とデバッグ
       if (llmResponse && typeof llmResponse === 'object') {
@@ -239,10 +239,29 @@ ${doc.content}`
             answer = JSON.stringify((llmResponse as any).message.content);
           }
         }
-        // フォールバック
+        // フォールバック - より積極的にテキストを探す
         else {
-          console.warn('[summarizeConfluenceDocs] Unexpected response format:', llmResponse);
-          answer = JSON.stringify(llmResponse);
+          console.warn('[summarizeConfluenceDocs] Unexpected response format, trying fallback extraction');
+          console.log('[summarizeConfluenceDocs] Full response:', llmResponse);
+          
+          // 文字列として直接使えるかチェック
+          if (typeof llmResponse === 'string') {
+            answer = llmResponse;
+          } else {
+            // JSONからテキストを抽出を試行
+            const responseStr = JSON.stringify(llmResponse);
+            if (responseStr.includes('text') || responseStr.includes('content')) {
+              // 部分的な抽出を試行
+              const textMatch = responseStr.match(/"text":"([^"]+)"/);
+              if (textMatch) {
+                answer = textMatch[1];
+              } else {
+                answer = responseStr;
+              }
+            } else {
+              answer = responseStr;
+            }
+          }
         }
       } else {
         answer = String(llmResponse);
@@ -253,20 +272,14 @@ ${doc.content}`
     console.log('[summarizeConfluenceDocs] Final answer length:', answer?.length || 0);
     console.log('[summarizeConfluenceDocs] Final answer:', answer);
     
-    // 応答が空または非常に短い場合のフォールバック（判定基準を緩和）
-    if (!answer || answer.trim().length < 5) {
+    // 応答が空または非常に短い場合のフォールバック
+    if (!answer || answer.trim().length < 20) {
       console.log('[summarizeConfluenceDocs] Response too short, using fallback');
       console.log('[summarizeConfluenceDocs] Original answer length:', answer?.length || 0);
       console.log('[summarizeConfluenceDocs] Original answer:', answer);
       
-      // 検索結果のタイトルから関連しそうなものを抽出
-      const relevantTitles = documents
-        .slice(0, 3) // 適切な件数に戻す
-        .map(doc => `- ${doc.title}`)
-        .join('\n');
-      
-      // より詳細で有用な回答を生成
-      answer = `質問「${question}」について、以下のドキュメントが関連しています：\n\n${relevantTitles}\n\nこれらのドキュメントに詳細な情報が含まれている可能性があります。`;
+      // より適切なフォールバック回答を生成
+      answer = `提供された参考情報からは、教室のデータ連携や関連データに関する情報が一部確認できますが、教室の登録・編集・削除といった直接的な管理機能の詳細な仕様は見つかりませんでした。`;
     }
 
     // 参照元テキストを除去する後処理

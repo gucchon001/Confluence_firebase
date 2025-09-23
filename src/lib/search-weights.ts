@@ -4,8 +4,8 @@
  */
 
 // ベクトル検索とキーワード検索の重み（調整）
-export const VECTOR_WEIGHT = 0.4; // ベクトル検索の重み（下げる）
-export const KEYWORD_WEIGHT = 0.5; // キーワード検索の重み（上げる）
+export const VECTOR_WEIGHT = 0.4; // ベクトル検索の重み（調整）
+export const KEYWORD_WEIGHT = 0.5; // キーワード検索の重み（キーワードマッチングを重視）
 export const LABEL_WEIGHT = 0.1; // ラベル検索の重み（下げる）
 
 // ラベルフィルタオプション

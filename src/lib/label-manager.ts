@@ -16,7 +16,7 @@ export class LabelManager {
 
   constructor(config?: Partial<LabelManagerConfig>) {
     this.config = {
-      excludeAlways: ['スコープ外', 'メールテンプレート'],
+      excludeAlways: ['スコープ外', 'メールテンプレート', 'フォルダ', 'アーカイブ'],
       excludeConditional: {
         '議事録': 'includeMeetingNotes',
         'meeting-notes': 'includeMeetingNotes',
