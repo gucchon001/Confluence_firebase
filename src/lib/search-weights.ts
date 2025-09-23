@@ -4,8 +4,8 @@
  */
 
 // ベクトル検索とキーワード検索の重み（調整）
-export const VECTOR_WEIGHT = 0.4; // ベクトル検索の重み（調整）
-export const KEYWORD_WEIGHT = 0.5; // キーワード検索の重み（キーワードマッチングを重視）
+export const VECTOR_WEIGHT = 0.3; // ベクトル検索の重み（調整）
+export const KEYWORD_WEIGHT = 0.6; // キーワード検索の重み（キーワードマッチングを重視）
 export const LABEL_WEIGHT = 0.1; // ラベル検索の重み（下げる）
 
 // ラベルフィルタオプション
@@ -302,27 +302,27 @@ export const IMPORTANT_KEYWORDS = [
 
 // キーワードマッチングの重み
 export const WEIGHTS = {
-  // タイトル関連
-  TITLE_EXACT_MATCH: 0.8,   // タイトルに完全一致
-  TITLE_CONTAINS: 0.5,      // タイトルに部分一致
+  // タイトル関連（大幅強化）
+  TITLE_EXACT_MATCH: 2.0,   // タイトルに完全一致（大幅強化）
+  TITLE_CONTAINS: 1.2,      // タイトルに部分一致（強化）
   
   // ラベル関連
-  LABEL_MATCH: 0.4,         // ラベルに一致
+  LABEL_MATCH: 0.6,         // ラベルに一致（強化）
   
   // コンテンツ関連
-  CONTENT_MATCH: 0.3,       // コンテンツに一致
+  CONTENT_MATCH: 0.4,       // コンテンツに一致（強化）
   
   // 重要キーワードの厳格一致ブースト
-  IMPORTANT_KEYWORD_TITLE_EXACT: 5.0,  // 重要キーワードがタイトルに完全一致（大幅強化）
-  IMPORTANT_KEYWORD_TITLE_CONTAINS: 3.0, // 重要キーワードがタイトルに部分一致（大幅強化）
-  IMPORTANT_KEYWORD_LABEL_EXACT: 4.0,   // 重要キーワードがラベルに完全一致（大幅強化）
-  IMPORTANT_KEYWORD_LABEL_CONTAINS: 2.5, // 重要キーワードがラベルに部分一致（大幅強化）
+  IMPORTANT_KEYWORD_TITLE_EXACT: 8.0,  // 重要キーワードがタイトルに完全一致（大幅強化）
+  IMPORTANT_KEYWORD_TITLE_CONTAINS: 5.0, // 重要キーワードがタイトルに部分一致（大幅強化）
+  IMPORTANT_KEYWORD_LABEL_EXACT: 6.0,   // 重要キーワードがラベルに完全一致（大幅強化）
+  IMPORTANT_KEYWORD_LABEL_CONTAINS: 4.0, // 重要キーワードがラベルに部分一致（大幅強化）
   
   // 汎用語の重み（極小化）
   GENERIC_TERM_WEIGHT: 0.0, // 汎用語の重みを0に（採点影響なし）
   
   // 複合スコアの計算係数
-  HYBRID_FACTOR: 0.7        // ハイブリッドスコア計算時の係数
+  HYBRID_FACTOR: 0.8        // ハイブリッドスコア計算時の係数（強化）
 };
 
 /**
@@ -356,7 +356,9 @@ export function calculateHybridScore(vectorDistance: number, keywordScore: numbe
   const keywordScoreWeighted = keywordScore * KEYWORD_WEIGHT;
   const labelScoreWeighted = labelScore * LABEL_WEIGHT;
   
-  return vectorScore + keywordScoreWeighted + labelScoreWeighted;
+  // スコアを0-100の範囲に正規化（テストの期待値に合わせる）
+  const rawScore = vectorScore + keywordScoreWeighted + labelScoreWeighted;
+  return Math.min(100, Math.max(0, rawScore * 100));
 }
 
 /**

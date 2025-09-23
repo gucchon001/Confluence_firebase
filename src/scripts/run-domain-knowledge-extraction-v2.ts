@@ -200,51 +200,56 @@ async function main() {
     const deduplicationPath = join(config.llm.outputDir, 'deduplication-result-v2.json');
     const deduplicationResult = JSON.parse(readFileSync(deduplicationPath, 'utf8'));
     
-    // ドメイン名を個別ページから集約（機能領域のみ）
+    // 全キーワードを収集してページ間重複削除を実行
     const allDomainNames = new Set<string>();
+    const allFunctionNames = new Set<string>();
+    const allOperationNames = new Set<string>();
+    const allSystemFields = new Set<string>();
+    const allSystemTerms = new Set<string>();
+    const allRelatedKeywords = new Set<string>();
+    
     Object.values(deduplicationResult.functions).forEach((pageData: any) => {
-      if (pageData.domainNames && Array.isArray(pageData.domainNames)) {
-        pageData.domainNames.forEach((domain: string) => {
-          if (domain && domain.trim() && (domain.includes('管理') || domain.includes('機能'))) {
-            allDomainNames.add(domain.trim());
-          }
-        });
-      }
+      if (pageData.domainNames) pageData.domainNames.forEach((k: string) => allDomainNames.add(k));
+      if (pageData.functionNames) pageData.functionNames.forEach((k: string) => allFunctionNames.add(k));
+      if (pageData.operationNames) pageData.operationNames.forEach((k: string) => allOperationNames.add(k));
+      if (pageData.systemFields) pageData.systemFields.forEach((k: string) => allSystemFields.add(k));
+      if (pageData.systemTerms) pageData.systemTerms.forEach((k: string) => allSystemTerms.add(k));
+      if (pageData.relatedKeywords) pageData.relatedKeywords.forEach((k: string) => allRelatedKeywords.add(k));
     });
 
-    const domainStats = {
-      totalDomainNames: allDomainNames.size,
-      topDomainNames: Array.from(allDomainNames).slice(0, 20)
-    };
-    
-    // 全キーワードを統合（新しいフィールドも含める）
+    // 全キーワードを統合
     const allKeywords = new Set<string>();
-    Object.values(deduplicationResult.functions).forEach((pageData: any) => {
-      if (pageData.domainNames) pageData.domainNames.forEach((k: string) => allKeywords.add(k));
-      if (pageData.functionNames) pageData.functionNames.forEach((k: string) => allKeywords.add(k));
-      if (pageData.operationNames) pageData.operationNames.forEach((k: string) => allKeywords.add(k));
-      if (pageData.systemFields) pageData.systemFields.forEach((k: string) => allKeywords.add(k));
-      if (pageData.systemTerms) pageData.systemTerms.forEach((k: string) => allKeywords.add(k));
-      if (pageData.relatedKeywords) pageData.relatedKeywords.forEach((k: string) => allKeywords.add(k));
-    });
+    allDomainNames.forEach(k => allKeywords.add(k));
+    allFunctionNames.forEach(k => allKeywords.add(k));
+    allOperationNames.forEach(k => allKeywords.add(k));
+    allSystemFields.forEach(k => allKeywords.add(k));
+    allSystemTerms.forEach(k => allKeywords.add(k));
+    allRelatedKeywords.forEach(k => allKeywords.add(k));
+
+    // ドメイン名の統計（機能領域のみ）
+    const functionalDomains = Array.from(allDomainNames).filter(domain => 
+      domain.includes('管理') || domain.includes('機能')
+    );
 
     const finalResult = {
       metadata: {
         extractedAt: new Date().toISOString(),
-        version: '2.1',
-        description: 'データドリブンなドメイン知識抽出結果（システム項目・用語対応版）'
+        version: '2.2',
+        description: 'データドリブンなドメイン知識抽出結果（ページ間重複削除対応版）'
       },
       statistics: {
         totalPages: Object.keys(deduplicationResult.functions).length,
         totalKeywords: allKeywords.size,
-        domainNames: domainStats.totalDomainNames,
+        domainNames: functionalDomains.length,
+        systemFields: allSystemFields.size,
+        systemTerms: allSystemTerms.size,
         reductionRate: deduplicationResult.global.statistics.reductionRate,
         protectedKeywords: deduplicationResult.global.statistics.protectedCount
       },
-      domainNames: Array.from(allDomainNames),
+      domainNames: functionalDomains,
       allKeywords: Array.from(allKeywords),
       functions: deduplicationResult.functions,
-      topDomainNames: domainStats.topDomainNames
+      topDomainNames: functionalDomains.slice(0, 20)
     };
     
     const finalPath = join(config.pipeline.outputDir, 'final-domain-knowledge-v2.json');
@@ -255,6 +260,8 @@ async function main() {
     console.log(`   - 総ページ数: ${finalResult.statistics.totalPages}`);
     console.log(`   - 総キーワード数: ${finalResult.statistics.totalKeywords}`);
     console.log(`   - ドメイン名数: ${finalResult.statistics.domainNames}`);
+    console.log(`   - システム項目数: ${finalResult.statistics.systemFields}`);
+    console.log(`   - システム用語数: ${finalResult.statistics.systemTerms}`);
     console.log(`   - 削減率: ${finalResult.statistics.reductionRate ? finalResult.statistics.reductionRate.toFixed(1) : 0}%`);
     console.log(`   - 保護キーワード数: ${finalResult.statistics.protectedKeywords}`);
     

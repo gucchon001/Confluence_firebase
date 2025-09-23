@@ -381,7 +381,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           const kwCap = Math.min(50, Math.max(10, Math.floor(topK / 3)));
           
           // 複数のキーワードでBM25検索を実行
-          const searchKeywords = keywords.slice(0, 3); // 上位3つのキーワードを使用
+          const searchKeywords = keywords.slice(0, 5); // 上位5つのキーワードを使用（拡張）
           
           // クエリ依存のキーワード注入は行わない（汎用ルールに統一）
           
@@ -628,8 +628,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const kr = kwRank.get(r.id) ?? 1000000;
         const tr = titleRank.get(r.id); // 厳格タイトルはある場合のみ加点
         const br = bm25Rank.get(r.id);
-        // 重み: vector=1.5, keyword=0.2, title-exact=0.7, bm25=0.35
-        let rrf = (1.5 / (kRrf + vr)) + 0.2 * (1 / (kRrf + kr)) + (tr ? 0.7 * (1 / (kRrf + tr)) : 0) + (br ? 0.35 * (1 / (kRrf + br)) : 0);
+        // 重み: vector=1.0, keyword=0.8, title-exact=1.2, bm25=0.6（キーワードマッチングを重視）
+        let rrf = (1.0 / (kRrf + vr)) + 0.8 * (1 / (kRrf + kr)) + (tr ? 1.2 * (1 / (kRrf + tr)) : 0) + (br ? 0.6 * (1 / (kRrf + br)) : 0);
         // ドメイン減衰（メール/帳票/請求/アーカイブ/議事録）：順位の最後で軽く抑制
         try {
           const titleStr = String(r.title || '').toLowerCase();
