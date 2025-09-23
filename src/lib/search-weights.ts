@@ -12,7 +12,7 @@ export const LABEL_WEIGHT = 0.1; // ラベル検索の重み（下げる）
 export interface LabelFilterOptions {
   includeMeetingNotes: boolean;
   includeArchived: boolean;
-  includeFolders: boolean;  // フォルダラベルを含めるかどうか
+  includeFolders?: boolean;  // フォルダラベルを含めるかどうか
 }
 
 
