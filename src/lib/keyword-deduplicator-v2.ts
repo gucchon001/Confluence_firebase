@@ -283,6 +283,8 @@ export function deduplicateFunctionKeywords(
     domainNames?: string[];
     functionNames?: string[];
     operationNames?: string[];
+    systemFields?: string[];
+    systemTerms?: string[];
     relatedKeywords?: string[];
   }>,
   options: DeduplicationOptions = {}
@@ -290,6 +292,8 @@ export function deduplicateFunctionKeywords(
   domainNames: string[];
   functionNames: string[];
   operationNames: string[];
+  systemFields: string[];
+  systemTerms: string[];
   relatedKeywords: string[];
   deduplicationStats: DeduplicationResult['statistics'];
 }> {
@@ -300,28 +304,33 @@ export function deduplicateFunctionKeywords(
       ...(functionData.domainNames || []),
       ...(functionData.functionNames || []),
       ...(functionData.operationNames || []),
+      ...(functionData.systemFields || []),
+      ...(functionData.systemTerms || []),
       ...(functionData.relatedKeywords || [])
     ];
     
     const deduplicationResult = deduplicateKeywords(allKeywords, options);
     
-    // カテゴリ別に再分類
-    const domainNames = deduplicationResult.uniqueKeywords.filter(isDomainName);
-    const functionNames = deduplicationResult.uniqueKeywords.filter(kw => 
-      !isDomainName(kw) && (kw.includes('機能') || kw.includes('閲覧') || kw.includes('登録') || kw.includes('編集'))
-    );
-    const operationNames = deduplicationResult.uniqueKeywords.filter(kw => 
-      !isDomainName(kw) && !functionNames.includes(kw) && 
-      (kw.includes('閲覧') || kw.includes('登録') || kw.includes('編集') || kw.includes('削除') || kw.includes('一覧'))
-    );
-    const relatedKeywords = deduplicationResult.uniqueKeywords.filter(kw => 
-      !isDomainName(kw) && !functionNames.includes(kw) && !operationNames.includes(kw)
-    );
+    // カテゴリ別に再分類（元のデータから保持）
+    const domainNames = functionData.domainNames ? 
+      deduplicateKeywords(functionData.domainNames, options).uniqueKeywords : [];
+    const functionNames = functionData.functionNames ? 
+      deduplicateKeywords(functionData.functionNames, options).uniqueKeywords : [];
+    const operationNames = functionData.operationNames ? 
+      deduplicateKeywords(functionData.operationNames, options).uniqueKeywords : [];
+    const systemFields = functionData.systemFields ? 
+      deduplicateKeywords(functionData.systemFields, options).uniqueKeywords : [];
+    const systemTerms = functionData.systemTerms ? 
+      deduplicateKeywords(functionData.systemTerms, options).uniqueKeywords : [];
+    const relatedKeywords = functionData.relatedKeywords ? 
+      deduplicateKeywords(functionData.relatedKeywords, options).uniqueKeywords : [];
     
     result[functionName] = {
       domainNames,
       functionNames,
       operationNames,
+      systemFields,
+      systemTerms,
       relatedKeywords,
       deduplicationStats: deduplicationResult.statistics
     };
@@ -338,6 +347,8 @@ export function deduplicateGlobalKeywords(
     domainNames?: string[];
     functionNames?: string[];
     operationNames?: string[];
+    systemFields?: string[];
+    systemTerms?: string[];
     relatedKeywords?: string[];
   }>,
   options: DeduplicationOptions = {}
@@ -348,6 +359,8 @@ export function deduplicateGlobalKeywords(
     allKeywords.push(...(func.domainNames || []));
     allKeywords.push(...(func.functionNames || []));
     allKeywords.push(...(func.operationNames || []));
+    allKeywords.push(...(func.systemFields || []));
+    allKeywords.push(...(func.systemTerms || []));
     allKeywords.push(...(func.relatedKeywords || []));
   });
   

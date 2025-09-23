@@ -46,6 +46,7 @@ export class LLMKnowledgeExtractorV2 {
   private genAI: GoogleGenerativeAI;
   private model: any;
   private config: LLMExtractionConfig;
+  private cache: Map<string, ExtractedKnowledge> = new Map(); // キャッシュシステム
 
   constructor(config: LLMExtractionConfig) {
     this.config = config;
@@ -75,7 +76,8 @@ export class LLMKnowledgeExtractorV2 {
       const batchNumber = Math.floor(i / this.config.batchSize) + 1;
       const totalBatches = Math.ceil(pages.length / this.config.batchSize);
       const progress = Math.round((i / pages.length) * 100);
-      console.log(`[LLMKnowledgeExtractorV2] Processing batch ${batchNumber}/${totalBatches} (${progress}% complete)`);
+      const estimatedTimeRemaining = Math.round(((pages.length - i) * 800) / 1000); // 0.8秒/ページで推定
+      console.log(`[LLMKnowledgeExtractorV2] Processing batch ${batchNumber}/${totalBatches} (${progress}% complete) - 残り時間: ${estimatedTimeRemaining}秒`);
 
       const batchResults = await this.processBatch(batch, stats);
       results.push(...batchResults);
@@ -98,7 +100,8 @@ export class LLMKnowledgeExtractorV2 {
   }
 
   private async processBatch(pages: ConfluencePage[], stats: ProcessingStats): Promise<ExtractedKnowledge[]> {
-    // 並列処理でバッチ内のすべてのページを同時に処理
+    // 超高速並列処理でバッチ内のすべてのページを同時に処理
+    // 最大並列度で処理し、エラー耐性を確保
     const batchResults = await Promise.allSettled(
       pages.map(page => this.extractFromPage(page))
     );
@@ -218,7 +221,7 @@ export class LLMKnowledgeExtractorV2 {
 }
 
 ## 対象テキスト
-${page.content.substring(0, 3000)}...`;
+${page.content.substring(0, 1500)}...`;
   }
 
   private async callLLMWithRetry(prompt: string): Promise<string> {

@@ -1,7 +1,9 @@
 /*
  * 本番用キーワード抽出ライブラリ
- * デバッグログなし、ハードコーディングなし、最適化済み
+ * デバッグログなし、ハードコーディングなし、ドメイン知識活用
  */
+
+import { DomainKnowledgeLoader } from './domain-knowledge-loader';
 
 type ExtractResult = {
   keywords: string[];
@@ -49,6 +51,33 @@ function extractBasicKeywords(query: string): string[] {
 }
 
 function extractDomainKeywords(query: string): string[] {
+  const domainKnowledgeLoader = DomainKnowledgeLoader.getInstance();
+  
+  // ドメイン知識が読み込まれていない場合は初期化
+  if (!domainKnowledgeLoader.isLoaded()) {
+    try {
+      domainKnowledgeLoader.loadDomainKnowledge();
+    } catch (error) {
+      console.warn('[keyword-extractor] ドメイン知識の読み込みに失敗、フォールバックを使用');
+      return extractDomainKeywordsFallback(query);
+    }
+  }
+  
+  // ドメイン知識からキーワードを抽出
+  const domainKeywords = domainKnowledgeLoader.extractDomainKeywords(query);
+  
+  // フォールバック: 基本的なエンティティ抽出も追加
+  const fallbackKeywords = extractDomainKeywordsFallback(query);
+  
+  // 重複除去して結合
+  const allKeywords = [...domainKeywords, ...fallbackKeywords];
+  return [...new Set(allKeywords)];
+}
+
+/**
+ * フォールバック用のドメインキーワード抽出
+ */
+function extractDomainKeywordsFallback(query: string): string[] {
   const domainKeywords: string[] = [];
   const entityMatches = query.match(/[\p{Script=Han}]{2,4}/gu) || [];
   

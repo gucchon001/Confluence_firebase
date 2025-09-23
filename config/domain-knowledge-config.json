@@ -11,10 +11,10 @@
   "llm": {
     "apiKey": "${GEMINI_API_KEY}",
     "model": "gemini-2.5-flash",
-    "batchSize": 10,
+    "batchSize": 50,
     "outputDir": "data/llm-extraction-v2",
     "maxRetries": 3,
-    "delayBetweenRequests": 100
+    "delayBetweenRequests": 0
   },
   "validation": {
     "outputDir": "data/validation-v2"

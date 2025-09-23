@@ -128,6 +128,7 @@ async function main() {
         return acc;
       }, {} as Record<string, any>);
       
+      // systemFieldsとsystemTermsを保護して重複削除を実行
       const deduplicatedFunctions = deduplicateFunctionKeywords(functions, {
         protectDomainNames: true,
         minLength: 2,
