@@ -3,7 +3,7 @@
  * Based on case_classroom-deletion-issue-search-quality-test.md
  */
 
-import { searchLanceDB } from '../lib/lancedb-search-client';
+import { searchLanceDB } from '../lib/lancedb-search-client.js';
 
 // Test configuration
 const TEST_QUERY = '教室削除ができないのは何が原因ですか';

@@ -2,7 +2,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { ConfluencePage } from './confluence-data-extractor';
-import { deduplicateFunctionKeywords, deduplicateGlobalKeywords } from '../lib/keyword-deduplicator';
 
 interface ExtractedKnowledge {
   pageId: string;

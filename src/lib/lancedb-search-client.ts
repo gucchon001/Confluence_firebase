@@ -115,6 +115,15 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
   try {
     console.log(`[searchLanceDB] Starting search with query: "${params.query}"`);
     
+    // Lunr Indexの初期化を確実に実行
+    try {
+      await lunrInitializer.initializeAsync();
+      console.log('✅ Lunr Index initialization completed in searchLanceDB');
+    } catch (error) {
+      console.warn('⚠️ Lunr Index initialization failed in searchLanceDB:', error);
+      // 初期化に失敗しても検索は継続（フォールバック検索を使用）
+    }
+    
     // デフォルト値の設定
     const topK = params.topK || 5;
     const tableName = params.tableName || 'confluence';

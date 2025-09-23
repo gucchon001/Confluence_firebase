@@ -2,9 +2,19 @@ import { NextRequest } from 'next/server';
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 import { getEmbeddings } from '../../../lib/embeddings';
+import { initializeOnStartup } from '../../../lib/startup-initializer';
 
 export async function POST(req: NextRequest) {
   try {
+    // Lunr Indexの初期化を確実に実行
+    try {
+      await initializeOnStartup();
+      console.log('✅ Lunr Index initialization completed in search API');
+    } catch (error) {
+      console.warn('⚠️ Lunr Index initialization failed in search API:', error);
+      // 初期化に失敗しても検索は継続（フォールバック検索を使用）
+    }
+
     const body = await req.json();
     const query: string = body?.query || '';
     const topK: number = body?.topK || 5;

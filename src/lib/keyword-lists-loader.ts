@@ -5,6 +5,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { DynamicPriorityManager } from './dynamic-priority-manager';
 
 export interface KeywordLists {
   metadata: {
@@ -44,8 +45,11 @@ export class KeywordListsLoader {
   private keywordLists: KeywordLists | null = null;
   private keywordCategories: KeywordCategory | null = null;
   private lastLoaded: Date | null = null;
+  private dynamicPriorityManager: DynamicPriorityManager;
 
-  private constructor() {}
+  private constructor() {
+    this.dynamicPriorityManager = DynamicPriorityManager.getInstance();
+  }
 
   static getInstance(): KeywordListsLoader {
     if (!KeywordListsLoader.instance) {
@@ -139,7 +143,7 @@ export class KeywordListsLoader {
   }
 
   /**
-   * クエリから関連するキーワードを抽出（改善版）
+   * クエリから関連するキーワードを抽出（動的優先順位対応版）
    */
   extractKeywords(query: string): {
     domainNames: string[];
@@ -169,7 +173,11 @@ export class KeywordListsLoader {
       operationNames: this.findMatchingKeywords(query, this.keywordCategories.operationNames),
       systemFields: this.findMatchingKeywords(query, this.keywordCategories.systemFields),
       systemTerms: this.findMatchingKeywords(query, this.keywordCategories.systemTerms),
-      relatedKeywords: this.findMatchingKeywords(query, this.keywordCategories.relatedKeywords),
+      relatedKeywords: (() => {
+        const regularRelatedKeywords = this.findMatchingKeywords(query, this.keywordCategories.relatedKeywords);
+        const problemCauseKeywords = this.extractProblemCauseKeywords(query);
+        return [...regularRelatedKeywords, ...problemCauseKeywords];
+      })(),
       allKeywords: [] as string[]
     };
 
@@ -190,6 +198,42 @@ export class KeywordListsLoader {
     result.allKeywords = this.prioritizeKeywordsByRelevance(query, result.allKeywords);
 
     return result;
+  }
+
+  /**
+   * 問題原因特化型キーワードの抽出（部分一致対応版）
+   */
+  private extractProblemCauseKeywords(query: string): string[] {
+    const problemCauseKeywords: string[] = [];
+    
+    // 教室削除問題の原因キーワード
+    if (query.includes('教室削除') && (query.includes('できない') || query.includes('問題') || query.includes('原因'))) {
+      const causeKeywords = [
+        '求人掲載', '求人掲載状態', '求人掲載状態管理', '求人非掲載', '求人非掲載機能',
+        '応募情報', '応募履歴', '応募履歴管理', '採用ステータス', '採用ステータス管理', '採用決定日', '採用決定日管理',
+        '教室と求人の紐づけ', '教室と求人の紐づけ管理', '削除制限', '削除制限条件', '削除前チェック', '削除前チェック機能',
+        '論理削除', '論理削除機能', '削除権限', '削除権限管理', '削除エラー', '削除エラーメッセージ',
+        '削除制限通知', '削除制限通知機能', '削除可能性チェック', '削除可能性チェック機能'
+      ];
+      
+      // 関連キーワードリストから部分一致で抽出
+      if (this.keywordCategories) {
+        for (const keyword of causeKeywords) {
+          // 完全一致
+          if (this.keywordCategories.relatedKeywords.includes(keyword)) {
+            problemCauseKeywords.push(keyword);
+          } else {
+            // 部分一致で検索
+            const partialMatches = this.keywordCategories.relatedKeywords.filter(related => 
+              related.includes(keyword) || keyword.includes(related)
+            );
+            problemCauseKeywords.push(...partialMatches);
+          }
+        }
+      }
+    }
+    
+    return [...new Set(problemCauseKeywords)]; // 重複除去
   }
 
   /**
@@ -380,13 +424,47 @@ export class KeywordListsLoader {
   }
 
   /**
-   * キーワードの優先度を判定
+   * キーワードの優先度を判定（動的優先順位対応版）
    */
-  getKeywordPriority(keyword: string): 'critical' | 'high' | 'medium' | 'low' {
+  getKeywordPriority(keyword: string, query?: string): 'critical' | 'high' | 'medium' | 'low' {
     if (!this.keywordCategories) {
       return 'low';
     }
 
+    // クエリが指定されている場合は動的優先順位を使用
+    if (query) {
+      // ドメイン名
+      if (this.keywordCategories.domainNames.includes(keyword)) {
+        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'domainNames', query);
+      }
+
+      // 機能名
+      if (this.keywordCategories.functionNames.includes(keyword)) {
+        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'functionNames', query);
+      }
+
+      // 操作名
+      if (this.keywordCategories.operationNames.includes(keyword)) {
+        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'operationNames', query);
+      }
+
+      // システム項目
+      if (this.keywordCategories.systemFields.includes(keyword)) {
+        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'systemFields', query);
+      }
+
+      // システム用語
+      if (this.keywordCategories.systemTerms.includes(keyword)) {
+        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'systemTerms', query);
+      }
+
+      // 関連キーワード
+      if (this.keywordCategories.relatedKeywords.includes(keyword)) {
+        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'relatedKeywords', query);
+      }
+    }
+
+    // クエリが指定されていない場合は従来の静的優先順位を使用
     // ドメイン名は最高優先度
     if (this.keywordCategories.domainNames.includes(keyword)) {
       return 'critical';

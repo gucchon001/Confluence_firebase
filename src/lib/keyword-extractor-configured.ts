@@ -57,8 +57,8 @@ export async function extractKeywordsConfigured(query: string): Promise<ExtractR
     const allKeywords = [...extractedKeywords.allKeywords, ...fallbackKeywords];
     const uniqueKeywords = [...new Set(allKeywords)];
     
-    // 優先度別に分類
-    const prioritySets = categorizeByPriority(uniqueKeywords, keywordListsLoader);
+    // 優先度別に分類（動的優先順位を使用）
+    const prioritySets = categorizeByPriority(uniqueKeywords, keywordListsLoader, query);
     
     // 最終的なキーワード選択（最大12個）
     const finalKeywords = selectFinalKeywords(prioritySets, 12);
@@ -145,11 +145,12 @@ function extractFallbackKeywords(query: string): string[] {
 }
 
 /**
- * 優先度別にキーワードを分類
+ * 優先度別にキーワードを分類（動的優先順位対応版）
  */
 function categorizeByPriority(
   keywords: string[], 
-  keywordListsLoader: KeywordListsLoader
+  keywordListsLoader: KeywordListsLoader,
+  query: string
 ): {
   critical: Set<string>;
   high: Set<string>;
@@ -164,7 +165,7 @@ function categorizeByPriority(
   };
   
   for (const keyword of keywords) {
-    const priority = keywordListsLoader.getKeywordPriority(keyword);
+    const priority = keywordListsLoader.getKeywordPriority(keyword, query);
     prioritySets[priority].add(keyword.toLowerCase());
   }
   
