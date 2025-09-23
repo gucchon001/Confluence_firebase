@@ -12,7 +12,8 @@ type ExtractResult = {
 
 const JA_TOKEN_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z0-9_.-]+/u;
 const STOPWORDS = new Set<string>([
-  'こと','もの','ため','など','これ','それ','あれ','について','の','は','が','を','に','で','と','や','から','まで','より','へ','も','な','だ','です','ます','ください','教えて','詳細','仕様','機能','情報','方法','件','ですか','とは'
+  'こと','もの','ため','など','これ','それ','あれ','について','の','は','が','を','に','で','と','や','から','まで','より','へ','も','な','だ','です','ます','ください','教えて','件','ですか','とは'
+  // 詳細、仕様、機能、情報、方法 は除外（教室管理では重要な語）
 ]);
 
 function uniquePreserveOrder(arr: string[]): string[] {
@@ -88,6 +89,120 @@ async function extractWithKuromoji(text: string): Promise<string[]> {
   }
 }
 
+function extractWithRegex(text: string): string[] {
+  // 日本語の単語を抽出（2文字以上）
+  const japaneseWords = text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]{2,}/gu) || [];
+  
+  // 英語の単語を抽出（2文字以上）
+  const englishWords = text.match(/[A-Za-z]{2,}/gu) || [];
+  
+  // 数字を含む語を抽出
+  const numberWords = text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z0-9]{2,}/gu) || [];
+  
+  // すべての語を統合
+  const allWords = [...japaneseWords, ...englishWords, ...numberWords];
+  
+  // ストップワードを除外し、重複を除去
+  const filtered = allWords.filter(w => !STOPWORDS.has(w) && w.length >= 2);
+  const unique = uniquePreserveOrder(filtered);
+  
+  // 長い語を優先
+  unique.sort((a, b) => b.length - a.length);
+  
+  return unique.slice(0, 10); // 最大10個まで
+}
+
+// 汎用的なキーワード優先度選択関数
+function selectKeywordsByPriority(keywords: string[], query: string): string[] {
+  const selected: string[] = [];
+  const queryLower = query.toLowerCase();
+  
+  // 1. クエリに直接含まれるキーワード（最高優先度）
+  const directMatches = keywords.filter(kw => 
+    queryLower.includes(kw.toLowerCase()) || kw.toLowerCase().includes(queryLower)
+  );
+  selected.push(...directMatches);
+  
+  // 2. エンティティキーワード（高優先度）
+  const entityPatterns = [
+    /^[A-Za-z0-9]+$/,  // 英語・数字の単語
+    /[\p{Script=Han}]{2,4}$/u,  // 2-4文字の漢字
+    /[\p{Script=Han}]{2,}[\p{Script=Hiragana}]{1,3}$/u,  // 漢字+ひらがな
+    /[\p{Script=Han}]{2,}[\p{Script=Katakana}]{1,3}$/u   // 漢字+カタカナ
+  ];
+  
+  const entityKeywords = keywords.filter(kw => 
+    entityPatterns.some(pattern => pattern.test(kw)) && 
+    !selected.includes(kw)
+  );
+  selected.push(...entityKeywords);
+  
+  // 3. 機能・動作キーワード（中優先度）
+  const functionPatterns = [
+    /機能$/, /管理$/, /システム$/, /情報$/, /一覧$/, /閲覧$/, /登録$/, /編集$/, /削除$/, /設定$/,
+    /詳細$/, /仕様$/, /要件$/, /手順$/, /方法$/, /プロセス$/, /フロー$/, /ワーク$/
+  ];
+  
+  const functionKeywords = keywords.filter(kw => 
+    functionPatterns.some(pattern => pattern.test(kw)) && 
+    !selected.includes(kw)
+  );
+  selected.push(...functionKeywords);
+  
+  // 4. 修飾語・形容詞（低優先度）
+  const modifierKeywords = keywords.filter(kw => 
+    kw.length >= 3 && 
+    kw.length <= 6 && 
+    !selected.includes(kw) &&
+    !functionPatterns.some(pattern => pattern.test(kw))
+  );
+  selected.push(...modifierKeywords);
+  
+  return uniquePreserveOrder(selected);
+}
+
+// 多様性を保つキーワード選択関数
+function selectDiverseKeywords(keywords: string[]): string[] {
+  const selected: string[] = [];
+  const used = new Set<string>();
+  
+  // 1. 長さの多様性を保つ（短いものから長いものまで）
+  const sortedByLength = [...keywords].sort((a, b) => a.length - b.length);
+  
+  for (const kw of sortedByLength) {
+    if (selected.length >= 8) break;
+    
+    const kwLower = kw.toLowerCase();
+    
+    // 既に類似のキーワードが選択されている場合はスキップ
+    const isSimilar = selected.some(selectedKw => 
+      selectedKw.toLowerCase().includes(kwLower) || 
+      kwLower.includes(selectedKw.toLowerCase())
+    );
+    
+    if (!isSimilar && !used.has(kwLower)) {
+      selected.push(kw);
+      used.add(kwLower);
+    }
+  }
+  
+  // 2. 不足分を長いキーワードで補完
+  if (selected.length < 5) {
+    const remaining = keywords.filter(kw => !used.has(kw.toLowerCase()));
+    const longKeywords = remaining
+      .filter(kw => kw.length >= 4)
+      .sort((a, b) => b.length - a.length);
+    
+    for (const kw of longKeywords) {
+      if (selected.length >= 8) break;
+      selected.push(kw);
+      used.add(kw.toLowerCase());
+    }
+  }
+  
+  return selected;
+}
+
 async function expandWithLLM(baseQuery: string, baseKeywords: string[]): Promise<string[]> {
   try {
     if (process.env.USE_LLM_EXPANSION !== 'true') return [];
@@ -125,24 +240,63 @@ async function expandWithLLM(baseQuery: string, baseKeywords: string[]): Promise
 
 export async function extractKeywordsHybrid(query: string): Promise<ExtractResult> {
   const stripped = query.replace(/-\S+/g, ' ').trim();
-  // 形態素解析優先（kuromoji）→tiny-segmenter→n-gram
+  
+  // 1. 形態素解析による基本キーワード抽出
   const baseKeywords = await extractWithKuromoji(stripped);
-
-  // LLM補助は「抽出が弱い」「抽出数が少ない」などのときに限定（または環境有効時）
+  
+  // 2. 正規表現による補完抽出（形態素解析で漏れた語を補完）
+  const regexKeywords = extractWithRegex(stripped);
+  
+  // 3. 基本キーワードと正規表現キーワードを統合
+  const combinedKeywords = uniquePreserveOrder([...baseKeywords, ...regexKeywords]);
+  
+  // 4. LLM補助（抽出が弱い場合または環境有効時）
   let llmSynonyms: string[] = [];
-  if (baseKeywords.length <= 2 || process.env.USE_LLM_EXPANSION === 'true') {
-    llmSynonyms = await expandWithLLM(query, baseKeywords);
+  if (combinedKeywords.length <= 3 || process.env.USE_LLM_EXPANSION === 'true') {
+    llmSynonyms = await expandWithLLM(query, combinedKeywords);
   }
+
+  // 5. 粗集合（combinedKeywords + llmSynonyms）
+  const rawKeywords = uniquePreserveOrder([...combinedKeywords, ...llmSynonyms]);
+  console.log(`[keyword-extractor] rawKeywords:`, rawKeywords);
 
   const highPriority = new Set(baseKeywords.map(k => k.toLowerCase()));
   const lowPriority = new Set(llmSynonyms.map(k => k.toLowerCase()));
-  // 粗集合
-  const rawKeywords = uniquePreserveOrder([...baseKeywords, ...llmSynonyms]);
+
+  // キーワード分割と補完（STOPWORDSチェック前）
+  const splitKeywords: string[] = [];
+  for (const w of rawKeywords) {
+    console.log(`[keyword-extractor] Processing keyword: "${w}" (length: ${w.length})`);
+    
+    // 元のキーワードを追加
+    splitKeywords.push(w);
+    
+    // 長いキーワードを分割
+    if (w.length > 4) { // 閾値を4に下げる
+      // 複数の分割パターンを適用
+      const splitPatterns = [
+        /[の・・、]/g,  // 助詞・記号での分割
+        /(詳細|仕様|機能|管理|情報|一覧|閲覧|登録|編集|削除|コピー|設定|更新)/g,  // 機能語での分割
+        /(教室|求人|企業|ユーザー|システム)/g  // エンティティ語での分割
+      ];
+      
+      for (const pattern of splitPatterns) {
+        const parts = w.split(pattern).filter(part => part.length >= 2);
+        if (parts.length > 1) {
+          console.log(`[keyword-extractor] Split "${w}" with pattern ${pattern} into:`, parts);
+          splitKeywords.push(...parts);
+        }
+      }
+    }
+  }
+  console.log(`[keyword-extractor] splitKeywords:`, splitKeywords);
 
   // 簡易正規化・圧縮
   const isKanaOnly = (s: string) => /^[\p{Script=Hiragana}\p{Script=Katakana}ー]+$/u.test(s);
   const isMeaningfulLen = (s: string) => s.length >= 2 && s.length <= 16;
-  const filtered = rawKeywords.filter(w => isMeaningfulLen(w) && !STOPWORDS.has(w));
+  const filtered = splitKeywords.filter(w => isMeaningfulLen(w) && !STOPWORDS.has(w));
+  console.log('[keyword-extractor] filtered:', filtered);
+  
   // 部分列は長い語に吸収（"ログイ" などは "ログイン" があれば除外）
   const byLength = [...filtered].sort((a, b) => b.length - a.length);
   const chosen: string[] = [];
@@ -151,10 +305,13 @@ export async function extractKeywordsHybrid(query: string): Promise<ExtractResul
     if (chosen.some(x => x.toLowerCase().includes(lower))) continue; // 既により長い語に含まれる
     chosen.push(w);
   }
+  console.log('[keyword-extractor] chosen:', chosen);
+  
   // LLM語は弱めなので末尾側へ。原語（highPriorityに含まれるもの）を優先配置
   const hp = chosen.filter(w => highPriority.has(w.toLowerCase()));
   const lp = chosen.filter(w => !highPriority.has(w.toLowerCase()));
   const compact = uniquePreserveOrder([...hp, ...lp]).slice(0, 8);
+  console.log('[keyword-extractor] compact:', compact);
   // 汎用クエリ正規化: 数値+期間表現や一般的な制約語を抽出し、漏れがあれば補完
   try {
     // 表記揺れの統合（汎用）
@@ -173,49 +330,31 @@ export async function extractKeywordsHybrid(query: string): Promise<ExtractResul
       }
     }
   } catch {}
-  // コア語抽出（改良版）
-  const core = (() => {
-  // より積極的に修飾語を除去
-  const q = stripped
-    .replace(/(の仕様は|の仕様|の設定箇所は|の設定|を教えて|について|とは|は|の詳細|の機能|の方法|の手順)$/g, '')
-    .replace(/(機能|仕様|設定箇所|設定|詳細|方法|手順|プロセス|管理|システム|機能)$/g, '')
-    .trim();
-  
-  // 「仕様」を含むクエリの場合は、関連キーワードを追加
-  if (stripped.includes('仕様')) {
-    // 仕様に関連するキーワードを抽出
-    const specKeywords: string[] = (stripped.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z0-9]{2,}/gu) as string[]) || [];
-    const relevantSpecKeywords = specKeywords.filter((kw: string) => 
-      kw.includes('管理') || kw.includes('機能') || kw.includes('求人') || kw.includes('教室')
+  // 汎用的なキーワード選択戦略
+  const keywords = (() => {
+    console.log('[keyword-extractor] Starting improved keyword selection');
+    
+    // 1. 基本フィルタリング（長さとストップワード）
+    const basicFiltered = compact.filter(kw => 
+      kw.length >= 2 && 
+      kw.length <= 12 && 
+      !STOPWORDS.has(kw)
     );
-    if (relevantSpecKeywords.length > 0) {
-      // 関連キーワードをLLM同義語に追加
-      llmSynonyms.push(...relevantSpecKeywords);
-    }
-  }
+    console.log('[keyword-extractor] basicFiltered:', basicFiltered);
     
-    // より長い語を優先的に抽出
-    const words: string[] = (q.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z0-9]{2,}/gu) as string[]) || [];
-    if (words.length > 0) {
-      // 長い語を優先
-      const sortedWords = words.sort((a, b) => b.length - a.length);
-      return sortedWords[0];
-    }
+    // 2. 優先度ベースのキーワード選択
+    const prioritizedKeywords = selectKeywordsByPriority(basicFiltered, stripped);
+    console.log('[keyword-extractor] prioritizedKeywords:', prioritizedKeywords);
     
-    // LLM同義語にシンプルな候補があれば優先
-    const simpleLLM = llmSynonyms.find(s => s.length <= 8 && !/\s/.test(s));
-    return simpleLLM || compact[0] || stripped;
+    // 3. 多様性を保つためのキーワード選択
+    const diverseKeywords = selectDiverseKeywords(prioritizedKeywords);
+    console.log('[keyword-extractor] diverseKeywords:', diverseKeywords);
+    
+    // 4. 最終的なキーワード数調整
+    const finalKeywords = diverseKeywords.slice(0, 8);
+    console.log('[keyword-extractor] finalKeywords:', finalKeywords);
+    return finalKeywords;
   })();
-  
-  // キーワードをより厳選（コア語を最優先、重複除去）
-  const finalKeywords = [core];
-  for (const kw of compact) {
-    if (kw !== core && !finalKeywords.some(k => k.includes(kw) || kw.includes(k))) {
-      finalKeywords.push(kw);
-    }
-    if (finalKeywords.length >= 3) break;
-  }
-  const keywords = uniquePreserveOrder(finalKeywords);
 
   // デバッグ
   try {
@@ -224,10 +363,8 @@ export async function extractKeywordsHybrid(query: string): Promise<ExtractResul
     console.log('[keyword-extractor] reduced:', keywords);
   } catch {}
 
-  // 優先度セットもreducedに合わせて再構成
-  const highReduced = new Set(keywords.filter(k => k.toLowerCase() === core.toLowerCase() || highPriority.has(k.toLowerCase())).map(k => k.toLowerCase()));
+  // 優先度セットもkeywordsに合わせて再構成
+  const highReduced = new Set(keywords.filter(k => highPriority.has(k.toLowerCase())).map(k => k.toLowerCase()));
   const lowReduced = new Set(keywords.filter(k => !highReduced.has(k.toLowerCase())).map(k => k.toLowerCase()));
   return { keywords, highPriority: highReduced, lowPriority: lowReduced };
 }
-
-
