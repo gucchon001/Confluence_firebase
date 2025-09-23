@@ -96,13 +96,11 @@ export const GENERIC_TERMS = [
   '目標', 'goal',
   '意図', 'intent',
   '理由', 'reason',
-  '原因', 'cause',
   '結果', 'result',
   '効果', 'effect',
   '影響', 'impact',
   '利点', 'advantage',
   '欠点', 'disadvantage',
-  '問題', 'problem', 'issue',
   '課題', 'challenge',
   'リスク', 'risk',
   '危険', 'danger',
@@ -389,9 +387,9 @@ export function calculateKeywordScore(
   let labelMatches = 0;
   let contentMatches = 0;
   
-  const lowerTitle = title.toLowerCase();
-  const lowerContent = content.toLowerCase();
-  const lowerLabels = labels.map(l => l.toLowerCase());
+  const lowerTitle = String(title || '').toLowerCase();
+  const lowerContent = String(content || '').toLowerCase();
+  const lowerLabels = Array.isArray(labels) ? labels.map(l => String(l || '').toLowerCase()) : [];
   
   // キーワードを正のキーワードと負のキーワードに分離
   const positiveKeywords: string[] = [];

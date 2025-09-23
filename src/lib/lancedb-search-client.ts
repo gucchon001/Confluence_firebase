@@ -578,8 +578,25 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           let added = 0;
           for (const row of bm25Results) {
             if (!resultsWithHybridScore.some(r => r.id === row.id)) {
-              const merged: any = { ...row, _distance: 1 - (row._bm25Score / 20), _sourceType: 'bm25', _keywordScore: row._bm25Score };
-              merged._labelScore = 0;
+              // BM25結果にも calculateKeywordScore を適用
+              const keywordScoreResult = calculateKeywordScore(
+                String(row.title || ''),
+                String(row.content || ''),
+                row.labels,
+                keywords,
+                { highPriority, lowPriority }
+              );
+              
+              const merged: any = { 
+                ...row, 
+                _distance: 1 - (row._bm25Score / 20), 
+                _sourceType: 'bm25', 
+                _keywordScore: keywordScoreResult.score,
+                _titleScore: keywordScoreResult.titleMatches,
+                _labelScore: keywordScoreResult.labelMatches,
+                _contentScore: keywordScoreResult.contentMatches,
+                _labelScoreDetail: keywordScoreResult.labelMatches
+              };
               merged._hybridScore = calculateHybridScore(merged._distance, merged._keywordScore, merged._labelScore);
               resultsWithHybridScore.push(merged);
               added++;

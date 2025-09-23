@@ -72,7 +72,10 @@ export class LLMKnowledgeExtractorV2 {
     // バッチ処理
     for (let i = 0; i < pages.length; i += this.config.batchSize) {
       const batch = pages.slice(i, i + this.config.batchSize);
-      console.log(`[LLMKnowledgeExtractorV2] Processing batch ${Math.floor(i / this.config.batchSize) + 1}/${Math.ceil(pages.length / this.config.batchSize)}`);
+      const batchNumber = Math.floor(i / this.config.batchSize) + 1;
+      const totalBatches = Math.ceil(pages.length / this.config.batchSize);
+      const progress = Math.round((i / pages.length) * 100);
+      console.log(`[LLMKnowledgeExtractorV2] Processing batch ${batchNumber}/${totalBatches} (${progress}% complete)`);
 
       const batchResults = await this.processBatch(batch, stats);
       results.push(...batchResults);
@@ -95,6 +98,7 @@ export class LLMKnowledgeExtractorV2 {
   }
 
   private async processBatch(pages: ConfluencePage[], stats: ProcessingStats): Promise<ExtractedKnowledge[]> {
+    // 並列処理でバッチ内のすべてのページを同時に処理
     const batchResults = await Promise.allSettled(
       pages.map(page => this.extractFromPage(page))
     );
@@ -214,7 +218,7 @@ export class LLMKnowledgeExtractorV2 {
 }
 
 ## 対象テキスト
-${page.content.substring(0, 3500)}...`;
+${page.content.substring(0, 3000)}...`;
   }
 
   private async callLLMWithRetry(prompt: string): Promise<string> {

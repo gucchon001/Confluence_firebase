@@ -14,7 +14,37 @@ const JA_TOKEN_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z
 const STOPWORDS = new Set<string>([
   'こと','もの','ため','など','これ','それ','あれ','について','の','は','が','を','に','で','と','や','から','まで','より','へ','も','な','だ','です','ます','ください','教えて','件','ですか','とは'
   // 詳細、仕様、機能、情報、方法 は除外（教室管理では重要な語）
+  // 原因、問題、制限、条件 は除外（問題解決では重要な語）
 ]);
+
+// キーワード優先度定義
+enum KeywordPriority {
+  CRITICAL = 1,    // 基本キーワード（教室、管理、詳細）
+  HIGH = 2,        // ドメインキーワード（教室管理）
+  MEDIUM = 3,      // 機能キーワード（教室一覧、教室登録等）
+  LOW = 4          // LLM拡張キーワード
+}
+
+// 教室管理関連ドメインパターン
+const CLASSROOM_DOMAIN_PATTERNS = [
+  /教室管理/,
+  /教室管理機能/,
+  /教室管理-求人管理機能/,
+  /求人・教室管理機能/
+];
+
+// 教室管理機能名パターン
+const CLASSROOM_FUNCTION_PATTERNS = [
+  { pattern: /教室一覧/, keyword: '教室一覧' },
+  { pattern: /教室登録/, keyword: '教室登録' },
+  { pattern: /教室編集/, keyword: '教室編集' },
+  { pattern: /教室削除/, keyword: '教室削除' },
+  { pattern: /教室コピー/, keyword: '教室コピー' },
+  { pattern: /教室新規登録/, keyword: '教室登録' },
+  { pattern: /教室情報編集/, keyword: '教室編集' },
+  { pattern: /教室掲載フラグ/, keyword: '教室掲載フラグ' },
+  { pattern: /教室公開フラグ/, keyword: '教室公開フラグ' }
+];
 
 function uniquePreserveOrder(arr: string[]): string[] {
   const seen = new Set<string>();
@@ -24,6 +54,192 @@ function uniquePreserveOrder(arr: string[]): string[] {
     if (!seen.has(k)) { seen.add(k); out.push(x); }
   }
   return out;
+}
+
+/**
+ * 基本キーワード抽出（最優先）
+ */
+function extractBasicKeywords(query: string): string[] {
+  console.log('[keyword-extractor] extractBasicKeywords called with:', query);
+  
+  // 元のクエリから基本キーワードを抽出
+  const basicKeywords = query.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z0-9_.-]+/u) || [];
+  
+  // 長さ制限（2-4文字）とストップワード除外
+  const filteredKeywords = basicKeywords.filter(kw => 
+    kw.length >= 2 && 
+    kw.length <= 4 && 
+    !STOPWORDS.has(kw)
+  );
+  
+  console.log('[keyword-extractor] extractBasicKeywords result:', filteredKeywords);
+  return filteredKeywords;
+}
+
+/**
+ * ドメイン特化キーワード抽出（高優先度）
+ */
+function extractDomainKeywords(query: string): string[] {
+  console.log('[keyword-extractor] extractDomainKeywords called with:', query);
+  
+  const domainKeywords: string[] = [];
+  
+  // 教室管理ドメインパターンマッチング
+  if (/教室管理/.test(query)) {
+    domainKeywords.push('教室管理');
+  }
+  
+  // エンティティキーワード抽出
+  if (/教室/.test(query)) {
+    domainKeywords.push('教室');
+  }
+  
+  console.log('[keyword-extractor] extractDomainKeywords result:', domainKeywords);
+  return domainKeywords;
+}
+
+/**
+ * 機能キーワード抽出（中優先度）
+ */
+function extractFunctionKeywords(query: string): string[] {
+  console.log('[keyword-extractor] extractFunctionKeywords called with:', query);
+  
+  const functionKeywords: string[] = [];
+  
+  // 仕様書で定義された機能名パターン
+  for (const { pattern, keyword } of CLASSROOM_FUNCTION_PATTERNS) {
+    if (pattern.test(query)) {
+      functionKeywords.push(keyword);
+    }
+  }
+  
+  // 詳細関連キーワード
+  if (/詳細/.test(query)) {
+    functionKeywords.push('教室管理の詳細');
+  }
+  
+  console.log('[keyword-extractor] extractFunctionKeywords result:', functionKeywords);
+  return functionKeywords;
+}
+
+/**
+ * キーワード長さ制御
+ */
+function validateKeywordLength(keyword: string): boolean {
+  return keyword.length >= 2 && keyword.length <= 8;
+}
+
+/**
+ * 重複除去
+ */
+function removeDuplicates(keywords: string[]): string[] {
+  const seen = new Set<string>();
+  return keywords.filter(kw => {
+    const normalized = kw.toLowerCase();
+    if (seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return true;
+  });
+}
+
+/**
+ * 優先度別キーワード選択
+ */
+function selectKeywordsByPriority(
+  basicKeywords: string[],
+  domainKeywords: string[],
+  functionKeywords: string[],
+  llmKeywords: string[]
+): string[] {
+  console.log('[keyword-extractor] selectKeywordsByPriority called');
+  console.log('  basicKeywords:', basicKeywords);
+  console.log('  domainKeywords:', domainKeywords);
+  console.log('  functionKeywords:', functionKeywords);
+  console.log('  llmKeywords:', llmKeywords);
+  
+  const selectedKeywords: string[] = [];
+  const maxKeywords = 8;
+  
+  // 1. 基本キーワードを最優先で追加
+  for (const kw of basicKeywords) {
+    if (selectedKeywords.length < maxKeywords && !selectedKeywords.includes(kw)) {
+      selectedKeywords.push(kw);
+      console.log('[keyword-extractor] Added basic keyword:', kw);
+    }
+  }
+  
+  // 2. ドメインキーワードを追加
+  for (const kw of domainKeywords) {
+    if (selectedKeywords.length < maxKeywords && !selectedKeywords.includes(kw)) {
+      selectedKeywords.push(kw);
+      console.log('[keyword-extractor] Added domain keyword:', kw);
+    }
+  }
+  
+  // 3. 機能キーワードを追加
+  for (const kw of functionKeywords) {
+    if (selectedKeywords.length < maxKeywords && !selectedKeywords.includes(kw)) {
+      selectedKeywords.push(kw);
+      console.log('[keyword-extractor] Added function keyword:', kw);
+    }
+  }
+  
+  // 4. LLM拡張キーワードで補完
+  for (const kw of llmKeywords) {
+    if (selectedKeywords.length < maxKeywords && !selectedKeywords.includes(kw)) {
+      selectedKeywords.push(kw);
+      console.log('[keyword-extractor] Added LLM keyword:', kw);
+    }
+  }
+  
+  console.log('[keyword-extractor] selectKeywordsByPriority result:', selectedKeywords);
+  return selectedKeywords;
+}
+
+/**
+ * 品質チェック
+ */
+function validateKeywordQuality(keywords: string[]): {
+  isValid: boolean;
+  score: number;
+  issues: string[];
+} {
+  const issues: string[] = [];
+  let score = 0;
+  
+  // 基本キーワードチェック
+  const hasClassroom = keywords.some(kw => kw.includes('教室'));
+  const hasManagement = keywords.some(kw => kw.includes('管理'));
+  const hasDetail = keywords.some(kw => kw.includes('詳細'));
+  
+  if (hasClassroom) score += 25;
+  else issues.push('教室キーワードが不足');
+  
+  if (hasManagement) score += 25;
+  else issues.push('管理キーワードが不足');
+  
+  if (hasDetail) score += 25;
+  else issues.push('詳細キーワードが不足');
+  
+  // 機能キーワードチェック
+  const functionKeywords = ['教室一覧', '教室登録', '教室編集', '教室削除', '教室コピー'];
+  const foundFunctions = functionKeywords.filter(fk => 
+    keywords.some(kw => kw.includes(fk))
+  );
+  
+  score += (foundFunctions.length / functionKeywords.length) * 25;
+  
+  if (foundFunctions.length < 3) {
+    issues.push('機能キーワードが不足');
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    score,
+    issues
+  };
 }
 
 function simpleNGrams(text: string, minLen = 2, maxLen = 3): string[] {
@@ -178,21 +394,25 @@ function selectDiverseKeywords(keywords: string[]): string[] {
   const selected: string[] = [];
   const used = new Set<string>();
   
-  // 1. 長さの多様性を保つ（短いものから長いものまで）
-  const sortedByLength = [...keywords].sort((a, b) => a.length - b.length);
+  // 1. 優先順位付け（長いキーワードを優先）
+  const sortedByPriority = [...keywords].sort((a, b) => {
+    // 長いキーワードを優先（より具体的）
+    if (a.length !== b.length) return b.length - a.length;
+    // 同じ長さの場合はアルファベット順
+    return a.localeCompare(b);
+  });
   
-  for (const kw of sortedByLength) {
+  for (const kw of sortedByPriority) {
     if (selected.length >= 8) break;
     
     const kwLower = kw.toLowerCase();
     
-    // 既に類似のキーワードが選択されている場合はスキップ
-    const isSimilar = selected.some(selectedKw => 
-      selectedKw.toLowerCase().includes(kwLower) || 
-      kwLower.includes(selectedKw.toLowerCase())
+    // 重複チェックを緩和（完全一致のみ）
+    const isDuplicate = selected.some(selectedKw => 
+      selectedKw.toLowerCase() === kwLower
     );
     
-    if (!isSimilar && !used.has(kwLower)) {
+    if (!isDuplicate && !used.has(kwLower)) {
       selected.push(kw);
       used.add(kwLower);
     }
@@ -234,10 +454,11 @@ async function expandWithLLM(baseQuery: string, baseKeywords: string[]): Promise
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = [
       'あなたは社内ドキュメント検索のためのキーワード抽出補助を行います。',
-      '以下の質問文に対し、実際のシステム機能名に基づいた具体的なキーワードを最大8件、JSON配列で返してください。',
+      '以下の質問文に対し、実際のシステム機能名に基づいた具体的なキーワードを最大10件、JSON配列で返してください。',
       '重要: 汎用的すぎるキーワード（予約、確保、割り当てなど）は避け、実際の機能名（一覧、登録、編集、削除、コピーなど）を優先してください。',
-      '教室管理システムの場合: 教室一覧、教室登録、教室編集、教室削除、教室コピー、教室管理機能 など',
-      '求人管理システムの場合: 求人一覧、求人登録、求人編集、求人削除、求人管理機能 など',
+      '機能関連の場合: 一覧、登録、編集、削除、コピー、管理、詳細、仕様、処理、実行 など',
+      '問題・制限関連の場合: 制限、条件、チェック、エラー、失敗、不具合、障害、異常 など',
+      'データ関連の場合: データ、情報、詳細、仕様、管理、処理 など',
       '出力はJSON配列のみ。',
       `質問文: ${baseQuery}`
     ].join('\n');
@@ -259,152 +480,83 @@ async function expandWithLLM(baseQuery: string, baseKeywords: string[]): Promise
   }
 }
 
+/**
+ * 新しい階層的キーワード抽出関数
+ */
 export async function extractKeywordsHybrid(query: string): Promise<ExtractResult> {
-  const stripped = query.replace(/-\S+/g, ' ').trim();
+  console.log('[keyword-extractor] extractKeywordsHybrid called with:', query);
   
-  // 1. 形態素解析による基本キーワード抽出
-  const baseKeywords = await extractWithKuromoji(stripped);
-  
-  // 2. 正規表現による補完抽出（形態素解析で漏れた語を補完）
-  const regexKeywords = extractWithRegex(stripped);
-  
-  // 3. 基本キーワードと正規表現キーワードを統合
-  const combinedKeywords = uniquePreserveOrder([...baseKeywords, ...regexKeywords]);
-  
-  // 4. LLM補助（環境有効時は常に実行）
-  let llmSynonyms: string[] = [];
-  if (process.env.USE_LLM_EXPANSION === 'true') {
-    llmSynonyms = await expandWithLLM(query, combinedKeywords);
-  }
-
-  // 5. 粗集合（combinedKeywords + llmSynonyms）
-  const rawKeywords = uniquePreserveOrder([...combinedKeywords, ...llmSynonyms]);
-  console.log(`[keyword-extractor] rawKeywords:`, rawKeywords);
-
-  const highPriority = new Set(baseKeywords.map(k => k.toLowerCase()));
-  const lowPriority = new Set(llmSynonyms.map(k => k.toLowerCase()));
-
-  // キーワード分割と補完（STOPWORDSチェック前）
-  const splitKeywords: string[] = [];
-  for (const w of rawKeywords) {
-    console.log(`[keyword-extractor] Processing keyword: "${w}" (length: ${w.length})`);
-    
-    // 元のキーワードを追加
-    splitKeywords.push(w);
-    
-    // 長いキーワードを分割
-    if (w.length > 4) { // 閾値を4に下げる
-      // 複数の分割パターンを適用
-      const splitPatterns = [
-        /[の・・、]/g,  // 助詞・記号での分割
-        /(詳細|仕様|機能|管理|情報|一覧|閲覧|登録|編集|削除|コピー|設定|更新)/g,  // 機能語での分割
-        /(教室|求人|企業|ユーザー|システム)/g  // エンティティ語での分割
-      ];
-      
-      for (const pattern of splitPatterns) {
-        const parts = w.split(pattern).filter(part => part.length >= 2);
-        if (parts.length > 1) {
-          console.log(`[keyword-extractor] Split "${w}" with pattern ${pattern} into:`, parts);
-          splitKeywords.push(...parts);
-        }
-      }
-    }
-  }
-  console.log(`[keyword-extractor] splitKeywords:`, splitKeywords);
-
-  // 簡易正規化・圧縮
-  const isKanaOnly = (s: string) => /^[\p{Script=Hiragana}\p{Script=Katakana}ー]+$/u.test(s);
-  const isMeaningfulLen = (s: string) => s.length >= 2 && s.length <= 16;
-  const filtered = splitKeywords.filter(w => isMeaningfulLen(w) && !STOPWORDS.has(w));
-  console.log('[keyword-extractor] filtered:', filtered);
-  
-  // 部分列は長い語に吸収（"ログイ" などは "ログイン" があれば除外）
-  const byLength = [...filtered].sort((a, b) => b.length - a.length);
-  const chosen: string[] = [];
-  for (const w of byLength) {
-    const lower = w.toLowerCase();
-    if (chosen.some(x => x.toLowerCase().includes(lower))) continue; // 既により長い語に含まれる
-    chosen.push(w);
-  }
-  console.log('[keyword-extractor] chosen:', chosen);
-  
-  // LLM語は弱めなので末尾側へ。原語（highPriorityに含まれるもの）を優先配置
-  const hp = chosen.filter(w => highPriority.has(w.toLowerCase()));
-  const lp = chosen.filter(w => !highPriority.has(w.toLowerCase()));
-  const compact = uniquePreserveOrder([...hp, ...lp]).slice(0, 8);
-  console.log('[keyword-extractor] compact:', compact);
-  // 汎用クエリ正規化: 数値+期間表現や一般的な制約語を抽出し、漏れがあれば補完
   try {
-    // 表記揺れの統合（汎用）
-    const normalizedQ = stripped
-      .replace(/送信できない|送信できません|送信不可/g, '送信不可')
-      .replace(/退会済み|アカウント削除/g, '退会')
-      .replace(/編集済み|修正/g, '編集');
-    const timeTokens = (normalizedQ.match(/([0-9０-９]{1,4})\s*(日|日間|時間|週|週間|か月|ヶ月)/g) || []).map(s => s.replace(/\s+/g, ''));
-    const constraintTokens = (normalizedQ.match(/(不可|できない|できません|禁止|制限|上限|下限|以内|以外|無効|退会|編集|送信不可|送信)/g) || []);
-    const hpSet = new Set(hp.map(w => w.toLowerCase()));
-    const lpSet = new Set(lp.map(w => w.toLowerCase()));
-    for (const t of [...timeTokens, ...constraintTokens]) {
-      const tl = t.toLowerCase();
-      if (!hpSet.has(tl) && !lpSet.has(tl)) {
-        compact.push(t);
-      }
+    // 1. 基本キーワード抽出（最優先）
+    const basicKeywords = extractBasicKeywords(query);
+    
+    // 2. ドメイン特化キーワード抽出（高優先度）
+    const domainKeywords = extractDomainKeywords(query);
+    
+    // 3. 機能キーワード抽出（中優先度）
+    const functionKeywords = extractFunctionKeywords(query);
+    
+    // 4. LLM拡張キーワード抽出（補完）
+    let llmKeywords: string[] = [];
+    if (process.env.USE_LLM_EXPANSION === 'true') {
+      llmKeywords = await expandWithLLM(query, basicKeywords);
     }
-  } catch {}
-  // 具体的な機能名を優先するキーワード選択戦略
-  const keywords = (() => {
-    console.log('[keyword-extractor] Starting improved keyword selection');
     
-    // 1. 基本フィルタリング（長さとストップワード）
-    const basicFiltered = compact.filter(kw => 
-      kw.length >= 2 && 
-      kw.length <= 12 && 
-      !STOPWORDS.has(kw)
-    );
-    console.log('[keyword-extractor] basicFiltered:', basicFiltered);
-    
-    // 2. 具体的な機能名を優先
-    const functionKeywords = basicFiltered.filter(w => 
-      /(一覧|閲覧|登録|編集|削除|コピー|管理|機能|詳細|仕様)/.test(w)
-    );
-    const entityKeywords = basicFiltered.filter(w => 
-      /(教室|求人|企業|ユーザー|システム)/.test(w)
-    );
-    const otherKeywords = basicFiltered.filter(w => 
-      !/(一覧|閲覧|登録|編集|削除|コピー|管理|機能|詳細|仕様|教室|求人|企業|ユーザー|システム)/.test(w)
+    // 5. 優先度別キーワード選択
+    const selectedKeywords = selectKeywordsByPriority(
+      basicKeywords,
+      domainKeywords,
+      functionKeywords,
+      llmKeywords
     );
     
-    console.log('[keyword-extractor] functionKeywords:', functionKeywords);
-    console.log('[keyword-extractor] entityKeywords:', entityKeywords);
-    console.log('[keyword-extractor] otherKeywords:', otherKeywords);
+    // 6. 品質チェック
+    const qualityCheck = validateKeywordQuality(selectedKeywords);
+    console.log('[keyword-extractor] Quality check:', qualityCheck);
     
-    // 3. 優先順位で選択（機能名 > エンティティ名 > その他）
-    const prioritizedKeywords = [
-      ...functionKeywords.slice(0, 4),
-      ...entityKeywords.slice(0, 2),
-      ...otherKeywords.slice(0, 2)
-    ];
-    console.log('[keyword-extractor] prioritizedKeywords:', prioritizedKeywords);
+    // 7. 最終的なキーワード数調整（8件に制限）
+    const finalKeywords = selectedKeywords.slice(0, 8);
     
-    // 4. 多様性を保つためのキーワード選択
-    const diverseKeywords = selectDiverseKeywords(prioritizedKeywords);
-    console.log('[keyword-extractor] diverseKeywords:', diverseKeywords);
+    // 8. 優先度セットの構成
+    const highPriority = new Set<string>();
+    const lowPriority = new Set<string>();
     
-    // 5. 最終的なキーワード数調整
-    const finalKeywords = diverseKeywords.slice(0, 8);
-    console.log('[keyword-extractor] finalKeywords:', finalKeywords);
-    return finalKeywords;
-  })();
-
-  // デバッグ
-  try {
-    console.log('[keyword-extractor] baseKeywords:', baseKeywords);
-    console.log('[keyword-extractor] llmSynonyms:', llmSynonyms);
-    console.log('[keyword-extractor] reduced:', keywords);
-  } catch {}
-
-  // 優先度セットもkeywordsに合わせて再構成
-  const highReduced = new Set(keywords.filter(k => highPriority.has(k.toLowerCase())).map(k => k.toLowerCase()));
-  const lowReduced = new Set(keywords.filter(k => !highReduced.has(k.toLowerCase())).map(k => k.toLowerCase()));
-  return { keywords, highPriority: highReduced, lowPriority: lowReduced };
+    // 基本キーワードとドメインキーワードを高優先度に
+    [...basicKeywords, ...domainKeywords].forEach(kw => {
+      if (finalKeywords.includes(kw)) {
+        highPriority.add(kw.toLowerCase());
+      }
+    });
+    
+    // 機能キーワードとLLMキーワードを低優先度に
+    [...functionKeywords, ...llmKeywords].forEach(kw => {
+      if (finalKeywords.includes(kw) && !highPriority.has(kw.toLowerCase())) {
+        lowPriority.add(kw.toLowerCase());
+      }
+    });
+    
+    console.log('[keyword-extractor] Final result:', {
+      keywords: finalKeywords,
+      highPriority: Array.from(highPriority),
+      lowPriority: Array.from(lowPriority),
+      qualityScore: qualityCheck.score
+    });
+    
+    return {
+      keywords: finalKeywords,
+      highPriority,
+      lowPriority
+    };
+    
+  } catch (error) {
+    console.error('[keyword-extractor] Error in extractKeywordsHybrid:', error);
+    
+    // エラー時はフォールバック
+    const fallbackKeywords = extractBasicKeywords(query);
+    return {
+      keywords: fallbackKeywords,
+      highPriority: new Set(fallbackKeywords.map(k => k.toLowerCase())),
+      lowPriority: new Set()
+    };
+  }
 }
