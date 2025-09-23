@@ -139,7 +139,7 @@ export class KeywordListsLoader {
   }
 
   /**
-   * クエリから関連するキーワードを抽出
+   * クエリから関連するキーワードを抽出（改善版）
    */
   extractKeywords(query: string): {
     domainNames: string[];
@@ -186,7 +186,110 @@ export class KeywordListsLoader {
     // 重複除去
     result.allKeywords = [...new Set(result.allKeywords)];
 
+    // クエリ関連性によるフィルタリングと優先度付け
+    result.allKeywords = this.prioritizeKeywordsByRelevance(query, result.allKeywords);
+
     return result;
+  }
+
+  /**
+   * クエリ関連性によるキーワードの優先度付け
+   */
+  private prioritizeKeywordsByRelevance(query: string, keywords: string[]): string[] {
+    // クエリから重要単語を抽出
+    const queryWords = this.extractQueryWords(query);
+    const importantWords = queryWords.filter(word => word.length >= 2);
+    
+    // キーワードを優先度別に分類
+    const highPriority: string[] = [];
+    const mediumPriority: string[] = [];
+    const lowPriority: string[] = [];
+    
+    for (const keyword of keywords) {
+      const relevance = this.calculateRelevance(keyword, importantWords);
+      
+      if (relevance >= 0.8) {
+        highPriority.push(keyword);
+      } else if (relevance >= 0.5) {
+        mediumPriority.push(keyword);
+      } else if (relevance >= 0.2) {
+        lowPriority.push(keyword);
+      }
+    }
+    
+    // 優先度順に結合（高優先度 → 中優先度 → 低優先度）
+    return [...highPriority, ...mediumPriority, ...lowPriority];
+  }
+
+  /**
+   * キーワードの関連性を計算
+   */
+  private calculateRelevance(keyword: string, importantWords: string[]): number {
+    let maxRelevance = 0;
+    
+    for (const word of importantWords) {
+      // 完全一致
+      if (keyword === word) {
+        return 1.0;
+      }
+      
+      // 部分一致（キーワードが単語を含む）
+      if (keyword.includes(word)) {
+        maxRelevance = Math.max(maxRelevance, 0.9);
+      }
+      
+      // 部分一致（単語がキーワードを含む）
+      if (word.includes(keyword)) {
+        maxRelevance = Math.max(maxRelevance, 0.8);
+      }
+      
+      // 共通部分文字列
+      const commonLength = this.findCommonSubstringLength(keyword, word);
+      if (commonLength >= 2) {
+        const relevance = commonLength / Math.max(keyword.length, word.length);
+        maxRelevance = Math.max(maxRelevance, relevance);
+      }
+    }
+    
+    return maxRelevance;
+  }
+
+  /**
+   * 共通部分文字列の長さを計算
+   */
+  private findCommonSubstringLength(str1: string, str2: string): number {
+    let maxLength = 0;
+    
+    for (let i = 0; i < str1.length; i++) {
+      for (let j = 0; j < str2.length; j++) {
+        let length = 0;
+        while (i + length < str1.length && j + length < str2.length && 
+               str1[i + length] === str2[j + length]) {
+          length++;
+        }
+        maxLength = Math.max(maxLength, length);
+      }
+    }
+    
+    return maxLength;
+  }
+
+  /**
+   * クエリから単語を抽出（改善版）
+   */
+  private extractQueryWords(query: string): string[] {
+    // より適切な分割パターン
+    const words = query.split(/[の・・、は？]/g).filter(word => word.trim().length > 0);
+    
+    // 2文字以上の単語のみを抽出
+    const validWords = words.map(word => word.trim()).filter(word => word.length >= 2);
+    
+    // デバッグ用ログ
+    console.log(`[extractQueryWords] クエリ: "${query}"`);
+    console.log(`[extractQueryWords] 分割後: [${words.map(w => `"${w}"`).join(', ')}]`);
+    console.log(`[extractQueryWords] 有効単語: [${validWords.map(w => `"${w}"`).join(', ')}]`);
+    
+    return validWords;
   }
 
   /**
@@ -230,8 +333,12 @@ export class KeywordListsLoader {
       const trimmedWord = queryWord.trim();
       if (trimmedWord.length < 2) continue;
       
+      // スペースを無視したマッチング
+      const normalizedKeyword = keyword.replace(/\s+/g, '');
+      const normalizedQueryWord = trimmedWord.replace(/\s+/g, '');
+      
       // キーワードがクエリ単語を含む、またはクエリ単語がキーワードを含む
-      if (keyword.includes(trimmedWord) || trimmedWord.includes(keyword)) {
+      if (normalizedKeyword.includes(normalizedQueryWord) || normalizedQueryWord.includes(normalizedKeyword)) {
         return true;
       }
       

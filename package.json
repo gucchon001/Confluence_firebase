@@ -30,7 +30,10 @@
     "sync:confluence:differential": "tsx src/scripts/batch-sync-confluence.ts --differential",
     "sync:confluence:no-delete": "tsx src/scripts/batch-sync-confluence.ts --skip-deleted",
     "sync:confluence:diff-no-delete": "tsx src/scripts/batch-sync-confluence.ts --differential --skip-deleted",
-    "sync:confluence": "tsx src/scripts/batch-sync-confluence.ts --all"
+    "sync:confluence": "tsx src/scripts/batch-sync-confluence.ts --all",
+    "domain-knowledge-extraction-v2": "tsx src/scripts/run-domain-knowledge-extraction-v2.ts",
+    "complete-pipeline": "tsx src/scripts/run-complete-pipeline.ts",
+    "lightweight-pipeline": "tsx src/scripts/run-lightweight-pipeline.ts"
   },
   "dependencies": {
     "@genkit-ai/google-cloud": "^1.19.2",

@@ -5,7 +5,7 @@ import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 import { getEmbeddings } from './embeddings';
 import { calculateKeywordScore, calculateHybridScore, LabelFilterOptions } from './search-weights';
-import { extractKeywordsHybrid } from './keyword-extractor';
+import { extractKeywordsConfigured } from './keyword-extractor-configured';
 import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
@@ -122,7 +122,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // 並列実行でパフォーマンス最適化
     const [vector, { keywords, highPriority, lowPriority }, db] = await Promise.all([
       getEmbeddings(params.query),
-      extractKeywordsHybrid(params.query),
+      await extractKeywordsConfigured(params.query),
       (async () => {
         const dbPath = path.resolve(process.cwd(), '.lancedb');
         console.log(`[searchLanceDB] Connecting to LanceDB at ${dbPath}`);
@@ -818,7 +818,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
          console.log(`[searchLanceDB] Mapping result: id=${result.id}, _sourceType=${result._sourceType}`);
          
          // 結果オブジェクトを作成
-         const sourceType = (result._sourceType || 'vector') as 'vector' | 'keyword' | 'hybrid';
+         const sourceType = (result._sourceType || 'vector') as 'vector' | 'keyword' | 'hybrid' | 'bm25';
          // ソース別にスコア表記を整形
          let scoreKind: 'vector' | 'bm25' | 'keyword' | 'hybrid' = 'vector';
          let scoreRaw: number | undefined;
@@ -830,12 +830,30 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
            scoreKind = 'vector';
            scoreRaw = distance;
            scoreText = `類似度 ${similarityPct}%`;
-         } else {
-           // BM25/keyword 系
+         } else if (sourceType === 'bm25') {
+           // BM25 系
            const bm25 = result._bm25Score ?? result._keywordScore ?? 0;
            scoreKind = 'bm25';
            scoreRaw = bm25;
            scoreText = `BM25 ${bm25.toFixed(2)}`;
+         } else {
+           // keyword 系
+           const keyword = result._keywordScore ?? 0;
+           scoreKind = 'keyword';
+           scoreRaw = keyword;
+           scoreText = `Keyword ${keyword.toFixed(2)}`;
+         }
+
+         // スコア計算の修正
+         let finalScore: number;
+         if (sourceType === 'bm25' || sourceType === 'keyword') {
+           // BM25スコアの場合、キーワードスコアを直接使用
+           const keywordScore = result._keywordScore || 0;
+           finalScore = Math.min(100, Math.max(0, keywordScore * 10)); // スコアを10倍して0-100の範囲に
+         } else {
+           // ベクトルスコアの場合、距離を反転
+           const distance = result._distance ?? 1;
+           finalScore = Math.max(0, Math.min(100, Math.round((1 - distance) * 100)));
          }
 
          const formattedResult = {
@@ -844,7 +862,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
            title: result.title || 'No Title',
            content: result.content || '',
            distance: normalizeScoreToPercentage(result._distance, result._sourceType || 'vector'), // スコアを適切に正規化
-           score: normalizeScoreToPercentage(result._distance, result._sourceType || 'vector'), // フロントエンド用のscoreフィールドを追加
+           score: finalScore, // 修正されたスコア計算
            space_key: result.space_key,
            labels: getLabelsAsArray(result.labels),
            url: result.url || '',

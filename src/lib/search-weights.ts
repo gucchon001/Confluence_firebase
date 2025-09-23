@@ -4,8 +4,8 @@
  */
 
 // ベクトル検索とキーワード検索の重み（調整）
-export const VECTOR_WEIGHT = 0.3; // ベクトル検索の重み（調整）
-export const KEYWORD_WEIGHT = 0.6; // キーワード検索の重み（キーワードマッチングを重視）
+export const VECTOR_WEIGHT = 0.2; // ベクトル検索の重み（下げる）
+export const KEYWORD_WEIGHT = 0.7; // キーワード検索の重み（キーワードマッチングを重視）
 export const LABEL_WEIGHT = 0.1; // ラベル検索の重み（下げる）
 
 // ラベルフィルタオプション
@@ -287,6 +287,19 @@ export const IMPORTANT_KEYWORDS = [
 
   // 教室管理関連
   '教室管理', 'classroom management',
+  '教室管理機能', 'classroom management function',
+  '教室一覧', 'classroom list',
+  '教室登録', 'classroom registration',
+  '教室編集', 'classroom edit',
+  '教室削除', 'classroom delete',
+  '教室コピー', 'classroom copy',
+  '教室情報', 'classroom information',
+  '教室詳細', 'classroom details',
+  '教室基本情報', 'classroom basic information',
+  '教室応募情報', 'classroom application information',
+  '教室ロゴ', 'classroom logo',
+  '教室スライド', 'classroom slide',
+  '教室塾チャート', 'classroom chart',
   '求人情報', 'job information',
   '新規登録', 'new registration',
   '機能', 'function',
@@ -303,26 +316,26 @@ export const IMPORTANT_KEYWORDS = [
 // キーワードマッチングの重み
 export const WEIGHTS = {
   // タイトル関連（大幅強化）
-  TITLE_EXACT_MATCH: 2.0,   // タイトルに完全一致（大幅強化）
-  TITLE_CONTAINS: 1.2,      // タイトルに部分一致（強化）
+  TITLE_EXACT_MATCH: 3.0,   // タイトルに完全一致（大幅強化）
+  TITLE_CONTAINS: 2.0,      // タイトルに部分一致（強化）
   
   // ラベル関連
-  LABEL_MATCH: 0.6,         // ラベルに一致（強化）
+  LABEL_MATCH: 0.8,         // ラベルに一致（強化）
   
   // コンテンツ関連
-  CONTENT_MATCH: 0.4,       // コンテンツに一致（強化）
+  CONTENT_MATCH: 0.6,       // コンテンツに一致（強化）
   
   // 重要キーワードの厳格一致ブースト
-  IMPORTANT_KEYWORD_TITLE_EXACT: 8.0,  // 重要キーワードがタイトルに完全一致（大幅強化）
-  IMPORTANT_KEYWORD_TITLE_CONTAINS: 5.0, // 重要キーワードがタイトルに部分一致（大幅強化）
-  IMPORTANT_KEYWORD_LABEL_EXACT: 6.0,   // 重要キーワードがラベルに完全一致（大幅強化）
-  IMPORTANT_KEYWORD_LABEL_CONTAINS: 4.0, // 重要キーワードがラベルに部分一致（大幅強化）
+  IMPORTANT_KEYWORD_TITLE_EXACT: 12.0,  // 重要キーワードがタイトルに完全一致（大幅強化）
+  IMPORTANT_KEYWORD_TITLE_CONTAINS: 8.0, // 重要キーワードがタイトルに部分一致（大幅強化）
+  IMPORTANT_KEYWORD_LABEL_EXACT: 10.0,   // 重要キーワードがラベルに完全一致（大幅強化）
+  IMPORTANT_KEYWORD_LABEL_CONTAINS: 6.0, // 重要キーワードがラベルに部分一致（大幅強化）
   
   // 汎用語の重み（極小化）
   GENERIC_TERM_WEIGHT: 0.0, // 汎用語の重みを0に（採点影響なし）
   
   // 複合スコアの計算係数
-  HYBRID_FACTOR: 0.8        // ハイブリッドスコア計算時の係数（強化）
+  HYBRID_FACTOR: 1.0        // ハイブリッドスコア計算時の係数（強化）
 };
 
 /**
@@ -357,8 +370,11 @@ export function calculateHybridScore(vectorDistance: number, keywordScore: numbe
   const labelScoreWeighted = labelScore * LABEL_WEIGHT;
   
   // スコアを0-100の範囲に正規化（テストの期待値に合わせる）
+  // キーワードスコアを重視し、より高いスコアを生成
   const rawScore = vectorScore + keywordScoreWeighted + labelScoreWeighted;
-  return Math.min(100, Math.max(0, rawScore * 100));
+  const normalizedScore = Math.min(100, Math.max(0, rawScore * 50)); // 正規化係数を調整
+  
+  return normalizedScore;
 }
 
 /**
