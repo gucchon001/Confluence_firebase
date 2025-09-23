@@ -1,10 +1,29 @@
 #!/usr/bin/env tsx
 
+import 'dotenv/config';
 import { ConfluenceDataExtractor, type ExtractionConfig } from './confluence-data-extractor';
 import { LLMKnowledgeExtractor, type LLMExtractionConfig } from './llm-knowledge-extractor';
 import { KnowledgeValidator } from './knowledge-validator';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+
+// 環境変数を展開する関数
+function expandEnvVars(obj: any): any {
+  if (typeof obj === 'string') {
+    return obj.replace(/\$\{([^}]+)\}/g, (match, envVar) => {
+      return process.env[envVar] || match;
+    });
+  } else if (Array.isArray(obj)) {
+    return obj.map(expandEnvVars);
+  } else if (obj && typeof obj === 'object') {
+    const expanded: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      expanded[key] = expandEnvVars(value);
+    }
+    return expanded;
+  }
+  return obj;
+}
 
 interface PipelineConfig {
   confluence: ExtractionConfig;
@@ -153,7 +172,8 @@ function loadConfig(): PipelineConfig {
   
   if (existsSync(configPath)) {
     console.log(`📋 Loading configuration from: ${configPath}`);
-    return JSON.parse(readFileSync(configPath, 'utf-8'));
+    const rawConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
+    return expandEnvVars(rawConfig);
   }
 
   // デフォルト設定

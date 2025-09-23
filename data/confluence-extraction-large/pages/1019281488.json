@@ -1,0 +1,13 @@
+{
+  "id": "1019281488",
+  "title": "598_【FIX】応募情報CSVダウンロード",
+  "content": "1. 目次 2. 概要 本機能は 596_【FIX】応募・採用管理 - 一覧閲覧機能 にて絞り込まれた応募・採用情報をCSVファイルとしてダウンロードする機能です。 3. 要求事項 クライアント企業向け管理画面にログインできるクライアント企業管理者が利用することができる。 最大でダウンロードできる行数は20,000件とする。 596_【FIX】応募・採用管理 - 一覧閲覧機能 で絞り込まれた全ての 【FIX】応募情報 について 採用確認情報ダウンロードボタン を押すと https://docs.google.com/spreadsheets/d/1dCffursWuZsQfzNESjOTtlP-N9Ff-f8imrJATrRceIc/edit#gid=2117861613 のフォーマット の通り にCSVファイルをダウンロードする 応募情報ダウンロードボタンを押すと https://docs.google.com/spreadsheets/d/1Kcw2RBEA72aEI8BvLbg-Hb6S_iC2WlZ8xTPREAjnCZw/edit#gid=2117861613 のフォーマットの通り にCSVファイルをダウンロードする ダウンロードに成功または失敗した場合、それを通知するポップアップを表示する。それぞれ「CSVファイルのダウンロードに成功しました。」、「CSVファイルのダウンロードに失敗しました。時間を置いて再度ダウンロードを行なってください。」とする。 ダウンロードに成功または失敗した場合、以下を含むログを出力する。 日時、ユーザー番号、アクセス元IPアドレス、ユーザーエージェント、アクション（成功or失敗） 4. 要件定義 4.1. ユーザーインターフェース（画面） https://www.figma.com/file/8zITZViFoU0WYNnwig5AKc/%E3%80%90%E5%85%B1%E6%9C%89%E3%80%91%E3%83%88%E3%83%A2%E3%83%8E%E3%82%AB%E3%82%A4%E6%A7%98_%E5%A1%BE?type=design&amp;node-id=80153-50801&amp;mode=design&amp;t=E7uOJpRHlChE8xHh-4 4.6. エラー処理 4.7. ログ ダウンロード 処理を実行した場合に下記フォーマットでログを出力する。 成功した場合 応募情報CSVファイル User {クライアント 管理者 のユーザー番号} downloaded application csv file . {アクセスURI} {日時} {アクセス元IPアドレス} {ユーザーエージェント} 採用確認情報CSVファイル User {クライアント 管理者 のユーザー番号} downloaded hiring csv file . {アクセスURI} {日時} {アクセス元IPアドレス} {ユーザーエージェント} 失敗した場合 応募情報CSVファイル User {クライアント管理者のユーザー番号} failed to download application csv file. {アクセスURI} {日時} {アクセス元IPアドレス} {ユーザーエージェント} 採用確認情報CSVファイル User {クライアント管理者のユーザー番号} failed to download hiring csv file. {アクセスURI} {日時} {アクセス元IPアドレス} {ユーザーエージェント}",
+  "parentId": "705036289",
+  "parentTitle": "590_■応募管理機能",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1019281488/598_+FIX+CSV",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-05-21T01:23:48.358Z",
+  "author": "feng_xiaomeng (Unlicensed)",
+  "excerpt": "1. 目次 2. 概要 本機能は 596_【FIX】応募・採用管理 - 一覧閲覧機能 にて絞り込まれた応募・採用情報をCSVファイルとしてダウンロードする機能です。 3. 要求事項 クライアント企業向け管理画面にログインできるクライアント企業管理者が利用することができる。 最大でダウンロードできる行数は20,000件とする。 596_【FIX】応募・採用管理 - 一覧閲覧機能 で絞り込まれた全ての..."
+}

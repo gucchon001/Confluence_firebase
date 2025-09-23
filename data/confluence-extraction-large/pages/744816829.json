@@ -1,0 +1,13 @@
+{
+  "id": "744816829",
+  "title": "741_【統合により削除】自動オファー送信対象者登録バッチ",
+  "content": "742_【作成中】自動オファー送信バッチ の機能へ統合するため、削除。 参考チケット CTJ-2693 0f376871-0459-35fc-b139-2a34c915ec22 System Jira",
+  "parentId": "744325328",
+  "parentTitle": "740_■オファー関連バッチ",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/744816829/741_",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-04-16T06:21:11.206Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "742_【作成中】自動オファー送信バッチ の機能へ統合するため、削除。 参考チケット CTJ-2693 0f376871-0459-35fc-b139-2a34c915ec22 System Jira"
+}

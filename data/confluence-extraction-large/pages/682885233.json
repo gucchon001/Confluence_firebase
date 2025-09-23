@@ -1,0 +1,13 @@
+{
+  "id": "682885233",
+  "title": "【FIX】全体管理者登録情報",
+  "content": "概要 全体管理画面を使用するユーザーである全体管理者の登録情報 ワークフロー https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674758673?atlOrigin=eyJpIjoiNTEyYjQ0ZjY5YWY5NDAwMjhiOWNmYjI2OGUwMGUwMjMiLCJwIjoiYyJ9 詳細 入力項目 変数名 値の形式 画面上の入力形式 制限とエラーメッセージ 説明・プレースホルダー 1 ユーザー番号 user_number 数値 - 変更不可 システム全体のユーザー（会員、全体管理者、クライアント企業管理者）を通して一意に付与される番号。 新規登録時に自動発行される。 1〜100,000までとする 2 管理者種別 &nbsp;type 単一選択 セレクトボックス 管理者種別を選択してください &nbsp; システム管理者、塾講師ステーション管理者、ゲスト管理者、記事管理者、記事担当者、ギフト券担当者 から選択する。 3 メールアドレス email 文字列 テキストボックス 共通要件 の定義に従う 重複は不可 ログインIDとして使用する 4 パスワード &nbsp;password 文字列 テキストボックス 共通要件 の定義に従う 共通要件 の定義に従う 5 氏名 name 文字列 テキストボックス &nbsp; 6 氏名（フリガナ） name_kana&nbsp; 文字列 テキストボックス 共通要件 の定義に従う 7 ニックネーム &nbsp;nickname 文字列 テキストボックス 20文字以内 &nbsp; 8 PR &nbsp;pr 文字列 テキストボックス 1000文字以内 &nbsp; 9 自己紹介ページURL &nbsp; 文字列 テキストボックス 255文字以内 共通要件 の定義に従う 本システム外 10 画像 &nbsp;image 画像 ファイルアップロード 形式：png, jpeg/jpg, svg, gif, heic, webp 最大5MBまで 11 IPアドレス制限 ip_restriction 単一選択 ラジオボタン IPアドレス制限の有無を選択してください 特定のIP(トモノカイ社内IP)からのアクセス以外で管理画面にアクセスした場合、個人情報を含むページにアクセスができなくなるという制御がかかる&nbsp;。 「しない」、「する」から選択する。 12 最終ログイン日時 日時 - 変更不可 最後にログインした日時 自動で上書き保存される。 13 【作成中】帳票共通項目 で定める項目を持つ。 14 【作成中】帳票共通項目 で定める項目を持つ。 15 【作成中】帳票共通項目 で定める項目を持つ。 16 【作成中】帳票共通項目 で定める項目を持つ。 17 【作成中】帳票共通項目 で定める項目を持つ。 18 【作成中】帳票共通項目 で定める項目を持つ。",
+  "parentId": "698581065",
+  "parentTitle": "■全体管理・問合せ",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/682885233/FIX",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-05-20T03:12:36.207Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "概要 全体管理画面を使用するユーザーである全体管理者の登録情報 ワークフロー https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674758673?atlOrigin=eyJpIjoiNTEyYjQ0ZjY5YWY5NDAwMjhiOWNmYjI2OGUwMGUwMjMiLCJwIjoiYyJ9 詳細 入力項目 変数名 値の形式 画..."
+}

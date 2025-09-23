@@ -12,6 +12,7 @@ export const LABEL_WEIGHT = 0.1; // ラベル検索の重み（下げる）
 export interface LabelFilterOptions {
   includeMeetingNotes: boolean;
   includeArchived: boolean;
+  includeFolders: boolean;  // フォルダラベルを含めるかどうか
 }
 
 
@@ -352,7 +353,12 @@ export const WEIGHTS = {
 export function calculateHybridScore(vectorDistance: number, keywordScore: number, labelScore: number = 0): number {
   // ベクトル距離は小さいほど良い（0-1の範囲）
   // キーワードスコアとラベルスコアは大きいほど良い
-  return vectorDistance * VECTOR_WEIGHT - keywordScore * KEYWORD_WEIGHT - labelScore * LABEL_WEIGHT;
+  // ベクトル距離を反転（1 - distance）してスコアとして使用
+  const vectorScore = (1 - vectorDistance) * VECTOR_WEIGHT;
+  const keywordScoreWeighted = keywordScore * KEYWORD_WEIGHT;
+  const labelScoreWeighted = labelScore * LABEL_WEIGHT;
+  
+  return vectorScore + keywordScoreWeighted + labelScoreWeighted;
 }
 
 /**
@@ -436,6 +442,7 @@ export function calculateKeywordScore(
         console.log(`[calculateKeywordScore] Important keyword exact title match: +${WEIGHTS.IMPORTANT_KEYWORD_TITLE_EXACT * weightMultiplier}`);
       } else {
         keywordScore += WEIGHTS.TITLE_EXACT_MATCH * weightMultiplier;
+        console.log(`[calculateKeywordScore] Exact title match: +${WEIGHTS.TITLE_EXACT_MATCH * weightMultiplier}`);
       }
       titleMatches++;
     }
@@ -446,8 +453,30 @@ export function calculateKeywordScore(
         console.log(`[calculateKeywordScore] Important keyword title contains: +${WEIGHTS.IMPORTANT_KEYWORD_TITLE_CONTAINS * weightMultiplier}`);
       } else {
         keywordScore += WEIGHTS.TITLE_CONTAINS * weightMultiplier;
+        console.log(`[calculateKeywordScore] Title contains: +${WEIGHTS.TITLE_CONTAINS * weightMultiplier}`);
       }
       titleMatches++;
+    }
+    // 部分マッチング（キーワードの一部がタイトルに含まれる場合）
+    else {
+      // キーワードを分割して部分マッチングを試行
+      const keywordParts = lowerKeyword.split(/[の・・、]/).filter(part => part.length >= 2);
+      let partialMatch = false;
+      
+      for (const part of keywordParts) {
+        if (lowerTitle.includes(part)) {
+          keywordScore += WEIGHTS.TITLE_CONTAINS * weightMultiplier * 0.5; // 部分マッチは半分のスコア
+          console.log(`[calculateKeywordScore] Partial title match (${part}): +${WEIGHTS.TITLE_CONTAINS * weightMultiplier * 0.5}`);
+          titleMatches++;
+          partialMatch = true;
+          break; // 最初の部分マッチのみカウント
+        }
+      }
+      
+      // デバッグログ
+      if (!partialMatch) {
+        console.log(`[calculateKeywordScore] No title match for "${lowerKeyword}" in "${lowerTitle}"`);
+      }
     }
         
         // デバッグ: タイトルマッチングの詳細をログ出力

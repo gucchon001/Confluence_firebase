@@ -1,0 +1,13 @@
+{
+  "id": "724631564",
+  "title": "234_【作成中】採用確認複数項目切り替え機能",
+  "content": "★関連して https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/906690562#2.2.-%E5%9C%A8%E7%B1%8D%E7%A2%BA%E8%AA%8D%E5%A4%89%E6%9B%B4%E3%81%AB%E3%82%88%E3%82%8B%E8%AB%8B%E6%B1%82%E3%81%B8%E3%81%AE%E5%8F%8D%E6%98%A0%E5%87%A6%E7%90%86 の処理を行うことを記載する。 ★ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/908066817?focusedCommentId=912622136 に記載の通り、在籍確認が◯になったら「請求確定日時」の登録処理も必要。さらに、 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/906690562#2.2.-%E5%9C%A8%E7%B1%8D%E7%A2%BA%E8%AA%8D%E5%A4%89%E6%9B%B4%E3%81%AB%E3%82%88%E3%82%8B%E8%AB%8B%E6%B1%82%E3%81%B8%E3%81%AE%E5%8F%8D%E6%98%A0%E5%87%A6%E7%90%86 も必要。",
+  "parentId": "704381195",
+  "parentTitle": "230_■採用確認管理機能",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/724631564/234_",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-01-23T06:21:50.333Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "★関連して https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/906690562#2.2.-%E5%9C%A8%E7%B1%8D%E7%A2%BA%E8%AA%8D%E5%A4%89%E6%9B%B4%E3%81%AB%E3%82%88%E3%82%8B%E8%AB%8B%E6%B1%82%E3%81%B8%E3%81%AE%E5%..."
+}

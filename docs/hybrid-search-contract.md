@@ -3,7 +3,7 @@
 ### 入力（SearchParams）
 - `query: string`
 - `topK?: number`（既定: 12）
-- `useLunrBM25?: boolean`（既定: true）
+- `useLunrIndex?: boolean`（既定: false）
 - `labelFilters?: { includeMeetingNotes: boolean; includeArchived: boolean }`
 - `tableName?: string`（既定: `confluence`）
 

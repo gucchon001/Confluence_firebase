@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const fullVector = await getEmbeddings(query);
     console.log(`Generated embedding vector (${fullVector.length} dimensions)`);
     
-    // フルサイズのベクトルを使用（768次元）
+    // フルサイズのベクトルを使用（384次元）
     const vector = fullVector;
     console.log(`Using full vector with ${vector.length} dimensions`);
 

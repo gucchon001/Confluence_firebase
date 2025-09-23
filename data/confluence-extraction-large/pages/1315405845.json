@@ -1,0 +1,13 @@
+{
+  "id": "1315405845",
+  "title": "2024-12-13 フェーズ5に関するミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：池田様( )、平山様、原口様 GIG： 資料 https://docs.google.com/spreadsheets/d/1-Xmse1cr-U3wJK6rMTI9NBYPvgQuOZDezzIumo74pww/edit?gid=1154879342#gid=1154879342 タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 前回のネクストアクションの確認 16 16 complete indeed連携についての依頼内容の起票（エピックはこれまで改善で使用していたエピック） 進捗確認 デザイン：FIX 実装：進行中 テスト： アドミン-記事管理-新規登録 トモノカイ様テスト完了し修正対応中 アドミン-記事管理-編集 トモノカイ様テストご依頼中 アドミン-記事管理-一覧 GIGテスト中 データ移行（1回目）： 本番DBの追加を12/12に完了し、データ移行対応中 そのほか 塾講師ステーション情報局サイトへのディレクトリ変更（GIG小竹） 検証方針 リリース直前まで、 https://www.juku.st/article で運用をする リリース時に、 https://www.juku.st/ （https://www.juku.st/info）に変更をする 1回目のテストを本番環境でも行う理由 下記理由で本番環境で1回目のデータ移行テストする 新規構築している「塾講師ステーション情報局サイト」が現在稼働している https://www.juku.st/ の一部データを参照している為 既存データが問題なく移行できているか、本番で事前に確認してリリース時の不具合や想定外の問題発生リスクを軽減する為 対応したこと 現状/infoは、旧サーバにアクセスしていて、CloudFront(キャッシュサーバ)のグローバル分岐機能で振り分けています。 この機能において、特定IPで振り分け先を変更するという設定はできないので、暫定的にディレクトリ名を変更する対応をアプリケーション側で行う その他 バージョンデータ再出力のご依頼（江尻） CTJ-4684 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 画像登録UIの調整（GIG江尻） CTJ-410 0f376871-0459-35fc-b139-2a34c915ec22 System Jira &rarr;方針問題ない。 TinyMCEの有料プラン契約方法について（GIG江尻） https://gig-inc.slack.com/archives/C07R1AJE7CP/p1733990095621849 &nbsp;アクション事項 15 15 incomplete 原口様：バージョンデータの再出力のご依頼 17 63a6259f-9564-45bc-a47c-7715d3b77421 incomplete CTJ-4684 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 18 62d1d99c-a34e-4e00-9ec6-3b385cfee02e incomplete TinyMCEの有料プラン契約についてチケット化 &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED TinyMCEの有料プランの契約方法についてはトモノカイ様側でご用意いただく TinyMCEの有料プランの契約方法についてはトモノカイ様側でご用意いただく",
+  "parentId": "1235976240",
+  "parentTitle": "議事録_2024年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1315405845/2024-12-13+5",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-12-13T04:55:39.601Z",
+  "author": "kotake_jin",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：池田様( )、平山様、原口様 GIG： 資料 https://docs.google.com/spreadsheets/d/1-Xmse1cr-U3wJK6rMTI9NBYPvgQuOZDezzIumo74pww/edit?gid=1154879342#gid=1154879342 タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ..."
+}

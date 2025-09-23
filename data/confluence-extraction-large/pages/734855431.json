@@ -1,0 +1,13 @@
+{
+  "id": "734855431",
+  "title": "【FIX】記事カテゴリ",
+  "content": "1. 概要 全体管理者が https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/682557639 作成時に選択する記事カテゴリ情報。 具体的な値は 記事カテゴリ にて定義する。 2. ワークフロー 3. 詳細 項目名 変数名 値の形式 画面上の入力形式 制限とエラーメッセージ 説明・プレースホルダー 1 カテゴリ番号 id 数値 &nbsp; 自然数 新規登録時に、システムで一意に発行する連番。 旧システムのIDを移行するため、重複しない様に旧システムの最大番号から十分余裕を持った番号から開始する。 2 アイコン画像 icon 数値 「親カテゴリ番号」がnullの状態にのみ、登録可能とする。 3 名称 name 文字列 テキストボックス 100文字以内 4 概要 summary_text 文字列 テキストボックス 300文字以内 5 【作成中】帳票共通項目 で定める項目を持つ。 6 【作成中】帳票共通項目 で定める項目を持つ。 7 【作成中】帳票共通項目 で定める項目を持つ。 8 【作成中】帳票共通項目 で定める項目を持つ。 9 【作成中】帳票共通項目 で定める項目を持つ。 10 【作成中】帳票共通項目 で定める項目を持つ。 4. 関連要件定義 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703529119 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703496344 5. 関連チケット CTJ-459 0f376871-0459-35fc-b139-2a34c915ec22 System Jira CTJ-446 0f376871-0459-35fc-b139-2a34c915ec22 System Jira CTJ-447 0f376871-0459-35fc-b139-2a34c915ec22 System Jira CTJ-448 0f376871-0459-35fc-b139-2a34c915ec22 System Jira CTJ-449 0f376871-0459-35fc-b139-2a34c915ec22 System Jira",
+  "parentId": "744521946",
+  "parentTitle": "■記事・バナー",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/734855431/FIX",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-12-23T04:14:49.703Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "1. 概要 全体管理者が https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/682557639 作成時に選択する記事カテゴリ情報。 具体的な値は 記事カテゴリ にて定義する。 2. ワークフロー 3. 詳細 項目名 変数名 値の形式 画面上の入力形式 制限とエラーメッセージ 説明・プレースホルダー 1 カテゴリ番号 id 数値 &n..."
+}

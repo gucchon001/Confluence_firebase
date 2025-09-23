@@ -1,0 +1,13 @@
+{
+  "id": "707297281",
+  "title": "2023-03-08 ミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様( )、片岡様 GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 進捗確認・タスク 各議題についてメモを追加します。 その他 商品管理・マスタの統合案 https://docs.google.com/spreadsheets/d/1NBbn6IefE8-b3KVgVkV6r89LlZ705IAn6Oy5rsIOM44/edit#gid=159838599&amp;range=N:N 工数見込み（要件定義：減、開発：若干増） 方針 統合する 機能の認識合わせ 契約管理機能 CSVダウンロードは必要 契約情報の帳票 「以前の契約」の情報が必要 「メモ」必要 ステーションとキャリアの、リニューアル後のページ差異について TOPページ：別（要素の有無、デザイン） 求人検索・詳細など：要素は基本同じ、デザイン・コンテンツで差別化 ログイン、新規登録、マイページなど両方とも利用するページ：共通 &rarr;認識相違なし 設計・デザイン・実装フェーズの見積もり・契約・検収タイミング 一括とするか分割で契約するか WYSWYG 今週金曜日に記事担当者に確認する &nbsp;アクション事項 15 incomplete ステーションとキャリアの差異洗い出しと統一化の可否整理 false System JIRA 0f376871-0459-35fc-b139-2a34c915ec22 CTJ-382 &quot; &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 DECIDED 7113baef-b9fe-4a11-a28f-9518f6a1b72a",
+  "parentId": "1235746832",
+  "parentTitle": "議事録_2023年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/707297281/2023-03-08",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2023-03-16T05:45:27.543Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様( )、片岡様 GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 進捗確認・タスク 各議題についてメモを追加します。 その他 商品管理・マスタの統合案 https://docs.google.com/spreadsheets/d/1NBbn6IefE8-b3KVgVkV6r89Ll..."
+}

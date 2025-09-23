@@ -1,0 +1,13 @@
+{
+  "id": "962068539",
+  "title": "2024-3-27 ミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様？( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 進捗確認 フェーズ4の要求・デザイン・WFを進行 来週以降にフェーズ3の残り機能の受け入れテストを頂く予定 そのほか https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/938377236?focusedCommentId=995623557 条件なしの時、「すべての塾講師バイト・アルバイトの求人一覧」と表示？&rarr;OK 同じくキャリアの場合は「すべての塾講師求人一覧」と表示？&rarr;OK ★政令指定都市の場合の、エリアの特徴とエリア塾講師の特徴枠には何を表示するか。 複数の市区町村を列挙したURLのためどれか1つを表示できない。都市ごとの特徴リストをもらうか、枠ごと非表示か&rarr;都市ごとの特徴対応表を頂く 市区町村マスタとエリア特徴表示リストにズレがある 参照しているデータ元が異なるのでズレが存在する ★1ページのものは新規に内容を作成・登録頂く こちらのコメントの意図を確認 CTJ-914 0f376871-0459-35fc-b139-2a34c915ec22 System Jira &rarr;コメントに追記した CTJ-2580 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 会員編集 オファー設定と通知設定の順番を入れ替え&rarr;OK 利用設定が漏れているので追加すべきか？&rarr;追加 アクセスログ 求人詳細ページへのアクセスログで間違いないか？&rarr;OK https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/713392189/431+FIX?focusedCommentId=994771491 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/713392189/431+FIX?focusedCommentId=994378307 ともに完全一致でOKか&rarr;OK 例えば「ID:1」のユーザーを調べようとすると表示が遅くなる。 また名前は部分一致が良いか？&rarr;OK 会員登録の登録期間検索は、仮登録のタイミングかメール認証のタイミングで検索するか&rarr;本登録の方を検索したい ★ディレクトリマップのURLなどのご確認&rarr;チケットはお渡しする CTJ-1499 0f376871-0459-35fc-b139-2a34c915ec22 System Jira CTJ-1092 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 入会経路のデータは保持していないが問題ないか？&rarr;問題ないと思われるが、池田様確認 &rarr;新規会員登録か応募券会員登録かは区別するデータのみ持ちたい、画面上のフィルター項目としては不要 オファー関連のレビュー状況の確認 全体・クライアントともに本日中に返送いただける フェーズ３の３月でのご検収のお願い（UAT＆修正はこれまで同様に完了まで行う前提） &nbsp;アクション事項 15 incomplete &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED",
+  "parentId": "1235976240",
+  "parentTitle": "議事録_2024年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/962068539/2024-3-27",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-03-27T09:22:11.940Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様？( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 進捗確認 フェーズ4の要求・デザイン・WFを進行 来週以降にフェーズ3の残り機能の受け入れテストを頂く予定 そのほか https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/..."
+}

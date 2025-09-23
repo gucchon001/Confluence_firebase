@@ -1,0 +1,13 @@
+{
+  "id": "995819561",
+  "title": "2024-4-8 確認会ミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 確認内容 CTJ-2678 0f376871-0459-35fc-b139-2a34c915ec22 System Jira ギフト券番号での検索は不要 CTJ-2234 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 市区町村は任意でOK CSVファイル生成系は、ShiftJISかUTF-8かどちらをご希望か？（参考： https://gig-inc.slack.com/archives/C05EYRNFV2T/p1712322272214069?thread_ts=1712063784.052269&amp;cid=C05EYRNFV2T ） &rarr;Shift JISで https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/717521020?focusedCommentId=1010139403 このようなデザインだろうか？ https://www.figma.com/file/8zITZViFoU0WYNnwig5AKc/【共有】トモノカイ様_塾?type=design&amp;node-id=146020-91994&amp;mode=design&amp;t=k3904RNHxHSYliQU-4 &rarr;課題で提出する ★ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/680525965?focusedCommentId=1004830845 をサービスサイトで表示していなかった 要不要、および現行と同じような表示の想定かを確認 &rarr;トモノカイ様で内部確認 2024-4-5 確認会ミーティング議事録 の応募情報 要求変更としての扱いになる 工数は5日ほどかかる想定 データインポート＆個人情報削除（退会機能）も影響範囲になる 応募時の情報を丸ごと保持でOK CTJ-1480 0f376871-0459-35fc-b139-2a34c915ec22 System Jira を対応不要としたことの確認。 現行データのうち、会員情報（ https://drive.google.com/drive/folders/1qkppn5QXwYn-0Ic8QwGtPnqdjtCHAhS3?usp=drive_link ）の項目の多くが不足しているため、確認の依頼。 &nbsp;アクション事項 15 incomplete &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED",
+  "parentId": "1235976240",
+  "parentTitle": "議事録_2024年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/995819561/2024-4-8",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-04-08T06:33:56.933Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 確認内容 CTJ-2678 0f376871-0459-35fc-b139-2a34c915ec22 System Jira ギフト券番号での検索は不要 CTJ-2234 0f376871-0459-35fc-b139-2a34c915e..."
+}

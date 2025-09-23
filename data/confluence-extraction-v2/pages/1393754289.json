@@ -1,0 +1,13 @@
+{
+  "id": "1393754289",
+  "title": "エリア平均給与",
+  "content": "概要 エリア平均給与算出共通処理 にて保存される値 詳細 入力項目 変数名 値の形式 画面上の入力形式 制限とエラーメッセージ 説明・プレースホルダー 1 ID id 数値 ー 自然数 2 都道府県ID prefecture_id 数値 ー 自然数 3 市区町村ID city_id 数値 ー 自然数 4 平均時給_アルバイト average _parttime _hourly_salary 数値 ー&nbsp; 自然数 円単位の平均時給 5 平均月給_正社員 average _fulltime _monthly_salary 数値 ー 自然数 円単位の平均月給 6 求人数_アルバイト parttime_job_count 数値 ー 自然数 7 求人数_正社員 fulltime_job_count 数値 ー 自然数 8 【作成中】帳票共通項目 で定める項目を持つ。 9 【作成中】帳票共通項目 で定める項目を持つ。 10 【作成中】帳票共通項目 で定める項目を持つ。 11 【作成中】帳票共通項目 で定める項目を持つ。 12 【作成中】帳票共通項目 で定める項目を持つ。 13 【作成中】帳票共通項目 で定める項目を持つ。",
+  "parentId": "731218669",
+  "parentTitle": "■その他",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1393754289",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2025-02-20T02:32:24.923Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "概要 エリア平均給与算出共通処理 にて保存される値 詳細 入力項目 変数名 値の形式 画面上の入力形式 制限とエラーメッセージ 説明・プレースホルダー 1 ID id 数値 ー 自然数 2 都道府県ID prefecture_id 数値 ー 自然数 3 市区町村ID city_id 数値 ー 自然数 4 平均時給_アルバイト average _parttime _hourly_salary 数値 ..."
+}

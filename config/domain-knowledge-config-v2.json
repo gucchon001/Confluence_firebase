@@ -1,0 +1,26 @@
+{
+  "confluence": {
+    "baseUrl": "${CONFLUENCE_BASE_URL}",
+    "email": "${CONFLUENCE_USER_EMAIL}",
+    "apiToken": "${CONFLUENCE_API_TOKEN}",
+    "spaceKey": "${CONFLUENCE_SPACE_KEY}",
+    "maxPages": 200,
+    "batchSize": 20,
+    "outputDir": "data/confluence-extraction-v2"
+  },
+  "llm": {
+    "apiKey": "${GEMINI_API_KEY}",
+    "model": "gemini-2.5-flash",
+    "batchSize": 5,
+    "outputDir": "data/llm-extraction-v2",
+    "maxRetries": 3,
+    "delayBetweenRequests": 1000
+  },
+  "validation": {
+    "outputDir": "data/validation-v2"
+  },
+  "pipeline": {
+    "steps": ["confluence", "llm"],
+    "outputDir": "data/domain-knowledge-v2"
+  }
+}

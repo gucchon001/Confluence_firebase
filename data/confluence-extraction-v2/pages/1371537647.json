@@ -1,0 +1,13 @@
+{
+  "id": "1371537647",
+  "title": "2025-02-14 フェーズ5に関するミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：池田様( )、平山様、原口様 GIG： 資料 https://docs.google.com/spreadsheets/d/1-Xmse1cr-U3wJK6rMTI9NBYPvgQuOZDezzIumo74pww/edit?gid=1154879342#gid=1154879342 タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 前回のネクストアクションの確認 16 16 complete リリース時間を9:00〜変更可能か回答する。 17 17 complete rotots.txtから https://www.juku.st/qa-sitemap.xml を削除する。木曜日の本番反映枠 18 18 complete クラウドフロントの設定＋S3からファイルを削除 19 19 complete https://www.juku.st/qa-sitemap.xml 20 20 complete https://www.juku.st/entries-sitemap.xml 21 21 complete https://www.juku.st/categories-sitemap.xml 22 22 complete レイジーロード処理を（ loading=&quot;lazy&quot; ）へ修正する。 進捗確認 概ねスケジュール通りに進行中 実装：完了（差分機能） 機能テスト： 差分機能：GIG修正対応中 トモノカイ様テストは を予定しております。 残課題：進行中 CTJ-4812 0f376871-0459-35fc-b139-2a34c915ec22 System Jira デザイン部分の修正が残っている CTJ-5035 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 来週火曜日の本番反映枠での反映を予定 CTJ-5054 0f376871-0459-35fc-b139-2a34c915ec22 System Jira そのほか 予定通り2/14に情報局の初回リリースが完了いたしました。検収対応などありがとうございました。引き続き、残課題、差分機能の対応進めてまいります。（GIG小竹） 現状のrobots.txtの確認（GIG小竹） 下記は、 情報局記事キーワードのサイトマップ なためqa-sitemapと同様に削除する形で問題ないでしょうか？ &rarr;削除する DB定義書のご共有（江尻） 記事管理関連のテーブルも追加いたしました https://docs.google.com/spreadsheets/d/12TGH6p0ZvRkvijo3RaIvDtQaiYCqEIIgbbTFgUGqe6Y/edit?gid=1432366281#gid=1432366281 来週以降のフェーズ5の定例の開催可否について（GIG小竹） 残りは、残課題と差分機能の対応になります。slackでのやり取りで問題ないかと思いますので、来週以降は必要な場合に開催でいかがでしょうか？ -&gt;問題なし &nbsp;アクション事項 keywordsのサイトマップは削除 &nbsp;決定事項 b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED 来週以降は定例はなし 来週以降は定例はなし",
+  "parentId": "1710817285",
+  "parentTitle": "議事録_2025年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1371537647/2025-02-14+5",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2025-02-14T10:07:28.003Z",
+  "author": "kotake_jin",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：池田様( )、平山様、原口様 GIG： 資料 https://docs.google.com/spreadsheets/d/1-Xmse1cr-U3wJK6rMTI9NBYPvgQuOZDezzIumo74pww/edit?gid=1154879342#gid=1154879342 タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ..."
+}

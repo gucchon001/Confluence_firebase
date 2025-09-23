@@ -42,14 +42,14 @@ export class ConfluenceAPI {
   constructor(config?: Partial<ConfluenceAPIConfig>) {
     this.config = {
       baseUrl: process.env.CONFLUENCE_BASE_URL || '',
-      username: process.env.CONFLUENCE_USERNAME || '',
+      username: process.env.CONFLUENCE_USER_EMAIL || '',
       apiToken: process.env.CONFLUENCE_API_TOKEN || '',
       timeout: 30000,
       ...config
     };
 
     if (!this.config.baseUrl || !this.config.username || !this.config.apiToken) {
-      throw new Error('Confluence API configuration is incomplete. Please set CONFLUENCE_BASE_URL, CONFLUENCE_USERNAME, and CONFLUENCE_API_TOKEN environment variables.');
+      throw new Error('Confluence API configuration is incomplete. Please set CONFLUENCE_BASE_URL, CONFLUENCE_USER_EMAIL, and CONFLUENCE_API_TOKEN environment variables.');
     }
 
     this.baseHeaders = {
@@ -60,14 +60,20 @@ export class ConfluenceAPI {
   }
 
   async getSpace(spaceKey: string): Promise<{ key: string; name: string }> {
-    const url = `${this.config.baseUrl}/rest/api/space/${spaceKey}`;
+    // 既存のクライアントと同じアプローチを使用（v1 API）
+    const url = `${this.config.baseUrl}/wiki/rest/api/content?spaceKey=${spaceKey}&limit=1&expand=space`;
     
     try {
       const response = await this.makeRequest(url);
-      return {
-        key: response.key,
-        name: response.name
-      };
+      if (response.results && response.results.length > 0) {
+        const space = response.results[0].space;
+        return {
+          key: space.key,
+          name: space.name
+        };
+      } else {
+        throw new Error(`No content found in space ${spaceKey}`);
+      }
     } catch (error) {
       console.error(`[ConfluenceAPI] Failed to get space ${spaceKey}:`, error);
       throw error;
@@ -75,12 +81,14 @@ export class ConfluenceAPI {
   }
 
   async getPages(options: PageSearchOptions): Promise<PageDetails[]> {
-    const url = `${this.config.baseUrl}/rest/api/content`;
+    // 既存のクライアントと同じアプローチを使用（v1 API）
+    const url = `${this.config.baseUrl}/wiki/rest/api/content`;
     const params = new URLSearchParams({
       spaceKey: options.spaceKey,
       start: options.start.toString(),
       limit: options.limit.toString(),
       expand: (options.expand || ['version', 'space', 'body.storage']).join(','),
+      type: 'page',
       ...(options.includeArchived ? { status: 'current,archived' } : { status: 'current' })
     });
 
@@ -94,7 +102,12 @@ export class ConfluenceAPI {
   }
 
   async getPageDetails(pageId: string): Promise<PageDetails> {
-    const url = `${this.config.baseUrl}/rest/api/content/${pageId}`;
+    // 入力パラメータの型チェック
+    if (!pageId || typeof pageId !== 'string') {
+      throw new Error('Invalid pageId: must be a non-empty string');
+    }
+
+    const url = `${this.config.baseUrl}/wiki/rest/api/content/${pageId}`;
     const params = new URLSearchParams({
       expand: 'version,space,body.storage,ancestors,descendants,children'
     });
@@ -102,11 +115,18 @@ export class ConfluenceAPI {
     try {
       const response = await this.makeRequest(`${url}?${params}`);
       
+      // レスポンスの型チェック
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid response: expected object');
+      }
+      
       // 親ページ情報を追加
-      if (response.ancestors && response.ancestors.length > 0) {
+      if (response.ancestors && Array.isArray(response.ancestors) && response.ancestors.length > 0) {
         const parent = response.ancestors[response.ancestors.length - 1];
-        response.parentId = parent.id;
-        response.parentTitle = parent.title;
+        if (parent && typeof parent === 'object' && parent.id && parent.title) {
+          response.parentId = parent.id;
+          response.parentTitle = parent.title;
+        }
       }
 
       return response;
@@ -117,7 +137,7 @@ export class ConfluenceAPI {
   }
 
   async searchPages(query: string, spaceKey?: string): Promise<PageDetails[]> {
-    const url = `${this.config.baseUrl}/rest/api/content/search`;
+    const url = `${this.config.baseUrl}/wiki/rest/api/content/search`;
     const params = new URLSearchParams({
       cql: spaceKey ? `space = ${spaceKey} AND text ~ "${query}"` : `text ~ "${query}"`,
       expand: 'version,space,body.storage',
@@ -134,7 +154,7 @@ export class ConfluenceAPI {
   }
 
   async getPageLabels(pageId: string): Promise<string[]> {
-    const url = `${this.config.baseUrl}/rest/api/content/${pageId}/label`;
+    const url = `${this.config.baseUrl}/wiki/rest/api/content/${pageId}/label`;
     
     try {
       const response = await this.makeRequest(url);
@@ -150,6 +170,9 @@ export class ConfluenceAPI {
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
     try {
+      console.log(`[ConfluenceAPI] Making request to: ${url}`);
+      console.log(`[ConfluenceAPI] Headers:`, this.baseHeaders);
+      
       const response = await fetch(url, {
         method: 'GET',
         headers: this.baseHeaders,
@@ -224,4 +247,4 @@ export class ConfluenceAPI {
   }
 }
 
-export { ConfluenceAPI, type ConfluenceAPIConfig, type PageSearchOptions, type PageDetails };
+export { type ConfluenceAPIConfig, type PageSearchOptions, type PageDetails };

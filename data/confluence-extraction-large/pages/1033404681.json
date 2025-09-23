@@ -1,0 +1,13 @@
+{
+  "id": "1033404681",
+  "title": "006_【作成中】データレイヤー",
+  "content": "データレイヤー定義： https://docs.google.com/spreadsheets/d/1M10zos5l5oCygVNRlmNCdNvhHnjPFkoAOQgWZYzcoP4/edit?gid=1932946241#gid=1932946241 ※下記は検討途中の定義のため削除 設置ページ データレイヤー 変数名 備考 1 / /ca &lt;script type=&quot;text/javascript&quot;&gt; var dataLayer = dataLayer || []; dataLayer.push({ 'PageType': 'Homepage', }); &lt;/script&gt; もしかしたら不要？念のため設置 2 /search &lt;script type=&quot;text/javascript&quot;&gt; var dataLayer = dataLayer || []; dataLayer.push({ 'PageType': 'Listingpage', 'ProductIDList': ['cm_job_id1','cm_job_id2','cm_job_id3] // 上位3点までの商品IDを実装 }); &lt;/script&gt; cm_job_id1 cm_job_id2 cm_job_id3 変数名cm_job_id1,2,3は現状存在しない変数のため仮置き 3 /area 4 /station 5 /classrooms 6 /guidance 7 /direction 8 /requirement 9 /welcome 10 /treatment 11 /feature 12 /company 13 /classroom /job1 &lt;script type=&quot;text/javascript&quot;&gt; var dataLayer = dataLayer || []; dataLayer.push({ 'PageType': 'Productpage', 'ProductID': 'cm_job_id1' }); &lt;/script&gt; cm_job_id1 変数名cm_job_id1は現状存在しない変数のため仮置き 14 /job_apply &lt;script type=&quot;text/javascript&quot;&gt; var products_list = []; products_list.push( { id: &quot;cm_jobcan_id&quot;, price: 1, quantity: 1 } /* 商品が増える場合は行を追加する */ ); var dataLayer = dataLayer || []; dataLayer.push({ 'PageType': 'Basketpage', 'ProductBasketProducts': products_list }); &lt;/script&gt; cm_job_id1 price 、 quantity は1で固定出力 変数名cm_job_id1は現状存在しない変数のため仮置き 15 /job_apply/complete &lt;script type=&quot;text/javascript&quot;&gt; var products_list = []; products_list.push( { id: &quot;cm_jobcan_id&quot;, price: 1, quantity: 1 } /* 商品が増える場合は行を追加する */ ); var dataLayer = dataLayer || []; dataLayer.push({ 'PageType': 'Transactionpage', 'ProductTransactionProducts': products_list, 'TransactionID': 'cm_transaction_id' }); &lt;/script&gt; cm_job_id1 cm_transaction_id 変数名cm_job_id1は現状存在しない変数のため仮置き 16 17 ※後から追加 18 /employment /appearance /work_time /qualification /route /line /overseas 'PageType': 'Listingpage', 'ProductIDList': ['cm_job_id1','cm_job_id2','cm_job_id3]",
+  "parentId": "721092728",
+  "parentTitle": "000_■全体・共通",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1033404681/006_",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-12-11T07:06:17.442Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "データレイヤー定義： https://docs.google.com/spreadsheets/d/1M10zos5l5oCygVNRlmNCdNvhHnjPFkoAOQgWZYzcoP4/edit?gid=1932946241#gid=1932946241 ※下記は検討途中の定義のため削除 設置ページ データレイヤー 変数名 備考 1 / /ca &lt;script type=&quot;te..."
+}

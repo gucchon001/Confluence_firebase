@@ -4,5 +4,5 @@
 import './genkit';
 
 // Import the flows you want to be available in the dev UI.
-import './flows/retrieve-relevant-docs';
+import './flows/retrieve-relevant-docs-lancedb';
 import './flows/summarize-confluence-docs';

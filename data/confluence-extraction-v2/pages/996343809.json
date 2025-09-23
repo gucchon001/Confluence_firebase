@@ -1,0 +1,13 @@
+{
+  "id": "996343809",
+  "title": "2024-4-5 確認会ミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 確認内容 CTJ-2769 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 将来のタスクとして存在していることをご共有 一覧へ戻るボタンの位置は画面上部と画面下部かどちらにするか？&rarr;基本的には下に置く ★ https://www.figma.com/file/8zITZViFoU0WYNnwig5AKc?type=design&amp;node-id=59436-39366&amp;mode=design#755025403 ★塾でまとめるカードの中に表示する求人の抽出条件 ★まとめるカードの下部の口コミを見るリンクの要否 ブランド口コミ詳細へのリンクの方がいいか？ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/684359685?focusedCommentId=1002995805 上のURLとはdmaiの値が微妙に異なる&rarr;そのままの値を引き継ぐ ★ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/716243019?focusedCommentId=999653827 公開かつ掲載の求人のみ絞り込むべきか？ ★ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/716243019?focusedCommentId=1000407210 求人数の条件は不要か？ ★ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/716243019?focusedCommentId=1008795822 こちら大手塾ブランドと同じ条件ではないか？ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744423704?focusedCommentId=1002078546 現在の定義では、キャリアとステーションを分けられないか？ ★応募情報では応募時点の情報をコピーして保持したい。どこまでを対象とするかは社内で確認する &nbsp;アクション事項 15 incomplete &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED",
+  "parentId": "1235976240",
+  "parentTitle": "議事録_2024年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/996343809/2024-4-5",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-04-08T05:24:09.475Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 確認内容 CTJ-2769 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 将来のタスクとして存在していることをご共有 一覧へ戻るボタンの位置は画面上部と画面下部かどちらにするか？&rar..."
+}

@@ -516,4 +516,4 @@ if (require.main === module) {
   main();
 }
 
-export { KnowledgeValidator, type ValidationResult, type ValidationIssue, type ValidationStats, type QualityReport };
+export { type ValidationResult, type ValidationIssue, type ValidationStats, type QualityReport };

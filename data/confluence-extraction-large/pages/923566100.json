@@ -1,0 +1,13 @@
+{
+  "id": "923566100",
+  "title": "不一致確認依頼メール（クライアント）",
+  "content": "ワークフロー 【FIX】採用お祝い/口コミ確認・公開フロー メールテンプレート 項目 内容 件名 【塾講師ステーション】《要確認》採用確認：応募者申請内容と情報不一致 Fromアドレス メール共通要件 の定義に従う From名前 メール共通要件 の定義に従う Toアドレス kanri@jukust.jp https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/740032791#%E8%AB%8B%E6%B1%82%E3%81%AB%E9%96%A2%E9%80%A3%E3%81%97%E3%81%AA%E3%81%84%E3%83%A1%E3%83%BC%E3%83%AB%E3%81%AE%E5%A0%B4%E5%90%88 To名前 なし Cc(カンマ区切り) なし 本文 {企業名} 採用確認ご担当者様 ※本メールはシステムより自動送信しております。 本件のお問い合わせ・ご回答は管理画面よりご登録ください。 いつもお世話になっております。 塾講師ステーション運営部です。 以下の応募者につきまして、再度ステータスをご確認ください。 ◆不一致確認数 ： {件数} 件 ◆該当の応募ID一覧 {応募ID} ▼対象応募者を確認する（管理画面 採用確認） https://www.juku.st/client/ adoptions?c[differ_for_company]=1 【登録方法についてご不明な場合はサポートサイトをご覧ください】 https://www.jukust-support.jp/?p=1571 ================================================ 株式会社トモノカイ 採用確認担当 学習塾支援部門 塾講師ステーション運営部 TEL：03-5766-2764（部直通）FAX：03-3499-2544 Mail：kanri@jukust.jp（営業時間：平日10時~19時） 関連チケット CTJ-461 0f376871-0459-35fc-b139-2a34c915ec22 System JIRA",
+  "parentId": "911605964",
+  "parentTitle": "■採用お祝い申請",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/923566100",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-02-21T09:19:52.151Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "ワークフロー 【FIX】採用お祝い/口コミ確認・公開フロー メールテンプレート 項目 内容 件名 【塾講師ステーション】《要確認》採用確認：応募者申請内容と情報不一致 Fromアドレス メール共通要件 の定義に従う From名前 メール共通要件 の定義に従う Toアドレス kanri@jukust.jp https://giginc.atlassian.net/wiki/spaces/CLIENT..."
+}

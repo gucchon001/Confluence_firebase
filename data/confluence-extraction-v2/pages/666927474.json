@@ -1,0 +1,13 @@
+{
+  "id": "666927474",
+  "title": "データ移行・リリース計画",
+  "content": "1. 計画書 https://docs.google.com/spreadsheets/d/1rQJgwVjZ0G8nY2-bkCmEDVsdUqUNffK9FN0IAa8q1hs/edit#gid=1154879342 2. タスク管理 下記エピック内のタスクにて管理する。 データ移行 CTJ-39 0f376871-0459-35fc-b139-2a34c915ec22 System Jira リリース CTJ-1956 0f376871-0459-35fc-b139-2a34c915ec22 System Jira CTJ-40 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 3. 移行データ 下記フォルダで受領していく。 https://drive.google.com/drive/folders/1uGRJv_3u8wx8MYqJ1t1txJQGT6FW8x6A?usp=drive_link 4. 移行作業 手順書（社内用）： https://giginc.atlassian.net/wiki/x/MgDFPw 5. 参考 [GIG社内]データ移行・リリース計画社内キックオフMTG ER図： 2024/2/15時点 新STG： https://drive.google.com/file/d/12TwLmRuRRfNOJJD9I-wrGQ77yAN7zrdE/view",
+  "parentId": "666927105",
+  "parentTitle": "■要件定義",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/666927474",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-05-24T02:31:40.349Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "1. 計画書 https://docs.google.com/spreadsheets/d/1rQJgwVjZ0G8nY2-bkCmEDVsdUqUNffK9FN0IAa8q1hs/edit#gid=1154879342 2. タスク管理 下記エピック内のタスクにて管理する。 データ移行 CTJ-39 0f376871-0459-35fc-b139-2a34c915ec22 System Jira..."
+}

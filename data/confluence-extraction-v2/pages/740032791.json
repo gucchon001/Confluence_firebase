@@ -1,0 +1,13 @@
+{
+  "id": "740032791",
+  "title": "メール共通要件",
+  "content": "1. 要件 本システムから発信するメールについて、特に指定が無い場合は、下記の通りとする。 項目 本番環境 STG環境 DEV環境 1 送信元メールアドレス noreply@jukust.jp https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/965312812 参照 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/965312812 参照 2 送信元名称 塾講師ステーション 塾講師ステーション 塾講師ステーション 3 returnPath returnpath@jukust.jp returnpath-stg@jukust.jp 1.1. クライアント企業担当者に送信する場合の送信先 クライアント企業担当者にメールを送信する場合、特に指定がない場合は以下の条件の送信先に送信する 1.1.1. 請求に関連しないメールの場合 以下のメールアドレスに向けて送信する 企業に登録されたメールアドレス（ 【FIX】企業：基本情報 のメールアドレス） 請求担当以外の担当者のメールアドレス ただしとある担当者が請求担当者であっても、他の担当を1つでも兼ねている場合はその担当者にも送信する 1.1.2. 請求に関連するメールの場合 請求に関連するメールとは次のフォルダー（ ■請求時 ）配下のメールとする。 以下のメールアドレスに向けて送信する 請求担当者にのみ送信する 2. 関連チケット CTJ-488 0f376871-0459-35fc-b139-2a34c915ec22 System Jira",
+  "parentId": "681312317",
+  "parentTitle": "メールテンプレート",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/740032791",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2025-05-07T03:20:45.903Z",
+  "author": "kotake_jin",
+  "excerpt": "1. 要件 本システムから発信するメールについて、特に指定が無い場合は、下記の通りとする。 項目 本番環境 STG環境 DEV環境 1 送信元メールアドレス noreply@jukust.jp https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/965312812 参照 https://giginc.atlassian..."
+}

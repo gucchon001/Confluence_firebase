@@ -1,0 +1,13 @@
+{
+  "id": "1245544451",
+  "title": "【FIX】記事_ピックアップ",
+  "content": "1. 概要 全体管理者の記事担当者、もしくは記事管理者が全体管理画面にて登録・更新する記事のピックアップ情報。 2. ワークフロー https://giginc.atlassian.net/l/cp/4t92A98e 【FIX】ピックアップ記事選定フロー 3. 詳細 項目名 変数名 値の形式 画面上の入力形式 制限とエラーメッセージ 説明・プレースホルダー 1 番号 id 数値 ー 本システムが発行する一意の連番。 旧システムのIDを移行するため、重複しない様に旧システムの最大番号から十分余裕を持った番号から開始する。 2 記事番号 article _id 数値 チェックボックス（該当記事の新規・編集画面におけるピックアップフラグとして） 自然数 指定の番号の https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/682557639 が存在すること。 3 ピックアップ種別 pickup_type 数値 セレクトボックス ピックアップした記事の表示箇所を区別するための情報。 「人気記事」「注目記事」 から選択する。 選択肢は定義ファイルにて定義する。 4 表示順 order 数値 自然数 ピックアップした記事の表示順を指定するための情報。 登録可能な最大の数値は定義ファイルにて定義する。 5 【作成中】帳票共通項目 で定める項目を持つ。 6 【作成中】帳票共通項目 で定める項目を持つ。 7 【作成中】帳票共通項目 で定める項目を持つ。 8 【作成中】帳票共通項目 で定める項目を持つ。 9 【作成中】帳票共通項目 で定める項目を持つ。 10 【作成中】帳票共通項目 で定める項目を持つ。 4. 関連要件定義 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703496344 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/713359414 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704545028 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704577796 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704610650 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/717947278 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/723976536 5. 関連チケット",
+  "parentId": "744521946",
+  "parentTitle": "■記事・バナー",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1245544451/FIX+_",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-11-26T05:55:01.189Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "1. 概要 全体管理者の記事担当者、もしくは記事管理者が全体管理画面にて登録・更新する記事のピックアップ情報。 2. ワークフロー https://giginc.atlassian.net/l/cp/4t92A98e 【FIX】ピックアップ記事選定フロー 3. 詳細 項目名 変数名 値の形式 画面上の入力形式 制限とエラーメッセージ 説明・プレースホルダー 1 番号 id 数値 ー 本システムが発..."
+}

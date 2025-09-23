@@ -1,0 +1,13 @@
+{
+  "id": "996376615",
+  "title": "2024-4-19 確認会ミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様 GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 確認内容 【作成中】オシゴトQ＆A の公開のうち、「全教室」とは何か？Q&amp;Aは求人に紐づいているので、教室単位での公開の切り替えの意味を確認 マイページトップのバナー表示のご確認 要求： https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/823197928?focusedCommentId=1024753825 デザインでの表示位置・タイトルの文言 &rarr;ともに更新した内容でOK https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/938377236/011#3.8.-%E6%B1%82%E4%BA%BA%E3%82%AB%E3%83%BC%E3%83%89%E4%B8%80%E8%A6%A7%E3%81%AE%E4%B8%8B%E3%81%AE%E3%82%B5%E3%83%96%E3%82%B3%E3%83%B3%E3%83%86%E3%83%B3%E3%83%84 の1つ目 この場所には実装されていないため、必要であればバグ起票 &rarr;不要 CTJ-3137 0f376871-0459-35fc-b139-2a34c915ec22 System Jira の要求を確認、仕様変更か？ &rarr;帳票で定義していなかったため、そこから作業の必要あり リニューアルまでに表示まで対応は難しい 今あるデータだけ残すような対応はできる フェーズ5対応の想定でチケット作成する 求人一覧で、教室で絞り込むURLではなく教室グループで絞り込むURLに飛ばして必要か？ 下は応じて確認 https://www.figma.com/file/8zITZViFoU0WYNnwig5AKc?type=design&amp;node-id=146020-91994&amp;mode=design#768740015 &rarr;教室名（求人1）で、リンク先はIDが小さいものに当てる https://www.figma.com/file/8zITZViFoU0WYNnwig5AKc?type=design&amp;node-id=146020-91994&amp;mode=design#768750404 &rarr;リンク先はIDが小さいものに当てる 教室の口コミ詳細 https://www.figma.com/file/8zITZViFoU0WYNnwig5AKc?type=design&amp;node-id=146020-91994&amp;mode=design#768816658 「この教室の」が正しいか？&rarr;OK CTJ-576 0f376871-0459-35fc-b139-2a34c915ec22 System Jira コメントの意味を確認 他にもテストチケットで「確認をお願いします」の確認対象を確認致します データ移行関連 https://docs.google.com/spreadsheets/d/1hGhCzYGJ4jV80iKHy-67408pza9CaFHUPDz0EEnZd_c/edit#gid=1118624703 に成果報酬契約5を追加したことの共有 「会員_基本情報.csv」が主になるDB。この「id」が、リニューアル後も利用するユニークなID。 会員のIDについての確認（ https://docs.google.com/spreadsheets/d/1hGhCzYGJ4jV80iKHy-67408pza9CaFHUPDz0EEnZd_c/edit#gid=1690700196&amp;range=M4 ） H1タグの中に教室名を表示するチケット起票いただく 求人検索一覧のURLなどはトモノカイ様に記入いただいて問題ないか開発に確認 &nbsp;アクション事項 15 incomplete &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED",
+  "parentId": "1235976240",
+  "parentTitle": "議事録_2024年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/996376615/2024-4-19",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-04-19T03:43:52.108Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様 GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 確認内容 【作成中】オシゴトQ＆A の公開のうち、「全教室」とは何か？Q&amp;Aは求人に紐づいているので、教室単位での公開の切り替えの意味を確認 マイページトップのバナー表示のご確認 要求： https://giginc.at..."
+}

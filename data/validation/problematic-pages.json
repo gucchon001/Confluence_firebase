@@ -1,0 +1,21 @@
+[
+  {
+    "pageId": "643858450",
+    "pageTitle": "塾講師ステーションドキュメントスペース",
+    "isValid": false,
+    "issues": [
+      {
+        "type": "error",
+        "message": "機能が抽出されていない",
+        "field": "functions"
+      },
+      {
+        "type": "error",
+        "message": "信頼度が非常に低いです",
+        "field": "confidence",
+        "suggestion": "プロンプトの改善を検討してください"
+      }
+    ],
+    "score": 50
+  }
+]

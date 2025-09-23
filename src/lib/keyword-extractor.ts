@@ -123,10 +123,22 @@ function selectKeywordsByPriority(keywords: string[], query: string): string[] {
   );
   selected.push(...directMatches);
   
-  // 2. エンティティキーワード（高優先度）
+  // 2. 短いキーワードを優先（2-4文字の重要キーワード）
+  const shortKeywords = keywords.filter(kw => 
+    kw.length >= 2 && 
+    kw.length <= 4 && 
+    !selected.includes(kw) &&
+    // 重要な短いキーワードパターン
+    (/^[\p{Script=Han}]{2,4}$/u.test(kw) || // 2-4文字の漢字
+     /^[\p{Script=Han}]{2,}[\p{Script=Hiragana}]{1,2}$/u.test(kw) || // 漢字+ひらがな
+     /^[\p{Script=Han}]{2,}[\p{Script=Katakana}]{1,2}$/u.test(kw)) // 漢字+カタカナ
+  );
+  selected.push(...shortKeywords);
+  
+  // 3. エンティティキーワード（高優先度）
   const entityPatterns = [
     /^[A-Za-z0-9]+$/,  // 英語・数字の単語
-    /[\p{Script=Han}]{2,4}$/u,  // 2-4文字の漢字
+    /[\p{Script=Han}]{2,6}$/u,  // 2-6文字の漢字
     /[\p{Script=Han}]{2,}[\p{Script=Hiragana}]{1,3}$/u,  // 漢字+ひらがな
     /[\p{Script=Han}]{2,}[\p{Script=Katakana}]{1,3}$/u   // 漢字+カタカナ
   ];
@@ -137,7 +149,7 @@ function selectKeywordsByPriority(keywords: string[], query: string): string[] {
   );
   selected.push(...entityKeywords);
   
-  // 3. 機能・動作キーワード（中優先度）
+  // 4. 機能・動作キーワード（中優先度）
   const functionPatterns = [
     /機能$/, /管理$/, /システム$/, /情報$/, /一覧$/, /閲覧$/, /登録$/, /編集$/, /削除$/, /設定$/,
     /詳細$/, /仕様$/, /要件$/, /手順$/, /方法$/, /プロセス$/, /フロー$/, /ワーク$/
@@ -149,10 +161,10 @@ function selectKeywordsByPriority(keywords: string[], query: string): string[] {
   );
   selected.push(...functionKeywords);
   
-  // 4. 修飾語・形容詞（低優先度）
+  // 5. 修飾語・形容詞（低優先度）
   const modifierKeywords = keywords.filter(kw => 
     kw.length >= 3 && 
-    kw.length <= 6 && 
+    kw.length <= 8 && 
     !selected.includes(kw) &&
     !functionPatterns.some(pattern => pattern.test(kw))
   );
@@ -205,9 +217,16 @@ function selectDiverseKeywords(keywords: string[]): string[] {
 
 async function expandWithLLM(baseQuery: string, baseKeywords: string[]): Promise<string[]> {
   try {
-    if (process.env.USE_LLM_EXPANSION !== 'true') return [];
+    console.log('[keyword-extractor] expandWithLLM called with:', { baseQuery, baseKeywords, USE_LLM_EXPANSION: process.env.USE_LLM_EXPANSION });
+    if (process.env.USE_LLM_EXPANSION !== 'true') {
+      console.log('[keyword-extractor] LLM expansion disabled');
+      return [];
+    }
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) return [];
+    if (!apiKey) {
+      console.log('[keyword-extractor] No API key found');
+      return [];
+    }
 
     // 動的import（未インストールなら無視）
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
@@ -215,8 +234,10 @@ async function expandWithLLM(baseQuery: string, baseKeywords: string[]): Promise
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = [
       'あなたは社内ドキュメント検索のためのキーワード抽出補助を行います。',
-      '以下の質問文に対し、同義語・言い換え・機能名候補を最大8件、JSON配列で返してください。',
-      '一般語・ストップワードは除外し、日本語/英語の双方を含めても構いません。',
+      '以下の質問文に対し、実際のシステム機能名に基づいた具体的なキーワードを最大8件、JSON配列で返してください。',
+      '重要: 汎用的すぎるキーワード（予約、確保、割り当てなど）は避け、実際の機能名（一覧、登録、編集、削除、コピーなど）を優先してください。',
+      '教室管理システムの場合: 教室一覧、教室登録、教室編集、教室削除、教室コピー、教室管理機能 など',
+      '求人管理システムの場合: 求人一覧、求人登録、求人編集、求人削除、求人管理機能 など',
       '出力はJSON配列のみ。',
       `質問文: ${baseQuery}`
     ].join('\n');
@@ -250,9 +271,9 @@ export async function extractKeywordsHybrid(query: string): Promise<ExtractResul
   // 3. 基本キーワードと正規表現キーワードを統合
   const combinedKeywords = uniquePreserveOrder([...baseKeywords, ...regexKeywords]);
   
-  // 4. LLM補助（抽出が弱い場合または環境有効時）
+  // 4. LLM補助（環境有効時は常に実行）
   let llmSynonyms: string[] = [];
-  if (combinedKeywords.length <= 3 || process.env.USE_LLM_EXPANSION === 'true') {
+  if (process.env.USE_LLM_EXPANSION === 'true') {
     llmSynonyms = await expandWithLLM(query, combinedKeywords);
   }
 
@@ -330,7 +351,7 @@ export async function extractKeywordsHybrid(query: string): Promise<ExtractResul
       }
     }
   } catch {}
-  // 汎用的なキーワード選択戦略
+  // 具体的な機能名を優先するキーワード選択戦略
   const keywords = (() => {
     console.log('[keyword-extractor] Starting improved keyword selection');
     
@@ -342,15 +363,34 @@ export async function extractKeywordsHybrid(query: string): Promise<ExtractResul
     );
     console.log('[keyword-extractor] basicFiltered:', basicFiltered);
     
-    // 2. 優先度ベースのキーワード選択
-    const prioritizedKeywords = selectKeywordsByPriority(basicFiltered, stripped);
+    // 2. 具体的な機能名を優先
+    const functionKeywords = basicFiltered.filter(w => 
+      /(一覧|閲覧|登録|編集|削除|コピー|管理|機能|詳細|仕様)/.test(w)
+    );
+    const entityKeywords = basicFiltered.filter(w => 
+      /(教室|求人|企業|ユーザー|システム)/.test(w)
+    );
+    const otherKeywords = basicFiltered.filter(w => 
+      !/(一覧|閲覧|登録|編集|削除|コピー|管理|機能|詳細|仕様|教室|求人|企業|ユーザー|システム)/.test(w)
+    );
+    
+    console.log('[keyword-extractor] functionKeywords:', functionKeywords);
+    console.log('[keyword-extractor] entityKeywords:', entityKeywords);
+    console.log('[keyword-extractor] otherKeywords:', otherKeywords);
+    
+    // 3. 優先順位で選択（機能名 > エンティティ名 > その他）
+    const prioritizedKeywords = [
+      ...functionKeywords.slice(0, 4),
+      ...entityKeywords.slice(0, 2),
+      ...otherKeywords.slice(0, 2)
+    ];
     console.log('[keyword-extractor] prioritizedKeywords:', prioritizedKeywords);
     
-    // 3. 多様性を保つためのキーワード選択
+    // 4. 多様性を保つためのキーワード選択
     const diverseKeywords = selectDiverseKeywords(prioritizedKeywords);
     console.log('[keyword-extractor] diverseKeywords:', diverseKeywords);
     
-    // 4. 最終的なキーワード数調整
+    // 5. 最終的なキーワード数調整
     const finalKeywords = diverseKeywords.slice(0, 8);
     console.log('[keyword-extractor] finalKeywords:', finalKeywords);
     return finalKeywords;

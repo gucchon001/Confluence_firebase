@@ -38,6 +38,7 @@ interface ExtractionConfig {
   batchSize: number;
   includeArchived: boolean;
   maxPages?: number;
+  specificPageId?: string;
 }
 
 export class ConfluenceDataExtractor {
@@ -86,6 +87,23 @@ export class ConfluenceDataExtractor {
 
   private async extractAllPages(): Promise<ConfluencePage[]> {
     const allPages: ConfluencePage[] = [];
+    
+    // 特定のページIDが指定されている場合
+    if (this.config.specificPageId) {
+      console.log(`[ConfluenceDataExtractor] Fetching specific page: ${this.config.specificPageId}`);
+      try {
+        const pageDetails = await this.confluenceAPI.getPageDetails(this.config.specificPageId);
+        const transformedPage = this.transformToConfluencePage(pageDetails);
+        if (transformedPage) {
+          allPages.push(transformedPage);
+        }
+        return allPages;
+      } catch (error) {
+        console.error(`[ConfluenceDataExtractor] Failed to get specific page ${this.config.specificPageId}:`, error);
+        return [];
+      }
+    }
+    
     let start = 0;
     const limit = this.config.batchSize;
 
@@ -120,7 +138,7 @@ export class ConfluenceDataExtractor {
 
       // 最大ページ数制限
       if (this.config.maxPages && allPages.length >= this.config.maxPages) {
-        allPages.splice(this.config.maxPages);
+        allPages.length = this.config.maxPages;
         break;
       }
 
@@ -131,13 +149,26 @@ export class ConfluenceDataExtractor {
   }
 
   private transformToConfluencePage(pageData: any): ConfluencePage {
+    // 必須フィールドの型チェック
+    if (!pageData || typeof pageData !== 'object') {
+      throw new Error('Invalid pageData: must be an object');
+    }
+    
+    if (!pageData.id || typeof pageData.id !== 'string') {
+      throw new Error('Invalid pageData: id must be a string');
+    }
+    
+    if (!pageData.title || typeof pageData.title !== 'string') {
+      throw new Error('Invalid pageData: title must be a string');
+    }
+
     return {
       id: pageData.id,
       title: pageData.title,
       content: this.extractTextContent(pageData.body),
-      parentId: pageData.parentId,
-      parentTitle: pageData.parentTitle,
-      labels: pageData.labels || [],
+      parentId: pageData.parentId || null,
+      parentTitle: pageData.parentTitle || null,
+      labels: Array.isArray(pageData.labels) ? pageData.labels : [],
       url: pageData._links?.webui || '',
       spaceKey: pageData.space?.key || '',
       lastModified: pageData.version?.when || '',
@@ -149,8 +180,19 @@ export class ConfluenceDataExtractor {
   private extractTextContent(body: any): string {
     if (!body || !body.storage) return '';
     
+    // body.storageの型チェック
+    let storageContent: string;
+    if (typeof body.storage === 'string') {
+      storageContent = body.storage;
+    } else if (typeof body.storage === 'object' && body.storage.value) {
+      storageContent = body.storage.value;
+    } else {
+      console.warn(`[ConfluenceDataExtractor] Unexpected body.storage type: ${typeof body.storage}`, body.storage);
+      return '';
+    }
+    
     // HTMLタグを除去してテキストのみ抽出
-    const text = body.storage
+    const text = storageContent
       .replace(/<[^>]*>/g, ' ') // HTMLタグを除去
       .replace(/\s+/g, ' ') // 複数の空白を1つに
       .trim();
@@ -264,4 +306,4 @@ if (require.main === module) {
   main();
 }
 
-export { ConfluenceDataExtractor, type ConfluencePage, type ConfluenceSpace, type ExtractionConfig };
+export { type ConfluencePage, type ConfluenceSpace, type ExtractionConfig };

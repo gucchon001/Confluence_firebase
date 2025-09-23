@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { ConfluencePage } from './confluence-data-extractor';
+import { deduplicateFunctionKeywords, deduplicateGlobalKeywords } from '../lib/keyword-deduplicator';
 
 interface ExtractedKnowledge {
   pageId: string;
@@ -321,10 +322,49 @@ ${page.content}
       });
     });
 
+    // 重複削除の実行
+    console.log('🔄 キーワードの重複削除を実行中...');
+    const deduplicatedFunctions = deduplicateFunctionKeywords(merged.functions, {
+      caseSensitive: false,
+      trimWhitespace: true,
+      normalizeSimilar: true,
+      preserveOrder: true,
+      minLength: 2,
+      maxLength: 50
+    });
+
+    // グローバル重複削除の実行
+    const globalDeduplication = deduplicateGlobalKeywords(merged.functions, {
+      caseSensitive: false,
+      trimWhitespace: true,
+      normalizeSimilar: true,
+      preserveOrder: true,
+      minLength: 2,
+      maxLength: 50
+    });
+
+    // 重複削除結果の適用
+    merged.functions = deduplicatedFunctions;
+    
+    // 重複削除統計の追加
+    merged.statistics.deduplication = {
+      globalReductionRate: globalDeduplication.statistics.reductionRate,
+      totalDuplicatesRemoved: globalDeduplication.statistics.duplicateCount,
+      totalSimilarRemoved: globalDeduplication.statistics.similarCount,
+      originalKeywordCount: globalDeduplication.statistics.originalCount,
+      finalKeywordCount: globalDeduplication.statistics.uniqueCount
+    };
+
     // 統計情報の計算
     merged.statistics.totalFunctions = Object.keys(merged.functions).length;
     merged.statistics.totalKeywords = Object.values(merged.functions)
       .reduce((sum: number, func: any) => sum + func.keywords.length, 0);
+
+    console.log(`✅ 重複削除完了: ${globalDeduplication.statistics.reductionRate.toFixed(1)}%削減`);
+    console.log(`   - 元のキーワード数: ${globalDeduplication.statistics.originalCount}`);
+    console.log(`   - 最終キーワード数: ${globalDeduplication.statistics.uniqueCount}`);
+    console.log(`   - 重複削除: ${globalDeduplication.statistics.duplicateCount}個`);
+    console.log(`   - 類似削除: ${globalDeduplication.statistics.similarCount}個`);
 
     return merged;
   }
@@ -370,4 +410,4 @@ if (require.main === module) {
   main();
 }
 
-export { LLMKnowledgeExtractor, type ExtractedKnowledge, type LLMExtractionConfig, type ProcessingStats };
+export { type ExtractedKnowledge, type LLMExtractionConfig, type ProcessingStats };

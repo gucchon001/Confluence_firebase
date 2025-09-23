@@ -1,0 +1,13 @@
+{
+  "id": "1043726356",
+  "title": "データ移行ガイドライン（Pythonプログラム）",
+  "content": "1. インプット資料 説明（本ページ： データ移行ガイドライン（Pythonプログラム） ） 新旧データ対応表： https://docs.google.com/spreadsheets/d/1hGhCzYGJ4jV80iKHy-67408pza9CaFHUPDz0EEnZd_c/edit#gid=0 テーブル定義書： https://docs.google.com/spreadsheets/d/12TGH6p0ZvRkvijo3RaIvDtQaiYCqEIIgbbTFgUGqe6Y/edit#gid=1444761206 （HTさん所有の更新中ファイル） サンプルデータ https://drive.google.com/drive/u/0/folders/1pJPdNHrj1SFV57jnp4QlaETJtvsa0xzE （GIGフォルダへコピーしたもの） ベースのプログラム： https://colab.research.google.com/drive/1srwKbavmS_gDm4aJlPvQhMXASh3qOGj3?usp=drive_link （中島さん作成の企業データインポートプログラム） 実データ：まだ無い。これから。 プログラムの対象：★完了チェックにもしたい。プログラム完成。確認、ローカルテスト、STGテスト、本番移行１回目、２回目） 2. 作成したプログラム 置き場所： https://colab.research.google.com/drive/1srwKbavmS_gDm4aJlPvQhMXASh3qOGj3?usp=drive_link 3. 移行の流れ STGにインポート 本番にインポート 4. Pythonプログラムの注意点 マウントしたGoogleドライブのディレクトリが合っているか 文字コードの定義が合っているか 5. ToDoメモ 実行順序があるので、ファイルに番号付与した方が良い",
+  "parentId": "666927474",
+  "parentTitle": "データ移行・リリース計画",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1043726356/Python",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-05-08T05:52:37.771Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "1. インプット資料 説明（本ページ： データ移行ガイドライン（Pythonプログラム） ） 新旧データ対応表： https://docs.google.com/spreadsheets/d/1hGhCzYGJ4jV80iKHy-67408pza9CaFHUPDz0EEnZd_c/edit#gid=0 テーブル定義書： https://docs.google.com/spreadsheets/d/..."
+}

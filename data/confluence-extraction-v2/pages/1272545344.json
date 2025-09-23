@@ -1,0 +1,13 @@
+{
+  "id": "1272545344",
+  "title": "記事画像ファイルの種類と構造",
+  "content": "1. 記事画像ファイルの種類 タイプ タイプ名 内容 形式 画像サイズ ※アップロードしたファイルの縦横比を維持したまま拡大・縮小する画像の基準サイズ ※指定サイズ以下の画像の場合は、元の画像サイズのままとする。 ファイル名 1 特大 xlarge サービスサイトの記事詳細表示用（タイトル、本文中ともに） webp 横1280px 例：xlarge_image.webp 2 大 large サービスサイトの一覧表示用 webp 横500px 例：large_image.webp 3 中 medium 管理画面のサムネイル用 webp 横150px 例：medium_image.webp 4 小 small 使用しない webp 横80px 例：small_image.webp 5 オリジナル original 使用しない webp サイズ変換なし 例：original_image.webp 6 ー ー アップロードしたファイル png, jpeg/jpg, svg, gif, webp, heic サイズ変換なし 例：image.jpg 2. 記事画像ファイルの格納構造 2.1. 旧システムの構造 /entry_images/[画像番号]/[タイプ名]/[ファイル名] 2.2. 新システムの構造 / article _images/[画像番号]/[タイプ別ファイル名] ※[タイプ別ファイル名]=[タイプ名]_ [元のファイル名] juku_entry_images_image.webp",
+  "parentId": "704545028",
+  "parentTitle": "332_【FIX】記事新規登録機能",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1272545344",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-12-24T09:41:26.987Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "1. 記事画像ファイルの種類 タイプ タイプ名 内容 形式 画像サイズ ※アップロードしたファイルの縦横比を維持したまま拡大・縮小する画像の基準サイズ ※指定サイズ以下の画像の場合は、元の画像サイズのままとする。 ファイル名 1 特大 xlarge サービスサイトの記事詳細表示用（タイトル、本文中ともに） webp 横1280px 例：xlarge_image.webp 2 大 large サービ..."
+}

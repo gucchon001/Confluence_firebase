@@ -7,7 +7,7 @@
 ## 2. 基本方針（更新）
 
 * アプリケーションの主要なAI処理は、Genkitの core（`genkit`）を直接呼び出して実装する。
-* `@genkit-ai/flow` および `@genkit-ai/next` は使用しない。
+* `@genkit-ai/flow` は使用しないが、`@genkit-ai/next` は必要に応じて使用する。
 * Next.js の API Route (`app/api/**`) から、プレーンな関数（LLM生成・検索関数）を直接呼び出す。
 * Google Cloud 連携は `@genkit-ai/googleai` / `@genkit-ai/google-cloud` を利用し、`zod` で入出力のバリデーションを行う。
 
@@ -16,20 +16,18 @@
 プロジェクト全体のGenkit設定は、以下の`src/ai/genkit.ts`の記述を標準とする。Google Cloudのテレメトリー（ロギング、トレース）は`enableGoogleCloudTelemetry()`を呼び出して有効化する。
 
 ```typescript
-'use server';
-
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { enableGoogleCloudTelemetry } from '@genkit-ai/google-cloud';
 
 // Google Cloudのロギングとトレースを有効化
-enableGoogleCloudTelemetry();
+// enableGoogleCloudTelemetry();
 
 // GenkitをGoogle AIプラグインで初期化
 export const ai = genkit({
   plugins: [googleAI()],
-  logLevel: 'debug',
-  enableTracingAndMetrics: true,
+  // logLevel: 'debug',
+  // enableTracingAndMetrics: true,
 });
 ```
 
@@ -38,15 +36,30 @@ export const ai = genkit({
 ### 4.1 プレーン関数（例）
 
 ```typescript
-// src/ai/flows/retrieve-relevant-docs.ts
-export async function retrieveRelevantDocs({ question }: { question: string }) {
-  // 省略: ベクトル生成 → Vector Search → Firestore内容取得
+// src/ai/flows/retrieve-relevant-docs-lancedb.ts
+export async function retrieveRelevantDocs({
+  question,
+  labels,
+  labelFilters,
+}: {
+  question: string;
+  labels?: string[];
+  labelFilters?: {
+    includeMeetingNotes: boolean;
+    includeArchived: boolean;
+  };
+}): Promise<any[]> {
+  // LanceDB検索 → フィルタリング → 結果返却
   return results; // JSONシリアライズ可能な配列
 }
 
 // src/ai/flows/summarize-confluence-docs.ts
-export async function summarizeConfluenceDocs({ question, context, chatHistory }) {
-  // 省略: プロンプト生成 → ai.generate({ model, prompt })
+export async function summarizeConfluenceDocs({
+  question,
+  context: documents,
+  chatHistory = [],
+}: SummarizeInput): Promise<SummarizeOutput> {
+  // プロンプト生成 → ai.generate({ model: 'googleai/gemini-2.5-flash', prompt })
   return { answer, references };
 }
 ```
@@ -57,16 +70,27 @@ export async function summarizeConfluenceDocs({ question, context, chatHistory }
 // src/app/api/flow/[flow]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
-import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs';
+import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 
-export async function POST(req: NextRequest, { params }: { params: { flow: string } }) {
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ flow: string }> }
+) {
   try {
     const body = await req.json();
-    switch (params.flow) {
+    const params = await context.params;
+    const flow = params.flow;
+
+    switch (flow) {
       case 'retrieveRelevantDocs': {
-        const { question } = body ?? {};
-        if (!question) return NextResponse.json({ error: 'question is required' }, { status: 400 });
-        const docs = await retrieveRelevantDocs({ question });
+        const { question, labels, labelFilters } = body ?? {};
+        if (typeof question !== 'string' || question.length === 0) {
+          return NextResponse.json(
+            { error: 'Invalid input: question is required' },
+            { status: 400 }
+          );
+        }
+        const docs = await retrieveRelevantDocs({ question, labels, labelFilters });
         return NextResponse.json(docs);
       }
       case 'summarizeConfluenceDocs': {
@@ -77,7 +101,11 @@ export async function POST(req: NextRequest, { params }: { params: { flow: strin
         return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Internal Error' }, { status: 500 });
+    console.error('[API Error]', e);
+    return NextResponse.json(
+      { error: e?.message || 'Internal Error' },
+      { status: 500 }
+    );
   }
 }
 ```
@@ -92,4 +120,4 @@ Vector Search実装におけるGCS/Firestoreの役割は従来方針（保存/�
 
 ---
 
-注: 旧方針（`@genkit-ai/flow` および `@genkit-ai/next` による Flow 実装例）は廃止。すべてプレーン関数 + Next API に統一する。
+注: 旧方針（`@genkit-ai/flow` による Flow 実装例）は廃止。プレーン関数 + Next API に統一し、`@genkit-ai/next` は必要に応じて使用する。

@@ -1,0 +1,13 @@
+{
+  "id": "851673282",
+  "title": "【FIX】バッチエラー時通知先",
+  "content": "通知先リスト 種別 宛先 1 メール kanri@jukust.jp 、 juku_bat@jukust.jp ただしSTG環境では juku_stg@jukust.jp とする。 メールテンプレート 項目 内容 件名 バッチ処理＄バッチ処理略称＄のエラーのご連絡 Fromアドレス メール共通要件 の定義に従う From名前 メール共通要件 の定義に従う Toアドレス 通知先リストに従う To名前 なし Cc(カンマ区切り) なし 本文 塾講師ステーション管理人 様 バッジ処理にて以下のエラーが発生したのでご連絡致します。 バッチ処理実行日時：yyyy/mm/dd hh:mm:ss バッチ処理のエラーログ ＄バッチ処理のエラーログ＄ 請求書PDF通知系バッチ バウンスメールによる送信失敗通知メールテンプレート 項目 内容 件名 バッチ処理 ＄バッチ処理略称＄ のエラーのご連絡 Fromアドレス メール共通要件 の定義に従う From名前 メール共通要件 の定義に従う Toアドレス 通知先リストに従う To名前 なし Cc(カンマ区切り) なし 本文 塾講師ステーション管理人 様 以下のバッジ処理にて、バウンスメールのため送信失敗のエラーが発生したのでご連絡致します。 バッチ処理実行日時：yyyy/mm/dd hh:mm:ss バウンスメールにより送信できなかった送信先 example@example.com (企業番号：12345) example@example.com (企業番号：6789) example@example.com (企業番号：02468) ・・・ バッチ処理のエラーログ ＄バッチ処理のエラーログ＄",
+  "parentId": "699269166",
+  "parentTitle": "■バッチ処理定義",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/851673282/FIX",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-08-28T08:31:55.135Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "通知先リスト 種別 宛先 1 メール kanri@jukust.jp 、 juku_bat@jukust.jp ただしSTG環境では juku_stg@jukust.jp とする。 メールテンプレート 項目 内容 件名 バッチ処理＄バッチ処理略称＄のエラーのご連絡 Fromアドレス メール共通要件 の定義に従う From名前 メール共通要件 の定義に従う Toアドレス 通知先リストに従う To名前..."
+}

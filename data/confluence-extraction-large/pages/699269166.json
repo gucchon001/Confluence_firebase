@@ -1,0 +1,13 @@
+{
+  "id": "699269166",
+  "title": "■バッチ処理定義",
+  "content": "1. 概要 本システムで行うバッチ処理を定義する。 2. バッチ一覧 true 3. 関連資料 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/676233261#%E3%83%90%E3%83%83%E3%83%81%E4%B8%80%E8%A6%A7 3.1. バッチ実行コマンド・手順書 https://docs.google.com/spreadsheets/d/1d4G6pJ6JicI98cp_l_YpL_ObPdwCQ-JySHyuLrdcMbM/edit?gid=0#gid=0 4. 関連チケット CTJ-179 0f376871-0459-35fc-b139-2a34c915ec22 System Jira CTJ-4159 0f376871-0459-35fc-b139-2a34c915ec22 System Jira （要件定義時にはない追加バッチの要件）",
+  "parentId": "666927272",
+  "parentTitle": "機能要件",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/699269166",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-08-16T07:47:33.469Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "1. 概要 本システムで行うバッチ処理を定義する。 2. バッチ一覧 true 3. 関連資料 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/676233261#%E3%83%90%E3%83%83%E3%83%81%E4%B8%80%E8%A6%A7 3.1. バッチ実行コマンド・手順書 https://docs.google..."
+}

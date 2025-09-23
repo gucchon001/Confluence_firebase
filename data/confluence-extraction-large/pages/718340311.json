@@ -1,0 +1,13 @@
+{
+  "id": "718340311",
+  "title": "025_【FIX】カテゴリの記事一覧閲覧機能",
+  "content": "1. 目次 1 6 false list false 2. 概要 本機能は https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/682557639 【FIX】記事カテゴリ の登録済みのデータのカテゴリで一覧を閲覧するための機能です。 3. 要求事項 エンドユーザーと会員が概要で挙げた帳票に登録されている記事情報のうち、「公開フラグ」が「公開」かつ、 「公開日時」が過去日時かつ、「検索対象」にチェックが入っている 記事データを閲覧できる。 閲覧できる項目はWFに従い、特記すべき内容のみ下に続ける。 カテゴリの説明文 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703496344 で設定した 設定ファイル（ 【FIX】記事カテゴリ ）に定義された カテゴリの説明文が表示される。 カテゴリの記事一覧 1ページあたりの表示数を15件とし、表示対象のレコードが16件以上の場合は、ページネーション(ページ移動のためのコンポーネント）と現在のページ数、総ページ数を一覧の上部と下部に表示する。 存在しないページを指定した場合は1ページ目を表示する。 更新日時 の降順で並べ、更新日時が同一の場合は作成時間の降順とする。 記事カードを押下すると https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/718373037 に遷移する。 「情報局TOPへ戻る」ボタン 押下すると https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/719290535/003_?atl_f=content-tree に遷移する。 ページを閲覧した場合、以下の情報が入ったログを出力する。 日時、ユーザー番号、アクセスURI、アクセス元IPアドレス、ユーザーエージェント 3.1. 権限 要求に同じ。 3.2. 帳票 要求に同じ。 3.3. メールテンプレート なし 3.4. ワークフロー 4. 要件定義 本ページで特に指定した場合を除き、 共通要件 に従うものとする。 4.1. ユーザーインターフェース（画面） https://www.figma.com/design/8zITZViFoU0WYNnwig5AKc/%E3%80%90%E5%85%B1%E6%9C%89%E3%80%91%E3%83%88%E3%83%A2%E3%83%8E%E3%82%AB%E3%82%A4%E6%A7%98_%E5%A1%BE?node-id=185844-36876&amp;node-type=frame&amp;t=aEvBQYfBZHWCJsAj-0 4.2. 入力 項目名 変数名 入力元 説明 制限とエラーメッセージ 1 ページ番号 &nbsp; URLパラメータ &nbsp; &nbsp; 4.3. 出力 出力項目 出力先 説明 1 件数 画面 指定されたフィルタリングを適用した結果表示可能なデータの総件数をページ上部に表示する。 2 総ページ数 画面 指定されたフィルタリングを適用した結果の件数に対して1ページあたり 15件 の表示で計算した総ページ数をページ上部に表示する。 3 ページ番号 画面 入力されたページ番号を入力処理にて変換した値をページ上部に表示する。 4 カテゴリの概要 画面 保存された 【FIX】記事カテゴリ の「概要」を適切にHTMLエスケープして表示する。 5 タイトル画像 画面 保存された https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/682557639 の「タイトル画像」で指定した画像を表示する。表示画像サイズは端末に応じて 記事画像ファイルの種類と構造 に従うものとする。 6 タイトル 画面 保存された https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/682557639 の「タイトル」を適切にHTMLエスケープして表示する。 7 カテゴリ 画面 保存された https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/682557639 の「カテゴリ」が指し示す選択肢のラベルを出力する。 8 更新日時 画面 【FIX】記事カスタムフィールド値 に保存された「本文更新日時」（項目の説明は https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1248591874 参照）をyyyy/mm/dd形式で表示する。 4.4. 処理 4.5. エラー処理 4.6. ログ 一覧を表示した場合に下記フォーマットでログを出力する User {ユーザー番号} read category article list. page={ページ番号} category={カテゴリ} {アクセスURI} {日時} {アクセス元IPアドレス} {ユーザーエージェント} 5. 制限事項",
+  "parentId": "718275111",
+  "parentTitle": "020_■記事管理機能",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/718340311/025_+FIX",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-12-27T03:47:36.820Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "1. 目次 1 6 false list false 2. 概要 本機能は https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/682557639 【FIX】記事カテゴリ の登録済みのデータのカテゴリで一覧を閲覧するための機能です。 3. 要求事項 エンドユーザーと会員が概要で挙げた帳票に登録されている記事情報のうち、「公開フラグ」が..."
+}

@@ -51,49 +51,7 @@ Confluenceからデータを取得し、ベクトルデータベースを更新�
     }
     ```
 
-### 3.2 `POST /ask`
-
-ユーザーの質問を受け付け、RAGを実行して回答を返すメインのエンドポイント。
-
-* **説明**: ユーザーからの質問に応じて、関連する仕様書を検索し、LLMが生成した要約を返す。
-* **認証**: Firebase AuthenticationによるIDトークン認証。
-* **リクエストボディ**:
-    ```json
-    {
-      "question": "string",
-      "conversation_id": "string",
-      "restricts": {
-        "space_key": ["string"],
-        "label": ["string"],
-        "content_type": ["string"]
-      },
-      "crowding_tag": "string"
-    }
-    ```
-    | フィールド        | 型           | 必須 | 説明                                     |
-    | :---------------- | :----------- | :--- | :--------------------------------------- |
-    | `question`        | `string`     | ✅   | ユーザーからの質問文。                   |
-    | `conversation_id` | `string`     |      | 会話履歴のID。新規会話の場合は省略。     |
-    | `restricts`       | `object`     |      | 検索対象を絞り込むための条件。各名前空間（`space_key`、`label`、`content_type`など）ごとに許可リストを指定。 |
-    | `crowding_tag`    | `string`     |      | 同一ページからの結果を制限するためのタグ。通常はページIDを指定。 |
-* **レスポンス (200 OK)**:
-    ```json
-    {
-      "answer": "string",
-      "references": [
-        {
-          "title": "string",
-          "url": "string",
-          "space_key": "string",
-          "labels": ["string"],
-          "last_modified": "timestamp",
-          "score": 0.95
-        }
-      ]
-    }
-    ```
-
-### 3.3 `GET /conversations`
+### 3.2 `GET /conversations`
 
 ユーザーの過去の会話履歴一覧を取得する。
 
@@ -120,7 +78,7 @@ Confluenceからデータを取得し、ベクトルデータベースを更新�
     }
     ```
 
-### 3.4 `GET /conversations/{conversation_id}`
+### 3.3 `GET /conversations/{conversation_id}`
 
 特定の会話のメッセージ履歴を取得する。
 
@@ -158,7 +116,7 @@ Confluenceからデータを取得し、ベクトルデータベースを更新�
     }
     ```
 
-### 3.5 `POST /sync-status`
+### 3.4 `POST /sync-status`
 
 現在のベクトルデータベース同期状態を取得する。
 

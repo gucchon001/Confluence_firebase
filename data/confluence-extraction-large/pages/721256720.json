@@ -1,0 +1,13 @@
+{
+  "id": "721256720",
+  "title": "612_【統合のため不要】採用確認 - 確認結果登録機能",
+  "content": "以下はすべて CTJ-1656 0f376871-0459-35fc-b139-2a34c915ec22 System JIRA にて統合・対応済み。 ★関連して https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/906690562#2.1.-%E6%8E%A1%E7%94%A8%E3%82%B9%E3%83%86%E3%83%BC%E3%82%BF%E3%82%B9%E5%A4%89%E6%9B%B4%E3%81%AB%E3%82%88%E3%82%8B%E8%AB%8B%E6%B1%82%E3%81%B8%E3%81%AE%E5%8F%8D%E6%98%A0%E5%87%A6%E7%90%86 の処理を行うことを記載する。 ★関連して https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/906690562#2.2.-%E5%9C%A8%E7%B1%8D%E7%A2%BA%E8%AA%8D%E5%A4%89%E6%9B%B4%E3%81%AB%E3%82%88%E3%82%8B%E8%AB%8B%E6%B1%82%E3%81%B8%E3%81%AE%E5%8F%8D%E6%98%A0%E5%87%A6%E7%90%86 の処理を行うことを記載する。 ★在籍確認のタイミングは CTJ-2003 0f376871-0459-35fc-b139-2a34c915ec22 System JIRA でご希望いただいた内容を反映させる。 ★ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/908066817?focusedCommentId=912622136 に記載の通り、在籍確認が◯になったら「請求確定日時」の登録処理も必要。さらに https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/906690562#2.2.-%E5%9C%A8%E7%B1%8D%E7%A2%BA%E8%AA%8D%E5%A4%89%E6%9B%B4%E3%81%AB%E3%82%88%E3%82%8B%E8%AB%8B%E6%B1%82%E3%81%B8%E3%81%AE%E5%8F%8D%E6%98%A0%E5%87%A6%E7%90%86 も必要。",
+  "parentId": "703496337",
+  "parentTitle": "610_■採用確認管理機能",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/721256720/612_+-",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-02-15T10:45:37.708Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "以下はすべて CTJ-1656 0f376871-0459-35fc-b139-2a34c915ec22 System JIRA にて統合・対応済み。 ★関連して https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/906690562#2.1.-%E6%8E%A1%E7%94%A8%E3%82%B9%E3%83%86%E3%83%BC..."
+}

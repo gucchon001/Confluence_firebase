@@ -10,10 +10,10 @@
 
 ### クエリ
 - エントリポイント:
-  - `searchCandidates(query: string, k: number)`
-  - `searchWithFilters(query: string, { excludeLabels?: string[] }, k: number)`
+  - `searchCandidates(query: string, limit: number = 50): Promise<LunrSearchResult[]>`
+  - `searchWithFilters(query: string, filters: { labels?: string[]; excludeLabels?: string[] } = {}, limit: number = 50): Promise<LunrSearchResult[]>`
 - 入力: ユーザーの自然文 `query`（前段の抽出で top 1-3 keywords を渡す実装も可）
-- フィルタ: `excludeLabels` は Low/Archive/Meeting などを除外
+- フィルタ: `excludeLabels` は Low/Archive/Meeting などを除外、`labels` は特定ラベルのみを含める
 
 ### 返却
 - 候補: `{ pageId, score, title, snippet?, labels, url }[]`（score は BM25 スコア）

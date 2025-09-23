@@ -8,7 +8,7 @@
 - AI-Powered Summarization Tool: Leverage the Gemini model to generate concise summaries of the retrieved Confluence data relevant to the user's query.
 - Response Display: Display the summarized answer, along with a list of source Confluence page titles and URLs for reference.
 - Chat History: Save and load conversation history using Firestore.
-- Secure API Endpoint: Implement a POST /ask API endpoint using Firebase Authentication to handle user questions securely.
+- Secure API Endpoints: Implement API endpoints using Firebase Authentication to handle user questions securely.
 
 ## Style Guidelines:
 

@@ -1,0 +1,13 @@
+{
+  "id": "1336246330",
+  "title": "XMLサイトマップ定義（定義ファイル）",
+  "content": "1. 概要 システムの実装時に定義する、XMLサイトマップのカスタムフィールド定義情報。 定義ファイルとして実装する。 フィールドの最大数は100とする。 項目名 変数名 値の形式 画面上の形式 制限 説明 1 サイトマップファイル名 name 文字列 ー https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1333723137 の機能で指定のサイトマップファイル名を定義ファイルで定義する。 2 priority priority 数値 ー 設定できる値は、 0.1 〜 1.0 とする。 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1333723137 の機能で指定のサイトマップファイル名を定義ファイルで定義する。",
+  "parentId": "1246527490",
+  "parentTitle": "■記事_定義ファイル",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1336246330/XML",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-12-20T05:22:28.306Z",
+  "author": "kotake_jin",
+  "excerpt": "1. 概要 システムの実装時に定義する、XMLサイトマップのカスタムフィールド定義情報。 定義ファイルとして実装する。 フィールドの最大数は100とする。 項目名 変数名 値の形式 画面上の形式 制限 説明 1 サイトマップファイル名 name 文字列 ー https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1333723137 の機..."
+}

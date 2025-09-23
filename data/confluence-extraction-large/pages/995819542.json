@@ -1,0 +1,13 @@
+{
+  "id": "995819542",
+  "title": "2024-4-3 ミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 進捗確認 フェーズ4の要求定義を進行中 受け入れテストをお渡し データ移行では引き続き新旧データの対応表を確認いただく そのほか 「研修初日」と「在籍確認」を入力した後、採用ステータスを「採用」&rarr;「未登録」に変更すると値はクリアするか？ &rarr;トモノカイ様の内部でヒヤリングなさる この行の意味をお聞きする &rarr;いまの実装でOK https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704348331/263+FIX+Amazon+-?focusedCommentId=1003028741 &rarr;できない、そもそも取り消し処理がほとんど発生しない https://docs.google.com/spreadsheets/d/1NBbn6IefE8-b3KVgVkV6r89LlZ705IAn6Oy5rsIOM44/edit#gid=1902383958&amp;range=180:180 この行の要不要を確認、現在は最大5つ表示する形で、「もっと見る」は実装はしていない &rarr;必要 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704381330?focusedCommentId=1004732742 の意図を確認、採用確認の採用ステータスの変更だけ検知できればOKか？&rarr;クライアントとアドミンでのみ検知できればOK https://docs.google.com/spreadsheets/d/16dUGSHlBrqZvrxWCjQxBXthyyzBQCwgABS7bVydWsLQ/edit#gid=1381470411 5行目確認&rarr;FIX https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/744423704?focusedCommentId=1006829653 &rarr;問題はないはず。XMLにアクセスできるようリダイレクトは必要に応じて設定する https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/744423704?focusedCommentId=1006796848 &rarr;OK クライアントトップのチャートの意図を確認 「各教室ページのアクセス数の合計」これは企業配下のすべての教室のアクセスの合計、で間違いないか？&rarr;OK 「塾講師ステーション全体のアクセスをポイント化し表示」このポイント化はどのような仕組みか？&rarr;求人詳細へのアクセスを単純にポイント化 教室へのアクセスの数字について確認&rarr;何桁でも表示 https://www.figma.com/file/8zITZViFoU0WYNnwig5AKc?type=design&amp;node-id=137356-78931&amp;mode=design#749586575 2ndは左セルでも「アンケート謝礼」と表示したいということか？&rarr;OK 修正チケットのメンション先は鈴木様か池田様か？&rarr;全て鈴木様でOK CTJ-363 0f376871-0459-35fc-b139-2a34c915ec22 System Jira 要否を再確認頂きたい 受け入れテストのお渡し&rarr;17日締め切りとする 口コミのレビューはデザインで大きな修正点があれば先にお伝えいただく &nbsp;アクション事項 15 incomplete &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED",
+  "parentId": "1235976240",
+  "parentTitle": "議事録_2024年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/995819542/2024-4-3",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-04-03T06:36:03.569Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 進捗確認 フェーズ4の要求定義を進行中 受け入れテストをお渡し データ移行では引き続き新旧データの対応表を確認いただく そのほか 「研修初日」と「在籍確認」を入力した後、採用ステータスを「採用」&rarr;「未登録」に変更す..."
+}

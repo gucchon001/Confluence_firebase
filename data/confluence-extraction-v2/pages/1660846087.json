@@ -1,0 +1,13 @@
+{
+  "id": "1660846087",
+  "title": "【作成中】急募部分取り下げ具体例",
+  "content": "1. レコードの更新イメージ 1.1. 想定条件 急募50個&times;3ヶ月を購入後、1ヶ月と少し経過後に急募2個のみを取り下げる場合。 1.2. テーブルのBefore/Afterイメージ 種別（テーブル） レコード カラム 取り下げ前 取り下げ後 契約 （contract） 当初 id 1021 1021 service_quantity 50 50 start_datetime 2025/7/10 10:23:07 2025/7/10 10:23:07 end_datetime 2025/10/11 00:00:00 2025/10/11 00:00:00 inactive_datetime - 2025/8/15 13:51:03 ※取り下げ日時 新 id - 2233 service_quantity - 48 start_datetime - 2025/8/15 13:51:03 ※取り下げ日時 or 元の開始日の遅い方 end_datetime - 2025/10/11 00:00:00 previous_contract_number - 1021 急募 （urgent_job） 1個目 id 101 101 contract_id 1021 2233 job_id 65301 65301 ： ： ： ： 17個目 id 117 117 contract_id 1021 1021 job_id 65317 65317 deleted_at - 2025/8/15 13:51:03 ※取り下げ日時 ： ： ： ： 23個目 id 123 123 contract_id 1021 1021 job_id 65323 65323 deleted_at - 2025/8/15 13:51:03 ※取り下げ日時 ： ： ： ： 50個目 id 150 150 contract_id 1021 2233 job_id 65350 65350 請求明細 （invoice_billing_items） 当初 id 8441 8441 invoice_id 501 ※7月分 501 ※7月分 contract_id 1021 1021 unit_price 5000 5000 quantity 150 ※50&times;3ヶ月 150 ※50&times;3ヶ月 新 id - 9094 invoice_id - 621 ※8月分（取り下げ月 or 元の請求月の遅い方 ※元のinvoice_idと同じ場合あり） contract_id - 2233 unit_price - -5000 ※単価のマイナス quantity - 4 ※取り下げ数2&times;残り月数1.86の 小数点切り上げ 2ヶ月",
+  "parentId": "1682472977",
+  "parentTitle": "【作成中】184-2_急募部分取り下げ機能",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1660846087",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2025-09-01T03:09:32.884Z",
+  "author": "ejiri_yusuke",
+  "excerpt": "1. レコードの更新イメージ 1.1. 想定条件 急募50個&times;3ヶ月を購入後、1ヶ月と少し経過後に急募2個のみを取り下げる場合。 1.2. テーブルのBefore/Afterイメージ 種別（テーブル） レコード カラム 取り下げ前 取り下げ後 契約 （contract） 当初 id 1021 1021 service_quantity 50 50 start_datetime 2025..."
+}

@@ -16,7 +16,7 @@ export class LabelManager {
 
   constructor(config?: Partial<LabelManagerConfig>) {
     this.config = {
-      excludeAlways: ['スコープ外', 'メールテンプレート', 'フォルダ', 'アーカイブ'],
+      excludeAlways: ['スコープ外', 'メールテンプレート', 'アーカイブ', 'フォルダ'],
       excludeConditional: {
         '議事録': 'includeMeetingNotes',
         'meeting-notes': 'includeMeetingNotes',
@@ -92,7 +92,8 @@ export class LabelManager {
   getDefaultFilterOptions(): LabelFilterOptions {
     return {
       includeMeetingNotes: false,
-      includeArchived: false
+      includeArchived: false,
+      includeFolders: false  // フォルダラベルは常に除外
     };
   }
 

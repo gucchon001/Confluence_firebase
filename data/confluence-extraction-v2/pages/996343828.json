@@ -1,0 +1,13 @@
+{
+  "id": "996343828",
+  "title": "2024-4-24ミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 進捗確認 フェーズ4の要求定義・WF・デザインを進行中 UAT データ移行 そのほか CTJ-3186 0f376871-0459-35fc-b139-2a34c915ec22 System Jira レコードの色を合わせるようにする提案 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/edit-v2/744554649?focusedCommentId=1027670167 現行のCSVを頂くのが間に合わなければ、各列がIDかテキストか確認する 【FIX】教室：応募情報転送連絡先／応募後連絡先電話番号 この中のメールアドレスを現在どこにも使用の定義をしていないが、どこでの使用を想定されるか？ ★ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/681771086?focusedCommentId=1030127749 ★ https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/681771086?focusedCommentId=1027866695 https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/681214057?focusedCommentId=1029865592 URLなどチェックの運用の仕方の更新 トモノカイ様レビュー時に、タイトル、ディスクリプションは変更した上で「要変更」へ、URLはセルにコメントを付与して「要変更」へ変更いただく。 CTJ-2807 0f376871-0459-35fc-b139-2a34c915ec22 System Jira データ移行での住所マスタの変更への対応 古い住所のままの企業と教室に対して、現在の正しい住所に変更してもらうようご連絡・対応いただきたい 会員が住所の違いでインポートできない場合は空で登録する、そのような会員はリストをお渡しするのでご対応いただきたい 会員はインポート後は空欄で良い ★企業・教室は、影響範囲の規模を確認するため、トモノカイ様に企業の全データと教室の全データを頂く https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704643076?focusedCommentId=1028358294 CTJ-607 0f376871-0459-35fc-b139-2a34c915ec22 System Jira ダウンロードしたいデータ項目を伺う データ移行用のフォーマットのカラム名を英語名に変更する旨の共有 開発環境の構築は7月頭を想定している。一旦共有のみ。 リダイレクト表はどのような分担で作成するか社内確認してお伝えする SEO会社への確認が必要なので、もしトモノカイ様に担当していただく場合は10営業ほどかかる 切り替え時にアクセスがあった場合は、301（または302）でリダイレクト &nbsp;アクション事項 15 incomplete &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED",
+  "parentId": "1235976240",
+  "parentTitle": "議事録_2024年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/996343828/2024-4-24",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-04-26T08:29:49.330Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 進捗確認 フェーズ4の要求定義・WF・デザインを進行中 UAT データ移行 そのほか CTJ-3186 0f376871-0459-35fc-b139-2a34c915ec22 System Jira レコードの色を合わせる..."
+}

@@ -1,0 +1,13 @@
+{
+  "id": "1028620354",
+  "title": "2024-5-27 確認会ミーティング議事録",
+  "content": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 確認内容 本番環境の設定変数 CTJ-1164 0f376871-0459-35fc-b139-2a34c915ec22 System Jira GoogleMapはSTGと同じ ★Amazonギフトは本番用情報をお渡し頂く トモノカイ様より ■オファーの通知メールの文面を修正。 パーソナルオファーの文面修正。 ▽求人をキープする&darr; https://www.juku.st/consideration?job_id={求人ID}?argument=vpaU4SdP&amp;dmai=a5c8f3dd631176 上記のキープリンクをすべて削除お願いします。 ━━━━━━━━━━━━━━━ 塾講師ステーションからのご案内 ━━━━━━━━━━━━━━━ いつも塾講師ステーションをご利用いただき、誠にありがとうございます。 今回のスカウトは$$会員の氏名$$様のご希望に合ったものでしたでしょうか。 上記の文面を削除。※対象要件定義書 https://www.juku.st/consideration?job_id={求人ID}?argument=vpaU4SdP&amp;dmai=a5c8f3dd631176 【FIX】パーソナルオファー受信通知メール（会員宛） &rarr;修正チケットを作成する。 CTJ-3730 0f376871-0459-35fc-b139-2a34c915ec22 System Jira にて対応中。 口コミTOPの受け入れ課題は内容ですが、こちらは別の課題とまとめて受け入れテストを行う感じで良いでしょうか。 &rarr;031のチケットが対象。ただし口コミのグループ詳細がないか？お渡し済み。 また、テストデータが全然入っていないので、実際に表示がされている画面をいただくことは可能でしょうか。 &rarr;開発側でデータをいれ、かつクリックしても作動するようにする&rarr;調整中 UAT ユーザー側のオファー一覧と詳細 &rarr;GIG：本日お渡しする。バッチも含めてテスト可能状態か確認してご連絡。&rarr;お渡し済み。 バッチ系 &rarr;GIG：GIG内でUATいただく方法を確認中。確認後お渡しする。 t-newsだけ先に確認して共有いただきたい。&rarr;チケットはお渡し済み、インフラから作業が必要 契約データ https://docs.google.com/spreadsheets/d/1jKR4pybiZNTBY82PGhmVY59ti7sxSFxT5ousFCcjaqA/edit#gid=2067574915 契約データがないと、請求、教室などがデータ移行できないなど影響する 成果報酬と基本契約のセットだけ移行し、オプションは後回しでお渡し頂く バグ課題の進捗 2〜22行目、およびナビプラス、Feedforce、Sitemapについて、誰ボールで次の進捗をお伝えする リリース時のオファーの状態 client側はバッチも含めてロックし、admin側は機能はロックしていない状態でリリースする。 Admin側はロックしていないことを確認&rarr;ロックしない予定 &nbsp;アクション事項 15 incomplete &nbsp;決定事項 「/decision」と入力してこのミーティングで決定した内容を記録します。: b9455583-fc11-4f6e-a694-f0f5e364eda8 7113baef-b9fe-4a11-a28f-9518f6a1b72a DECIDED",
+  "parentId": "1235976240",
+  "parentTitle": "議事録_2024年",
+  "labels": [],
+  "url": "/spaces/CLIENTTOMO/pages/1028620354/2024-5-27",
+  "spaceKey": "CLIENTTOMO",
+  "lastModified": "2024-05-28T06:16:12.009Z",
+  "author": "元ユーザー (Deleted)",
+  "excerpt": "&nbsp;日付 &nbsp;参加者 トモノカイ：鈴木様( )、池田様( ) GIG： 資料 スケジュール タスク管理（Jira） &nbsp;議題 項目 プレゼンター メモ 確認内容 本番環境の設定変数 CTJ-1164 0f376871-0459-35fc-b139-2a34c915ec22 System Jira GoogleMapはSTGと同じ ★Amazonギフトは本番用情報をお渡し頂く..."
+}
