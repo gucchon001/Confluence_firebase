@@ -7,7 +7,7 @@ import { lancedbClient } from './lancedb-client';
 import { getEmbeddings } from './embeddings';
 import { calculateKeywordScore, LabelFilterOptions } from './search-weights';
 import { calculateHybridScore } from './score-utils';
-import { DynamicKeywordExtractor } from './dynamic-keyword-extractor';
+import { unifiedKeywordExtractionService } from './unified-keyword-extraction-service';
 import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
@@ -136,8 +136,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const [vector, keywords, connection] = await Promise.all([
       getEmbeddings(params.query),
       (async () => {
-        const extractor = new DynamicKeywordExtractor();
-        return await extractor.extractKeywordsConfigured(params.query);
+        return await unifiedKeywordExtractionService.extractKeywordsConfigured(params.query);
       })(),
       lancedbClient.getConnection()
     ]);

@@ -47,13 +47,35 @@ export class UnifiedInitializer {
     this.status.errors = [];
     
     try {
-      // 1. LanceDBの初期化
-      await this.initializeLanceDB();
+      // 並列初期化でパフォーマンス向上
+      console.log('[UnifiedInitializer] Starting parallel initialization...');
       
-      // 2. Lunrの初期化
-      await this.initializeLunr();
+      const [lancedbResult, lunrResult] = await Promise.allSettled([
+        this.initializeLanceDB(),
+        this.initializeLunr()
+      ]);
       
-      // 3. 全体の状態を更新
+      // LanceDB結果の処理
+      if (lancedbResult.status === 'fulfilled') {
+        console.log('✅ LanceDB initialization completed');
+        this.status.lancedb = true;
+      } else {
+        const errorMessage = `LanceDB initialization failed: ${lancedbResult.reason}`;
+        console.error(`❌ ${errorMessage}`);
+        this.status.errors.push(errorMessage);
+      }
+      
+      // Lunr結果の処理
+      if (lunrResult.status === 'fulfilled') {
+        console.log('✅ Lunr initialization completed');
+        this.status.lunr = true;
+      } else {
+        const errorMessage = `Lunr initialization failed: ${lunrResult.reason}`;
+        console.error(`❌ ${errorMessage}`);
+        this.status.errors.push(errorMessage);
+      }
+      
+      // 全体の状態を更新
       this.status.overall = this.status.lancedb && this.status.lunr;
       
       if (this.status.overall) {
