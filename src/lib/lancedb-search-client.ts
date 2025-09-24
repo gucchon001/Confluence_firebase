@@ -47,6 +47,7 @@ function isTitleExcluded(title: string, excludePatterns: string[]): boolean {
 }
 
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText } from './score-utils';
+import { unifiedSearchResultProcessor } from './unified-search-result-processor';
 
 /**
  * スコアを適切なパーセンテージに変換する関数（ハイブリッド検索対応）
@@ -859,63 +860,22 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const finalResults = combinedResults.slice(0, topK);
     console.log(`[searchLanceDB] Returning top ${finalResults.length} results based on hybrid score`);
     
-    // 結果を整形
-       // 結果を整形する前に各結果の内容をログ出力
-       console.log(`[searchLanceDB] Final results before formatting:`);
-       finalResults.forEach((result, idx) => {
-         console.log(`[searchLanceDB] Result ${idx+1}: title=${result.title}, _sourceType=${result._sourceType}`);
-       });
-       
-       return finalResults.map(result => {
-         // 各フィールドの値をログ出力
-         console.log(`[searchLanceDB] Mapping result: id=${result.id}, _sourceType=${result._sourceType}`);
-         
-         // 結果オブジェクトを作成
-         const sourceType = (result._sourceType || 'vector') as 'vector' | 'keyword' | 'hybrid' | 'bm25';
-         // ソース別にスコア表記を整形
-         let scoreKind: 'vector' | 'bm25' | 'keyword' | 'hybrid' = 'vector';
-         let scoreRaw: number | undefined;
-         let scoreText: string | undefined;
-         
-         const distance = result._distance ?? 1;
-         const bm25Score = result._bm25Score ?? result._keywordScore ?? 0;
-         
-         scoreKind = sourceType;
-         scoreRaw = sourceType === 'bm25' || sourceType === 'keyword' ? bm25Score : distance;
-         scoreText = generateScoreText(sourceType, bm25Score, distance);
-
-         // スコア計算の修正（ハイブリッド検索対応）
-         let finalScore: number;
-         if (sourceType === 'bm25' || sourceType === 'keyword') {
-           // BM25スコアの場合、キーワードスコアを直接使用
-           finalScore = Math.min(100, Math.max(0, bm25Score * 10)); // スコアを10倍して0-100の範囲に
-         } else {
-           // ベクトル/ハイブリッドスコアの場合
-           finalScore = calculateSimilarityPercentage(distance);
-         }
-
-         const formattedResult = {
-           id: result.id,
-           pageId: result.pageId, // pageIdフィールドを追加
-           title: result.title || 'No Title',
-           content: result.content || '',
-           distance: result._distance ?? 1, // 元の距離値を保持
-           score: finalScore, // 修正されたスコア計算
-           space_key: result.space_key,
-           labels: getLabelsAsArray(result.labels),
-           url: result.url || '',
-           lastUpdated: result.lastUpdated || '',
-           source: sourceType, // hybrid, keyword, vectorのいずれか
-           matchDetails: result._matchDetails || {},
-           rrfScore: result._rrfScore || 0,
-           scoreKind,
-           scoreRaw,
-           scoreText
-         };
-         
-         console.log(`[searchLanceDB] Formatted result: source=${formattedResult.source}`);
-         return formattedResult;
-       });
+    // 結果を整形（統一サービスを使用）
+    console.log(`[searchLanceDB] Final results before formatting:`);
+    finalResults.forEach((result, idx) => {
+      console.log(`[searchLanceDB] Result ${idx+1}: title=${result.title}, _sourceType=${result._sourceType}`);
+    });
+    
+    // 統一検索結果処理サービスを使用して結果を処理（RRF無効化で高速化）
+    const processedResults = unifiedSearchResultProcessor.processSearchResults(finalResults, {
+      vectorWeight: 0.4,
+      keywordWeight: 0.4,
+      labelWeight: 0.2,
+      enableRRF: false  // RRF無効化で高速化
+    });
+    
+    console.log(`[searchLanceDB] Processed ${processedResults.length} results using unified service`);
+    return processedResults;
   } catch (error: any) {
     console.error(`[searchLanceDB] Error: ${error.message}`);
     throw new Error(`LanceDB search failed: ${error.message}`);
