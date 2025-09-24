@@ -1,5 +1,6 @@
 /**
  * スコア計算に関する共通ユーティリティ関数
+ * 重複コードを統一し、一貫したスコア計算を提供
  */
 
 /**
@@ -45,6 +46,61 @@ export function normalizeBM25Score(score: number, maxScore: number = 20): number
  * @param distance 距離値（ベクトル/ハイブリッドの場合）
  * @returns スコアテキスト
  */
+/**
+ * ハイブリッドスコアを計算（統一版）
+ * @param vectorDistance ベクトル距離（0-1の範囲）
+ * @param keywordScore キーワードスコア
+ * @param labelScore ラベルスコア
+ * @param vectorWeight ベクトル重み（デフォルト: 0.4）
+ * @param keywordWeight キーワード重み（デフォルト: 0.4）
+ * @param labelWeight ラベル重み（デフォルト: 0.2）
+ * @returns ハイブリッドスコア（0-1の範囲）
+ */
+export function calculateHybridScore(
+  vectorDistance: number,
+  keywordScore: number,
+  labelScore: number,
+  vectorWeight: number = 0.4,
+  keywordWeight: number = 0.4,
+  labelWeight: number = 0.2
+): number {
+  // ベクトル距離を0-1の範囲に正規化
+  const normalizedDistance = Math.min(1, Math.max(0, vectorDistance));
+  
+  // キーワードスコアを0-1の範囲に正規化
+  const normalizedKeywordScore = Math.min(1, keywordScore / 10);
+  
+  // ラベルスコアを0-1の範囲に正規化
+  const normalizedLabelScore = Math.min(1, labelScore / 5);
+  
+  // 重み付け平均
+  return (normalizedDistance * vectorWeight) + (normalizedKeywordScore * keywordWeight) + (normalizedLabelScore * labelWeight);
+}
+
+/**
+ * ハイブリッド検索エンジン用のスコア計算（ベクトル + BM25）
+ * @param vectorScore ベクトルスコア（距離）
+ * @param bm25Score BM25スコア
+ * @param vectorWeight ベクトル重み（デフォルト: 0.5）
+ * @param bm25Weight BM25重み（デフォルト: 0.5）
+ * @returns ハイブリッドスコア
+ */
+export function calculateHybridSearchScore(
+  vectorScore: number,
+  bm25Score: number,
+  vectorWeight: number = 0.5,
+  bm25Weight: number = 0.5
+): number {
+  // ベクトルスコアは距離なので、1から引いて類似度に変換
+  const vectorSimilarity = 1 - vectorScore;
+  
+  // 正規化されたBM25スコア（0-1の範囲に正規化）
+  const normalizedBm25 = Math.min(bm25Score / 10, 1);
+  
+  // 重み付き平均
+  return vectorWeight * vectorSimilarity + bm25Weight * normalizedBm25;
+}
+
 export function generateScoreText(
   sourceType: 'vector' | 'bm25' | 'keyword' | 'hybrid',
   score?: number,

@@ -4,7 +4,8 @@
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 import { getEmbeddings } from './embeddings';
-import { calculateKeywordScore, calculateHybridScore, LabelFilterOptions } from './search-weights';
+import { calculateKeywordScore, LabelFilterOptions } from './search-weights';
+import { calculateHybridScore } from './score-utils';
 import { DynamicKeywordExtractor } from './dynamic-keyword-extractor';
 import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';

@@ -7,6 +7,7 @@ import { getEmbeddings } from './embeddings';
 import { searchLanceDB } from './lancedb-search-client';
 import { lunrSearchClient } from './lunr-search-client';
 import { preprocessQuery } from './query-preprocessor';
+import { formatSearchResults, combineAndRerankResults, FormattedSearchResult } from './search-result-formatter';
 
 export interface HybridSearchParams {
   query: string;
@@ -29,6 +30,18 @@ export interface HybridSearchResult {
   scoreKind: 'vector' | 'bm25' | 'hybrid' | 'title';
   scoreRaw: number;
   scoreText: string;
+  // 追加フィールド（統一フォーマット対応）
+  id?: string;
+  distance?: number;
+  score?: number;
+  space_key?: string;
+  lastUpdated?: string;
+  matchDetails?: {
+    titleMatches?: number;
+    labelMatches?: number;
+    contentMatches?: number;
+  };
+  rrfScore?: number;
 }
 
 export class HybridSearchEngine {
@@ -213,17 +226,12 @@ export class HybridSearchEngine {
   }
 
   /**
-   * ハイブリッドスコアを計算
+   * ハイブリッドスコアを計算（統一ユーティリティを使用）
    */
   private calculateHybridScore(vectorScore: number, bm25Score: number): number {
-    // ベクトルスコアは距離なので、1から引いて類似度に変換
-    const vectorSimilarity = 1 - vectorScore;
-    
-    // 正規化されたBM25スコア（0-1の範囲に正規化）
-    const normalizedBm25 = Math.min(bm25Score / 10, 1);
-    
-    // 重み付き平均
-    return this.vectorWeight * vectorSimilarity + this.bm25Weight * normalizedBm25;
+    // 統一ユーティリティを使用してスコア計算
+    const { calculateHybridSearchScore } = require('./score-utils');
+    return calculateHybridSearchScore(vectorScore, bm25Score, this.vectorWeight, this.bm25Weight);
   }
 
   /**

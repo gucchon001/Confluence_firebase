@@ -27,7 +27,7 @@ export function calculateKeywordScore(
   priority: { highPriority: Set<string>; lowPriority: Set<string> }
 ): KeywordScoreResult {
   const titleMatches = countMatches(title, keywords);
-  const labelMatches = countMatches(labels.join(' '), keywords);
+  const labelMatches = countMatches(Array.isArray(labels) ? labels.join(' ') : String(labels || ''), keywords);
   const contentMatches = countMatches(content, keywords);
 
   let score = 0;
