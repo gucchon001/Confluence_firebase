@@ -6,6 +6,8 @@
 import 'dotenv/config';
 import { searchLanceDB } from '../lib/lancedb-search-client';
 import { extractKeywordsConfigured } from '../lib/keyword-extractor-configured';
+import { summarizeConfluenceDocs } from '../ai/flows/summarize-confluence-docs';
+import { hybridSearchEngine } from '../lib/hybrid-search-engine';
 
 // テスト対象クエリ
 const TEST_QUERY = 'オファー機能の種類は？';
@@ -402,6 +404,86 @@ async function calculateQualityMetrics() {
   }
 }
 
+async function testAIResponse(): Promise<{ prompt: string; response: string; references: any[] }> {
+  console.log('\n🤖 テストケース5: AI回答生成テスト');
+  console.log('クエリ: オファー機能の種類は？');
+  
+  try {
+    // 検索結果を取得（ハイブリッド検索エンジンを使用）
+    const hybridResults = await hybridSearchEngine.search({
+      query: 'オファー機能の種類は？',
+      topK: 10,
+      tableName: 'confluence',
+      useLunrIndex: true,
+      labelFilters: {
+        includeMeetingNotes: false,
+        includeArchived: false
+      }
+    });
+    
+    // ハイブリッド検索結果をLanceDB形式に変換
+    const searchResults = hybridResults.map(result => ({
+      id: `${result.pageId}-0`,
+      title: result.title,
+      content: result.content,
+      distance: result.scoreRaw,
+      space_key: '',
+      labels: result.labels,
+      url: result.url,
+      lastUpdated: null,
+      source: result.source,
+      scoreKind: result.scoreKind,
+      scoreText: result.scoreText
+    }));
+    
+    // 検索結果をAI用の形式に変換
+    const documents = searchResults.map(result => ({
+      content: result.content || '',
+      title: result.title,
+      url: result.url || '',
+      spaceName: result.spaceName || 'Unknown',
+      lastUpdated: result.lastUpdated || null,
+      labels: result.labels || [],
+      // スコア情報を追加
+      scoreText: result.scoreText,
+      source: result.source,
+      distance: result.distance
+    }));
+    
+    console.log(`📄 AIに送信するドキュメント数: ${documents.length}件`);
+    
+    const aiResult = await summarizeConfluenceDocs({
+      question: 'オファー機能の種類は？',
+      context: documents,
+      chatHistory: []
+    });
+    
+    console.log('\n📝 AIプロンプト（プレビュー）:');
+    console.log(aiResult.prompt ? aiResult.prompt.substring(0, 1000) + '...' : 'プロンプトの取得に失敗しました');
+    
+    console.log('\n🤖 AI回答:');
+    console.log(aiResult.answer);
+    
+    console.log('\n📚 AI参照元:');
+    aiResult.references.forEach((ref, index) => {
+      console.log(`${index + 1}. ${ref.title}`);
+      console.log(`   URL: ${ref.url}`);
+      console.log(`   スコア: ${ref.scoreText || 'N/A'}`);
+      console.log(`   ソース: ${ref.source || 'unknown'}`);
+    });
+    
+    return {
+      prompt: aiResult.prompt || '',
+      response: aiResult.answer,
+      references: aiResult.references
+    };
+    
+  } catch (error) {
+    console.error('❌ AI回答生成エラー:', error);
+    throw error;
+  }
+}
+
 // メインテスト実行
 async function runAllTests() {
   console.log('=== オファー機能検索品質テスト ===');
@@ -413,6 +495,7 @@ async function runAllTests() {
     keywordMatching: await testKeywordMatching(),
     scoring: await testScoring(),
     functionClassification: await testFunctionClassification(),
+    aiResponse: await testAIResponse(),
     qualityMetrics: await calculateQualityMetrics()
   };
   
@@ -434,6 +517,10 @@ async function runAllTests() {
     const { scoutPages, matchPages, commonPages } = results.functionClassification;
     const classificationPass = scoutPages.length >= 3 && matchPages.length >= 3 && commonPages.length >= 2;
     console.log(`機能分類テスト: ${classificationPass ? '✅ 合格' : '❌ 不合格'}`);
+  }
+  
+  if (results.aiResponse) {
+    console.log('AI回答生成テスト: ✅ 完了');
   }
   
   if (results.qualityMetrics) {

@@ -45,7 +45,7 @@ function isTitleExcluded(title: string, excludePatterns: string[]): boolean {
 }
 
 /**
- * スコアを適切なパーセンテージに変換する関数
+ * スコアを適切なパーセンテージに変換する関数（ハイブリッド検索対応）
  */
 function normalizeScoreToPercentage(score: number, source: string): number {
   if (score === undefined || score === null) return 0;
@@ -58,9 +58,9 @@ function normalizeScoreToPercentage(score: number, source: string): number {
     return Math.round(normalized * 100);
   }
   
-  // ベクトル距離の場合（0-1の範囲、小さいほど良い）
-  const normalized = Math.max(0, Math.min(1, 1 - score));
-  return Math.round(normalized * 100);
+  // ベクトル距離またはハイブリッドの場合（0-1の範囲、小さいほど良い）
+  const similarityPct = Math.max(0, Math.min(100, Math.round((1 - score) * 1000) / 10));
+  return similarityPct;
 }
 
 /**
@@ -884,13 +884,14 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
          let scoreKind: 'vector' | 'bm25' | 'keyword' | 'hybrid' = 'vector';
          let scoreRaw: number | undefined;
          let scoreText: string | undefined;
+         
          if (sourceType === 'vector' || sourceType === 'hybrid') {
            // ベクトル距離(0-1) → 類似度(%)
            const distance = result._distance ?? 1;
            const similarityPct = Math.max(0, Math.min(100, Math.round((1 - distance) * 1000) / 10)); // 小数1桁
-           scoreKind = 'vector';
+           scoreKind = sourceType === 'hybrid' ? 'hybrid' : 'vector';
            scoreRaw = distance;
-           scoreText = `類似度 ${similarityPct}%`;
+           scoreText = `${sourceType === 'hybrid' ? 'Hybrid' : 'Vector'} ${similarityPct}%`;
          } else if (sourceType === 'bm25') {
            // BM25 系
            const bm25 = result._bm25Score ?? result._keywordScore ?? 0;
@@ -905,16 +906,20 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
            scoreText = `Keyword ${keyword.toFixed(2)}`;
          }
 
-         // スコア計算の修正
+         // スコア計算の修正（ハイブリッド検索対応）
          let finalScore: number;
          if (sourceType === 'bm25' || sourceType === 'keyword') {
            // BM25スコアの場合、キーワードスコアを直接使用
            const keywordScore = result._keywordScore || 0;
            finalScore = Math.min(100, Math.max(0, keywordScore * 10)); // スコアを10倍して0-100の範囲に
-         } else {
-           // ベクトルスコアの場合、距離を反転
+         } else if (sourceType === 'hybrid') {
+           // ハイブリッド検索の場合
            const distance = result._distance ?? 1;
-           finalScore = Math.max(0, Math.min(100, Math.round((1 - distance) * 100)));
+           finalScore = Math.max(0, Math.min(100, Math.round((1 - distance) * 1000) / 10));
+         } else {
+           // ベクトルスコアの場合
+           const distance = result._distance ?? 1;
+           finalScore = Math.max(0, Math.min(100, Math.round((1 - distance) * 1000) / 10));
          }
 
          const formattedResult = {
@@ -922,7 +927,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
            pageId: result.pageId, // pageIdフィールドを追加
            title: result.title || 'No Title',
            content: result.content || '',
-           distance: normalizeScoreToPercentage(result._distance, result._sourceType || 'vector'), // スコアを適切に正規化
+           distance: result._distance ?? 1, // 元の距離値を保持
            score: finalScore, // 修正されたスコア計算
            space_key: result.space_key,
            labels: getLabelsAsArray(result.labels),

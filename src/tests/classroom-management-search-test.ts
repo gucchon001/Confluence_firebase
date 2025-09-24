@@ -5,6 +5,7 @@
 
 import { searchLanceDB } from '../lib/lancedb-search-client';
 import { summarizeConfluenceDocs } from '../ai/flows/summarize-confluence-docs';
+import { hybridSearchEngine } from '../lib/hybrid-search-engine';
 
 // 理想の抽出ページ（優先度：高）
 const HIGH_PRIORITY_PAGES = [
@@ -197,7 +198,7 @@ async function testBasicSearch(): Promise<TestResult> {
                          priority === 'excluded' ? '❌' : '❓';
       
       console.log(`${index + 1}. ${priorityIcon} ${result.title}`);
-      console.log(`   スコア: ${result.score}, ラベル: ${JSON.stringify(result.labels)}, ソース: ${result.source}`);
+      console.log(`   スコア: ${result.scoreText || result.score}, ラベル: ${JSON.stringify(result.labels)}, ソース: ${result.source}`);
     });
     
     return testResult;
@@ -215,16 +216,32 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
   console.log('クエリ: 教室管理の詳細は');
   
   try {
-    // 検索結果を取得
-    const searchResults = await searchLanceDB({
+    // 検索結果を取得（ハイブリッド検索エンジンを使用）
+    const hybridResults = await hybridSearchEngine.search({
       query: '教室管理の詳細は',
       topK: 10,
       tableName: 'confluence',
+      useLunrIndex: true,
       labelFilters: {
         includeMeetingNotes: false,
         includeArchived: false
       }
     });
+    
+    // ハイブリッド検索結果をLanceDB形式に変換
+    const searchResults = hybridResults.map(result => ({
+      id: `${result.pageId}-0`,
+      title: result.title,
+      content: result.content,
+      distance: result.scoreRaw,
+      space_key: '',
+      labels: result.labels,
+      url: result.url,
+      lastUpdated: null,
+      source: result.source,
+      scoreKind: result.scoreKind,
+      scoreText: result.scoreText
+    }));
     
     // 検索結果をAI用の形式に変換
     const documents = searchResults.map(result => ({
@@ -233,7 +250,11 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
       url: result.url || '',
       spaceName: result.spaceName || 'Unknown',
       lastUpdated: result.lastUpdated || null,
-      labels: result.labels || []
+      labels: result.labels || [],
+      // スコア情報を追加
+      scoreText: result.scoreText,
+      source: result.source,
+      distance: result.distance
     }));
     
     console.log(`📄 AIに送信するドキュメント数: ${documents.length}件`);
@@ -256,6 +277,7 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
       console.log(`${index + 1}. ${ref.title}`);
       console.log(`   URL: ${ref.url}`);
       console.log(`   スコア: ${ref.scoreText || 'N/A'}`);
+      console.log(`   ソース: ${ref.source || 'unknown'}`);
     });
     
     return {

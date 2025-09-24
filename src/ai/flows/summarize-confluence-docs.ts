@@ -51,12 +51,13 @@ const PROMPT_TEMPLATE = `
 # 出力構成（必須）
 1) 1段落の要約
 2) 章立て（定義/サイト表示/管理機能/関連バッチ等、該当するもの）
-3) 引用（High/Mediumのみ）: 箇条書きでタイトルを列挙
+3) 参照元: 箇条書きでタイトルを列挙（High/Medium優先）
 4) 参考情報（Low）: 必要に応じて短く列挙
 
 # 信頼区分の扱い
 - 固定のスコア閾値で資料を除外しないでください。
 - High/Medium の資料のみ本文の根拠として用い、Low は「参考情報（Low）」で触れてください。
+- 参照元セクションでは、High/Medium優先で文書を列挙してください。
 
 # 厳格な禁止事項
 - 参考情報に根拠のない推測は出力しないでください。
@@ -171,7 +172,7 @@ export async function summarizeConfluenceDocs({
 **スペース**: ${doc.spaceName || 'Unknown'}
 **最終更新**: ${doc.lastUpdated || 'Unknown'}
 **ラベル**: ${(doc.labels || []).join(', ')}
-        **関連度スコア**: ${(doc as any).distance || 'N/A'}%
+        **関連度スコア**: ${(doc as any).scoreText || 'N/A'}
 
 ### 内容
 ${doc.content}`
