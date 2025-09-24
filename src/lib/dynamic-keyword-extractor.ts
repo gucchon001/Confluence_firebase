@@ -192,24 +192,20 @@ export class DynamicKeywordExtractor {
       return 'unknown';
     }
 
-    // 優先度の高いドメイン名を先にチェック（教室管理関連を優先）
-    const priorityDomains = ['教室管理', '教室管理機能', '教室', '求人管理', '求人'];
-    const otherDomains = keywordCategories.domainNames.filter(domain => 
-      !priorityDomains.includes(domain)
-    );
+    // 全てのドメインを同等に扱う（ハードコーディングを削除）
+    const allDomains = keywordCategories.domainNames;
 
-    // 1. 優先ドメインとの完全マッチング
-    for (const domainName of priorityDomains) {
-      if (coreWords.some(word => word === domainName || domainName.includes(word))) {
+    // 1. 完全一致を優先
+    for (const domainName of allDomains) {
+      if (coreWords.some(word => word === domainName)) {
         return domainName;
       }
     }
 
-    // 2. その他のドメインとのマッチング（より厳密な条件）
-    for (const domainName of otherDomains) {
+    // 2. 部分一致（ドメイン名が単語を含む）
+    for (const domainName of allDomains) {
       if (coreWords.some(word => {
-        // 完全一致または、ドメイン名が単語を含む（逆は除外）
-        return word === domainName || (domainName.includes(word) && word.length >= 2);
+        return domainName.includes(word) && word.length >= 2;
       })) {
         return domainName;
       }
@@ -220,7 +216,7 @@ export class DynamicKeywordExtractor {
       if (coreWords.some(word => functionName.includes(word) || word.includes(functionName))) {
         // 機能名からドメインを推測
         const domainPart = functionName.split('-')[0] || functionName.split('機能')[0];
-        if (domainPart && priorityDomains.includes(domainPart)) {
+        if (domainPart && allDomains.includes(domainPart)) {
           return domainPart;
         }
       }
