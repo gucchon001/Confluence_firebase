@@ -292,6 +292,7 @@ export class HybridSearchEngine {
    * 距離値から類似度スコアを計算
    * @param distance 距離値
    * @returns 類似度スコア（0-100%）
+   * @deprecated 新しい calculateSimilarityScore 関数を使用してください
    */
   private calculateSimilarityScore(distance: number): number {
     // 距離値が1.0を超えている場合、ユークリッド距離と仮定

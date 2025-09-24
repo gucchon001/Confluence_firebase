@@ -20,9 +20,10 @@ const PROMPT_TEMPLATE = `
 5. 本当に全く関連する情報がない場合のみ、「参考情報の中に関連する記述が見つかりませんでした」と回答してください。
 6. 回答は、ユーザーの質問に対して簡潔かつ明確に要約してください。
 7. 回答には参照元情報をテキストとして含めないでください。参照元は別途処理されます。
-8. ユーザーからの挨拶や感謝には、フレンドリーに返答してください。
-9. 提供された参考情報にあるラベルやスペース情報も活用して、より関連性の高い回答を提供してください。
-10. 情報の確実性が低い場合は、推測や不確かな情報を提供するのではなく、「この点についての詳細な情報は見つかりませんでした」と正直に伝えてください。
+8. 「参照元」「### 参照元」「## 参照元」などの参照元セクションは絶対に生成しないでください。
+9. ユーザーからの挨拶や感謝には、フレンドリーに返答してください。
+10. 提供された参考情報にあるラベルやスペース情報も活用して、より関連性の高い回答を提供してください。
+11. 情報の確実性が低い場合は、推測や不確かな情報を提供するのではなく、「この点についての詳細な情報は見つかりませんでした」と正直に伝えてください。
 
 # 提供された参考情報 (Context)
 {{context}}
@@ -51,13 +52,11 @@ const PROMPT_TEMPLATE = `
 # 出力構成（必須）
 1) 1段落の要約
 2) 章立て（定義/サイト表示/管理機能/関連バッチ等、該当するもの）
-3) 参照元: 箇条書きでタイトルを列挙（High/Medium優先）
-4) 参考情報（Low）: 必要に応じて短く列挙
+3) 参考情報（Low）: 必要に応じて短く列挙
 
 # 信頼区分の扱い
 - 固定のスコア閾値で資料を除外しないでください。
 - High/Medium の資料のみ本文の根拠として用い、Low は「参考情報（Low）」で触れてください。
-- 参照元セクションでは、High/Medium優先で文書を列挙してください。
 
 # 厳格な禁止事項
 - 参考情報に根拠のない推測は出力しないでください。
@@ -286,17 +285,29 @@ ${doc.content}`
 
     // 参照元テキストを除去する後処理
     if (answer) {
-      // 「参照元」で始まる行以降を除去
       const lines = answer.split('\n');
-      const referenceStartIndex = lines.findIndex(line => 
-        line.trim().startsWith('参照元') || 
-        line.trim().startsWith('*') && line.includes('Title:') ||
-        line.trim().match(/^\*\s*Title:/)
-      );
+      let referenceStartIndex = -1;
+      
+      // より包括的な参照元セクションの検出
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (
+          line.startsWith('### 参照元') ||
+          line.startsWith('## 参照元') ||
+          line.startsWith('# 参照元') ||
+          line.startsWith('参照元') ||
+          (line.startsWith('*') && line.includes('Title:')) ||
+          line.match(/^\*\s*Title:/) ||
+          line.match(/^###?\s*参照元/)
+        ) {
+          referenceStartIndex = i;
+          break;
+        }
+      }
       
       if (referenceStartIndex !== -1) {
         answer = lines.slice(0, referenceStartIndex).join('\n').trim();
-        console.log('[summarizeConfluenceDocs] Removed reference text from answer');
+        console.log('[summarizeConfluenceDocs] Removed reference text from answer at line', referenceStartIndex);
       }
     }
 

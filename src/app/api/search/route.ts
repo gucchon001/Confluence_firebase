@@ -6,22 +6,7 @@ import { initializeOnStartup } from '../../../lib/startup-initializer';
 import { preprocessQuery, calculateQueryQuality } from '../../../lib/query-preprocessor';
 import { hybridSearchEngine } from '../../../lib/hybrid-search-engine';
 import { lunrInitializer } from '../../../lib/lunr-initializer';
-
-/**
- * 距離値から類似度スコアを計算
- * @param distance 距離値
- * @returns 類似度スコア（0-100%）
- */
-function calculateSimilarityScore(distance: number): number {
-  // 距離値が1.0を超えている場合、ユークリッド距離と仮定
-  if (distance > 1.0) {
-    // ユークリッド距離の場合: 1 / (1 + distance) で正規化
-    return (1 / (1 + distance)) * 100;
-  } else {
-    // コサイン距離の場合: 1 - distance で正規化
-    return Math.max(0, (1 - distance)) * 100;
-  }
-}
+import { calculateSimilarityScore } from '../../../lib/score-utils';
 
 export async function POST(req: NextRequest) {
   try {

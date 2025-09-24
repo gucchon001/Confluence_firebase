@@ -64,7 +64,7 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                             <span className="truncate">{source.title}</span>
                             <span className="text-xs text-muted-foreground ml-1">
                                 ({source.distance !== undefined && source.distance !== null
-                                  ? Math.max(0, Math.min(100, Math.round(source.distance)))
+                                  ? Math.max(0, Math.min(100, Math.round((1 - source.distance) * 100)))
                                   : '??'}% 一致)
                             </span>
                             <span className="text-xs ml-1 font-bold" style={{color: 'blue'}}>

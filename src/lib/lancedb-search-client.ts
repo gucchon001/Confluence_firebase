@@ -44,23 +44,22 @@ function isTitleExcluded(title: string, excludePatterns: string[]): boolean {
   });
 }
 
+import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText } from './score-utils';
+
 /**
  * スコアを適切なパーセンテージに変換する関数（ハイブリッド検索対応）
+ * @deprecated 新しい generateScoreText 関数を使用してください
  */
 function normalizeScoreToPercentage(score: number, source: string): number {
   if (score === undefined || score === null) return 0;
   
   // BM25スコアの場合（正の値、大きいほど良い）
   if (source === 'bm25' || source === 'keyword') {
-    // BM25スコアを0-100%の範囲に正規化（最大スコアを100%とする）
-    const maxScore = 20; // 経験的な最大スコア値
-    const normalized = Math.max(0, Math.min(1, score / maxScore));
-    return Math.round(normalized * 100);
+    return normalizeBM25Score(score);
   }
   
   // ベクトル距離またはハイブリッドの場合（0-1の範囲、小さいほど良い）
-  const similarityPct = Math.max(0, Math.min(100, Math.round((1 - score) * 1000) / 10));
-  return similarityPct;
+  return calculateSimilarityPercentage(score);
 }
 
 /**
@@ -97,7 +96,7 @@ export interface LanceDBSearchResult {
   labels?: string[];
   url?: string;
   lastUpdated?: string;
-  source?: 'vector' | 'keyword' | 'hybrid'; // 検索ソース（ベクトル検索、キーワード検索、またはハイブリッド）
+  source?: 'vector' | 'keyword' | 'hybrid' | 'bm25'; // 検索ソース（ベクトル検索、キーワード検索、BM25検索、またはハイブリッド）
   matchDetails?: {
     titleMatches?: number;
     labelMatches?: number;
@@ -885,41 +884,21 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
          let scoreRaw: number | undefined;
          let scoreText: string | undefined;
          
-         if (sourceType === 'vector' || sourceType === 'hybrid') {
-           // ベクトル距離(0-1) → 類似度(%)
-           const distance = result._distance ?? 1;
-           const similarityPct = Math.max(0, Math.min(100, Math.round((1 - distance) * 1000) / 10)); // 小数1桁
-           scoreKind = sourceType === 'hybrid' ? 'hybrid' : 'vector';
-           scoreRaw = distance;
-           scoreText = `${sourceType === 'hybrid' ? 'Hybrid' : 'Vector'} ${similarityPct}%`;
-         } else if (sourceType === 'bm25') {
-           // BM25 系
-           const bm25 = result._bm25Score ?? result._keywordScore ?? 0;
-           scoreKind = 'bm25';
-           scoreRaw = bm25;
-           scoreText = `BM25 ${bm25.toFixed(2)}`;
-         } else {
-           // keyword 系
-           const keyword = result._keywordScore ?? 0;
-           scoreKind = 'keyword';
-           scoreRaw = keyword;
-           scoreText = `Keyword ${keyword.toFixed(2)}`;
-         }
+         const distance = result._distance ?? 1;
+         const bm25Score = result._bm25Score ?? result._keywordScore ?? 0;
+         
+         scoreKind = sourceType;
+         scoreRaw = sourceType === 'bm25' || sourceType === 'keyword' ? bm25Score : distance;
+         scoreText = generateScoreText(sourceType, bm25Score, distance);
 
          // スコア計算の修正（ハイブリッド検索対応）
          let finalScore: number;
          if (sourceType === 'bm25' || sourceType === 'keyword') {
            // BM25スコアの場合、キーワードスコアを直接使用
-           const keywordScore = result._keywordScore || 0;
-           finalScore = Math.min(100, Math.max(0, keywordScore * 10)); // スコアを10倍して0-100の範囲に
-         } else if (sourceType === 'hybrid') {
-           // ハイブリッド検索の場合
-           const distance = result._distance ?? 1;
-           finalScore = Math.max(0, Math.min(100, Math.round((1 - distance) * 1000) / 10));
+           finalScore = Math.min(100, Math.max(0, bm25Score * 10)); // スコアを10倍して0-100の範囲に
          } else {
-           // ベクトルスコアの場合
-           const distance = result._distance ?? 1;
-           finalScore = Math.max(0, Math.min(100, Math.round((1 - distance) * 1000) / 10));
+           // ベクトル/ハイブリッドスコアの場合
+           finalScore = calculateSimilarityPercentage(distance);
          }
 
          const formattedResult = {
