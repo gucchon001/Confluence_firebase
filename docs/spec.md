@@ -96,7 +96,7 @@ AIフレームワーク: Genkit (core)
 
 LLM / Embedding:
 - LLM: Google AI - Gemini API (gemini-2.5-flash)
-- Embedding: @xenova/transformers (Xenova/paraphrase-multilingual-MiniLM-L12-v2)
+- Embedding: @xenova/transformers (Xenova/paraphrase-multilingual-mpnet-base-v2)
   - 768次元のベクトル生成
   - ローカル実行によるコスト削減
   - API依存なしでオフライン動作可能
