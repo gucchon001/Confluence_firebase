@@ -3,21 +3,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
-import { unifiedInitializer } from '@/lib/unified-initializer';
+import { APIErrorHandler, withAPIErrorHandling } from '@/lib/api-error-handler';
 
-export async function POST(
+export const POST = withAPIErrorHandling(async (
   req: NextRequest,
   context: { params: Promise<{ flow: string }> }
-) {
-  try {
-    // 統一初期化サービスを使用
-    try {
-      await unifiedInitializer.initializeAll();
-      console.log('✅ Unified initialization completed in flow API');
-    } catch (error) {
-      console.warn('⚠️ Unified initialization failed in flow API:', error);
-      // 初期化に失敗しても処理は継続
-    }
+) => {
+  // 統一初期化サービスを使用
+  await APIErrorHandler.handleUnifiedInitialization();
 
     const body = await req.json();
     const params = await context.params;
@@ -27,10 +20,7 @@ export async function POST(
       case 'retrieveRelevantDocs': {
         const { question, labels, labelFilters } = body ?? {};
         if (typeof question !== 'string' || question.length === 0) {
-          return NextResponse.json(
-            { error: 'Invalid input: question is required' },
-            { status: 400 }
-          );
+          return APIErrorHandler.validationError('Invalid input: question is required');
         }
         const docs = await retrieveRelevantDocs({ question, labels, labelFilters });
         return NextResponse.json(docs);
@@ -40,14 +30,7 @@ export async function POST(
         return NextResponse.json(result);
       }
       default:
-        return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
+        return APIErrorHandler.notFoundError('Flow not found');
     }
-  } catch (e: any) {
-    console.error('[API Error]', e);
-    return NextResponse.json(
-      { error: e?.message || 'Internal Error' },
-      { status: 500 }
-    );
-  }
-}
+});
 

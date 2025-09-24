@@ -6,35 +6,8 @@
  */
 import { describe, test, expect, beforeAll } from 'vitest';
 import * as lancedb from '@lancedb/lancedb';
-import * as admin from 'firebase-admin';
-import * as path from 'path';
 import { getEmbeddings } from '../../lib/embeddings';
-
-// Firebase Admin SDKの初期化
-function initializeFirebase() {
-  if (!admin.apps.length) {
-    try {
-      const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      if (serviceAccountPath) {
-        const serviceAccount = require(path.resolve(serviceAccountPath));
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
-        });
-        return true;
-      }
-    } catch (error) {
-      console.warn('Firebase Admin SDK初期化エラー:', error);
-    }
-  } else {
-    return true;
-  }
-  return false;
-}
-
-// テスト用のダミーベクトル生成関数
-function generateDummyVector(dimension: number): number[] {
-  return Array(dimension).fill(0).map(() => Math.random());
-}
+import { unifiedFirebaseService, generateDummyVector } from '../../lib/unified-firebase-service';
 
 // getEmbeddingsのモック関数
 async function mockGetEmbeddings(text: string, dimension: number = 10): Promise<number[]> {
@@ -64,7 +37,9 @@ describe('LanceDBとFirestore統合テスト', () => {
     }]);
     
     // Firebase Admin SDKを初期化
-    if (initializeFirebase()) {
+    const firebaseInitialized = await unifiedFirebaseService.initializeForTesting();
+    if (firebaseInitialized) {
+      const { admin } = await import('firebase-admin');
       firestore = admin.firestore();
     }
   });

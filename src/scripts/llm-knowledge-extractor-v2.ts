@@ -224,41 +224,36 @@ ${page.content.substring(0, 1500)}...`;
   }
 
   private async callLLMWithRetry(prompt: string): Promise<string> {
-    let lastError: Error | null = null;
-
     console.log(`[LLMKnowledgeExtractorV2] Starting LLM call with prompt length: ${prompt.length}`);
 
-    for (let attempt = 1; attempt <= this.config.maxRetries; attempt++) {
-      try {
-        console.log(`[LLMKnowledgeExtractorV2] Attempt ${attempt}/${this.config.maxRetries}`);
+    const { withRetry } = await import('../lib/retry-utils');
+    
+    return await withRetry(
+      async () => {
+        console.log(`[LLMKnowledgeExtractorV2] Attempting LLM call`);
         const result = await this.model.generateContent(prompt);
         console.log(`[LLMKnowledgeExtractorV2] Model response received`);
         const response = await result.response;
         console.log(`[LLMKnowledgeExtractorV2] Response object received`);
         const text = response.text();
         console.log(`[LLMKnowledgeExtractorV2] Text extracted: ${text.length} characters`);
-        console.log(`[LLMKnowledgeExtractorV2] LLM call successful on attempt ${attempt}`);
+        console.log(`[LLMKnowledgeExtractorV2] LLM call successful`);
         return text;
-      } catch (error) {
-        lastError = error as Error;
-        console.log(`[LLMKnowledgeExtractorV2] LLM call failed (attempt ${attempt}):`, error.message);
-        console.log(`[LLMKnowledgeExtractorV2] Error details:`, error);
-        console.log(`[LLMKnowledgeExtractorV2] Error stack:`, error.stack);
-        console.log(`[LLMKnowledgeExtractorV2] Error type:`, typeof error);
-        console.log(`[LLMKnowledgeExtractorV2] Error constructor:`, error.constructor.name);
-        console.log(`[LLMKnowledgeExtractorV2] Error keys:`, Object.keys(error));
-        console.log(`[LLMKnowledgeExtractorV2] Error toString:`, error.toString());
-        
-        if (attempt < this.config.maxRetries) {
-          const delay = Math.pow(2, attempt) * 1000;
-          console.log(`[LLMKnowledgeExtractorV2] Retrying in ${delay}ms...`);
-          await this.delay(delay);
+      },
+      {
+        maxRetries: this.config.maxRetries,
+        initialDelay: 1000,
+        onError: async (error: any, retryCount: number) => {
+          console.log(`[LLMKnowledgeExtractorV2] LLM call failed (attempt ${retryCount}):`, error.message);
+          console.log(`[LLMKnowledgeExtractorV2] Error details:`, error);
+          console.log(`[LLMKnowledgeExtractorV2] Error stack:`, error.stack);
+          console.log(`[LLMKnowledgeExtractorV2] Error type:`, typeof error);
+          console.log(`[LLMKnowledgeExtractorV2] Error constructor:`, error.constructor.name);
+          console.log(`[LLMKnowledgeExtractorV2] Error keys:`, Object.keys(error));
+          console.log(`[LLMKnowledgeExtractorV2] Error toString:`, error.toString());
         }
       }
-    }
-
-    console.log(`[LLMKnowledgeExtractorV2] All retry attempts failed`);
-    throw lastError || new Error('All LLM retry attempts failed');
+    );
   }
 
   private parseResponse(response: string, page: ConfluencePage): ExtractedKnowledge {

@@ -2,29 +2,26 @@ import { NextRequest } from 'next/server';
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 import { getEmbeddings } from '../../../lib/embeddings';
-import { unifiedInitializer } from '../../../lib/unified-initializer';
 import { preprocessQuery, calculateQueryQuality } from '../../../lib/query-preprocessor';
 import { hybridSearchEngine } from '../../../lib/hybrid-search-engine';
 import { lunrInitializer } from '../../../lib/lunr-initializer';
 import { calculateSimilarityScore } from '../../../lib/score-utils';
+import { APIErrorHandler, withAPIErrorHandling } from '../../../lib/api-error-handler';
 
-export async function POST(req: NextRequest) {
-  try {
-    // 統一初期化サービスを使用
-    let lunrReady = false;
+export const POST = withAPIErrorHandling(async (req: NextRequest) => {
+  // 統一初期化サービスを使用
+  const lunrReady = await APIErrorHandler.handleUnifiedInitialization();
+  
+  // Lunrクライアントの状態を確認
+  if (lunrReady) {
     try {
-      await unifiedInitializer.initializeAll();
-      console.log('✅ Unified initialization completed in search API');
-      
-      // Lunrクライアントの状態を確認
       const { lunrSearchClient } = await import('../../../lib/lunr-search-client');
       const status = lunrSearchClient.getStatus();
       console.log('Lunr client status after init:', status);
-      lunrReady = status.isInitialized && status.hasIndex;
     } catch (error) {
-      console.warn('⚠️ Unified initialization failed in search API:', error);
-      // 初期化に失敗しても検索は継続（フォールバック検索を使用）
+      console.warn('⚠️ Lunr client status check failed:', error);
     }
+  }
 
     const body = await req.json();
     const query: string = body?.query || '';
@@ -33,7 +30,7 @@ export async function POST(req: NextRequest) {
     const useHybridSearch: boolean = body?.useHybridSearch !== false; // デフォルトで有効
     
     if (!query) {
-      return new Response(JSON.stringify({ error: 'query is required' }), { status: 400 });
+      return APIErrorHandler.validationError('query is required');
     }
 
     console.log(`Search query: "${query}", topK: ${topK}, tableName: ${tableName}, hybrid: ${useHybridSearch}`);
@@ -105,7 +102,7 @@ export async function POST(req: NextRequest) {
       const tableNames = await db.tableNames();
       if (!tableNames.includes(tableName)) {
         console.error(`Table '${tableName}' not found`);
-        return new Response(JSON.stringify({ error: `Vector database table '${tableName}' not found` }), { status: 500 });
+        return APIErrorHandler.internalServerError(`Vector database table '${tableName}' not found`);
       }
 
       // 4. テーブルを開いて検索
@@ -140,13 +137,9 @@ export async function POST(req: NextRequest) {
       });
     } catch (lanceDbError: any) {
       console.error('LanceDB error:', lanceDbError);
-      return new Response(JSON.stringify({ 
-        error: `LanceDB error: ${lanceDbError.message}`,
-        details: lanceDbError.stack
-      }), { status: 500 });
+      return APIErrorHandler.internalServerError(
+        `LanceDB error: ${lanceDbError.message}`,
+        lanceDbError.stack
+      );
     }
-  } catch (e: any) {
-    console.error('Search API error:', e);
-    return new Response(JSON.stringify({ error: e?.message || String(e) }), { status: 500 });
-  }
-}
+});
