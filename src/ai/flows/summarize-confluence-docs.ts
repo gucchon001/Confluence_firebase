@@ -140,6 +140,7 @@ export const SummarizeOutputSchema = z.object({
       scoreText: z.string().optional(),
     })
   ),
+  prompt: z.string().optional(),
 });
 
 export type SummarizeInput = z.infer<typeof SummarizeInputSchema>;
@@ -308,12 +309,13 @@ ${doc.content}`
     scoreText: (doc as any).scoreText,
   }));
 
-    return { answer, references };
+    return { answer, references, prompt };
   } catch (error: any) {
     console.error(`[summarizeConfluenceDocs] Error: ${error.message}`);
     return {
       answer: `エラーが発生しました: ${error.message}`,
       references: [],
+      prompt: '',
     };
   }
 }

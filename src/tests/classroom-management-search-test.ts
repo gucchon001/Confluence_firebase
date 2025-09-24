@@ -4,6 +4,7 @@
  */
 
 import { searchLanceDB } from '../lib/lancedb-search-client';
+import { summarizeConfluenceDocs } from '../ai/flows/summarize-confluence-docs';
 
 // 理想の抽出ページ（優先度：高）
 const HIGH_PRIORITY_PAGES = [
@@ -65,6 +66,17 @@ interface TestResult {
     score: number;
     labels: string[];
     source: string;
+  }>;
+  aiPrompt?: string;
+  aiResponse?: string;
+  aiReferences?: Array<{
+    title: string;
+    url: string;
+    spaceName?: string;
+    lastUpdated?: string;
+    distance?: number;
+    source?: string;
+    scoreText?: string;
   }>;
 }
 
@@ -196,6 +208,69 @@ async function testBasicSearch(): Promise<TestResult> {
 }
 
 /**
+ * テストケース4: AI回答生成テスト
+ */
+async function testAIResponse(): Promise<{ prompt: string; response: string; references: any[] }> {
+  console.log('\n🤖 テストケース4: AI回答生成テスト');
+  console.log('クエリ: 教室管理の詳細は');
+  
+  try {
+    // 検索結果を取得
+    const searchResults = await searchLanceDB({
+      query: '教室管理の詳細は',
+      topK: 10,
+      tableName: 'confluence',
+      labelFilters: {
+        includeMeetingNotes: false,
+        includeArchived: false
+      }
+    });
+    
+    // 検索結果をAI用の形式に変換
+    const documents = searchResults.map(result => ({
+      content: result.content || '',
+      title: result.title,
+      url: result.url || '',
+      spaceName: result.spaceName || 'Unknown',
+      lastUpdated: result.lastUpdated || null,
+      labels: result.labels || []
+    }));
+    
+    console.log(`📄 AIに送信するドキュメント数: ${documents.length}件`);
+    
+    // AI回答生成
+    const aiResult = await summarizeConfluenceDocs({
+      question: '教室管理の詳細は',
+      context: documents,
+      chatHistory: []
+    });
+    
+    console.log('\n📝 AIプロンプト（プレビュー）:');
+    console.log(aiResult.prompt ? aiResult.prompt.substring(0, 1000) + '...' : 'プロンプトの取得に失敗しました');
+    
+    console.log('\n🤖 AI回答:');
+    console.log(aiResult.answer);
+    
+    console.log('\n📚 AI参照元:');
+    aiResult.references.forEach((ref, index) => {
+      console.log(`${index + 1}. ${ref.title}`);
+      console.log(`   URL: ${ref.url}`);
+      console.log(`   スコア: ${ref.scoreText || 'N/A'}`);
+    });
+    
+    return {
+      prompt: aiResult.prompt || '',
+      response: aiResult.answer,
+      references: aiResult.references
+    };
+    
+  } catch (error) {
+    console.error('❌ AI回答生成エラー:', error);
+    throw error;
+  }
+}
+
+/**
  * テストケース2: キーワードマッチングテスト
  */
 async function testKeywordMatching(): Promise<void> {
@@ -296,6 +371,14 @@ async function runClassroomManagementQualityTest(): Promise<void> {
     
     // テストケース3: スコアリングテスト
     testScoring(testResult);
+    
+    // テストケース4: AI回答生成テスト
+    const aiTestResult = await testAIResponse();
+    
+    // AI結果をテスト結果に追加
+    testResult.aiPrompt = aiTestResult.prompt;
+    testResult.aiResponse = aiTestResult.response;
+    testResult.aiReferences = aiTestResult.references;
     
     // 品質評価
     evaluateQuality(testResult);
