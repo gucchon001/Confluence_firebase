@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Menu, Settings } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useAuthWrapper } from '@/hooks/use-auth-wrapper';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -42,8 +44,26 @@ const MessageCard = ({ msg }: { msg: Message }) => {
         )}
         <div className={`flex flex-col gap-2 ${isAssistant ? 'items-start' : 'items-end'} max-w-[85%] sm:max-w-[75%]`}>
             <Card className={`w-full ${isAssistant ? 'bg-white' : 'bg-primary text-primary-foreground'}`}>
-            <CardContent className="p-4 text-sm whitespace-pre-wrap break-words">
-                <p>{msg.content}</p>
+            <CardContent className="p-4 text-sm break-words">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({children}) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                    h2: ({children}) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                    h3: ({children}) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                    h4: ({children}) => <h4 className="text-sm font-semibold mb-1">{children}</h4>,
+                    p: ({children}) => <p className="mb-2">{children}</p>,
+                    ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                    ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                    li: ({children}) => <li className="text-sm">{children}</li>,
+                    strong: ({children}) => <strong className="font-semibold">{children}</strong>,
+                    em: ({children}) => <em className="italic">{children}</em>,
+                    code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                    pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
             </CardContent>
             {isAssistant && msg.sources && msg.sources.length > 0 && (
                 <CardFooter className="flex flex-col items-start gap-2 border-t p-4">
