@@ -22,7 +22,7 @@ export interface KeywordScoreResult {
 export function calculateKeywordScore(
   title: string,
   content: string,
-  labels: string[],
+  labels: string[] | string | undefined,
   keywords: string[],
   priority: { highPriority: Set<string>; lowPriority: Set<string> }
 ): KeywordScoreResult {

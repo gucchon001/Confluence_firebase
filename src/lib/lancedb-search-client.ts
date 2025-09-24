@@ -640,10 +640,15 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           for (const row of bm25Results) {
             if (!resultsWithHybridScore.some(r => r.id === row.id)) {
               // BM25結果にも calculateKeywordScore を適用
+              // labelsを配列として正規化
+              const normalizedLabels = Array.isArray(row.labels) 
+                ? row.labels 
+                : (typeof row.labels === 'string' ? [row.labels] : []);
+              
               const keywordScoreResult = calculateKeywordScore(
                 String(row.title || ''),
                 String(row.content || ''),
-                row.labels,
+                normalizedLabels,
                 keywords,
                 { highPriority, lowPriority }
               );
