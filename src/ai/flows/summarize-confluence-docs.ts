@@ -52,16 +52,16 @@ const PROMPT_TEMPLATE = `
 # 出力構成（必須）
 1) 1段落の要約
 2) 章立て（定義/サイト表示/管理機能/関連バッチ等、該当するもの）
-3) 参考情報（Low）: 必要に応じて短く列挙
 
 # 信頼区分の扱い
 - 固定のスコア閾値で資料を除外しないでください。
-- High/Medium の資料のみ本文の根拠として用い、Low は「参考情報（Low）」で触れてください。
+- High/Medium の資料のみ本文の根拠として用いてください。
 
 # 厳格な禁止事項
 - 参考情報に根拠のない推測は出力しないでください。
 - 章立ての各章は、該当する根拠ドキュメントが存在しない場合は省略してください（空章を作らない）。
 - メールテンプレートのみを根拠に仕様（要件/挙動）を断定しないでください。
+- 「参考情報（Low）」「### 参考情報」「## 参考情報」などの参考情報セクションは絶対に生成しないでください。
 `;
 
 const compiledTemplate = Handlebars.compile(PROMPT_TEMPLATE);
@@ -288,7 +288,7 @@ ${doc.content}`
       const lines = answer.split('\n');
       let referenceStartIndex = -1;
       
-      // より包括的な参照元セクションの検出
+      // より包括的な参照元セクションと参考情報セクションの検出
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (
@@ -296,9 +296,15 @@ ${doc.content}`
           line.startsWith('## 参照元') ||
           line.startsWith('# 参照元') ||
           line.startsWith('参照元') ||
+          line.startsWith('### 参考情報') ||
+          line.startsWith('## 参考情報') ||
+          line.startsWith('# 参考情報') ||
+          line.startsWith('参考情報') ||
+          line.includes('参考情報（Low）') ||
           (line.startsWith('*') && line.includes('Title:')) ||
           line.match(/^\*\s*Title:/) ||
-          line.match(/^###?\s*参照元/)
+          line.match(/^###?\s*参照元/) ||
+          line.match(/^###?\s*参考情報/)
         ) {
           referenceStartIndex = i;
           break;
