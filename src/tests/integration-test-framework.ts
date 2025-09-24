@@ -162,7 +162,7 @@ export class IntegrationTestFramework {
     try {
       // 1. LanceDB接続テスト
       const lancedbClient = LanceDBClient.getInstance();
-      await lancedbClient.initialize();
+      await lancedbClient.connect();
       
       // 2. テーブル存在確認
       const tables = await lancedbClient.listTables();
@@ -171,7 +171,7 @@ export class IntegrationTestFramework {
       }
 
       // 3. データ件数確認
-      const table = await lancedbClient.getTable('confluence');
+      const table = await lancedbClient.getTable();
       const count = await table.countRows();
       
       if (count === 0) {
@@ -325,7 +325,7 @@ export class IntegrationTestFramework {
     try {
       // 1. 全コンポーネントの初期化
       const lancedbClient = LanceDBClient.getInstance();
-      await lancedbClient.initialize();
+      await lancedbClient.connect();
 
       const lunrClient = LunrSearchClient.getInstance();
       await lunrClient.initialize();

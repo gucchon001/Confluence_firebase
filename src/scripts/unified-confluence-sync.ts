@@ -1,5 +1,5 @@
 /**
- * 統一Confluence同期スクリプト（batch-sync-confluence.ts）
+ * 統一Confluence同期スクリプト
  * 
  * 正しい仕様に基づくConfluence同期を実行
  * 1. ページIDが存在しない場合：追加
@@ -12,16 +12,16 @@ import 'dotenv/config';
 import { confluenceSyncService } from '../lib/confluence-sync-service';
 
 async function main() {
-    console.log('🚀 統一Confluence同期を開始します...（全件実行）');
+  console.log('🚀 統一Confluence同期を開始します...');
 
   try {
     // 1. テスト開始前のデータベース状態を表示
     console.log('\n📊 同期開始前の状態:');
     await confluenceSyncService.showDatabaseStatus();
 
-    // 2. Confluence APIから全ページを取得（ページネーション対応）
-    console.log('\n🔍 Confluence APIから全ページを取得中...');
-    const confluencePages = await confluenceSyncService.getAllConfluencePages(); // 全件取得（ページネーション対応）
+    // 2. Confluence APIから10ページを取得
+    console.log('\n🔍 Confluence APIから10ページを取得中...');
+    const confluencePages = await confluenceSyncService.getConfluencePages(10);
     console.log(`取得したページ数: ${confluencePages.length}`);
 
     if (confluencePages.length === 0) {
