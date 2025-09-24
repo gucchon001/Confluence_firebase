@@ -97,7 +97,7 @@ AIフレームワーク: Genkit (core)
 LLM / Embedding:
 - LLM: Google AI - Gemini API (gemini-2.5-flash)
 - Embedding: @xenova/transformers (Xenova/paraphrase-multilingual-MiniLM-L12-v2)
-  - 384次元のベクトル生成
+  - 768次元のベクトル生成
   - ローカル実行によるコスト削減
   - API依存なしでオフライン動作可能
   - 初回ロード後の高速な処理（8-14ms）
@@ -126,11 +126,11 @@ LLM / Embedding:
    - Confluenceからページデータを取得
    - HTMLからテキストを抽出
    - テキストをチャンク分割（1000文字程度、100文字オーバーラップ）
-   - @xenova/transformersによる埋め込みベクトル生成（384次元）
+   - @xenova/transformersによる埋め込みベクトル生成（768次元）
    - LanceDBにベクトルとメタデータを保存
 
 2. **ハイブリッド検索フロー**
-   - ユーザークエリを@xenova/transformersで埋め込みベクトルに変換（384次元）
+   - ユーザークエリを@xenova/transformersで埋め込みベクトルに変換（768次元）
    - 並列実行による複数検索ソースの組み合わせ：
      - **ベクトル検索**: LanceDBで類似ベクトル検索（意味的類似性）
      - **キーワード検索**: LanceDBのLIKE句によるタイトル・コンテンツ検索

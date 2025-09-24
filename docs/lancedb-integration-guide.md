@@ -18,7 +18,7 @@ Confluence API → データ取得 → テキスト抽出 → チャンク分割
 
 1. **データ同期**: Confluenceからページデータを取得
 2. **前処理**: HTMLからテキスト抽出、チャンク分割（1000文字、100文字オーバーラップ）
-3. **埋め込み生成**: @xenova/transformersで384次元ベクトル生成
+3. **埋め込み生成**: @xenova/transformersで768次元ベクトル生成
 4. **保存**: LanceDBにベクトルとメタデータを保存
 5. **検索**: ユーザークエリをベクトル化してLanceDBで検索
 
@@ -29,7 +29,7 @@ Confluence API → データ取得 → テキスト抽出 → チャンク分割
 ```typescript
 interface ConfluenceRecord {
   id: string;                    // チャンクID (pageId-chunkIndex)
-  vector: number[];              // 384次元の埋め込みベクトル
+  vector: number[];              // 768次元の埋め込みベクトル
   pageId: number;                // ConfluenceページID
   chunkIndex: number;            // チャンク番号
   space_key: string;             // スペースキー
@@ -48,7 +48,7 @@ const schema = {
   id: 'utf8',
   vector: { 
     type: 'fixed_size_list', 
-    listSize: 384, 
+    listSize: 768, 
     field: { type: 'float32' } 
   },
   pageId: 'int64',
@@ -102,7 +102,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
 ### 5.1 検索性能
 
 - **平均検索時間**: 7-23ms
-- **ベクトル次元**: 384次元
+- **ベクトル次元**: 768次元
 - **メモリ使用量**: 100回検索で約0.5MB増加
 - **対応ページ数**: 最大10,000ページ
 
@@ -175,7 +175,7 @@ npx tsx src/scripts/lancedb-search.ts "検索クエリ" --table confluence
 ### 8.1 よくある問題
 
 1. **テーブルが見つからない**: `.lancedb`ディレクトリの存在確認
-2. **次元数エラー**: ベクトル次元が384であることを確認
+2. **次元数エラー**: ベクトル次元が768であることを確認
 3. **検索結果が空**: ラベルフィルタリングの設定確認
 
 ### 8.2 ログ確認

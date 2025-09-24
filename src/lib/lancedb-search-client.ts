@@ -5,7 +5,7 @@ import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 import { getEmbeddings } from './embeddings';
 import { calculateKeywordScore, calculateHybridScore, LabelFilterOptions } from './search-weights';
-import { extractKeywordsConfigured } from './keyword-extractor-configured';
+import { DynamicKeywordExtractor } from './dynamic-keyword-extractor';
 import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
@@ -72,6 +72,7 @@ export interface LanceDBSearchParams {
   tableName?: string;
   filter?: string;
   maxDistance?: number; // 最大距離（類似度閾値）
+  qualityThreshold?: number; // 品質閾値（高品質結果のフィルタリング）
   useKeywordSearch?: boolean; // キーワード検索を使用するかどうか
   labelFilters?: LabelFilterOptions; // ラベルフィルタオプション
   includeLabels?: string[]; // アプリ層での包含フィルタ用ラベル
@@ -79,6 +80,7 @@ export interface LanceDBSearchParams {
   useLunrIndex?: boolean; // Feature flag for Lunr inverted index
   originalQuery?: string; // 展開前の原文クエリ（優先度制御用）
   excludeTitlePatterns?: string[]; // タイトル除外パターン
+  titleWeight?: number; // タイトル重み（ベクトル検索でのタイトル重視度）
 }
 
 /**
@@ -127,11 +129,15 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // デフォルト値の設定
     const topK = params.topK || 5;
     const tableName = params.tableName || 'confluence';
+    const titleWeight = params.titleWeight || 1.0; // デフォルトのタイトル重み
     
     // 並列実行でパフォーマンス最適化
-    const [vector, { keywords, highPriority, lowPriority }, db] = await Promise.all([
+    const [vector, keywords, db] = await Promise.all([
       getEmbeddings(params.query),
-      await extractKeywordsConfigured(params.query),
+      (async () => {
+        const extractor = new DynamicKeywordExtractor();
+        return await extractor.extractKeywordsConfigured(params.query);
+      })(),
       (async () => {
         const dbPath = path.resolve(process.cwd(), '.lancedb');
         console.log(`[searchLanceDB] Connecting to LanceDB at ${dbPath}`);
@@ -141,6 +147,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     console.log(`[searchLanceDB] Generated embedding vector with ${vector.length} dimensions`);
     console.log(`[searchLanceDB] Extracted ${keywords.length} keywords: ${keywords.join(', ')}`);
+    
+    // キーワードの優先度を設定（Setオブジェクトとして）
+    const highPriority = new Set(keywords.slice(0, 3)); // 上位3つのキーワードを高優先度
+    const lowPriority = new Set(keywords.slice(3)); // 残りを低優先度
     
     // テーブル存在確認とテーブルを開く
     const [tableNames, tbl] = await Promise.all([
@@ -187,6 +197,31 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       vectorResults = await vectorQuery.limit(topK * 2).toArray();
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
+    // 距離閾値でフィルタリング（ベクトル検索の有効化）
+    const distanceThreshold = params.maxDistance || 2.0; // 最適化: 1.0 -> 2.0 (ベクトル検索を有効化)
+    const qualityThreshold = params.qualityThreshold || 0.0; // 最適化: 0.1 -> 0.0 (品質閾値を無効化)
+    
+    console.log(`[searchLanceDB] Using distance threshold: ${distanceThreshold}, quality threshold: ${qualityThreshold}`);
+      
+      if (distanceThreshold < 2.0) {
+        const beforeCount = vectorResults.length;
+        vectorResults = vectorResults.filter(result => {
+          const distance = result._distance || 0;
+          return distance <= distanceThreshold;
+        });
+        console.log(`[searchLanceDB] Applied distance threshold ${distanceThreshold}: ${beforeCount} -> ${vectorResults.length} results`);
+      }
+      
+      // 品質閾値でフィルタリング（高品質結果のみ）
+      if (qualityThreshold < distanceThreshold) {
+        const beforeCount = vectorResults.length;
+        vectorResults = vectorResults.filter(result => {
+          const distance = result._distance || 0;
+          return distance >= qualityThreshold;
+        });
+        console.log(`[searchLanceDB] Applied quality threshold ${qualityThreshold}: ${beforeCount} -> ${vectorResults.length} results`);
+      }
+      
       // ラベルフィルタリングを適用（処理速度向上）
       if (excludeLabels.length > 0) {
         const beforeCount = vectorResults.length;
@@ -211,6 +246,23 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           return true;
         });
         console.log(`[searchLanceDB] Excluded ${beforeCount - vectorResults.length} results due to title pattern filtering`);
+      }
+      
+      // タイトル重みを適用（ベクトル検索結果の調整）
+      if (titleWeight !== 1.0) {
+        console.log(`[searchLanceDB] Applying title weight: ${titleWeight}`);
+        vectorResults = vectorResults.map(result => {
+          const title = String(result.title || '').toLowerCase();
+          const query = params.query.toLowerCase();
+          
+          // タイトルにクエリが含まれている場合、距離を調整
+          if (title.includes(query)) {
+            const adjustedDistance = result._distance * (1 / titleWeight);
+            return { ...result, _distance: adjustedDistance, _titleBoosted: true };
+          }
+          return result;
+        });
+        console.log(`[searchLanceDB] Applied title weight to ${vectorResults.filter(r => r._titleBoosted).length} results`);
       }
       
       // 結果数を制限

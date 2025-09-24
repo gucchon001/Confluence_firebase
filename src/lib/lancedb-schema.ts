@@ -16,7 +16,7 @@ interface SchemaDefinition {
 // 最小限のスキーマ定義（エラー切り分け用）
 export const MinimalLanceDBSchema: SchemaDefinition = {
   id: { type: 'string', nullable: false },
-  vector: { type: 'vector', valueType: 'float32', dimensions: 384, nullable: false },
+  vector: { type: 'vector', valueType: 'float32', dimensions: 768, nullable: false },
   title: { type: 'string', nullable: false },
   content: { type: 'string', nullable: false }
 };
@@ -24,7 +24,7 @@ export const MinimalLanceDBSchema: SchemaDefinition = {
 // 完全なスキーマ定義
 export const FullLanceDBSchema: SchemaDefinition = {
   id: { type: 'string', nullable: false },
-  vector: { type: 'vector', valueType: 'float32', dimensions: 384, nullable: false },
+  vector: { type: 'vector', valueType: 'float32', dimensions: 768, nullable: false },
   space_key: { type: 'string', nullable: false },
   title: { type: 'string', nullable: false },
   labels: { type: 'list', valueType: 'string', nullable: false },
@@ -56,7 +56,7 @@ export interface ConfluenceSchema {
 export function createConfluenceSampleData(): ConfluenceSchema {
   return {
     id: 'sample-1',
-    vector: new Array(384).fill(0),
+    vector: new Array(768).fill(0),
     space_key: 'SAMPLE',
     title: 'Sample Title',
     labels: ['sample'],

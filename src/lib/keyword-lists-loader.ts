@@ -337,32 +337,56 @@ export class KeywordListsLoader {
   }
 
   /**
-   * キーワードのマッチング（汎用版）
+   * キーワードのマッチング（厳密版）
    */
   private findMatchingKeywords(query: string, keywords: string[]): string[] {
     const matchedKeywords: string[] = [];
+    const queryWords = this.extractQueryWords(query);
     
     for (const keyword of keywords) {
-      // 完全一致
-      if (query.includes(keyword)) {
+      // 1. 完全一致を優先
+      if (queryWords.some(word => keyword === word)) {
         matchedKeywords.push(keyword);
         continue;
       }
       
-      // 部分一致（キーワードがクエリに含まれる）
-      if (keyword.includes(query)) {
+      // 2. クエリがキーワードを含む（3文字以上）
+      if (queryWords.some(word => 
+        word.length >= 3 && keyword.includes(word)
+      )) {
         matchedKeywords.push(keyword);
         continue;
       }
       
-      // 汎用的な関連性マッチング
-      if (this.isRelatedKeyword(keyword, query)) {
+      // 3. キーワードがクエリの主要単語を含む（3文字以上）
+      if (queryWords.some(word => 
+        word.length >= 3 && word.includes(keyword) && keyword.length >= 3
+      )) {
+        matchedKeywords.push(keyword);
+        continue;
+      }
+      
+      // 4. 教室管理に関連するキーワードのみ追加マッチング
+      if (this.isClassroomRelated(keyword) && this.isRelatedKeyword(keyword, query)) {
         matchedKeywords.push(keyword);
         continue;
       }
     }
 
     return matchedKeywords;
+  }
+
+  /**
+   * 教室管理に関連するキーワードかどうかを判定
+   */
+  private isClassroomRelated(keyword: string): boolean {
+    const classroomTerms = [
+      '教室', '管理', '一覧', '登録', '編集', '削除', 'コピー', '詳細',
+      'スクール', '校舎', '事業所', 'マネジメント', '運用', 'オペレーション',
+      '設定', '機能', '仕様', '要件', '画面', 'データ', '情報'
+    ];
+    
+    return classroomTerms.some(term => keyword.includes(term));
   }
 
   /**

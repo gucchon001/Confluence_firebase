@@ -12,7 +12,7 @@ async function main() {
   const args = process.argv.slice(2);
   let query = '';
   let tableName = 'confluence';
-  let vectorDim = 384; // デフォルトの次元数（LanceDBのベクトル次元数に合わせる）
+  let vectorDim = 768; // デフォルトの次元数（LanceDBのベクトル次元数に合わせる）
   
   // 検索クエリ（最初の引数）
   if (args.length > 0 && !args[0].startsWith('--')) {

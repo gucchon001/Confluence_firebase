@@ -3,7 +3,7 @@
  * Handles asynchronous initialization of Lunr search index
  */
 
-import { lunrSearchClient, LunrDocument } from './lunr-search-client';
+import { LunrSearchClient, LunrDocument } from './lunr-search-client';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { getLabelsAsArray } from './label-utils';
 
@@ -37,6 +37,7 @@ export class LunrInitializer {
       const startTime = Date.now();
 
       // まずはキャッシュからロードを試みる（再インデックス回避）
+      const lunrSearchClient = LunrSearchClient.getInstance();
       const loaded = await lunrSearchClient.loadFromDisk();
       if (loaded) {
         this.status.isInitialized = true;
@@ -93,6 +94,10 @@ export class LunrInitializer {
       await lunrSearchClient.initialize(lunrDocs);
       // キャッシュに保存
       await lunrSearchClient.saveToDisk(lunrDocs);
+      
+      // 初期化完了を確認
+      console.log(`[LunrInitializer] Lunr client ready: ${lunrSearchClient.isReady()}`);
+      console.log(`[LunrInitializer] Lunr status:`, lunrSearchClient.getStatus());
 
       const duration = Date.now() - startTime;
       this.status.isInitialized = true;

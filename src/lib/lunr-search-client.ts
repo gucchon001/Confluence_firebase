@@ -34,10 +34,23 @@ export interface LunrSearchResult {
 }
 
 export class LunrSearchClient {
+  private static instance: LunrSearchClient | null = null;
   private index: lunr.Index | null = null;
   private documents: Map<string, LunrDocument> = new Map();
   private isInitialized = false;
   private defaultCachePath = path.join('.cache', 'lunr-index.json');
+
+  // シングルトンパターン
+  public static getInstance(): LunrSearchClient {
+    if (!LunrSearchClient.instance) {
+      LunrSearchClient.instance = new LunrSearchClient();
+    }
+    return LunrSearchClient.instance;
+  }
+
+  private constructor() {
+    // プライベートコンストラクタ
+  }
 
   async initialize(documents: LunrDocument[]): Promise<void> {
     try {
@@ -85,6 +98,7 @@ export class LunrSearchClient {
 
       this.isInitialized = true;
       console.log(`[LunrSearchClient] Initialization complete with ${documents.length} documents`);
+      console.log(`[LunrSearchClient] Index ready: ${this.index !== null}`);
     } catch (error) {
       console.error('[LunrSearchClient] Initialization failed:', error);
       throw error;
@@ -256,6 +270,14 @@ export class LunrSearchClient {
     return this.isInitialized && this.index !== null;
   }
 
+  getStatus(): { isInitialized: boolean; documentCount: number; hasIndex: boolean } {
+    return {
+      isInitialized: this.isInitialized,
+      documentCount: this.documents.size,
+      hasIndex: this.index !== null
+    };
+  }
+
   async destroy(): Promise<void> {
     this.index = null;
     this.documents.clear();
@@ -264,4 +286,4 @@ export class LunrSearchClient {
 }
 
 // Singleton instance
-export const lunrSearchClient = new LunrSearchClient();
+export const lunrSearchClient = LunrSearchClient.getInstance();

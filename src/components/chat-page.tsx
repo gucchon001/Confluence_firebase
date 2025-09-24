@@ -25,7 +25,7 @@ import {
 } from '@/lib/conversation-service';
 import { useToast } from '@/hooks/use-toast';
 import { showErrorToast, showSuccessToast, showApiErrorToast, handleNetworkError } from '@/lib/toast-helpers';
-import MigrationButton from '@/components/migration-button';
+// import MigrationButton from '@/components/migration-button';
 
 interface ChatPageProps {
   user: User;
@@ -426,7 +426,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                             <CardTitle>設定</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <MigrationButton 
+                            {/* <MigrationButton 
                                 user={user} 
                                 onComplete={() => {
                                     // 移行完了後に会話一覧を更新
@@ -441,7 +441,10 @@ export default function ChatPage({ user }: ChatPageProps) {
                                     };
                                     refreshConversations();
                                 }}
-                            />
+                            /> */}
+                            <div className="text-sm text-muted-foreground">
+                                移行機能は一時的に無効化されています
+                            </div>
                             <div className="mt-4">
                                 <Button 
                                     variant="outline" 

@@ -418,6 +418,11 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
             chunks = [page.title || 'No content'];
           }
           
+          // 空のテキストの場合はタイトルを使用
+          if (text.trim().length === 0) {
+            chunks = [page.title || 'No content available'];
+          }
+          
           totalChunks += chunks.length;
           // ラベルを取得（metadataから取得、API呼び出しは最小限に）
           let labels: string[] = [];
@@ -438,7 +443,7 @@ async function batchSyncConfluence(isDifferentialSync = false, shouldDelete = tr
               id: `${page.id}-${i}`, 
               pageId: parseInt(page.id), 
               title: page.title,
-              spaceKey: page.space?.key || '', 
+              space_key: page.space?.key || '', 
               url: `${process.env.CONFLUENCE_BASE_URL}/wiki/spaces/${page.space?.key}/pages/${page.id}`,
               lastUpdated: page.version?.when || '', 
               chunkIndex: i, 
