@@ -5,6 +5,7 @@
 
 import { LunrSearchClient, LunrDocument } from './lunr-search-client';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
+import { lancedbClient } from './lancedb-client';
 import { getLabelsAsArray } from './label-utils';
 
 interface LunrInitializerStatus {
@@ -48,9 +49,8 @@ export class LunrInitializer {
       }
 
       // LanceDBからドキュメントを取得
-      const lancedb = await import('@lancedb/lancedb');
-      const db = await lancedb.connect('.lancedb');
-      const tbl = await db.openTable('confluence');
+      const connection = await lancedbClient.getConnection();
+      const tbl = connection.table;
       
       // 全ドキュメントを取得
       const docs = await tbl.query().limit(10000).toArray();
@@ -122,7 +122,13 @@ export class LunrInitializer {
   }
 
   isReady(): boolean {
-    return this.status.isInitialized && lunrSearchClient.isReady();
+    try {
+      const { lunrSearchClient } = require('./lunr-search-client');
+      return this.status.isInitialized && lunrSearchClient.isReady();
+    } catch (error) {
+      console.warn('[LunrInitializer] Failed to check Lunr readiness:', error);
+      return false;
+    }
   }
 
   getStatus(): LunrInitializerStatus {

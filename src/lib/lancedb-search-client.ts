@@ -3,6 +3,7 @@
  */
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
+import { lancedbClient } from './lancedb-client';
 import { getEmbeddings } from './embeddings';
 import { calculateKeywordScore, LabelFilterOptions } from './search-weights';
 import { calculateHybridScore } from './score-utils';
@@ -132,17 +133,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const titleWeight = params.titleWeight || 1.0; // デフォルトのタイトル重み
     
     // 並列実行でパフォーマンス最適化
-    const [vector, keywords, db] = await Promise.all([
+    const [vector, keywords, connection] = await Promise.all([
       getEmbeddings(params.query),
       (async () => {
         const extractor = new DynamicKeywordExtractor();
         return await extractor.extractKeywordsConfigured(params.query);
       })(),
-      (async () => {
-        const dbPath = path.resolve(process.cwd(), '.lancedb');
-        console.log(`[searchLanceDB] Connecting to LanceDB at ${dbPath}`);
-        return await lancedb.connect(dbPath);
-      })()
+      lancedbClient.getConnection()
     ]);
     
     console.log(`[searchLanceDB] Generated embedding vector with ${vector.length} dimensions`);
@@ -152,18 +149,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const highPriority = new Set(keywords.slice(0, 3)); // 上位3つのキーワードを高優先度
     const lowPriority = new Set(keywords.slice(3)); // 残りを低優先度
     
-    // テーブル存在確認とテーブルを開く
-    const [tableNames, tbl] = await Promise.all([
-      db.tableNames(),
-      db.openTable(tableName)
-    ]);
-    
-    if (!tableNames.includes(tableName)) {
-      console.error(`[searchLanceDB] Table '${tableName}' not found`);
-      return [];
-    }
-    
-    console.log(`[searchLanceDB] Opened table '${tableName}'`);
+    // テーブルを取得
+    const tbl = connection.table;
+    console.log(`[searchLanceDB] Using table '${connection.tableName}'`);
 
     // Check if Lunr is ready (should be initialized on startup)
     if (params.useLunrIndex && !lunrInitializer.isReady()) {

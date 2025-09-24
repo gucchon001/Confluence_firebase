@@ -8,6 +8,7 @@ import { searchLanceDB } from './lancedb-search-client';
 import { lunrSearchClient } from './lunr-search-client';
 import { preprocessQuery } from './query-preprocessor';
 import { formatSearchResults, combineAndRerankResults, FormattedSearchResult } from './search-result-formatter';
+import { lancedbClient } from './lancedb-client';
 
 export interface HybridSearchParams {
   query: string;
@@ -252,9 +253,8 @@ export class HybridSearchEngine {
       console.log('[HybridSearchEngine] Cache not found, loading from LanceDB...');
       
       // LanceDBからドキュメントを取得
-      const lancedb = await import('@lancedb/lancedb');
-      const db = await lancedb.connect('.lancedb');
-      const tbl = await db.openTable('confluence');
+      const connection = await lancedbClient.getConnection();
+      const tbl = connection.table;
       
       // 全データを取得（正しいLanceDB APIを使用）
       const allData = await tbl.search([0.1] * 768).limit(10000).toArray();

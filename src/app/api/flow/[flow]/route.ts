@@ -3,19 +3,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
-import { initializeOnStartup } from '@/lib/startup-initializer';
+import { unifiedInitializer } from '@/lib/unified-initializer';
 
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ flow: string }> }
 ) {
   try {
-    // Lunr Indexの初期化を確実に実行
+    // 統一初期化サービスを使用
     try {
-      await initializeOnStartup();
-      console.log('✅ Lunr Index initialization completed in flow API');
+      await unifiedInitializer.initializeAll();
+      console.log('✅ Unified initialization completed in flow API');
     } catch (error) {
-      console.warn('⚠️ Lunr Index initialization failed in flow API:', error);
+      console.warn('⚠️ Unified initialization failed in flow API:', error);
       // 初期化に失敗しても処理は継続
     }
 

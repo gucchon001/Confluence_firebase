@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 import { getEmbeddings } from '../../../lib/embeddings';
-import { initializeOnStartup } from '../../../lib/startup-initializer';
+import { unifiedInitializer } from '../../../lib/unified-initializer';
 import { preprocessQuery, calculateQueryQuality } from '../../../lib/query-preprocessor';
 import { hybridSearchEngine } from '../../../lib/hybrid-search-engine';
 import { lunrInitializer } from '../../../lib/lunr-initializer';
@@ -10,11 +10,11 @@ import { calculateSimilarityScore } from '../../../lib/score-utils';
 
 export async function POST(req: NextRequest) {
   try {
-    // Lunr Indexの初期化を確実に実行
+    // 統一初期化サービスを使用
     let lunrReady = false;
     try {
-      await lunrInitializer.initializeAsync();
-      console.log('✅ Lunr Index initialization completed in search API');
+      await unifiedInitializer.initializeAll();
+      console.log('✅ Unified initialization completed in search API');
       
       // Lunrクライアントの状態を確認
       const { lunrSearchClient } = await import('../../../lib/lunr-search-client');
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       console.log('Lunr client status after init:', status);
       lunrReady = status.isInitialized && status.hasIndex;
     } catch (error) {
-      console.warn('⚠️ Lunr Index initialization failed in search API:', error);
+      console.warn('⚠️ Unified initialization failed in search API:', error);
       // 初期化に失敗しても検索は継続（フォールバック検索を使用）
     }
 
