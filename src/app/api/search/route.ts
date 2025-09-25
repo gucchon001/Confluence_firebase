@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 import { getEmbeddings } from '../../../lib/embeddings';
@@ -43,8 +43,8 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
           topK,
           useLunrIndex: lunrReady, // Lunrの初期化状態に基づく
           labelFilters: {
-            includeMeetingNotes: false,
-            includeArchived: false
+            excludeMeetingNotes: true,
+            excludeArchived: true
           },
           tableName
         });
@@ -64,9 +64,7 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
           scoreText: result.scoreText
         }));
 
-        return new Response(JSON.stringify({ results: formattedResults }), { 
-          headers: { 'Content-Type': 'application/json' } 
-        });
+        return NextResponse.json({ results: formattedResults });
       } catch (hybridError: any) {
         console.error('Hybrid search failed, falling back to vector search:', hybridError);
         // フォールバック: ベクトル検索のみ
@@ -132,9 +130,7 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
       }));
 
       // 7. レスポンス返却
-      return new Response(JSON.stringify({ results: formattedResults }), { 
-        headers: { 'Content-Type': 'application/json' } 
-      });
+      return NextResponse.json({ results: formattedResults });
     } catch (lanceDbError: any) {
       console.error('LanceDB error:', lanceDbError);
       return APIErrorHandler.internalServerError(

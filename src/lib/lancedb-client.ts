@@ -7,7 +7,7 @@ import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 
 export interface LanceDBConnection {
-  db: lancedb.LanceDB;
+  db: lancedb.Connection;
   table: lancedb.Table;
   tableName: string;
 }
@@ -102,7 +102,7 @@ export class LanceDBClient {
   /**
    * データベースを取得
    */
-  public async getDatabase(): Promise<lancedb.LanceDB> {
+  public async getDatabase(): Promise<lancedb.Connection> {
     const connection = await this.getConnection();
     return connection.db;
   }
@@ -164,6 +164,6 @@ export async function getLanceDBTable(tableName?: string): Promise<lancedb.Table
 /**
  * 便利な関数: データベースを取得
  */
-export async function getLanceDBDatabase(): Promise<lancedb.LanceDB> {
+export async function getLanceDBDatabase(): Promise<lancedb.Connection> {
   return await lancedbClient.getDatabase();
 }

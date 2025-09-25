@@ -18,10 +18,10 @@ export class LabelManager {
     this.config = {
       excludeAlways: ['スコープ外', 'メールテンプレート', 'アーカイブ', 'フォルダ'],
       excludeConditional: {
-        '議事録': 'includeMeetingNotes',
-        'meeting-notes': 'includeMeetingNotes',
-        'アーカイブ': 'includeArchived',
-        'archive': 'includeArchived'
+        '議事録': 'excludeMeetingNotes',
+        'meeting-notes': 'excludeMeetingNotes',
+        'アーカイブ': 'excludeArchived',
+        'archive': 'excludeArchived'
       },
       ...config
     };
@@ -91,9 +91,10 @@ export class LabelManager {
    */
   getDefaultFilterOptions(): LabelFilterOptions {
     return {
-      includeMeetingNotes: false,
-      includeArchived: false,
-      includeFolders: false  // フォルダラベルは常に除外
+      excludeMeetingNotes: true,
+      excludeArchived: true,
+      excludeTemplates: false,
+      excludeGeneric: false
     };
   }
 

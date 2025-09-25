@@ -9,15 +9,13 @@ import { lunrSearchClient } from './lunr-search-client';
 import { preprocessQuery } from './query-preprocessor';
 import { formatSearchResults, combineAndRerankResults, FormattedSearchResult } from './search-result-formatter';
 import { lancedbClient } from './lancedb-client';
+import { LabelFilterOptions } from './search-weights';
 
 export interface HybridSearchParams {
   query: string;
   topK?: number;
   useLunrIndex?: boolean;
-  labelFilters?: {
-    includeMeetingNotes: boolean;
-    includeArchived: boolean;
-  };
+  labelFilters?: LabelFilterOptions;
   tableName?: string;
 }
 

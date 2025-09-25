@@ -459,32 +459,32 @@ export class KeywordListsLoader {
     if (query) {
       // ドメイン名
       if (this.keywordCategories.domainNames.includes(keyword)) {
-        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'domainNames', query);
+        return this.dynamicPriorityManager.adjustPriority(query, 'domainNames');
       }
 
       // 機能名
       if (this.keywordCategories.functionNames.includes(keyword)) {
-        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'functionNames', query);
+        return this.dynamicPriorityManager.adjustPriority(query, 'functionNames');
       }
 
       // 操作名
       if (this.keywordCategories.operationNames.includes(keyword)) {
-        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'operationNames', query);
+        return this.dynamicPriorityManager.adjustPriority(query, 'operationNames');
       }
 
       // システム項目
       if (this.keywordCategories.systemFields.includes(keyword)) {
-        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'systemFields', query);
+        return this.dynamicPriorityManager.adjustPriority(query, 'systemFields');
       }
 
       // システム用語
       if (this.keywordCategories.systemTerms.includes(keyword)) {
-        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'systemTerms', query);
+        return this.dynamicPriorityManager.adjustPriority(query, 'systemTerms');
       }
 
       // 関連キーワード
       if (this.keywordCategories.relatedKeywords.includes(keyword)) {
-        return this.dynamicPriorityManager.getDynamicKeywordPriority(keyword, 'relatedKeywords', query);
+        return this.dynamicPriorityManager.adjustPriority(query, 'relatedKeywords');
       }
     }
 

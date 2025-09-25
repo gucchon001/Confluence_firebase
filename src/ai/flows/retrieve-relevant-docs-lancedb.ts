@@ -117,8 +117,8 @@ async function lancedbRetrieverTool(
       spaceKey: filters?.spaceKey,
       labels: filters?.labels,
       labelFilters: {
-        includeMeetingNotes: false,
-        includeArchived: false
+        excludeMeetingNotes: true,
+        excludeArchived: true
       },
     });
     console.log('[lancedbRetrieverTool] Generated filterQuery:', filterQuery || '(none)');
@@ -158,8 +158,8 @@ async function lancedbRetrieverTool(
       topK: 12,
       useLunrIndex: false, // BM25検索を無効化してベクトル検索のみ使用
       labelFilters: {
-        includeMeetingNotes: false,
-        includeArchived: false
+        excludeMeetingNotes: true,
+        excludeArchived: true
       },
       excludeTitlePatterns: ['xxx_*'], // xxx_で始まるページを除外
     });

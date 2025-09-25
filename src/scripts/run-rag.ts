@@ -8,7 +8,7 @@ async function main() {
   }
 
   console.log(`=== RAG RUN ===\nQuery: ${query}`);
-  const ans = await answerWithRag(query, { labelFilters: { includeMeetingNotes: false, includeArchived: false } });
+  const ans = await answerWithRag(query, { labelFilters: { excludeMeetingNotes: true, excludeArchived: true } });
 
   console.log('\n--- 要約 ---');
   console.log(ans.summary);
