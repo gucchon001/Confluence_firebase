@@ -26,7 +26,7 @@ export interface ConfluenceChunk {
   title: string;
   content: string;
   chunkIndex: number;
-  lastModified: string;
+  lastUpdated: string;
   spaceKey: string;
   embedding: number[];
 }
@@ -159,7 +159,7 @@ export class ConfluenceSyncService {
           results.added++;
         } else {
           // ページIDが存在する場合：更新日時を比較
-          const existingLastModified = existingChunks[0].lastModified;
+          const existingLastModified = existingChunks[0].lastUpdated;
           const confluenceLastModified = page.version?.when || new Date().toISOString();
           
           console.log(`📅 更新日時比較:`);
@@ -238,10 +238,10 @@ export class ConfluenceSyncService {
           title: chunk.title,
           content: chunk.content,
           chunkIndex: chunk.chunkIndex,
-          lastUpdated: chunk.lastModified,
+          lastUpdated: chunk.lastUpdated,
           space_key: chunk.spaceKey,
           url: `${process.env.CONFLUENCE_BASE_URL}/wiki/spaces/${chunk.spaceKey}/pages/${chunk.pageId}`,
-          labels: [],
+          labels: this.extractLabelsFromPage(page),
           vector: embedding
         };
 
@@ -256,6 +256,17 @@ export class ConfluenceSyncService {
   }
 
   /**
+   * ページからラベルを抽出
+   */
+  private extractLabelsFromPage(page: ConfluencePage): string[] {
+    if (!page.metadata?.labels?.results) {
+      return [];
+    }
+
+    return page.metadata.labels.results.map(label => label.name);
+  }
+
+  /**
    * 既存ページを更新（削除→再作成）
    */
   private async updateExistingPage(table: any, page: ConfluencePage, existingChunks: ConfluenceChunk[]): Promise<void> {
@@ -264,7 +275,7 @@ export class ConfluenceSyncService {
       
       // 1. 既存のチャンクを削除
       for (const chunk of existingChunks) {
-        await table.delete(`pageId = ${chunk.pageId}`);
+        await table.delete(`"pageId" = ${chunk.pageId}`);
       }
       
       console.log(`  ✅ 既存チャンクの削除完了`);
@@ -286,7 +297,7 @@ export class ConfluenceSyncService {
     const content = page.body?.storage?.value || '';
     const title = page.title || 'No Title';
     const pageId = page.id;
-    const lastModified = page.version?.when || new Date().toISOString();
+    const lastUpdated = page.version?.when || new Date().toISOString();
     const spaceKey = page.space?.key || 'N/A';
 
     // 元の仕様に合わせたチャンク分割ロジック
@@ -303,7 +314,7 @@ export class ConfluenceSyncService {
           title,
           content: chunk,
           chunkIndex: Math.floor(i / chunkSize),
-          lastModified,
+          lastUpdated,
           spaceKey,
           embedding: [] // 後で埋め込みを生成
         });
@@ -316,7 +327,7 @@ export class ConfluenceSyncService {
         title,
         content: title, // コンテンツがない場合はタイトルを使用
         chunkIndex: 0,
-        lastModified,
+        lastUpdated,
         spaceKey,
         embedding: []
       });

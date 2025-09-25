@@ -235,6 +235,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         });
         console.log(`[searchLanceDB] Excluded ${beforeCount - vectorResults.length} results due to title pattern filtering`);
       }
+
       
       // タイトル重みを適用（ベクトル検索結果の調整）
       if (titleWeight !== 1.0) {
