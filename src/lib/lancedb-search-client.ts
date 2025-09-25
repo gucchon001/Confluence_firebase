@@ -15,6 +15,67 @@ import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
 
+// 検索結果キャッシュ
+const searchCache = new Map<string, any>();
+const CACHE_SIZE_LIMIT = 1000;
+const CACHE_TTL = 5 * 60 * 1000; // 5分間
+
+interface CacheEntry {
+  results: any[];
+  timestamp: number;
+  ttl: number;
+}
+
+/**
+ * キャッシュキーを生成
+ */
+function generateCacheKey(query: string, params: any): string {
+  const normalizedQuery = query.toLowerCase().trim();
+  const paramString = JSON.stringify({
+    topK: params.topK || 5,
+    labelFilters: params.labelFilters || { includeMeetingNotes: false, includeArchived: false }
+  });
+  return `${normalizedQuery}_${Buffer.from(paramString).toString('base64').slice(0, 20)}`;
+}
+
+/**
+ * キャッシュから検索結果を取得
+ */
+function getFromCache(cacheKey: string): any[] | null {
+  const entry = searchCache.get(cacheKey);
+  if (!entry) {
+    return null;
+  }
+
+  // TTLチェック
+  if (Date.now() - entry.timestamp > entry.ttl) {
+    searchCache.delete(cacheKey);
+    return null;
+  }
+
+  console.log(`🎯 キャッシュヒット: "${cacheKey}"`);
+  return entry.results;
+}
+
+/**
+ * キャッシュに検索結果を保存
+ */
+function setToCache(cacheKey: string, results: any[]): void {
+  // キャッシュサイズ制限
+  if (searchCache.size >= CACHE_SIZE_LIMIT) {
+    const firstKey = searchCache.keys().next().value;
+    searchCache.delete(firstKey);
+  }
+
+  searchCache.set(cacheKey, {
+    results,
+    timestamp: Date.now(),
+    ttl: CACHE_TTL
+  });
+
+  console.log(`💾 キャッシュ保存: "${cacheKey}" (${results.length}件)`);
+}
+
 /**
  * タイトルが除外パターンにマッチするかチェック
  */
@@ -118,6 +179,18 @@ export interface LanceDBSearchResult {
 export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceDBSearchResult[]> {
   try {
     console.log(`[searchLanceDB] Starting search with query: "${params.query}"`);
+    
+    // キャッシュキーを生成
+    const cacheKey = generateCacheKey(params.query, params);
+    
+    // キャッシュから取得を試行
+    const cachedResults = getFromCache(cacheKey);
+    if (cachedResults) {
+      console.log(`🚀 キャッシュから結果を返却: ${cachedResults.length}件`);
+      return cachedResults;
+    }
+    
+    console.log(`🔍 キャッシュミス: "${params.query}"`);
     
     // Lunr Indexの初期化を確実に実行
     try {
@@ -394,13 +467,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           keywordMatchCount++;
         }
         
-        // ベクトル距離、キーワードスコアを組み合わせた複合スコア（ラベルスコアは使用しない）
-        const hybridScore = calculateHybridScore(resultWithScore._distance, keywordScore, 0);
-        console.log(`  Hybrid score: ${hybridScore} (vector: ${resultWithScore._distance}, keyword: ${keywordScore}, label: 0)`);
+        // ベクトル距離、キーワードスコア、ラベルスコアを組み合わせた複合スコア
+        const hybridScore = calculateHybridScore(resultWithScore._distance, keywordScore, labelMatches);
+        console.log(`  Hybrid score: ${hybridScore} (vector: ${resultWithScore._distance}, keyword: ${keywordScore}, label: ${labelMatches})`);
         
         // スコア情報を追加
         resultWithScore._keywordScore = keywordScore;
-        resultWithScore._labelScore = 0;  // ラベルスコアは使用しない
+        resultWithScore._labelScore = labelMatches;  // ラベルマッチ数をスコアとして使用
         resultWithScore._hybridScore = hybridScore;
         resultWithScore._sourceType = keywordScore > 0 ? 'hybrid' : 'vector';
         resultWithScore._matchDetails = {
@@ -876,6 +949,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     });
     
     console.log(`[searchLanceDB] Processed ${processedResults.length} results using unified service`);
+    
+    // 結果をキャッシュに保存
+    setToCache(cacheKey, processedResults);
+    
     return processedResults;
   } catch (error: any) {
     console.error(`[searchLanceDB] Error: ${error.message}`);

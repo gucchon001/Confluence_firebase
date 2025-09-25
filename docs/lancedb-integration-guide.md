@@ -24,42 +24,99 @@ Confluence API → データ取得 → テキスト抽出 → チャンク分割
 
 ## 3. スキーマ定義
 
-### 3.1 テーブルスキーマ
+### 3.1 正しいデータ構造（本番仕様）
+
+#### 3.1.1 TypeScriptインターフェース
 
 ```typescript
 interface ConfluenceRecord {
   id: string;                    // チャンクID (pageId-chunkIndex)
   vector: number[];              // 768次元の埋め込みベクトル
-  pageId: number;                // ConfluenceページID
+  pageId: number;                // ConfluenceページID（数値型）
   chunkIndex: number;            // チャンク番号
   space_key: string;             // スペースキー
   title: string;                 // ページタイトル
   content: string;               // チャンク内容
   url: string;                   // ページURL
-  lastUpdated: string;           // 最終更新日時
-  labels: string[];              // ラベル配列
+  lastUpdated: string;           // 最終更新日時（ISO文字列）
+  labels: string[];              // ラベル配列（空配列も可）
 }
 ```
 
-### 3.2 LanceDBスキーマ
+#### 3.1.2 LanceDBスキーマ定義
 
 ```typescript
-const schema = {
-  id: 'utf8',
-  vector: { 
-    type: 'fixed_size_list', 
-    listSize: 768, 
-    field: { type: 'float32' } 
-  },
-  pageId: 'int64',
-  chunkIndex: 'int32',
-  space_key: 'utf8',
-  title: 'utf8',
-  content: 'utf8',
-  url: 'utf8',
-  lastUpdated: 'utf8',
-  labels: { type: 'list', field: { type: 'utf8' } }
+export const FullLanceDBSchema: SchemaDefinition = {
+  id: { type: 'string', nullable: false },                    // チャンクID
+  vector: { type: 'vector', valueType: 'float32', dimensions: 768, nullable: false }, // 埋め込みベクトル
+  space_key: { type: 'string', nullable: false },            // スペースキー
+  title: { type: 'string', nullable: false },                // ページタイトル
+  labels: { type: 'list', valueType: 'string', nullable: false }, // ラベル配列
+  content: { type: 'string', nullable: false },              // チャンク内容
+  pageId: { type: 'int64', nullable: false },                // ページID（数値型）
+  chunkIndex: { type: 'int32', nullable: false },            // チャンクインデックス
+  url: { type: 'string', nullable: false },                  // ページURL
+  lastUpdated: { type: 'string', nullable: false }           // 最終更新日時
 };
+```
+
+### 3.2 重要なデータ型の仕様
+
+#### 3.2.1 ページID（pageId）
+- **型**: `number`（int64）
+- **変換**: `parseInt(pageId)` で文字列から数値に変換
+- **例**: `"123456789"` → `123456789`
+
+#### 3.2.2 更新日時（lastUpdated）
+- **型**: `string`（ISO 8601形式）
+- **フィールド名**: `lastUpdated`（`lastModified`ではない）
+- **例**: `"2024-01-15T10:30:00.000Z"`
+
+#### 3.2.3 ラベル（labels）
+- **型**: `string[]`配列
+- **抽出方法**: `page.metadata?.labels?.results?.map(label => label.name) || []`
+- **空配列**: ラベルがない場合は空配列`[]`を保存
+
+#### 3.2.4 埋め込みベクトル（vector）
+- **型**: `number[]`配列
+- **次元数**: 768次元（固定）
+- **値の型**: `float32`
+
+### 3.3 ラベル抽出ロジック
+
+```typescript
+/**
+ * ページからラベルを抽出（本番仕様）
+ */
+private extractLabelsFromPage(page: ConfluencePage): string[] {
+  if (!page.metadata?.labels?.results) {
+    return [];
+  }
+  return page.metadata.labels.results.map(label => label.name);
+}
+```
+
+### 3.4 チャンク分割ロジック
+
+#### 3.4.1 本番仕様（動的分割）
+```typescript
+// 1800文字での動的分割
+const chunkSize = 1800;
+for (let i = 0; i < content.length; i += chunkSize) {
+  const chunk = content.substring(i, i + chunkSize).trim();
+  // チャンク処理
+}
+```
+
+#### 3.4.2 理想仕様（固定分割）
+```typescript
+// 3チャンク固定分割
+const chunkSize = Math.ceil(content.length / 3);
+for (let i = 0; i < 3; i++) {
+  const start = i * chunkSize;
+  const end = Math.min(start + chunkSize, content.length);
+  // チャンク処理
+}
 ```
 
 ## 4. ハイブリッド検索

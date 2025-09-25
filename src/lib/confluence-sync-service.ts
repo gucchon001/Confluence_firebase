@@ -120,48 +120,6 @@ export class ConfluenceSyncService {
     }
   }
 
-  /**
-   * Confluence APIから全ページを取得（ページネーション対応）
-   */
-  async getAllConfluencePages(): Promise<ConfluencePage[]> {
-    const allPages: ConfluencePage[] = [];
-    let start = 0;
-    const batchSize = 50;
-    let hasMore = true;
-
-    console.log('🔄 ページネーション対応で全ページを取得中...');
-
-    while (hasMore) {
-      try {
-        const pages = await this.getConfluencePages(batchSize, start);
-        console.log(`📥 バッチ取得: ${pages.length}ページ (start=${start}, limit=${batchSize})`);
-        
-        if (pages.length === 0) {
-          console.log(`🔚 ページが見つかりません (start=${start}), 同期を停止`);
-          hasMore = false;
-          break;
-        }
-        
-        allPages.push(...pages);
-        start += pages.length;
-        
-        // ページネーション継続条件のチェック
-        if (pages.length < batchSize) {
-          console.log(`🔚 最後のバッチ: ${pages.length}ページ (バッチサイズ ${batchSize} 未満)`);
-          hasMore = false;
-        }
-        
-        console.log(`📊 累計取得ページ数: ${allPages.length}ページ`);
-        
-      } catch (error) {
-        console.error(`❌ バッチ取得エラー (start=${start}):`, error);
-        hasMore = false;
-      }
-    }
-
-    console.log(`✅ 全ページ取得完了: ${allPages.length}ページ`);
-    return allPages;
-  }
 
   /**
    * Confluenceページを並列バッチで取得

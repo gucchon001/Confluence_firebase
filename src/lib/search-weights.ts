@@ -49,7 +49,7 @@ export function calculateKeywordScore(
       score += 1;
     }
   }
-
+  
   return {
     score,
     titleMatches,

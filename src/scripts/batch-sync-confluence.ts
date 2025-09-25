@@ -61,5 +61,5 @@ async function main() {
 
 // スクリプト実行
 if (require.main === module) {
-  main();
+main();
 }

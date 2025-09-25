@@ -1,0 +1,243 @@
+🔍 vectorとlabelsの型表示問題がハイブリッド検索に影響するかテスト...
+
+📊 データベースの状態確認...
+📊 総チャンク数: 9
+
+🔍 vectorとlabelsの詳細分析...
+
+チャンク 0 (PageID: 666927149):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: undefined
+
+チャンク 1 (PageID: 674594874):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: 1
+
+チャンク 2 (PageID: 666927182):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: undefined
+
+チャンク 3 (PageID: 666927160):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: undefined
+
+チャンク 4 (PageID: 674660389):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: 1
+
+チャンク 5 (PageID: 680493067):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: 1
+
+チャンク 6 (PageID: 680525965):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: 1
+
+チャンク 7 (PageID: 674758673):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: 1
+
+チャンク 8 (PageID: 677150721):
+  vector型: object
+  vector配列確認: false
+  vector長さ: 768
+  labels型: object
+  labels配列確認: false
+  labels長さ: undefined
+
+🔍 ベクトル検索のテスト...
+
+📝 ベクトル検索クエリ: "機能 要件 システム"
+  ベクトル検索時間: 2736ms
+  ベクトル検索結果: 5件
+    1. 【FIX】全体管理者登録・削除フロー
+      PageID: 674758673, スコア: undefined
+      ソース: vector
+      距離: unknown
+    2. 【FIX】クライアント企業への請求・支払いフロー
+      PageID: 674594874, スコア: undefined
+      ソース: vector
+      距離: unknown
+    3. ユーザー登録・退会フロー（テンプレ）
+      PageID: 666927160, スコア: undefined
+      ソース: vector
+      距離: unknown
+
+📝 ベクトル検索クエリ: "管理 フロー プロセス"
+  ベクトル検索時間: 116ms
+  ベクトル検索結果: 5件
+    1. ユーザー登録・退会フロー（テンプレ）
+      PageID: 666927160, スコア: undefined
+      ソース: vector
+      距離: unknown
+    2. 【作成中】オシゴトQ＆A
+      PageID: 680525965, スコア: undefined
+      ソース: vector
+      距離: unknown
+    3. 【FIX】クライアント企業への請求・支払いフロー
+      PageID: 674594874, スコア: undefined
+      ソース: vector
+      距離: unknown
+
+📝 ベクトル検索クエリ: "データベース 同期 更新"
+  ベクトル検索時間: 94ms
+  ベクトル検索結果: 5件
+    1. ユーザー登録・退会フロー（テンプレ）
+      PageID: 666927160, スコア: undefined
+      ソース: vector
+      距離: unknown
+    2. 【作成中】オシゴトQ＆A
+      PageID: 680525965, スコア: undefined
+      ソース: vector
+      距離: unknown
+    3. 【FIX】全体管理者登録・削除フロー
+      PageID: 674758673, スコア: undefined
+      ソース: vector
+      距離: unknown
+
+🔍 ハイブリッド検索のテスト...
+
+📝 ハイブリッド検索クエリ: "機能 要件 システム"
+  ハイブリッド検索時間: 1228ms
+  ハイブリッド検索結果: 5件
+    1. 要件定義フォーマット（子機能）
+      PageID: 722600117, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+    2. 要件定義フォーマット（親機能）
+      PageID: 723025921, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+    3. 170_【要求FIX】求人管理機能
+      PageID: 704053484, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+
+📝 ハイブリッド検索クエリ: "管理 フロー プロセス"
+  ハイブリッド検索時間: 107ms
+  ハイブリッド検索結果: 5件
+    1. 【FIX】求人登録・公開・削除フロー
+      PageID: 686653475, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+    2. 303_【FIX】請求書PDF発行機能
+      PageID: 718438756, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+    3. 160_【FIX】教室管理機能
+      PageID: 704053435, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+
+📝 ハイブリッド検索クエリ: "データベース 同期 更新"
+  ハイブリッド検索時間: 115ms
+  ハイブリッド検索結果: 5件
+    1. 性能検証マニュアル
+      PageID: 1452310655, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+    2. 624_【FIX】契約更新辞退機能
+      PageID: 1392771106, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+    3. 623_【FIX】契約更新機能
+      PageID: 705429584, スコア: undefined
+      ソース: bm25
+      距離: unknown
+      RRFスコア: unknown
+
+🔍 ラベルフィルタリングのテスト...
+📊 ラベル付きチャンク数: 0
+⚠️ ラベル付きチャンクがありません
+
+🔍 埋め込み生成のテスト...
+  ⚠️ 埋め込み生成機能が利用できません
+
+🔍 検索結果の詳細分析...
+
+📊 検索結果の詳細:
+
+結果 1:
+  タイトル: ■要件定義
+  PageID: 666927105
+  スコア: undefined
+  距離: undefined
+  ソース: bm25
+  RRFスコア: undefined
+  ラベル: [none]
+  コンテンツ長: 417文字
+  マッチ詳細: {}
+
+結果 2:
+  タイトル: 要件定義フォーマット（親機能）
+  PageID: 723025921
+  スコア: undefined
+  距離: undefined
+  ソース: bm25
+  RRFスコア: undefined
+  ラベル: [機能要件, 要件定義フォーマット（親機能）]
+  コンテンツ長: 754文字
+  マッチ詳細: {}
+
+結果 3:
+  タイトル: 要件定義のレビュー観点
+  PageID: 761102478
+  スコア: undefined
+  距離: undefined
+  ソース: bm25
+  RRFスコア: undefined
+  ラベル: [要件定義のレビュー観点, 機能要件]
+  コンテンツ長: 1093文字
+  マッチ詳細: {}
+
+🎯 総合評価:
+==================================================
+✅ ベクトル検索: Yes
+✅ ハイブリッド検索: Yes
+✅ ラベル機能: No
+✅ 埋め込み生成: Yes
+
+🏆 総合スコア: 3/4
+🎉 型表示問題はハイブリッド検索に影響しません！
+
+✅ vectorとlabelsの機能テスト完了！

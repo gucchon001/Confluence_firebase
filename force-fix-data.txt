@@ -1,0 +1,42 @@
+🔧 強制的にデータを修正中...
+
+📊 現在の状況を確認中...
+- 総チャンク数: 799
+- 対象ページのチャンク数: 1
+- 現在のコンテンツ長: 26文字
+- 現在のスペース: N/A
+
+🗑️ 強制的に削除中...
+✅ 方法1: pageIdで削除完了
+⚠️ 方法2失敗: Error: lance error: LanceError(Schema): Schema error: No field named pageid. Column names are case sensitive. You can use double quotes to refer to the "pageid" column or set the datafusion.sql_parser.enable_ident_normalization configuration. Did you mean 'pageId'?., C:\Users\runneradmin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\lance-0.35.0\src\dataset\scanner.rs:256:37  Caused by: LanceError(Schema): Schema error: No field named pageid. Column names are case sensitive. You can use double quotes to refer to the "pageid" column or set the datafusion.sql_parser.enable_ident_normalization configuration. Did you mean 'pageId'?., C:\Users\runneradmin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\lance-0.35.0\src\dataset\scanner.rs:256:37
+
+🔍 削除確認中...
+- 削除後の総チャンク数: 799
+- 削除後の対象ページのチャンク数: 1
+❌ 削除失敗 - まだ 1 チャンクが残存
+
+📄 正しいデータを取得中...
+✅ 正しいデータ取得成功:
+- コンテンツ長: 12730文字
+- スペース: CLIENTTOMO
+
+➕ 強制的に追加中...
+- 分割されたチャンク数: 1
+- チャンク 1: 26文字
+
+🧠 埋め込み生成中...
+❌ 埋め込み生成エラー: TypeError: confluenceSyncService.embeddingService.generateEmbedding is not a function
+
+💾 データベースに追加中...
+✅ チャンク 0 追加完了
+
+📊 最終確認中...
+最終結果:
+- 総チャンク数: 800
+- 対象ページのチャンク数: 2
+- 最終コンテンツ長: 26文字
+- 最終スペース: N/A
+- 最終チャンクインデックス: 0
+❌ データ修正失敗
+
+✅ 強制データ修正完了

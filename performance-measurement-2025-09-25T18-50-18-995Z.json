@@ -1,0 +1,98 @@
+{
+  "summary": {
+    "totalQueries": 10,
+    "averageTotalTime": 13337.8,
+    "averageEmbeddingTime": 412.1,
+    "averageSearchTime": 12925.7,
+    "maxTotalTime": 27902,
+    "minTotalTime": 4964,
+    "bottleneckAnalysis": {
+      "embeddingRatio": 3.08971494549326,
+      "searchRatio": 96.91028505450674,
+      "primaryBottleneck": "検索実行"
+    }
+  },
+  "metrics": [
+    {
+      "query": "教室管理機能について教えて",
+      "totalTime": 27902,
+      "embeddingTime": 3803,
+      "searchTime": 24099,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:48:32.394Z"
+    },
+    {
+      "query": "生徒の一括登録はどうやるの？",
+      "totalTime": 18273,
+      "embeddingTime": 34,
+      "searchTime": 18239,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:48:50.793Z"
+    },
+    {
+      "query": "CSVアップロードの方法",
+      "totalTime": 17677,
+      "embeddingTime": 28,
+      "searchTime": 17649,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:49:23.701Z"
+    },
+    {
+      "query": "ログイン機能の実装",
+      "totalTime": 15357,
+      "embeddingTime": 22,
+      "searchTime": 15335,
+      "resultCount": 9,
+      "timestamp": "2025-09-25T18:50:13.801Z"
+    },
+    {
+      "query": "求人情報の編集機能",
+      "totalTime": 15011,
+      "embeddingTime": 39,
+      "searchTime": 14972,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:49:05.911Z"
+    },
+    {
+      "query": "ユーザー権限の管理",
+      "totalTime": 12153,
+      "embeddingTime": 60,
+      "searchTime": 12093,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:49:58.336Z"
+    },
+    {
+      "query": "教室の公開フラグとは？",
+      "totalTime": 10971,
+      "embeddingTime": 34,
+      "searchTime": 10937,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:49:34.781Z"
+    },
+    {
+      "query": "エラーハンドリングの仕組み",
+      "totalTime": 6066,
+      "embeddingTime": 32,
+      "searchTime": 6034,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:49:46.067Z"
+    },
+    {
+      "query": "データベースの設計について",
+      "totalTime": 5004,
+      "embeddingTime": 46,
+      "searchTime": 4958,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:49:39.897Z"
+    },
+    {
+      "query": "APIの仕様について",
+      "totalTime": 4964,
+      "embeddingTime": 23,
+      "searchTime": 4941,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:50:18.876Z"
+    }
+  ],
+  "generatedAt": "2025-09-25T18:50:18.995Z"
+}

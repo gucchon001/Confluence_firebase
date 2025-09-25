@@ -1,0 +1,59 @@
+🌐 直接Confluence APIを呼び出してコンテンツを確認中...
+
+環境変数確認:
+- CONFLUENCE_BASE_URL: https://giginc.atlassian.net
+- CONFLUENCE_USER_EMAIL: kanri@jukust.jp
+- CONFLUENCE_API_TOKEN: 設定済み
+- CONFLUENCE_SPACE_KEY: CLIENTTOMO
+
+📄 ページID 703529146 で直接取得中...
+URL: https://giginc.atlassian.net/wiki/rest/api/content/703529146?expand=body.storage%2Cbody.view%2Cbody.export_view%2Cspace%2Cversion%2Cmetadata.labels
+レスポンスステータス: 200
+レスポンスOK: true
+
+✅ ページ取得成功:
+- ID: 703529146
+- タイトル: 451_【FIX】全体管理者ログイン・ログアウト機能
+- スペース: CLIENTTOMO
+- バージョン: 19
+- 作成日: 2024-03-13T03:37:47.434Z
+
+📊 ボディ分析:
+- body.storage.value 存在: true
+- body.storage.value 長: 12730文字
+- body.view.value 存在: true
+- body.view.value 長: 20878文字
+- body.export_view.value 存在: true
+- body.export_view.value 長: 18503文字
+
+📄 body.storage.value 内容 (最初の1000文字):
+"<h1>1. 目次</h1><ac:structured-macro ac:name="toc" ac:schema-version="1" data-layout="default" ac:local-id="e64ae4f1-794c-41ee-8a53-02b5f5246845" ac:macro-id="b3b1dccf-fb13-4ed7-b085-838d6a9cea41" /><h1>2. 概要</h1><p>全体管理者が、全体管理画面にログイン/ログアウトするための機能。</p><h1>3. 要求事項</h1><ol start="1"><li><p>ログイン機能</p><ol start="1"><li><p>メールアドレスとパスワードを入力し登録済み情報と一致すれば、ログインに成功し、全体管理画面のTOPページへ遷移する。</p></li><li><p>メ<ac:inline-comment-marker ac:ref="fac39c43-d32f-4526-b188-78af51310e98">ールアドレス・パスワードの入力・登録規制</ac:inline-comment-marker>は<ac:link ac:card-appearance="inline"><ri:page ri:content-title="【FIX】全体管理者登録情報" ri:version-at-save="34" /><ac:link-body>【FIX】全体管理者登録情報</ac:link-body></ac:link> に記載の内容に準ずる。</p></li><li><p>メールアドレスやパスワードの入力値に誤りがあった場合、エラーメッセージに具体的な箇所や内容は表示せず、メールアドレスかパスワードに何らかの誤りがある旨のみを表示する。（攻撃者にヒントを与えないための対応）</p></li><li><p>一定回数パスワードを間違えてログインに失敗したら、対象のメールアドレスで作成されているアカウントはログインできないようにする。これをアカウントロック機能と呼ぶ。</p><ol start="1"><li><p>アカウントロックが発生するログイン失敗回数は、10回以上とする。</p></li><li><p>アカウントがロックされてから30分経過するとロックは自動的..."
+
+📄 body.view.value 内容 (最初の1000文字):
+"<h1 id="id-451_【FIX】全体管理者ログイン・ログアウト機能-1.目次"><style>[data-colorid=nsuihy6tcc]{color:#ff5630} html[data-color-mode=dark] [data-colorid=nsuihy6tcc]{color:#cf2600}[data-colorid=mqjvlo27om]{color:#ff5630} html[data-color-mode=dark] [data-colorid=mqjvlo27om]{color:#cf2600}[data-colorid=pmniicypgu]{color:#ff5630} html[data-color-mode=dark] [data-colorid=pmniicypgu]{color:#cf2600}[data-colorid=dw7c6y180a]{color:#ff5630} html[data-color-mode=dark] [data-colorid=dw7c6y180a]{color:#cf2600}[data-colorid=ksw900uzx3]{color:#ff5630} html[data-color-mode=dark] [data-colorid=ksw900uzx3]{color:#cf2600}</style>1. 目次</h1><div class="toc-macro client-side-toc-macro  conf-macro output-block" data-headerelements="H1,H2,H3,H4,H5,H6,H7" data-hasbody="false" data-macro-name="toc" data-macro-id="b3b1dccf-fb13-4ed7-b085-838d6a9cea41" data-layout="default" data-local-id="e64ae4f1-794c-41ee-8a53-02b5f5246845"> </div><h1 id="id-451_【FIX】全体管理者ログイン・ログアウト機能-2.概要">2. 概要</h1><p>全体管理者が、全体管理画面にログイン/ログアウトするための機能。</p><h1 id=..."
+
+📄 body.export_view.value 内容 (最初の1000文字):
+"<h1 id="id-451_【FIX】全体管理者ログイン・ログアウト機能-1.目次"><style>[data-colorid=xo0yygv4ke]{color:#ff5630} html[data-color-mode=dark] [data-colorid=xo0yygv4ke]{color:#cf2600}[data-colorid=m73avaug3y]{color:#ff5630} html[data-color-mode=dark] [data-colorid=m73avaug3y]{color:#cf2600}[data-colorid=rj2phu1680]{color:#ff5630} html[data-color-mode=dark] [data-colorid=rj2phu1680]{color:#cf2600}[data-colorid=bgtnw5t3fe]{color:#ff5630} html[data-color-mode=dark] [data-colorid=bgtnw5t3fe]{color:#cf2600}[data-colorid=mpioq2kezo]{color:#ff5630} html[data-color-mode=dark] [data-colorid=mpioq2kezo]{color:#cf2600}</style>1. 目次</h1><style type="text/css">/*<![CDATA[*/
+div.rbtoc1758817434454 {padding: 0px;}
+div.rbtoc1758817434454 ul {list-style: disc;margin-left: 0px;}
+div.rbtoc1758817434454 li {margin-left: 0px;padding-left: 0px;}
+
+/*]]>*/</style><div class="toc-macro rbtoc1758817434454">
+<ul class="toc-indentation">
+<li><a href="#id-451_【FIX】全体管理者ログイン・ログアウト機能-1.目次">1. 目次</a></li>
+<li><a href="#id-451_【FIX】全体管理者ログイン..."
+
+📊 メタデータ:
+- ラベル: [{"prefix":"global","name":"機能要件","id":"1725628428","label":"機能要件"}]
+
+🔍 スペース内でページを検索中...
+検索URL: https://giginc.atlassian.net/wiki/rest/api/content?spaceKey=CLIENTTOMO&expand=body.storage%2Cspace%2Cversion%2Cmetadata.labels&limit=50&start=0
+検索レスポンスステータス: 200
+
+✅ 検索成功:
+- 総ページ数: 50
+- 取得ページ数: 50
+
+❌ 検索でページが見つかりませんでした
+
+✅ 直接API呼び出し完了

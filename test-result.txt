@@ -1,0 +1,30 @@
+🚀 特定ページID (640450787) テストを開始...
+
+🔍 環境変数の確認:
+✅ CONFLUENCE_BASE_URL: https://giginc.atlassian.net
+✅ CONFLUENCE_USER_EMAIL: kanri@jukust.jp
+✅ CONFLUENCE_SPACE_KEY: CLIENTTOMO
+✅ CONFLUENCE_API_TOKEN: ***設定済み***
+
+🔧 ConfluenceSyncServiceインスタンスを作成中...
+✅ インスタンス作成完了
+
+📄 利用可能なページを取得中...
+✅ 最初のページを取得: client-tomonokai-juku Home (ID: 640450787)
+📝 コンテンツ長: 1538文字
+🏷️ ラベル数: 1
+🔍 ページIDの型: string
+🔍 ページIDの値: 640450787
+🏷️ ラベル一覧: フォルダ
+
+🔄 ページ同期を実行中...
+🔍 同期前のページ配列: [{"id":"640450787","title":"client-tomonokai-juku Home"}]
+✅ 同期処理完了
+
+📈 同期結果:
+  追加: 1ページ
+  更新: 0ページ
+  変更なし: 0ページ
+  エラー: 0件
+
+✅ テスト完了！

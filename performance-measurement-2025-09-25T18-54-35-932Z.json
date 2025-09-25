@@ -1,0 +1,98 @@
+{
+  "summary": {
+    "totalQueries": 10,
+    "averageTotalTime": 11366,
+    "averageEmbeddingTime": 596.8,
+    "averageSearchTime": 10769.2,
+    "maxTotalTime": 27817,
+    "minTotalTime": 4484,
+    "bottleneckAnalysis": {
+      "embeddingRatio": 5.250747844448354,
+      "searchRatio": 94.74925215555166,
+      "primaryBottleneck": "検索実行"
+    }
+  },
+  "metrics": [
+    {
+      "query": "教室管理機能について教えて",
+      "totalTime": 27817,
+      "embeddingTime": 5581,
+      "searchTime": 22236,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:53:08.862Z"
+    },
+    {
+      "query": "生徒の一括登録はどうやるの？",
+      "totalTime": 16265,
+      "embeddingTime": 63,
+      "searchTime": 16202,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:53:25.292Z"
+    },
+    {
+      "query": "CSVアップロードの方法",
+      "totalTime": 13020,
+      "embeddingTime": 43,
+      "searchTime": 12977,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:53:50.017Z"
+    },
+    {
+      "query": "求人情報の編集機能",
+      "totalTime": 11460,
+      "embeddingTime": 86,
+      "searchTime": 11374,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:53:36.888Z"
+    },
+    {
+      "query": "ログイン機能の実装",
+      "totalTime": 11388,
+      "embeddingTime": 26,
+      "searchTime": 11362,
+      "resultCount": 9,
+      "timestamp": "2025-09-25T18:54:31.128Z"
+    },
+    {
+      "query": "ユーザー権限の管理",
+      "totalTime": 9764,
+      "embeddingTime": 60,
+      "searchTime": 9704,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:54:19.629Z"
+    },
+    {
+      "query": "教室の公開フラグとは？",
+      "totalTime": 9448,
+      "embeddingTime": 36,
+      "searchTime": 9412,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:53:59.578Z"
+    },
+    {
+      "query": "エラーハンドリングの仕組み",
+      "totalTime": 5471,
+      "embeddingTime": 36,
+      "searchTime": 5435,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:54:09.760Z"
+    },
+    {
+      "query": "APIの仕様について",
+      "totalTime": 4543,
+      "embeddingTime": 17,
+      "searchTime": 4526,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:54:35.775Z"
+    },
+    {
+      "query": "データベースの設計について",
+      "totalTime": 4484,
+      "embeddingTime": 20,
+      "searchTime": 4464,
+      "resultCount": 10,
+      "timestamp": "2025-09-25T18:54:04.175Z"
+    }
+  ],
+  "generatedAt": "2025-09-25T18:54:35.933Z"
+}

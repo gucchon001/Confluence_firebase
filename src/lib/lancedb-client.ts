@@ -59,12 +59,63 @@ export class LanceDBClient {
       
       // テーブル存在確認
       const tableNames = await db.tableNames();
-      if (!tableNames.includes(this.config.tableName!)) {
-        throw new Error(`Table '${this.config.tableName}' not found. Available tables: ${tableNames.join(', ')}`);
-      }
+      let table;
       
-      // テーブルを開く
-      const table = await db.openTable(this.config.tableName!);
+      if (!tableNames.includes(this.config.tableName!)) {
+        console.log(`[LanceDBClient] Table '${this.config.tableName}' not found. Creating new table...`);
+        
+        // 空のデータでテーブルを作成（LanceDBの正しいスキーマ形式）
+        const emptyData = [{
+          id: 'dummy',
+          vector: new Array(768).fill(0.0), // float32の配列
+          space_key: 'dummy',
+          title: 'dummy',
+          labels: ['dummy'], // 文字列配列（明示的に配列として定義）
+          content: 'dummy',
+          pageId: 0,
+          chunkIndex: 0,
+          url: 'dummy',
+          lastUpdated: new Date().toISOString()
+        }];
+        
+        // LanceDB Arrow形式のスキーマ定義（完全版）
+        const lanceSchema = {
+          id: 'utf8',
+          vector: { 
+            type: 'fixed_size_list', 
+            listSize: 768, 
+            field: { type: 'float32' } 
+          },
+          space_key: 'utf8',
+          title: 'utf8',
+          labels: { 
+            type: 'list', 
+            field: { type: 'utf8' } 
+          },
+          content: 'utf8',
+          pageId: 'int64',
+          chunkIndex: 'int32',
+          url: 'utf8',
+          lastUpdated: 'utf8'
+        };
+        
+        try {
+          table = await db.createTable(this.config.tableName!, emptyData, lanceSchema);
+          console.log(`[LanceDBClient] Created new table '${this.config.tableName}'`);
+          
+          // ダミーデータを削除
+          await table.delete('id = "dummy"');
+          console.log(`[LanceDBClient] Removed dummy data from table`);
+        } catch (error) {
+          console.log(`[LanceDBClient] Table creation failed, trying to open existing table: ${error}`);
+          table = await db.openTable(this.config.tableName!);
+          console.log(`[LanceDBClient] Opened existing table '${this.config.tableName}'`);
+        }
+      } else {
+        // 既存のテーブルを開く
+        table = await db.openTable(this.config.tableName!);
+        console.log(`[LanceDBClient] Opened existing table '${this.config.tableName}'`);
+      }
       
       this.connection = {
         db,

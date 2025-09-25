@@ -10,6 +10,7 @@ import { preprocessQuery } from './query-preprocessor';
 import { formatSearchResults, combineAndRerankResults, FormattedSearchResult } from './search-result-formatter';
 import { lancedbClient } from './lancedb-client';
 import { LabelFilterOptions } from './search-weights';
+import { getLabelsAsArray } from './label-utils';
 
 export interface HybridSearchParams {
   query: string;
@@ -104,7 +105,7 @@ export class HybridSearchEngine {
         pageId: result.pageId,
         title: result.title,
         content: result.content,
-        labels: result.labels,
+        labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
         url: result.url,
         source: 'vector' as const,
         scoreKind: 'vector' as const,
@@ -151,7 +152,7 @@ export class HybridSearchEngine {
         pageId: result.pageId,
         title: result.title,
         content: result.content,
-        labels: result.labels,
+        labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
         url: '#',
         source: 'bm25' as const,
         scoreKind: 'bm25' as const,
@@ -263,7 +264,7 @@ export class HybridSearchEngine {
         pageId: row.pageId,
         title: row.title || '',
         content: row.content || '',
-        labels: row.labels || [],
+        labels: getLabelsAsArray(row.labels), // Arrow Vector型を配列に変換
         url: row.url || '#'
       }));
       
