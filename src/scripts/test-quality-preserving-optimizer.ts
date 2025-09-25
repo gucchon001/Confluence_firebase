@@ -40,7 +40,7 @@ async function testQualityPreservingOptimizer() {
       const optimizedStartTime = performance.now();
       const optimizedResults = await qualityPreservingOptimizer.search({
         query,
-        limit: 10,
+        topK: 10,
         labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
         excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
         excludeTitlePatterns: ['xxx_*']
@@ -52,7 +52,7 @@ async function testQualityPreservingOptimizer() {
       const originalStartTime = performance.now();
       const originalResults = await searchLanceDB({
         query,
-        limit: 10,
+        topK: 10,
         labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
         excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
         excludeTitlePatterns: ['xxx_*']

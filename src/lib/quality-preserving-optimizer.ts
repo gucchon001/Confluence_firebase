@@ -73,7 +73,7 @@ export class QualityPreservingOptimizer {
     try {
       await searchLanceDB({
         query: 'test',
-        limit: 1,
+        topK: 1,
         labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
         excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
         excludeTitlePatterns: ['xxx_*']
@@ -110,7 +110,7 @@ export class QualityPreservingOptimizer {
       // 既存の検索ロジックをそのまま使用
       const results = await searchLanceDB({
         query,
-        limit,
+        topK: limit,
         labelFilters,
         excludeLabels,
         excludeTitlePatterns,

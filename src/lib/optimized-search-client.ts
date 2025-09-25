@@ -176,8 +176,9 @@ export class OptimizedSearchClient {
       console.log('[OptimizedSearchClient] BM25 search found', bm25Results.length, 'results');
 
       // 3. 既存のフィルタリングロジックを適用
-      const filteredVectorResults = this.applyFiltering(vectorResults, labelFilters, excludeLabels, excludeTitlePatterns);
-      const filteredBM25Results = this.applyFiltering(bm25Results, labelFilters, excludeLabels, excludeTitlePatterns);
+      const normalizedLabelFilters = labelFilters || { excludeMeetingNotes: true, excludeArchived: true };
+      const filteredVectorResults = this.applyFiltering(vectorResults, normalizedLabelFilters, excludeLabels, excludeTitlePatterns);
+      const filteredBM25Results = this.applyFiltering(bm25Results, normalizedLabelFilters, excludeLabels, excludeTitlePatterns);
 
       console.log('[OptimizedSearchClient] Vector search found', filteredVectorResults.length, 'results after filtering');
       console.log('[OptimizedSearchClient] BM25 search found', filteredBM25Results.length, 'results after filtering');
@@ -277,7 +278,7 @@ export class OptimizedSearchClient {
 
     // ベクトル検索結果の処理
     for (const result of vectorResults) {
-      const hybridScore = calculateHybridScore(result, keywords, query);
+      const hybridScore = calculateHybridScore(result._distance || 0, 0.5, 0.3);
       hybridResults.push({
         ...result,
         _sourceType: 'hybrid',
@@ -287,7 +288,7 @@ export class OptimizedSearchClient {
 
     // BM25検索結果の処理
     for (const result of bm25Results) {
-      const hybridScore = calculateHybridScore(result, keywords, query);
+      const hybridScore = calculateHybridScore(result._distance || 0, 0.5, 0.3);
       hybridResults.push({
         ...result,
         _sourceType: 'hybrid',

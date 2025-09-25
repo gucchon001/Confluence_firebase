@@ -457,35 +457,41 @@ export class KeywordListsLoader {
 
     // クエリが指定されている場合は動的優先順位を使用
     if (query) {
+      let priority: number;
+      
       // ドメイン名
       if (this.keywordCategories.domainNames.includes(keyword)) {
-        return this.dynamicPriorityManager.adjustPriority(query, 'domainNames');
+        priority = this.dynamicPriorityManager.adjustPriority(query, 'domainNames');
       }
-
       // 機能名
-      if (this.keywordCategories.functionNames.includes(keyword)) {
-        return this.dynamicPriorityManager.adjustPriority(query, 'functionNames');
+      else if (this.keywordCategories.functionNames.includes(keyword)) {
+        priority = this.dynamicPriorityManager.adjustPriority(query, 'functionNames');
       }
-
       // 操作名
-      if (this.keywordCategories.operationNames.includes(keyword)) {
-        return this.dynamicPriorityManager.adjustPriority(query, 'operationNames');
+      else if (this.keywordCategories.operationNames.includes(keyword)) {
+        priority = this.dynamicPriorityManager.adjustPriority(query, 'operationNames');
       }
-
       // システム項目
-      if (this.keywordCategories.systemFields.includes(keyword)) {
-        return this.dynamicPriorityManager.adjustPriority(query, 'systemFields');
+      else if (this.keywordCategories.systemFields.includes(keyword)) {
+        priority = this.dynamicPriorityManager.adjustPriority(query, 'systemFields');
       }
-
       // システム用語
-      if (this.keywordCategories.systemTerms.includes(keyword)) {
-        return this.dynamicPriorityManager.adjustPriority(query, 'systemTerms');
+      else if (this.keywordCategories.systemTerms.includes(keyword)) {
+        priority = this.dynamicPriorityManager.adjustPriority(query, 'systemTerms');
+      }
+      // 関連キーワード
+      else if (this.keywordCategories.relatedKeywords.includes(keyword)) {
+        priority = this.dynamicPriorityManager.adjustPriority(query, 'relatedKeywords');
+      }
+      else {
+        return 'low'; // デフォルト
       }
 
-      // 関連キーワード
-      if (this.keywordCategories.relatedKeywords.includes(keyword)) {
-        return this.dynamicPriorityManager.adjustPriority(query, 'relatedKeywords');
-      }
+      // 数値を文字列リテラル型に変換
+      if (priority >= 80) return 'critical';
+      if (priority >= 60) return 'high';
+      if (priority >= 40) return 'medium';
+      return 'low';
     }
 
     // クエリが指定されていない場合は従来の静的優先順位を使用

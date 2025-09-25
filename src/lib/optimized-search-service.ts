@@ -145,15 +145,27 @@ class OptimizedSearchService {
 
       // 結果を処理・ランキング
       const processedResults = await this.resultProcessor!.processSearchResults(mergedResults, {
-        query,
-        limit,
-        labelFilters
+        vectorWeight: 0.4,
+        keywordWeight: 0.4,
+        labelWeight: 0.2
       });
 
       const endTime = performance.now();
       console.log(`✅ 最適化検索完了: ${(endTime - startTime).toFixed(2)}ms, 結果数: ${processedResults.length}`);
 
-      return processedResults;
+      // ProcessedSearchResultをSearchResultに変換
+      const searchResults: SearchResult[] = processedResults.map(result => ({
+        id: result.id,
+        title: result.title,
+        content: result.content,
+        score: result.score,
+        labels: result.labels || [],
+        pageId: result.pageId || 0,
+        url: result.url || '#',
+        _sourceType: result.source as 'vector' | 'bm25' | 'hybrid'
+      }));
+
+      return searchResults;
 
     } catch (error) {
       console.error('❌ 最適化検索エラー:', error);

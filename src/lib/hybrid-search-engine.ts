@@ -97,8 +97,7 @@ export class HybridSearchEngine {
       const vectorResults = await searchLanceDB({
         query,
         topK: limit,
-        tableName,
-        useHybridSearch: false
+        tableName
       });
 
       return vectorResults.map(result => ({
@@ -153,7 +152,7 @@ export class HybridSearchEngine {
         title: result.title,
         content: result.content,
         labels: result.labels,
-        url: result.url || '#',
+        url: '#',
         source: 'bm25' as const,
         scoreKind: 'bm25' as const,
         scoreRaw: result.score,
@@ -255,7 +254,8 @@ export class HybridSearchEngine {
       const tbl = connection.table;
       
       // 全データを取得（正しいLanceDB APIを使用）
-      const allData = await tbl.search([0.1] * 768).limit(10000).toArray();
+      const dummyVector = new Array(768).fill(0.1);
+      const allData = await tbl.search(dummyVector).limit(10000).toArray();
       console.log(`[HybridSearchEngine] Retrieved ${allData.length} documents from LanceDB`);
       
       // Lunrドキュメントに変換

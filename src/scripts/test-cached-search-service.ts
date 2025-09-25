@@ -39,7 +39,7 @@ async function testCachedSearchService() {
       const startTime = performance.now();
       const results = await cachedSearchService.search({
         query,
-        limit: 10,
+        topK: 10,
         labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
         excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
         excludeTitlePatterns: ['xxx_*']
@@ -62,7 +62,7 @@ async function testCachedSearchService() {
       const startTime = performance.now();
       const results = await cachedSearchService.search({
         query,
-        limit: 10,
+        topK: 10,
         labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
         excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
         excludeTitlePatterns: ['xxx_*']
@@ -111,7 +111,7 @@ async function testCachedSearchService() {
     const originalStartTime = performance.now();
     const originalResults = await searchLanceDB({
       query: comparisonQuery,
-      limit: 10,
+      topK: 10,
       labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
       excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
       excludeTitlePatterns: ['xxx_*']
@@ -124,7 +124,7 @@ async function testCachedSearchService() {
     const cachedStartTime = performance.now();
     const cachedResults = await cachedSearchService.search({
       query: comparisonQuery,
-      limit: 10,
+      topK: 10,
       labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
       excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
       excludeTitlePatterns: ['xxx_*']
@@ -137,7 +137,7 @@ async function testCachedSearchService() {
     const cached2StartTime = performance.now();
     const cached2Results = await cachedSearchService.search({
       query: comparisonQuery,
-      limit: 10,
+      topK: 10,
       labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
       excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
       excludeTitlePatterns: ['xxx_*']

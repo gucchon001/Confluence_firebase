@@ -133,7 +133,7 @@ export class CachedSearchService {
       } else {
         console.log('[CachedSearchService] Extracting keywords...');
         const keywordStartTime = performance.now();
-        keywords = unifiedKeywordExtractionService.extractKeywordsConfigured(query);
+        keywords = await unifiedKeywordExtractionService.extractKeywordsConfigured(query);
         const keywordEndTime = performance.now();
         console.log(`[CachedSearchService] Keywords extracted in ${(keywordEndTime - keywordStartTime).toFixed(2)}ms`);
         
@@ -145,11 +145,10 @@ export class CachedSearchService {
       const searchStartTime = performance.now();
       const results = await searchLanceDB({
         query,
-        limit,
+        topK: limit,
         labelFilters,
-        excludeLabels,
         excludeTitlePatterns,
-        distanceThreshold,
+        maxDistance: distanceThreshold,
         qualityThreshold
       });
       const searchEndTime = performance.now();

@@ -137,9 +137,9 @@ export class SimplePerformanceOptimizer {
       // 3. 結果の統合と処理
       const combinedResults = this.combineResults(vectorResults, bm25Results);
       const processedResults = this.resultProcessor!.processSearchResults(combinedResults, {
-        query,
-        limit,
-        excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive']
+        vectorWeight: 0.4,
+        keywordWeight: 0.4,
+        labelWeight: 0.2
       });
 
       const endTime = performance.now();
