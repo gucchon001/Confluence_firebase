@@ -4,6 +4,7 @@
  */
 
 import { searchLanceDB } from './lancedb-search-client';
+import { labelManager } from './label-manager';
 
 export interface QualityPreservingSearchParams {
   query: string;
@@ -75,7 +76,7 @@ export class QualityPreservingOptimizer {
         query: 'test',
         topK: 1,
         labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
-        excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
+        excludeLabels: ['議事録', 'meeting-notes'],
         excludeTitlePatterns: ['xxx_*']
       });
       console.log('[QualityPreservingOptimizer] Services warmed up successfully');
@@ -96,8 +97,8 @@ export class QualityPreservingOptimizer {
     const {
       query,
       limit = 10,
-      labelFilters = { includeMeetingNotes: false, includeArchived: false },
-      excludeLabels = ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
+      labelFilters = { includeMeetingNotes: false },
+      excludeLabels = labelManager.buildExcludeLabels(labelFilters),
       excludeTitlePatterns = ['xxx_*'],
       distanceThreshold = 2,
       qualityThreshold = 0

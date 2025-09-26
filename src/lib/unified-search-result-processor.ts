@@ -4,6 +4,7 @@
  */
 
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText, calculateHybridScore } from './score-utils';
+import { labelManager } from './label-manager';
 
 /**
  * 検索結果の生データ
@@ -198,7 +199,7 @@ export class UnifiedSearchResultProcessor {
       const labelsArr = this.getLabelsAsArray(result.labels);
       const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
       
-      const penaltyTerms = ['メール','mail','通知','テンプレート','template','帳票','請求','アーカイブ','議事録','meeting-notes','ミーティング','meeting','会議','議事','フォルダ'];
+      const penaltyTerms = labelManager.getPenaltyTerms();
       const genericTitleTerms = ['共通要件','非機能要件','用語','ワード','ディフィニション','definition','ガイドライン','一覧','フロー','要件'];
       
       const hasPenalty = penaltyTerms.some(t => titleStr.includes(t)) || 

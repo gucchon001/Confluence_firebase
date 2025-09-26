@@ -3,8 +3,7 @@
  */
 
 export interface LabelFilterOptions {
-  excludeArchived?: boolean;
-  excludeMeetingNotes?: boolean;
+  includeMeetingNotes?: boolean;
   excludeTemplates?: boolean;
   excludeGeneric?: boolean;
 }

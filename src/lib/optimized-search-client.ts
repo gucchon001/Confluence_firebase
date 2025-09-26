@@ -14,7 +14,6 @@ import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
-import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText } from './score-utils';
 import { unifiedSearchResultProcessor } from './unified-search-result-processor';
@@ -147,8 +146,8 @@ export class OptimizedSearchClient {
     const {
       query,
       limit = 10,
-      labelFilters = { includeMeetingNotes: false, includeArchived: false },
-      excludeLabels = ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
+      labelFilters = { includeMeetingNotes: false },
+      excludeLabels = labelManager.buildExcludeLabels(labelFilters),
       excludeTitlePatterns = ['xxx_*'],
       distanceThreshold = 2,
       qualityThreshold = 0
@@ -242,23 +241,8 @@ export class OptimizedSearchClient {
     excludeLabels: string[], 
     excludeTitlePatterns: string[]
   ): any[] {
-    // 既存のフィルタリングロジックを完全に保持
-    let filteredResults = results;
-
-    // ラベルフィルタリング
-    if (excludeLabels && excludeLabels.length > 0) {
-      const beforeCount = filteredResults.length;
-      filteredResults = filteredResults.filter(result => {
-        const labels = getLabelsAsArray(result.labels);
-        const hasExcludedLabel = labels.some(label =>
-          excludeLabels.some(excludeLabel =>
-            label.toLowerCase().includes(excludeLabel.toLowerCase())
-          )
-        );
-        return !hasExcludedLabel;
-      });
-      console.log('[OptimizedSearchClient] Excluded', beforeCount - filteredResults.length, 'results due to label filtering');
-    }
+    // LabelManagerを使用してラベルフィルタリング
+    let filteredResults = labelManager.filterResults(results, labelFilters);
 
     // タイトルパターンフィルタリング
     if (excludeTitlePatterns && excludeTitlePatterns.length > 0) {

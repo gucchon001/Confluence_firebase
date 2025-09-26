@@ -47,7 +47,7 @@ async function callFlow<T>(flowId: string, input: any): Promise<T> {
   return result as T;
 }
 
-export async function askQuestion(question: string, chatHistory: any[], labelFilters?: { includeMeetingNotes: boolean; includeArchived: boolean }): Promise<AskQuestionOutput> {
+export async function askQuestion(question: string, chatHistory: any[], labelFilters?: { includeMeetingNotes: boolean }): Promise<AskQuestionOutput> {
   if (!question) {
     throw new Error('Question is required.');
   }

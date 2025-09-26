@@ -11,6 +11,7 @@ import { formatSearchResults, combineAndRerankResults, FormattedSearchResult } f
 import { lancedbClient } from './lancedb-client';
 import { LabelFilterOptions } from './search-weights';
 import { getLabelsAsArray } from './label-utils';
+import { labelManager } from './label-manager';
 
 export interface HybridSearchParams {
   query: string;
@@ -56,7 +57,7 @@ export class HybridSearchEngine {
       query,
       topK = 12,
       useLunrIndex = true,
-      labelFilters = { includeMeetingNotes: false, includeArchived: false },
+      labelFilters = { includeMeetingNotes: false },
       tableName = 'confluence'
     } = params;
 
@@ -282,17 +283,7 @@ export class HybridSearchEngine {
    * 除外ラベルを取得
    */
   private getExcludeLabels(labelFilters: any): string[] {
-    const excludeLabels = ['フォルダ', 'アーカイブ', 'メールテンプレート'];
-    
-    if (!labelFilters.includeMeetingNotes) {
-      excludeLabels.push('議事録');
-    }
-    
-    if (!labelFilters.includeArchived) {
-      excludeLabels.push('アーカイブ');
-    }
-    
-    return excludeLabels;
+    return labelManager.buildExcludeLabels(labelFilters);
   }
 
   /**

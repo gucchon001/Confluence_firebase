@@ -5,7 +5,7 @@ export interface SearchParams {
   query: string;
   topK?: number;
   useLunrBM25?: boolean;
-  labelFilters?: { includeMeetingNotes: boolean; includeArchived: boolean };
+  labelFilters?: { includeMeetingNotes: boolean };
   tableName?: string;
 }
 

@@ -53,7 +53,7 @@ export class ConfluenceSyncService {
   private spaceKey: string;
   
   // 除外するラベルのリスト
-  private readonly EXCLUDED_LABELS = ['アーカイブ', 'フォルダ', 'スコープ外'];
+  private readonly EXCLUDED_LABELS = [];
   private readonly EXCLUDED_TITLE_PATTERNS = ['■要件定義', 'xxx_'];
 
   constructor() {

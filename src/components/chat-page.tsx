@@ -144,8 +144,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   
   // ラベルフィルタの状態
   const [labelFilters, setLabelFilters] = useState({
-    includeMeetingNotes: false,
-    includeArchived: false
+    includeMeetingNotes: false
   });
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -546,15 +545,6 @@ export default function ChatPage({ user }: ChatPageProps) {
                   }
                 />
                 <span>議事録を含める</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={labelFilters.includeArchived}
-                  onCheckedChange={(checked) => 
-                    setLabelFilters(prev => ({ ...prev, includeArchived: !!checked }))
-                  }
-                />
-                <span>アーカイブを含める</span>
               </label>
             </div>
             

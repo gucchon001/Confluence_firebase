@@ -33,7 +33,7 @@ function generateCacheKey(query: string, params: any): string {
   const normalizedQuery = query.toLowerCase().trim();
   const paramString = JSON.stringify({
     topK: params.topK || 5,
-    labelFilters: params.labelFilters || { includeMeetingNotes: false, includeArchived: false }
+    labelFilters: params.labelFilters || { includeMeetingNotes: false }
   });
   return `${normalizedQuery}_${Buffer.from(paramString).toString('base64').slice(0, 20)}`;
 }
@@ -758,12 +758,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const br = bm25Rank.get(r.id);
         // 重み: vector=1.0, keyword=0.8, title-exact=1.2, bm25=0.6（キーワードマッチングを重視）
         let rrf = (1.0 / (kRrf + vr)) + 0.8 * (1 / (kRrf + kr)) + (tr ? 1.2 * (1 / (kRrf + tr)) : 0) + (br ? 0.6 * (1 / (kRrf + br)) : 0);
-        // ドメイン減衰（メール/帳票/請求/アーカイブ/議事録）：順位の最後で軽く抑制
+        // ドメイン減衰（議事録）：順位の最後で軽く抑制
         try {
           const titleStr = String(r.title || '').toLowerCase();
           const labelsArr: string[] = getLabelsAsArray(r.labels);
           const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
-          const penaltyTerms = ['メール','mail','通知','テンプレート','template','帳票','請求','アーカイブ','議事録','meeting-notes','ミーティング','meeting','会議','議事','フォルダ'];
+          const penaltyTerms = labelManager.getPenaltyTerms();
           const genericTitleTerms = ['共通要件','非機能要件','用語','ワード','ディフィニション','definition','ガイドライン','一覧','フロー','要件'];
           const hasPenalty = penaltyTerms.some(t => titleStr.includes(t)) || lowerLabels.some(l => penaltyTerms.some(t => l.includes(t)));
           const isGenericDoc = genericTitleTerms.some(t => titleStr.includes(t));

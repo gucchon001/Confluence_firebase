@@ -92,7 +92,6 @@ async function lancedbRetrieverTool(
     labels?: string[];
     labelFilters?: {
       includeMeetingNotes: boolean;
-      includeArchived: boolean;
     };
   }
 ): Promise<any[]> {
@@ -116,10 +115,7 @@ async function lancedbRetrieverTool(
     console.log('[lancedbRetrieverTool] Filter params:', {
       spaceKey: filters?.spaceKey,
       labels: filters?.labels,
-      labelFilters: {
-        excludeMeetingNotes: true,
-        excludeArchived: true
-      },
+      labelFilters: filters?.labelFilters,
     });
     console.log('[lancedbRetrieverTool] Generated filterQuery:', filterQuery || '(none)');
 
@@ -157,9 +153,8 @@ async function lancedbRetrieverTool(
       query: optimizedQuery, // 最適化されたクエリを使用
       topK: 12,
       useLunrIndex: false, // BM25検索を無効化してベクトル検索のみ使用
-      labelFilters: {
-        excludeMeetingNotes: true,
-        excludeArchived: true
+      labelFilters: filters?.labelFilters || {
+        includeMeetingNotes: false
       },
       excludeTitlePatterns: ['xxx_*'], // xxx_で始まるページを除外
     });
@@ -195,7 +190,6 @@ export const RetrieveDocsInputSchema = z.object({
   labelFilters: z
     .object({
       includeMeetingNotes: z.boolean(),
-      includeArchived: z.boolean(),
     })
     .optional(),
 });
@@ -225,7 +219,6 @@ export async function retrieveRelevantDocs({
   labels?: string[];
   labelFilters?: {
     includeMeetingNotes: boolean;
-    includeArchived: boolean;
   };
 }): Promise<any[]> {
   try {

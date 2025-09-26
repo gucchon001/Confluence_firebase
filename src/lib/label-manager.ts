@@ -16,12 +16,10 @@ export class LabelManager {
 
   constructor(config?: Partial<LabelManagerConfig>) {
     this.config = {
-      excludeAlways: ['スコープ外', 'メールテンプレート', 'アーカイブ', 'フォルダ'],
+      excludeAlways: [],
       excludeConditional: {
-        '議事録': 'excludeMeetingNotes',
-        'meeting-notes': 'excludeMeetingNotes',
-        'アーカイブ': 'excludeArchived',
-        'archive': 'excludeArchived'
+        '議事録': 'includeMeetingNotes',
+        'meeting-notes': 'includeMeetingNotes'
       },
       ...config
     };
@@ -38,8 +36,8 @@ export class LabelManager {
 
     // 条件付き除外ラベルをチェック
     for (const [label, optionKey] of Object.entries(this.config.excludeConditional)) {
-      const shouldInclude = filterOptions[optionKey];
-      if (!shouldInclude) {
+      const shouldExclude = !filterOptions[optionKey];
+      if (shouldExclude) {
         excludeLabels.push(label);
       }
     }
@@ -91,11 +89,17 @@ export class LabelManager {
    */
   getDefaultFilterOptions(): LabelFilterOptions {
     return {
-      excludeMeetingNotes: true,
-      excludeArchived: true,
+      includeMeetingNotes: false,
       excludeTemplates: false,
       excludeGeneric: false
     };
+  }
+
+  /**
+   * ペナルティ用語（スコア減点対象）を取得
+   */
+  getPenaltyTerms(): string[] {
+    return ['議事録','meeting-notes','ミーティング','meeting','会議','議事'];
   }
 
   /**

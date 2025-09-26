@@ -73,7 +73,7 @@ async function optimizedVectorSearch(query: string): Promise<number> {
  */
 async function testVectorSearchOptimization() {
   console.log('🚀 ベクトル検索最適化テストを開始します...');
-  console.log('=' * 60);
+  console.log('='.repeat(60));
 
   const testQueries = [
     "教室管理機能について教えて",
@@ -121,9 +121,9 @@ async function testVectorSearchOptimization() {
   }
 
   // 結果分析
-  console.log('\n' + '=' * 60);
+  console.log('\n' + '='.repeat(60));
   console.log('📈 ベクトル検索最適化結果');
-  console.log('=' * 60);
+  console.log('='.repeat(60));
 
   // 基本統計
   const totalQueries = results.length;
