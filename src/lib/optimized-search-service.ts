@@ -95,13 +95,13 @@ class OptimizedSearchService {
 
   private async initializeLanceDB(): Promise<LanceDBClient> {
     const client = LanceDBClient.getInstance();
-    await client.connect();
+    // UnifiedInitializerが既に接続済みなので、そのまま返す
     return client;
   }
 
   private async initializeLunr(): Promise<LunrSearchClient> {
     const client = LunrSearchClient.getInstance();
-    // LunrSearchClientは引数なしのinitializeメソッドがないため、スキップ
+    // UnifiedInitializerが既に初期化済みなので、そのまま返す
     return client;
   }
 

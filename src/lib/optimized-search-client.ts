@@ -12,42 +12,11 @@ import { calculateHybridScore } from './score-utils';
 import { unifiedKeywordExtractionService } from './unified-keyword-extraction-service';
 import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
-import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { labelManager } from './label-manager';
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText } from './score-utils';
 import { unifiedSearchResultProcessor } from './unified-search-result-processor';
-
-/**
- * タイトルが除外パターンにマッチするかチェック
- */
-function isTitleExcluded(title: string, excludePatterns: string[]): boolean {
-  if (!title || !excludePatterns || excludePatterns.length === 0) {
-    return false;
-  }
-  
-  return excludePatterns.some(pattern => {
-    // パターンが末尾に*がある場合は前方一致
-    if (pattern.endsWith('*')) {
-      const prefix = pattern.slice(0, -1);
-      return title.startsWith(prefix);
-    }
-    // パターンが先頭に*がある場合は後方一致
-    else if (pattern.startsWith('*')) {
-      const suffix = pattern.slice(1);
-      return title.endsWith(suffix);
-    }
-    // パターンが*で囲まれている場合は部分一致
-    else if (pattern.startsWith('*') && pattern.endsWith('*')) {
-      const substring = pattern.slice(1, -1);
-      return title.includes(substring);
-    }
-    // 完全一致
-    else {
-      return title === pattern;
-    }
-  });
-}
+import { isTitleExcluded } from './title-utils';
 
 /**
  * 検索パラメータのインターフェース
@@ -119,7 +88,8 @@ export class OptimizedSearchClient {
   }
 
   private async initializeLunr(): Promise<void> {
-    await lunrInitializer.initializeAsync();
+    // UnifiedInitializerが既に初期化済みなので、スキップ
+    // lunrInitializer.initializeAsync()は不要
   }
 
   private async initializeKeywordService(): Promise<void> {

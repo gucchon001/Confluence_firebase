@@ -84,13 +84,13 @@ export class SimplePerformanceOptimizer {
 
   private async initializeLanceDB(): Promise<LanceDBClient> {
     const client = LanceDBClient.getInstance();
-    await client.connect();
+    // UnifiedInitializerが既に接続済みなので、そのまま返す
     return client;
   }
 
   private async initializeLunr(): Promise<LunrSearchClient> {
     const client = LunrSearchClient.getInstance();
-    // Lunrは既に初期化済みの場合はスキップ
+    // UnifiedInitializerが既に初期化済みなので、そのまま返す
     return client;
   }
 

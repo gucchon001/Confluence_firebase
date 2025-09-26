@@ -76,39 +76,10 @@ function setToCache(cacheKey: string, results: any[]): void {
   console.log(`💾 キャッシュ保存: "${cacheKey}" (${results.length}件)`);
 }
 
-/**
- * タイトルが除外パターンにマッチするかチェック
- */
-function isTitleExcluded(title: string, excludePatterns: string[]): boolean {
-  if (!title || !excludePatterns || excludePatterns.length === 0) {
-    return false;
-  }
-  
-  return excludePatterns.some(pattern => {
-    // パターンが末尾に*がある場合は前方一致
-    if (pattern.endsWith('*')) {
-      const prefix = pattern.slice(0, -1);
-      return title.startsWith(prefix);
-    }
-    // パターンが先頭に*がある場合は後方一致
-    else if (pattern.startsWith('*')) {
-      const suffix = pattern.slice(1);
-      return title.endsWith(suffix);
-    }
-    // パターンが*で囲まれている場合は部分一致
-    else if (pattern.startsWith('*') && pattern.endsWith('*')) {
-      const substring = pattern.slice(1, -1);
-      return title.includes(substring);
-    }
-    // 完全一致
-    else {
-      return title === pattern;
-    }
-  });
-}
 
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText } from './score-utils';
 import { unifiedSearchResultProcessor } from './unified-search-result-processor';
+import { isTitleExcluded } from './title-utils';
 
 /**
  * スコアを適切なパーセンテージに変換する関数（ハイブリッド検索対応）
