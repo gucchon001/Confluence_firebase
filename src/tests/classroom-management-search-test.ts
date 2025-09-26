@@ -6,6 +6,7 @@
 import { searchLanceDB } from '../lib/lancedb-search-client';
 import { summarizeConfluenceDocs } from '../ai/flows/summarize-confluence-docs';
 import { hybridSearchEngine } from '../lib/hybrid-search-engine';
+import { performance } from 'perf_hooks';
 
 // 理想の抽出ページ（優先度：高）
 const HIGH_PRIORITY_PAGES = [
@@ -50,6 +51,16 @@ const EXCLUDED_PAGES = [
   '【作成中】塾チャート'
 ];
 
+interface PerformanceMetrics {
+  searchTime: number;
+  aiGenerationTime: number;
+  totalTime: number;
+  cacheHit: boolean;
+  initializationTime?: number;
+  embeddingTime?: number;
+  keywordExtractionTime?: number;
+}
+
 interface TestResult {
   query: string;
   totalResults: number;
@@ -79,6 +90,7 @@ interface TestResult {
     source?: string;
     scoreText?: string;
   }>;
+  performance?: PerformanceMetrics;
 }
 
 /**
@@ -167,13 +179,15 @@ function calculateMetrics(results: any[]): TestResult {
 }
 
 /**
- * テストケース1: 基本検索テスト
+ * テストケース1: 基本検索テスト（パフォーマンス測定付き）
  */
 async function testBasicSearch(): Promise<TestResult> {
-  console.log('🔍 テストケース1: 基本検索テスト');
+  console.log('🔍 テストケース1: 基本検索テスト（パフォーマンス測定付き）');
   console.log('クエリ: 教室管理の詳細は');
   
   try {
+    const searchStartTime = performance.now();
+    
     const results = await searchLanceDB({
       query: '教室管理の詳細は',
       topK: 20,
@@ -184,9 +198,21 @@ async function testBasicSearch(): Promise<TestResult> {
       }
     });
     
+    const searchEndTime = performance.now();
+    const searchTime = searchEndTime - searchStartTime;
+    
     console.log(`📊 検索結果: ${results.length}件`);
+    console.log(`⏱️  検索時間: ${searchTime.toFixed(2)}ms`);
     
     const testResult = calculateMetrics(results);
+    
+    // パフォーマンス情報を追加
+    testResult.performance = {
+      searchTime,
+      aiGenerationTime: 0, // 基本検索ではAI生成は行わない
+      totalTime: searchTime,
+      cacheHit: false // キャッシュヒット情報は後で実装
+    };
     
     // 結果表示
     console.log('\n📋 検索結果詳細:');
@@ -209,13 +235,16 @@ async function testBasicSearch(): Promise<TestResult> {
 }
 
 /**
- * テストケース4: AI回答生成テスト
+ * テストケース4: AI回答生成テスト（パフォーマンス測定付き）
  */
-async function testAIResponse(): Promise<{ prompt: string; response: string; references: any[] }> {
-  console.log('\n🤖 テストケース4: AI回答生成テスト');
+async function testAIResponse(): Promise<{ prompt: string; response: string; references: any[]; performance: PerformanceMetrics }> {
+  console.log('\n🤖 テストケース4: AI回答生成テスト（パフォーマンス測定付き）');
   console.log('クエリ: 教室管理の詳細は');
   
   try {
+    const totalStartTime = performance.now();
+    const searchStartTime = performance.now();
+    
     // 検索結果を取得（ハイブリッド検索エンジンを使用）
     const hybridResults = await hybridSearchEngine.search({
       query: '教室管理の詳細は',
@@ -227,6 +256,9 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
         includeArchived: false
       }
     });
+    
+    const searchEndTime = performance.now();
+    const searchTime = searchEndTime - searchStartTime;
     
     // ハイブリッド検索結果をLanceDB形式に変換
     const searchResults = hybridResults.map(result => ({
@@ -258,6 +290,9 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
     }));
     
     console.log(`📄 AIに送信するドキュメント数: ${documents.length}件`);
+    console.log(`⏱️  検索時間: ${searchTime.toFixed(2)}ms`);
+    
+    const aiStartTime = performance.now();
     
     // AI回答生成
     const aiResult = await summarizeConfluenceDocs({
@@ -265,6 +300,15 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
       context: documents,
       chatHistory: []
     });
+    
+    const aiEndTime = performance.now();
+    const aiGenerationTime = aiEndTime - aiStartTime;
+    
+    const totalEndTime = performance.now();
+    const totalTime = totalEndTime - totalStartTime;
+    
+    console.log(`⏱️  AI生成時間: ${aiGenerationTime.toFixed(2)}ms`);
+    console.log(`⏱️  総時間: ${totalTime.toFixed(2)}ms`);
     
     console.log('\n📝 AIプロンプト（プレビュー）:');
     console.log(aiResult.prompt ? aiResult.prompt.substring(0, 1000) + '...' : 'プロンプトの取得に失敗しました');
@@ -283,7 +327,13 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
     return {
       prompt: aiResult.prompt || '',
       response: aiResult.answer,
-      references: aiResult.references
+      references: aiResult.references,
+      performance: {
+        searchTime,
+        aiGenerationTime,
+        totalTime,
+        cacheHit: false
+      }
     };
     
   } catch (error) {
@@ -340,6 +390,78 @@ function testScoring(testResult: TestResult): void {
 }
 
 /**
+ * パフォーマンス評価
+ */
+function evaluatePerformance(testResult: TestResult): void {
+  console.log('\n⚡ パフォーマンス評価結果:');
+  
+  if (!testResult.performance) {
+    console.log('⚠️ パフォーマンス情報が取得できませんでした');
+    return;
+  }
+  
+  const perf = testResult.performance;
+  
+  // パフォーマンス基準のチェック
+  const performanceCriteria = {
+    searchTime: perf.searchTime <= 5000, // 5秒以内
+    aiGenerationTime: perf.aiGenerationTime <= 10000, // 10秒以内
+    totalTime: perf.totalTime <= 15000, // 15秒以内
+    searchTimeExcellent: perf.searchTime <= 2000, // 2秒以内（優秀）
+    aiGenerationTimeExcellent: perf.aiGenerationTime <= 5000, // 5秒以内（優秀）
+    totalTimeExcellent: perf.totalTime <= 7000 // 7秒以内（優秀）
+  };
+  
+  console.log('パフォーマンス基準チェック:');
+  console.log(`⚡ 検索時間 (目標: 5秒以内): ${perf.searchTime.toFixed(2)}ms ${performanceCriteria.searchTime ? '✅' : '❌'}`);
+  console.log(`⚡ AI生成時間 (目標: 10秒以内): ${perf.aiGenerationTime.toFixed(2)}ms ${performanceCriteria.aiGenerationTime ? '✅' : '❌'}`);
+  console.log(`⚡ 総時間 (目標: 15秒以内): ${perf.totalTime.toFixed(2)}ms ${performanceCriteria.totalTime ? '✅' : '❌'}`);
+  
+  console.log('\n優秀基準チェック:');
+  console.log(`🔥 検索時間 (優秀: 2秒以内): ${perf.searchTime.toFixed(2)}ms ${performanceCriteria.searchTimeExcellent ? '🔥' : '⚡'}`);
+  console.log(`🔥 AI生成時間 (優秀: 5秒以内): ${perf.aiGenerationTime.toFixed(2)}ms ${performanceCriteria.aiGenerationTimeExcellent ? '🔥' : '⚡'}`);
+  console.log(`🔥 総時間 (優秀: 7秒以内): ${perf.totalTime.toFixed(2)}ms ${performanceCriteria.totalTimeExcellent ? '🔥' : '⚡'}`);
+  
+  // パフォーマンスレベルの判定
+  const excellentCount = Object.values({
+    searchTimeExcellent: performanceCriteria.searchTimeExcellent,
+    aiGenerationTimeExcellent: performanceCriteria.aiGenerationTimeExcellent,
+    totalTimeExcellent: performanceCriteria.totalTimeExcellent
+  }).filter(Boolean).length;
+  
+  const passedCount = Object.values({
+    searchTime: performanceCriteria.searchTime,
+    aiGenerationTime: performanceCriteria.aiGenerationTime,
+    totalTime: performanceCriteria.totalTime
+  }).filter(Boolean).length;
+  
+  console.log(`\n🎯 パフォーマンスレベル: ${excellentCount}/3 優秀基準をクリア`);
+  
+  if (excellentCount === 3) {
+    console.log('🚀 すべてのパフォーマンス基準で優秀レベルを達成しました！');
+  } else if (passedCount === 3) {
+    console.log('✅ すべてのパフォーマンス基準をクリアしました');
+  } else {
+    console.log('⚠️ 一部のパフォーマンス基準をクリアできませんでした。最適化が必要です。');
+  }
+  
+  // パフォーマンス改善提案
+  if (perf.searchTime > 3000) {
+    console.log('\n💡 検索時間改善提案:');
+    console.log('- 埋め込みベクトルキャッシュの実装');
+    console.log('- キーワード抽出キャッシュの実装');
+    console.log('- LanceDB接続の最適化');
+  }
+  
+  if (perf.aiGenerationTime > 7000) {
+    console.log('\n💡 AI生成時間改善提案:');
+    console.log('- プロンプトの最適化');
+    console.log('- コンテキスト長の調整');
+    console.log('- AI APIの最適化');
+  }
+}
+
+/**
  * 品質評価
  */
 function evaluateQuality(testResult: TestResult): void {
@@ -378,14 +500,89 @@ function evaluateQuality(testResult: TestResult): void {
 }
 
 /**
- * メインテスト実行
+ * パフォーマンス比較テスト
+ */
+async function testPerformanceComparison(): Promise<void> {
+  console.log('\n⚡ パフォーマンス比較テスト');
+  console.log('複数回の検索実行によるパフォーマンス測定');
+  
+  const testQueries = [
+    '教室管理の詳細は',
+    '教室一覧機能',
+    '教室登録機能',
+    '教室編集機能',
+    '教室削除機能'
+  ];
+  
+  const performanceResults: PerformanceMetrics[] = [];
+  
+  for (let i = 0; i < testQueries.length; i++) {
+    const query = testQueries[i];
+    console.log(`\n🔄 検索${i + 1}: "${query}"`);
+    
+    const startTime = performance.now();
+    
+    try {
+      const results = await searchLanceDB({
+        query,
+        topK: 10,
+        tableName: 'confluence',
+        labelFilters: {
+          includeMeetingNotes: false,
+          includeArchived: false
+        }
+      });
+      
+      const endTime = performance.now();
+      const searchTime = endTime - startTime;
+      
+      console.log(`⏱️  検索時間: ${searchTime.toFixed(2)}ms`);
+      console.log(`📋 結果数: ${results.length}件`);
+      
+      performanceResults.push({
+        searchTime,
+        aiGenerationTime: 0,
+        totalTime: searchTime,
+        cacheHit: false
+      });
+      
+    } catch (error) {
+      console.error(`❌ 検索エラー (${query}):`, error);
+    }
+  }
+  
+  // パフォーマンス統計の計算
+  const avgSearchTime = performanceResults.reduce((sum, p) => sum + p.searchTime, 0) / performanceResults.length;
+  const minSearchTime = Math.min(...performanceResults.map(p => p.searchTime));
+  const maxSearchTime = Math.max(...performanceResults.map(p => p.searchTime));
+  
+  console.log('\n📈 パフォーマンス統計:');
+  console.log(`平均検索時間: ${avgSearchTime.toFixed(2)}ms`);
+  console.log(`最小検索時間: ${minSearchTime.toFixed(2)}ms`);
+  console.log(`最大検索時間: ${maxSearchTime.toFixed(2)}ms`);
+  
+  // パフォーマンス安定性の評価
+  const variance = performanceResults.reduce((sum, p) => sum + Math.pow(p.searchTime - avgSearchTime, 2), 0) / performanceResults.length;
+  const standardDeviation = Math.sqrt(variance);
+  
+  console.log(`標準偏差: ${standardDeviation.toFixed(2)}ms`);
+  
+  if (standardDeviation < 1000) {
+    console.log('✅ パフォーマンスは安定しています');
+  } else {
+    console.log('⚠️ パフォーマンスにばらつきがあります');
+  }
+}
+
+/**
+ * メインテスト実行（パフォーマンステスト付き）
  */
 async function runClassroomManagementQualityTest(): Promise<void> {
-  console.log('🚀 教室管理検索品質テスト開始');
-  console.log('=' .repeat(50));
+  console.log('🚀 教室管理検索品質・パフォーマンステスト開始');
+  console.log('=' .repeat(60));
   
   try {
-    // テストケース1: 基本検索テスト
+    // テストケース1: 基本検索テスト（パフォーマンス測定付き）
     const testResult = await testBasicSearch();
     
     // テストケース2: キーワードマッチングテスト
@@ -394,7 +591,7 @@ async function runClassroomManagementQualityTest(): Promise<void> {
     // テストケース3: スコアリングテスト
     testScoring(testResult);
     
-    // テストケース4: AI回答生成テスト
+    // テストケース4: AI回答生成テスト（パフォーマンス測定付き）
     const aiTestResult = await testAIResponse();
     
     // AI結果をテスト結果に追加
@@ -402,11 +599,23 @@ async function runClassroomManagementQualityTest(): Promise<void> {
     testResult.aiResponse = aiTestResult.response;
     testResult.aiReferences = aiTestResult.references;
     
+    // AIパフォーマンス情報を統合
+    if (testResult.performance && aiTestResult.performance) {
+      testResult.performance.aiGenerationTime = aiTestResult.performance.aiGenerationTime;
+      testResult.performance.totalTime = aiTestResult.performance.totalTime;
+    }
+    
     // 品質評価
     evaluateQuality(testResult);
     
-    console.log('\n' + '=' .repeat(50));
-    console.log('✅ 教室管理検索品質テスト完了');
+    // パフォーマンス評価
+    evaluatePerformance(testResult);
+    
+    // パフォーマンス比較テスト
+    await testPerformanceComparison();
+    
+    console.log('\n' + '=' .repeat(60));
+    console.log('✅ 教室管理検索品質・パフォーマンステスト完了');
 
   } catch (error) {
     console.error('❌ テスト実行エラー:', error);
@@ -419,4 +628,4 @@ if (require.main === module) {
   runClassroomManagementQualityTest();
 }
 
-export { runClassroomManagementQualityTest, TestResult };
+export { runClassroomManagementQualityTest, TestResult, PerformanceMetrics };

@@ -53,8 +53,8 @@ export class ConfluenceSyncService {
   private spaceKey: string;
   
   // 除外するラベルのリスト
-  private readonly EXCLUDED_LABELS = [];
-  private readonly EXCLUDED_TITLE_PATTERNS = ['■要件定義', 'xxx_'];
+  private readonly EXCLUDED_LABELS = ['アーカイブ', 'archive', 'フォルダ', 'スコープ外'];
+  private readonly EXCLUDED_TITLE_PATTERNS = ['■要件定義', 'xxx_', '【削除】', '【不要】', '【統合により削除】', '【機能廃止のため作成停止】', '【他ツールへ機能切り出しのため作成停止】'];
 
   constructor() {
     this.lancedbClient = LanceDBClient.getInstance();

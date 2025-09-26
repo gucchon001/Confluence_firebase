@@ -117,12 +117,14 @@ export class PerformanceOptimizedInitializer {
    */
   private async initializeLunr(): Promise<void> {
     try {
-      console.log('[PerformanceOptimizedInitializer] Initializing Lunr...');
-      await lunrInitializer.initializeAsync();
-      this.status.lunr = lunrInitializer.isReady();
+      console.log('[PerformanceOptimizedInitializer] Initializing Lunr with optimization...');
+      const { optimizedLunrInitializer } = await import('./optimized-lunr-initializer');
+      await optimizedLunrInitializer.initializeOnce();
+      this.status.lunr = optimizedLunrInitializer.isReady();
       
       if (this.status.lunr) {
-        console.log('✅ Lunr initialization completed');
+        const initTime = optimizedLunrInitializer.getInitializationTime();
+        console.log(`✅ Lunr initialization completed in ${initTime.toFixed(2)}ms`);
       } else {
         console.warn('⚠️ Lunr initialization completed but not ready');
       }

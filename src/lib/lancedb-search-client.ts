@@ -163,12 +163,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     console.log(`🔍 キャッシュミス: "${params.query}"`);
     
-    // Lunr Indexの初期化を確実に実行
+    // 最適化されたLunr初期化を使用（重複初期化を防止）
     try {
-      await lunrInitializer.initializeAsync();
-      console.log('✅ Lunr Index initialization completed in searchLanceDB');
+      const { optimizedLunrInitializer } = await import('./optimized-lunr-initializer');
+      await optimizedLunrInitializer.initializeOnce();
+      console.log('✅ Optimized Lunr initialization completed in searchLanceDB');
     } catch (error) {
-      console.warn('⚠️ Lunr Index initialization failed in searchLanceDB:', error);
+      console.warn('⚠️ Optimized Lunr initialization failed in searchLanceDB:', error);
       // 初期化に失敗しても検索は継続（フォールバック検索を使用）
     }
     
@@ -177,13 +178,16 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const tableName = params.tableName || 'confluence';
     const titleWeight = params.titleWeight || 1.0; // デフォルトのタイトル重み
     
-    // 並列実行でパフォーマンス最適化
+    // 並列実行でパフォーマンス最適化（最適化されたLanceDB接続を使用）
     const [vector, keywords, connection] = await Promise.all([
       getEmbeddings(params.query),
       (async () => {
         return await unifiedKeywordExtractionService.extractKeywordsConfigured(params.query);
       })(),
-      lancedbClient.getConnection()
+      (async () => {
+        const { optimizedLanceDBClient } = await import('./optimized-lancedb-client');
+        return await optimizedLanceDBClient.getConnection();
+      })()
     ]);
     
     console.log(`[searchLanceDB] Generated embedding vector with ${vector.length} dimensions`);

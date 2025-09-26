@@ -1,0 +1,1671 @@
+{
+  "totalPages": 138,
+  "pages": [
+    {
+      "id": "986480779",
+      "title": "690_■全体・共通",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-03-15T03:22:54.052Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/986480779"
+    },
+    {
+      "id": "984809497",
+      "title": "■オファー関連",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-03-14T02:12:23.467Z",
+      "labels": [
+        "フォルダ",
+        "メールテンプレート"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/984809497"
+    },
+    {
+      "id": "911605964",
+      "title": "■採用お祝い申請",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-12-25T05:52:30.342Z",
+      "labels": [
+        "メールテンプレート",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/911605964"
+    },
+    {
+      "id": "869466321",
+      "title": "460_■共通",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-10-25T10:59:51.445Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/869466321"
+    },
+    {
+      "id": "744816858",
+      "title": "720_■会員情報関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:18:34.461Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744816858"
+    },
+    {
+      "id": "744718575",
+      "title": "800_■システム内部処理関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:20:37.845Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744718575"
+    },
+    {
+      "id": "744718561",
+      "title": "710_■教室・求人情報関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:18:19.860Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744718561"
+    },
+    {
+      "id": "744587528",
+      "title": "810_■外部システム連携用バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:21:02.421Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744587528"
+    },
+    {
+      "id": "744554697",
+      "title": "700_■契約関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:16:34.347Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744554697"
+    },
+    {
+      "id": "744521946",
+      "title": "■記事・バナー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T06:15:30.242Z",
+      "labels": [
+        "フォルダ",
+        "帳票"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744521946"
+    },
+    {
+      "id": "744423753",
+      "title": "770_■請求関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-12-14T06:52:27.414Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744423753"
+    },
+    {
+      "id": "744325371",
+      "title": "790_■分析用データ生成バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:20:17.672Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744325371"
+    },
+    {
+      "id": "744325358",
+      "title": "780_■記事関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:19:53.975Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744325358"
+    },
+    {
+      "id": "744325328",
+      "title": "740_■オファー関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:18:57.546Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744325328"
+    },
+    {
+      "id": "744325304",
+      "title": "760_■採用・採用お祝い関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-10-24T07:57:14.603Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/744325304"
+    },
+    {
+      "id": "743703182",
+      "title": "750_■応募・面接関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:19:07.873Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/743703182"
+    },
+    {
+      "id": "743703170",
+      "title": "730_■急募関連バッチ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T07:18:44.867Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/743703170"
+    },
+    {
+      "id": "731218669",
+      "title": "■その他",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T06:18:46.749Z",
+      "labels": [
+        "帳票",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/731218669"
+    },
+    {
+      "id": "721322402",
+      "title": "560_■自動オファー管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:12:11.606Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/721322402"
+    },
+    {
+      "id": "721289315",
+      "title": "040_■アカウント管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-26T03:20:50.334Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/721289315"
+    },
+    {
+      "id": "721125561",
+      "title": "420_■その他管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:37:59.723Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/721125561"
+    },
+    {
+      "id": "721092728",
+      "title": "000_■全体・共通",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T03:27:13.489Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/721092728"
+    },
+    {
+      "id": "721027302",
+      "title": "450_■アカウント管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:38:43.325Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/721027302"
+    },
+    {
+      "id": "720961938",
+      "title": "660_■企業管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:20:46.928Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/720961938"
+    },
+    {
+      "id": "720929148",
+      "title": "530_■パーソナルオファー管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:11:16.766Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/720929148"
+    },
+    {
+      "id": "720863520",
+      "title": "630_■請求管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:14:47.101Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/720863520"
+    },
+    {
+      "id": "720863513",
+      "title": "640_■アクセス集計管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:20:21.001Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/720863513"
+    },
+    {
+      "id": "720830830",
+      "title": "650_■問合せ管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:20:34.615Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/720830830"
+    },
+    {
+      "id": "720830820",
+      "title": "550_■パーソナルオファー - 履歴管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:11:56.312Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/720830820"
+    },
+    {
+      "id": "720699991",
+      "title": "680_■アカウント管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:21:10.259Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/720699991"
+    },
+    {
+      "id": "718798916",
+      "title": "280_■請求書明細管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:34:38.737Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/718798916"
+    },
+    {
+      "id": "718635198",
+      "title": "300_■請求書PDF管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:35:01.910Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/718635198"
+    },
+    {
+      "id": "718635173",
+      "title": "290_■請求管理採用者管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:34:50.270Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/718635173"
+    },
+    {
+      "id": "718471300",
+      "title": "■問合せ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-17T05:38:06.077Z",
+      "labels": [
+        "フォルダ",
+        "メールテンプレート"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/718471300"
+    },
+    {
+      "id": "718372998",
+      "title": "■全体管理者",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-07-24T06:59:50.123Z",
+      "labels": [
+        "メールテンプレート",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/718372998"
+    },
+    {
+      "id": "718275111",
+      "title": "020_■記事管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T03:27:48.970Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/718275111"
+    },
+    {
+      "id": "717947034",
+      "title": "070_■オファー管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T04:43:54.274Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/717947034"
+    },
+    {
+      "id": "717456039",
+      "title": "310_■【スコープアウト】請求CSV取り込み機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-12-05T05:26:23.793Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/717456039"
+    },
+    {
+      "id": "715882497",
+      "title": "■商品・契約",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-15T00:13:03.099Z",
+      "labels": [
+        "フォルダ",
+        "帳票"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/715882497"
+    },
+    {
+      "id": "714407989",
+      "title": "xxx_■その他オプション管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-13T03:26:45.572Z",
+      "labels": [
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/714407989"
+    },
+    {
+      "id": "705527850",
+      "title": "520_■オファー管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-06-01T08:17:28.086Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/705527850"
+    },
+    {
+      "id": "705396812",
+      "title": "570_■急募管理 機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-06-01T08:17:49.464Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/705396812"
+    },
+    {
+      "id": "705265775",
+      "title": "620_■契約管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-06-21T01:07:06.952Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/705265775"
+    },
+    {
+      "id": "705167424",
+      "title": "580_■オシゴトQ&A 管理機能閲覧機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:12:51.173Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/705167424"
+    },
+    {
+      "id": "705036289",
+      "title": "590_■応募管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:13:18.122Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/705036289"
+    },
+    {
+      "id": "704676255",
+      "title": "xxx_■プラン管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-10T08:19:03.552Z",
+      "labels": [
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704676255"
+    },
+    {
+      "id": "704643090",
+      "title": "090_■応募履歴管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T04:44:13.237Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704643090"
+    },
+    {
+      "id": "704610839",
+      "title": "xxx_■オファーオプション管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-10T10:53:07.546Z",
+      "labels": [
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704610839"
+    },
+    {
+      "id": "704577558",
+      "title": "050_■マイページ各種管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T04:43:22.981Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704577558"
+    },
+    {
+      "id": "704545187",
+      "title": "510_■教室管理-求人管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:10:07.823Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704545187"
+    },
+    {
+      "id": "704545131",
+      "title": "400_■メール送信履歴管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:37:38.370Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704545131"
+    },
+    {
+      "id": "704545089",
+      "title": "370_■metaタグ管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:36:51.422Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704545089"
+    },
+    {
+      "id": "704545010",
+      "title": "210_■応募管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:32:53.694Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704545010"
+    },
+    {
+      "id": "704512071",
+      "title": "xxx_■契約更新履歴管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-08T03:06:44.232Z",
+      "labels": [
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704512071"
+    },
+    {
+      "id": "704479627",
+      "title": "xxx_■掲載課金管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-10T11:03:36.952Z",
+      "labels": [
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704479627"
+    },
+    {
+      "id": "704479525",
+      "title": "340_【機能統合のため削除】■ピックアップ記事管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-12-07T05:27:03.440Z",
+      "labels": [
+        "機能要件",
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704479525"
+    },
+    {
+      "id": "704479429",
+      "title": "200_■オシゴトQ&A管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:32:40.386Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704479429"
+    },
+    {
+      "id": "704414087",
+      "title": "410_■サイト設定管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:37:48.935Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704414087"
+    },
+    {
+      "id": "704414005",
+      "title": "270_■請求管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-05-29T07:55:05.623Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704414005"
+    },
+    {
+      "id": "704413832",
+      "title": "190_■オファー 管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:32:01.033Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704413832"
+    },
+    {
+      "id": "704381195",
+      "title": "230_■採用確認管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:33:27.761Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704381195"
+    },
+    {
+      "id": "704381048",
+      "title": "180_■急募管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:31:31.704Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704381048"
+    },
+    {
+      "id": "704184702",
+      "title": "500_■教室管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-11-16T04:59:43.080Z",
+      "labels": [
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704184702"
+    },
+    {
+      "id": "704151814",
+      "title": "220_■企業別採用管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:33:05.341Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704151814"
+    },
+    {
+      "id": "704053425",
+      "title": "xxx_■契約更新管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-08T03:05:46.395Z",
+      "labels": [
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704053425"
+    },
+    {
+      "id": "704053401",
+      "title": "xxx_■オファー管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-08T03:04:24.623Z",
+      "labels": [
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/704053401"
+    },
+    {
+      "id": "703856825",
+      "title": "250_■お祝い金申請管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:33:49.860Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703856825"
+    },
+    {
+      "id": "703823956",
+      "title": "080_■オシゴトQ＆A管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T04:44:05.008Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703823956"
+    },
+    {
+      "id": "703693175",
+      "title": "030_■口コミ管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T03:28:01.577Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703693175"
+    },
+    {
+      "id": "703660217",
+      "title": "320_■口コミ管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:35:37.017Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703660217"
+    },
+    {
+      "id": "703561955",
+      "title": "240_■採用お祝い申請管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T05:33:39.115Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703561955"
+    },
+    {
+      "id": "703561879",
+      "title": "060_■メッセージ管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T04:43:43.307Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703561879"
+    },
+    {
+      "id": "703561854",
+      "title": "010_■求人・教室管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T03:27:35.503Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703561854"
+    },
+    {
+      "id": "703529119",
+      "title": "360_【作成中】■カテゴリ管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-05-02T07:43:48.389Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703529119"
+    },
+    {
+      "id": "703496344",
+      "title": "330_■記事管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2025-01-07T02:57:04.677Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703496344"
+    },
+    {
+      "id": "703496337",
+      "title": "610_■採用確認管理機能",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T10:14:07.006Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/703496337"
+    },
+    {
+      "id": "699269166",
+      "title": "■バッチ処理定義",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-08-16T07:47:33.469Z",
+      "labels": [
+        "機能要件",
+        "フォルダ",
+        "バッチ処理定義"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/699269166"
+    },
+    {
+      "id": "698712147",
+      "title": "■オシゴトQ＆A",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:23:53.013Z",
+      "labels": [
+        "メールテンプレート",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698712147"
+    },
+    {
+      "id": "698712140",
+      "title": "■応募・面接",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:24:07.729Z",
+      "labels": [
+        "フォルダ",
+        "メールテンプレート"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698712140"
+    },
+    {
+      "id": "698712072",
+      "title": "■会員",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:25:34.121Z",
+      "labels": [
+        "帳票",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698712072"
+    },
+    {
+      "id": "698712065",
+      "title": "■初期契約",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:25:05.018Z",
+      "labels": [
+        "帳票",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698712065"
+    },
+    {
+      "id": "698581065",
+      "title": "■全体管理・問合せ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-27T06:14:45.369Z",
+      "labels": [
+        "フォルダ",
+        "帳票"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698581065"
+    },
+    {
+      "id": "698581058",
+      "title": "■オファー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:25:48.904Z",
+      "labels": [
+        "フォルダ",
+        "帳票"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698581058"
+    },
+    {
+      "id": "698417257",
+      "title": "■請求時",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:24:33.667Z",
+      "labels": [
+        "メールテンプレート",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698417257"
+    },
+    {
+      "id": "698351709",
+      "title": "■契約・オプション",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:23:19.848Z",
+      "labels": [
+        "メールテンプレート",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698351709"
+    },
+    {
+      "id": "698351664",
+      "title": "■請求",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:26:39.278Z",
+      "labels": [
+        "帳票",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698351664"
+    },
+    {
+      "id": "698253372",
+      "title": "■オプション",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:26:00.811Z",
+      "labels": [
+        "フォルダ",
+        "帳票"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698253372"
+    },
+    {
+      "id": "698187871",
+      "title": "■採用時",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:24:22.037Z",
+      "labels": [
+        "フォルダ",
+        "メールテンプレート"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698187871"
+    },
+    {
+      "id": "698187864",
+      "title": "■会員登録・退会",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:23:33.003Z",
+      "labels": [
+        "メールテンプレート",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698187864"
+    },
+    {
+      "id": "698122319",
+      "title": "■求人・応募・採用",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-10T03:53:29.597Z",
+      "labels": [
+        "フォルダ",
+        "帳票"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/698122319"
+    },
+    {
+      "id": "697893108",
+      "title": "■企業・教室",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-21T08:25:22.014Z",
+      "labels": [
+        "フォルダ",
+        "帳票"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/697893108"
+    },
+    {
+      "id": "697893086",
+      "title": "【移動・統合のため削除】■採用",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-05-24T05:45:20.272Z",
+      "labels": [
+        "帳票",
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/697893086"
+    },
+    {
+      "id": "684228649",
+      "title": "■削除ページ",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-08T07:05:31.393Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/684228649"
+    },
+    {
+      "id": "674594849",
+      "title": "【FIX】ユーザー登録・退会フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-05-09T10:25:50.075Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674594849"
+    },
+    {
+      "id": "674496584",
+      "title": "【FIX】採用お祝い/口コミ確認・公開フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-02-05T08:27:01.967Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674496584"
+    },
+    {
+      "id": "674496577",
+      "title": "【FIX】採用後在籍確認フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-29T07:47:45.941Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674496577"
+    },
+    {
+      "id": "674496542",
+      "title": "【FIX】クライアント企業契約・登録・更新・契約終了フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-05-15T09:35:36.868Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674496542"
+    },
+    {
+      "id": "674234406",
+      "title": "【機能廃止のため作成停止】質問・回答フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-06T07:14:17.266Z",
+      "labels": [
+        "アーカイブ",
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674234406"
+    },
+    {
+      "id": "674234399",
+      "title": "【FIX】オファー・応募・選考・採用フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-28T13:10:50.254Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674234399"
+    },
+    {
+      "id": "674234390",
+      "title": "【他ツールへ機能切り出しのため作成停止】お知らせ登録・公開・削除フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-08T07:01:40.953Z",
+      "labels": [
+        "アーカイブ",
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674234390"
+    },
+    {
+      "id": "674168922",
+      "title": "【FIX】問合せ・回答フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-05-24T00:28:44.530Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674168922"
+    },
+    {
+      "id": "674103382",
+      "title": "【FIX】記事登録・公開・非公開・削除フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-04T05:37:37.900Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674103382"
+    },
+    {
+      "id": "674103375",
+      "title": "【ページ統合により削除】口コミ登録・確認・公開フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-29T02:29:26.595Z",
+      "labels": [
+        "アーカイブ",
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674103375"
+    },
+    {
+      "id": "674103368",
+      "title": "【他ツールへ機能切り出しのため作成停止】会員お知らせ登録・発信フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-08T07:00:52.778Z",
+      "labels": [
+        "アーカイブ",
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/674103368"
+    },
+    {
+      "id": "673939457",
+      "title": "2023-01-25 ミーティング議事録",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-01-25T06:55:24.666Z",
+      "labels": [
+        "meeting-notes",
+        "議事録",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/673939457"
+    },
+    {
+      "id": "669155329",
+      "title": "2024-XX-XX ミーティング議事録",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2025-09-25T00:00:20.051Z",
+      "labels": [
+        "meeting-notes",
+        "議事録",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/669155329"
+    },
+    {
+      "id": "668794897",
+      "title": "この特定のスペースにおけるミーティング議事録",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-01-17T02:44:31.351Z",
+      "labels": [
+        "アーカイブ",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/668794897"
+    },
+    {
+      "id": "668663828",
+      "title": "議事録",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-07T06:19:43.474Z",
+      "labels": [
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/668663828"
+    },
+    {
+      "id": "668631060",
+      "title": "2023-01-18 ミーティング議事録",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-01-18T06:18:00.796Z",
+      "labels": [
+        "meeting-notes",
+        "議事録",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/668631060"
+    },
+    {
+      "id": "666927474",
+      "title": "データ移行・リリース計画",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-05-24T02:31:40.349Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927474"
+    },
+    {
+      "id": "666927463",
+      "title": "[GIG社内]データ移行・リリース計画社内キックオフMTG",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-02-01T05:12:59.296Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927463"
+    },
+    {
+      "id": "666927452",
+      "title": "テスト計画",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-01-13T06:56:18.793Z",
+      "labels": [
+        "テスト計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927452"
+    },
+    {
+      "id": "666927338",
+      "title": "テスト要件",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-01-13T06:56:17.519Z",
+      "labels": [
+        "テスト要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927338"
+    },
+    {
+      "id": "666927327",
+      "title": "システム移行要件",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-01-13T06:56:17.403Z",
+      "labels": [
+        "非機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927327"
+    },
+    {
+      "id": "666927316",
+      "title": "非機能要件",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-15T07:03:59.363Z",
+      "labels": [
+        "非機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927316"
+    },
+    {
+      "id": "666927305",
+      "title": "■全体管理画面",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-20T08:18:22.794Z",
+      "labels": [
+        "全体管理画面",
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927305"
+    },
+    {
+      "id": "666927294",
+      "title": "■クライアント企業向け管理画面",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-20T08:18:41.792Z",
+      "labels": [
+        "フォルダ",
+        "機能要件",
+        "クライアント企業向け管理画面"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927294"
+    },
+    {
+      "id": "666927283",
+      "title": "■サービスサイト",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T04:49:58.632Z",
+      "labels": [
+        "フォルダ",
+        "サービスサイト",
+        "機能要件"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927283"
+    },
+    {
+      "id": "666927272",
+      "title": "機能要件",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-02-22T08:45:56.250Z",
+      "labels": [
+        "機能要件",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927272"
+    },
+    {
+      "id": "666927204",
+      "title": "帳票",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-04-07T10:17:12.423Z",
+      "labels": [
+        "帳票",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927204"
+    },
+    {
+      "id": "666927171",
+      "title": "【FIX】商品登録・購入不可化フロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-05-15T07:19:38.077Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927171"
+    },
+    {
+      "id": "666927138",
+      "title": "ワークフロー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-03-23T02:06:07.562Z",
+      "labels": [
+        "ワークフロー",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927138"
+    },
+    {
+      "id": "666927127",
+      "title": "権限",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2023-06-21T08:45:37.274Z",
+      "labels": [
+        "権限",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927127"
+    },
+    {
+      "id": "666927116",
+      "title": "ワード・ディフィニション",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-08T05:00:04.014Z",
+      "labels": [
+        "ワード・ディフィニション",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/666927116"
+    },
+    {
+      "id": "648806470",
+      "title": "テスト環境アカウント",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-09-20T06:00:05.817Z",
+      "labels": [
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/648806470"
+    },
+    {
+      "id": "646905861",
+      "title": "PJ開始前の事前情報サマリー（システム情報以外）",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2022-12-12T03:38:54.202Z",
+      "labels": [
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/646905861"
+    },
+    {
+      "id": "643858450",
+      "title": "塾講師ステーションドキュメントスペース",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2022-12-07T02:54:58.514Z",
+      "labels": [
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/643858450"
+    },
+    {
+      "id": "640450787",
+      "title": "client-tomonokai-juku Home",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2022-12-01T05:33:12.822Z",
+      "labels": [
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/640450787"
+    },
+    {
+      "id": "1764818981",
+      "title": "2025-10-22 ミーティング議事録",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2025-09-25T05:30:58.505Z",
+      "labels": [
+        "meeting-notes",
+        "議事録",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1764818981"
+    },
+    {
+      "id": "1246527490",
+      "title": "■記事_定義ファイル",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-10-07T01:35:24.995Z",
+      "labels": [
+        "フォルダ",
+        "帳票"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1246527490"
+    },
+    {
+      "id": "1022853139",
+      "title": "970_■記事・バナー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-17T00:52:49.183Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1022853139"
+    },
+    {
+      "id": "1022656517",
+      "title": "980_■全体管理",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-17T00:53:50.446Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1022656517"
+    },
+    {
+      "id": "1015906317",
+      "title": "950_■オファー",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-11T01:55:36.795Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1015906317"
+    },
+    {
+      "id": "1015808009",
+      "title": "960_■請求",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-11T01:56:56.960Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1015808009"
+    },
+    {
+      "id": "1014825018",
+      "title": "910_■企業・教室グループ・教室",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-10T08:53:17.170Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1014825018"
+    },
+    {
+      "id": "1014432099",
+      "title": "920_■商品・契約",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-10T08:52:52.016Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1014432099"
+    },
+    {
+      "id": "1014235546",
+      "title": "940_■求人・応募・採用",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-10T08:54:26.130Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1014235546"
+    },
+    {
+      "id": "1014169963",
+      "title": "930_■会員",
+      "spaceKey": "CLIENTTOMO",
+      "spaceName": "client-tomonokai-juku",
+      "lastModified": "2024-04-10T08:55:46.971Z",
+      "labels": [
+        "データ移行・リリース計画",
+        "フォルダ"
+      ],
+      "url": "https://giginc.atlassian.net/wiki/spaces/CLIENTTOMO/pages/1014169963"
+    }
+  ],
+  "searchQuery": "space = \"CLIENTTOMO\" AND label = \"フォルダ\"",
+  "timestamp": "2025-09-26T04:07:13.033Z"
+}

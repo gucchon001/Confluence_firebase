@@ -322,7 +322,20 @@ export class UnifiedKeywordExtractionService {
    * 設定済みキーワード抽出（既存API互換）
    */
   async extractKeywordsConfigured(query: string): Promise<string[]> {
+    // キャッシュから取得を試行
+    const { keywordCache } = await import('./keyword-cache');
+    const cachedKeywords = await keywordCache.getCachedKeywords(query);
+    if (cachedKeywords) {
+      console.log(`🚀 キーワード抽出結果をキャッシュから取得: ${query.substring(0, 30)}...`);
+      return cachedKeywords;
+    }
+    
+    console.log(`🔍 キーワード抽出中: ${query.substring(0, 30)}...`);
     const result = await this.extractDynamicKeywords(query);
+    
+    // キャッシュに保存
+    await keywordCache.setCachedKeywords(query, result.keywords);
+    
     return result.keywords;
   }
 
