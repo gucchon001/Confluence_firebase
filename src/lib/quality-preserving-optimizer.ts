@@ -75,8 +75,10 @@ export class QualityPreservingOptimizer {
       await searchLanceDB({
         query: 'test',
         topK: 1,
-        labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
-        excludeLabels: ['議事録', 'meeting-notes'],
+        labelFilters: {
+          excludeMeetingNotes: true,
+          excludeArchived: true
+        },
         excludeTitlePatterns: ['xxx_*']
       });
       console.log('[QualityPreservingOptimizer] Services warmed up successfully');
@@ -112,11 +114,11 @@ export class QualityPreservingOptimizer {
       const results = await searchLanceDB({
         query,
         topK: limit,
-        labelFilters,
-        excludeLabels,
-        excludeTitlePatterns,
-        distanceThreshold,
-        qualityThreshold
+        labelFilters: {
+          excludeArchived: true,
+          excludeMeetingNotes: true
+        },
+        excludeTitlePatterns
       });
 
       const endTime = performance.now();

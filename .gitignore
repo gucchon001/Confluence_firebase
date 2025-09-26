@@ -63,3 +63,45 @@ debug.log
 # Sync logs (may contain sensitive data)
 /logs/
 .last_sync_time.json
+
+# Temporary files and test scripts (for migration)
+*.ts
+!src/**/*.ts
+!next.config.ts
+!tailwind.config.ts
+!tsconfig.json
+!vitest.config.ts
+!playwright.config.ts
+*.txt
+*.json
+!package.json
+!package-lock.json
+!firebase.json
+!firestore.indexes.json
+!components.json
+!postcss.config.mjs
+
+# Test results and debug files
+test-results/
+*test*.ts
+debug-*.ts
+analyze-*.ts
+performance-*.json
+measurement-*.json
+result-*.json
+sync-progress.json
+differential-sync-result-*.json
+folder-pages-*.json
+archive-pages-*.json
+xxx-pages-*.json
+bm25-search-optimization-*.json
+detailed-bottleneck-analysis-*.json
+vector-search-optimization-*.json
+result-processing-optimization-*.json
+
+# Migration specific
+CLEANUP_SUMMARY.md
+PROJECT_CLEANUP_PLAN.md
+PERFORMANCE_*.md
+comprehensive-*.md
+performance-*.md

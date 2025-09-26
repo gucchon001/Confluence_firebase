@@ -4,6 +4,8 @@
 
 export interface LabelFilterOptions {
   includeMeetingNotes?: boolean;
+  excludeMeetingNotes?: boolean;
+  excludeArchived?: boolean;
   excludeTemplates?: boolean;
   excludeGeneric?: boolean;
 }

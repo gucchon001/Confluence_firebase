@@ -16,10 +16,15 @@ export class LabelManager {
 
   constructor(config?: Partial<LabelManagerConfig>) {
     this.config = {
-      excludeAlways: ['アーカイブ', 'archive', 'フォルダ', 'スコープ外'],
+      excludeAlways: ['スコープ外'],
       excludeConditional: {
         '議事録': 'includeMeetingNotes',
-        'meeting-notes': 'includeMeetingNotes'
+        'meeting-notes': 'includeMeetingNotes',
+        'アーカイブ': 'excludeArchived',
+        'archive': 'excludeArchived',
+        'フォルダ': 'excludeArchived',
+        'メールテンプレート': 'excludeTemplates',
+        '帳票': 'excludeTemplates'
       },
       ...config
     };
@@ -36,7 +41,16 @@ export class LabelManager {
 
     // 条件付き除外ラベルをチェック
     for (const [label, optionKey] of Object.entries(this.config.excludeConditional)) {
-      const shouldExclude = !filterOptions[optionKey];
+      let shouldExclude = false;
+      
+      if (optionKey === 'includeMeetingNotes') {
+        // 議事録は includeMeetingNotes が false の場合に除外
+        shouldExclude = !filterOptions[optionKey];
+      } else if (optionKey === 'excludeArchived' || optionKey === 'excludeTemplates') {
+        // アーカイブやテンプレートは excludeArchived/excludeTemplates が true の場合に除外
+        shouldExclude = !!filterOptions[optionKey];
+      }
+      
       if (shouldExclude) {
         excludeLabels.push(label);
       }
@@ -90,6 +104,8 @@ export class LabelManager {
   getDefaultFilterOptions(): LabelFilterOptions {
     return {
       includeMeetingNotes: false,
+      excludeMeetingNotes: true,
+      excludeArchived: true,
       excludeTemplates: false,
       excludeGeneric: false
     };

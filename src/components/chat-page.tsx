@@ -7,7 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Menu, Settings } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -66,33 +67,41 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                 </ReactMarkdown>
             </CardContent>
             {isAssistant && msg.sources && msg.sources.length > 0 && (
-                <CardFooter className="flex flex-col items-start gap-2 border-t p-4">
-                    <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        参照元
-                    </h4>
-                    <div className="flex flex-col gap-2 w-full">
-                        {msg.sources.map((source: any, index) => (
-                        <a
-                            key={index}
-                            href={source.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline flex items-center gap-1 w-full"
-                        >
-                            <LinkIcon className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{source.title}</span>
-                            <span className="text-xs text-muted-foreground ml-1">
-                                ({source.distance !== undefined && source.distance !== null
-                                  ? Math.max(0, Math.min(100, Math.round((1 - source.distance) * 100)))
-                                  : '??'}% 一致)
-                            </span>
-                            <span className="text-xs ml-1 font-bold" style={{color: 'blue'}}>
-                                {source.source === 'keyword' ? '⌨️' : '🔍'}
-                            </span>
-                        </a>
-                        ))}
-                    </div>
+                <CardFooter className="border-t p-4">
+                    <Accordion type="single" collapsible className="w-full">
+                        <AccordionItem value="references" className="border-none">
+                            <AccordionTrigger className="py-2 px-0 hover:no-underline">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                                    <FileText className="h-4 w-4" />
+                                    参照元 ({msg.sources.length}件)
+                                </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-2">
+                                <div className="flex flex-col gap-2 w-full">
+                                    {msg.sources.map((source: any, index) => (
+                                    <a
+                                        key={index}
+                                        href={source.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-primary hover:underline flex items-center gap-1 w-full p-2 rounded-md hover:bg-gray-50 transition-colors"
+                                    >
+                                        <LinkIcon className="h-3 w-3 shrink-0" />
+                                        <span className="truncate flex-1">{source.title}</span>
+                                        <span className="text-xs text-muted-foreground ml-1 shrink-0">
+                                            ({source.distance !== undefined && source.distance !== null
+                                              ? Math.max(0, Math.min(100, Math.round((1 - source.distance) * 100)))
+                                              : '??'}% 一致)
+                                        </span>
+                                        <span className="text-xs ml-1 font-bold shrink-0" style={{color: 'blue'}}>
+                                            {source.source === 'keyword' ? '⌨️' : '🔍'}
+                                        </span>
+                                    </a>
+                                    ))}
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
                 </CardFooter>
             )}
             </Card>
@@ -137,7 +146,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [conversations, setConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string }>>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -202,6 +211,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const handleSignOut = async () => {
     await signOut();
   };
+
 
   // テキストエリアの参照を保持するためのref
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -309,6 +319,7 @@ export default function ChatPage({ user }: ChatPageProps) {
         }
       }
 
+
     } catch (error) {
       console.error('Failed to get answer:', error);
       const errorMessage: Message = {
@@ -335,7 +346,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   return (
     <div className="flex h-screen">
       {/* サイドバー */}
-      <div className={`${isSidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 bg-gray-50 border-r overflow-hidden flex flex-col`}>
+      <div className="w-72 bg-gray-50 border-r overflow-hidden flex flex-col">
         <div className="p-4 border-b">
           <Button className="w-full" onClick={async () => {
             // 新しい会話を開始
@@ -354,16 +365,21 @@ export default function ChatPage({ user }: ChatPageProps) {
             新しいチャット
           </Button>
         </div>
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-2">
+        <ScrollArea className="flex-1 h-0">
+          <div className="p-4 space-y-2 pb-4">
+
+            {/* 通常の会話履歴 */}
             {conversations.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center">会話履歴がありません</p>
+              <p className="text-sm text-gray-500 text-center py-4">会話履歴がありません</p>
             ) : (
               conversations.map((conv: { id: string; title: string; lastMessage: string; timestamp: string }) => (
-                <Button
+                <div
                   key={conv.id}
-                  variant={currentConversationId === conv.id ? "secondary" : "ghost"}
-                  className="w-full justify-start text-left"
+                  className={`w-full cursor-pointer rounded-md p-3 transition-colors ${
+                    currentConversationId === conv.id 
+                      ? "bg-secondary" 
+                      : "hover:bg-gray-100"
+                  }`}
                   onClick={async () => {
                     // 会話を読み込む処理
                     setCurrentConversationId(conv.id);
@@ -384,11 +400,48 @@ export default function ChatPage({ user }: ChatPageProps) {
                     }
                   }}
                 >
-                  <div className="flex-1 overflow-hidden">
-                    <p className="font-medium truncate">{conv.title.length > 20 ? `${conv.title.substring(0, 20)}...` : conv.title}</p>
-                    <p className="text-xs text-gray-500 truncate">{conv.lastMessage.length > 25 ? `${conv.lastMessage.substring(0, 25)}...` : conv.lastMessage}</p>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 overflow-hidden text-left min-w-0">
+                      <p className="font-medium text-sm leading-tight" style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {conv.title.length > 12 ? `${conv.title.substring(0, 12)}...` : conv.title}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1 leading-tight" style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {conv.lastMessage.length > 14 ? `${conv.lastMessage.substring(0, 14)}...` : conv.lastMessage}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0 text-xs text-gray-400 ml-2">
+                      {(() => {
+                        const date = new Date(conv.timestamp);
+                        const now = new Date();
+                        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                        const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                        
+                        if (messageDate.getTime() === today.getTime()) {
+                          // 当日の場合は時刻を表示
+                          return date.toLocaleTimeString('ja-JP', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: false 
+                          });
+                        } else {
+                          // 前日以上の場合は日付を表示
+                          return date.toLocaleDateString('ja-JP', { 
+                            month: 'numeric', 
+                            day: 'numeric' 
+                          });
+                        }
+                      })()}
+                    </div>
                   </div>
-                </Button>
+                </div>
               ))
             )}
           </div>
@@ -399,14 +452,6 @@ export default function ChatPage({ user }: ChatPageProps) {
       <div className="flex-1 flex flex-col">
         <header className="flex h-16 items-center justify-between border-b bg-white/80 backdrop-blur-sm px-4 md:px-6 sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="shrink-0"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
             <Bot className="h-6 w-6 text-primary" />
             <h1 className="text-lg font-semibold">Confluence Spec Chat</h1>
           </div>
@@ -489,43 +534,19 @@ export default function ChatPage({ user }: ChatPageProps) {
                   ))}
                 </div>
             ) : (
-                <div className="space-y-6">
-                    <Card className="max-w-xl mx-auto text-center">
-                        <CardHeader>
-                            <CardTitle>ようこそ！Confluence Spec Chatへ</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-muted-foreground">このチャットボットは、Confluenceの仕様書に関する質問に回答します。</p>
-                            <div className="mt-4 space-y-2">
-                              <p className="text-xs text-muted-foreground">例えば、次のような質問ができます：</p>
-                              <div className="text-sm space-y-1">
-                                <p>• 「ログイン認証の仕組みはどうなっていますか？」</p>
-                                <p>• 「求人詳細画面の仕様について教えてください」</p>
-                                <p>• 「プロジェクトXの要件定義書を要約して」</p>
-                              </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    
-                    <Card className="max-w-xl mx-auto">
-                        <CardHeader>
-                            <CardTitle>使い方</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <h3 className="font-semibold mb-1">① 質問を入力</h3>
-                                <p className="text-sm text-muted-foreground">下の入力欄に質問を入力して送信します。</p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold mb-1">② 回答を確認</h3>
-                                <p className="text-sm text-muted-foreground">チャットボットが関連する仕様書に基づいて回答します。</p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold mb-1">③ 会話を続ける</h3>
-                                <p className="text-sm text-muted-foreground">追加質問や詳細の確認もできます。コンテキストを維持します。</p>
-                            </div>
-                        </CardContent>
-                    </Card>
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <div className="max-w-md mx-auto text-center">
+                        <h1 className="text-2xl font-bold mb-4">ようこそ！Confluence Spec Chatへ</h1>
+                        <p className="text-muted-foreground">このチャットボットは、Confluenceの仕様書に関する質問に回答します。</p>
+                        <div className="mt-4 space-y-2">
+                          <p className="text-xs text-muted-foreground">例えば、次のような質問ができます：</p>
+                          <div className="text-sm space-y-1">
+                            <p>• 「ログイン認証の仕組みはどうなっていますか？」</p>
+                            <p>• 「求人詳細画面の仕様について教えてください」</p>
+                            <p>• 「プロジェクトXの要件定義書を要約して」</p>
+                          </div>
+                        </div>
+                    </div>
                 </div>
             )}
             {isLoading && <SkeletonMessage />}

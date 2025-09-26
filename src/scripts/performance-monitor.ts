@@ -106,9 +106,10 @@ class PerformanceMonitor {
         const startTime = performance.now();
         const results = await searchLanceDB({
           query: query,
-          limit: 10,
+          topK: 10,
           labelFilters: {
-            excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive']
+            excludeArchived: true,
+            excludeMeetingNotes: true
           }
         });
         const endTime = performance.now();

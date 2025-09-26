@@ -40,8 +40,10 @@ async function testCachedSearchService() {
       const results = await cachedSearchService.search({
         query,
         topK: 10,
-        labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
-        excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
+        labelFilters: {
+          excludeArchived: true,
+          excludeMeetingNotes: true
+        },
         excludeTitlePatterns: ['xxx_*']
       });
       const endTime = performance.now();
@@ -63,8 +65,10 @@ async function testCachedSearchService() {
       const results = await cachedSearchService.search({
         query,
         topK: 10,
-        labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
-        excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
+        labelFilters: {
+          excludeArchived: true,
+          excludeMeetingNotes: true
+        },
         excludeTitlePatterns: ['xxx_*']
       });
       const endTime = performance.now();
@@ -112,8 +116,10 @@ async function testCachedSearchService() {
     const originalResults = await searchLanceDB({
       query: comparisonQuery,
       topK: 10,
-      labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
-      excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
+      labelFilters: {
+        excludeArchived: true,
+        excludeMeetingNotes: true
+      },
       excludeTitlePatterns: ['xxx_*']
     });
     const originalEndTime = performance.now();
@@ -125,8 +131,10 @@ async function testCachedSearchService() {
     const cachedResults = await cachedSearchService.search({
       query: comparisonQuery,
       topK: 10,
-      labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
-      excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
+      labelFilters: {
+        excludeArchived: true,
+        excludeMeetingNotes: true
+      },
       excludeTitlePatterns: ['xxx_*']
     });
     const cachedEndTime = performance.now();
@@ -138,8 +146,10 @@ async function testCachedSearchService() {
     const cached2Results = await cachedSearchService.search({
       query: comparisonQuery,
       topK: 10,
-      labelFilters: { excludeMeetingNotes: true, excludeArchived: true },
-      excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive'],
+      labelFilters: {
+        excludeArchived: true,
+        excludeMeetingNotes: true
+      },
       excludeTitlePatterns: ['xxx_*']
     });
     const cached2EndTime = performance.now();

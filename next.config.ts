@@ -12,7 +12,7 @@ const nextConfig = {
   },
   // 開発環境での最適化
   experimental: {
-    optimizeCss: true,
+    // optimizeCss: true, // crittersモジュールの問題で一時的に無効化
   },
   // パッケージの最適化
   transpilePackages: ['lunr'],

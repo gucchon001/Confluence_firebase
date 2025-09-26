@@ -62,7 +62,10 @@ class OptimizedSearchTester {
           query,
           limit: 10,
           labelFilters: {
-            excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive']
+            labelFilters: {
+            excludeArchived: true,
+            excludeMeetingNotes: true
+          }
           }
         });
         const endTime = performance.now();
@@ -101,7 +104,10 @@ class OptimizedSearchTester {
         query,
         limit: 10,
         labelFilters: {
-          excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive']
+          labelFilters: {
+            excludeArchived: true,
+            excludeMeetingNotes: true
+          }
         }
       });
       const originalEnd = performance.now();
@@ -114,7 +120,10 @@ class OptimizedSearchTester {
         query,
         limit: 10,
         labelFilters: {
-          excludeLabels: ['フォルダ', '議事録', 'meeting-notes', 'アーカイブ', 'archive']
+          labelFilters: {
+            excludeArchived: true,
+            excludeMeetingNotes: true
+          }
         }
       });
       const optimizedEnd = performance.now();
