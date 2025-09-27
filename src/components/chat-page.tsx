@@ -631,7 +631,27 @@ export default function ChatPage({ user }: ChatPageProps) {
                               pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
                             }}
                           >
-                            {streamingAnswer}
+                            {(() => {
+                              console.log('🔍 [DEBUG] streamingAnswer before ReactMarkdown:', streamingAnswer);
+                              console.log('🔍 [DEBUG] typeof streamingAnswer:', typeof streamingAnswer);
+                              
+                              let safeAnswer = '';
+                              if (typeof streamingAnswer === 'string') {
+                                safeAnswer = streamingAnswer;
+                              } else if (streamingAnswer !== null && streamingAnswer !== undefined) {
+                                safeAnswer = String(streamingAnswer);
+                              }
+                              
+                              console.log('🔍 [DEBUG] safeAnswer:', safeAnswer);
+                              console.log('🔍 [DEBUG] [object Object]含む:', safeAnswer.includes('[object Object]'));
+                              
+                              if (safeAnswer.includes('[object Object]')) {
+                                console.warn('🔍 [DEBUG] [object Object] detected in streamingAnswer, using fallback');
+                                safeAnswer = '回答の生成中にエラーが発生しました。';
+                              }
+                              
+                              return safeAnswer;
+                            })()}
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
                           </ReactMarkdown>
                         </CardContent>
