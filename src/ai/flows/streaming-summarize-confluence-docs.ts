@@ -135,6 +135,10 @@ export async function* streamingSummarizeConfluenceDocs(
     // ストリーミング生成の実行（エラーハンドリング付き）
     let result;
     try {
+      console.log('🔍 [DEBUG] AI generate開始');
+      console.log('🔍 [DEBUG] prompt length:', prompt.length);
+      console.log('🔍 [DEBUG] context length:', context.length);
+      
       result = await ai.generate({
         model: 'googleai/gemini-2.5-flash',
         prompt: prompt,
@@ -144,6 +148,11 @@ export async function* streamingSummarizeConfluenceDocs(
           topP: 0.8,
         }
       });
+      
+      console.log('🔍 [DEBUG] AI generate完了');
+      console.log('🔍 [DEBUG] result:', result);
+      console.log('🔍 [DEBUG] result.text type:', typeof result.text);
+      console.log('🔍 [DEBUG] result.text length:', result.text?.length || 0);
     } catch (error) {
       console.error('❌ Gemini API エラー:', error);
       
