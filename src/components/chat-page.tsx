@@ -256,16 +256,45 @@ export default function ChatPage({ user }: ChatPageProps) {
         // チャンク受信コールバック
         (chunk: string, chunkIndex: number) => {
           console.log(`チャンク受信 ${chunkIndex}:`, chunk);
-          // 文字列型チェック
-          const safeChunk = typeof chunk === 'string' ? chunk : String(chunk);
-          setStreamingAnswer(prev => prev + safeChunk);
+          // 文字列型チェックとサニタイズ
+          let safeChunk = '';
+          if (typeof chunk === 'string') {
+            safeChunk = chunk;
+          } else if (chunk !== null && chunk !== undefined) {
+            safeChunk = String(chunk);
+          }
+          
+          // 空文字列やnullは無視
+          if (safeChunk && safeChunk.trim()) {
+            setStreamingAnswer(prev => {
+              const newAnswer = prev + safeChunk;
+              // オブジェクトが混入していないかチェック
+              if (typeof newAnswer === 'string' && !newAnswer.includes('[object Object]')) {
+                return newAnswer;
+              }
+              console.warn('Invalid chunk detected, skipping:', chunk);
+              return prev;
+            });
+          }
         },
         // 完了コールバック
         (fullAnswer: string, references: any[]) => {
           console.log('ストリーミング完了:', fullAnswer);
-          // 文字列型チェック
-          const safeAnswer = typeof fullAnswer === 'string' ? fullAnswer : String(fullAnswer);
-          setStreamingAnswer(safeAnswer);
+          // 文字列型チェックとサニタイズ
+          let safeAnswer = '';
+          if (typeof fullAnswer === 'string') {
+            safeAnswer = fullAnswer;
+          } else if (fullAnswer !== null && fullAnswer !== undefined) {
+            safeAnswer = String(fullAnswer);
+          }
+          
+          // オブジェクトが混入していないかチェック
+          if (safeAnswer && !safeAnswer.includes('[object Object]')) {
+            setStreamingAnswer(safeAnswer);
+          } else {
+            console.warn('Invalid full answer detected:', fullAnswer);
+            setStreamingAnswer('回答の生成中にエラーが発生しました。');
+          }
           setStreamingReferences(references);
           
           // 最終的なメッセージを作成
@@ -598,7 +627,15 @@ export default function ChatPage({ user }: ChatPageProps) {
                               pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
                             }}
                           >
-                            {typeof streamingAnswer === 'string' ? streamingAnswer : String(streamingAnswer)}
+                            {(() => {
+                              // ストリーミング回答の安全性チェック
+                              if (typeof streamingAnswer === 'string' && !streamingAnswer.includes('[object Object]')) {
+                                return streamingAnswer;
+                              }
+                              // オブジェクトが混入している場合は空文字列を返す
+                              console.warn('Invalid streaming answer detected:', streamingAnswer);
+                              return '';
+                            })()}
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
                           </ReactMarkdown>
                         </CardContent>
