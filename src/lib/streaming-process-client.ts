@@ -155,14 +155,53 @@ export class StreamingProcessClient {
         break;
 
       case 'chunk':
+        console.log('🔍 [DEBUG] chunk message received:', message);
+        console.log('🔍 [DEBUG] message.chunk:', message.chunk);
+        console.log('🔍 [DEBUG] typeof message.chunk:', typeof message.chunk);
+        
         if (message.chunk && message.chunkIndex !== undefined) {
-          onChunk(message.chunk, message.chunkIndex);
+          // 文字列型チェック
+          let safeChunk = '';
+          if (typeof message.chunk === 'string') {
+            safeChunk = message.chunk;
+          } else if (message.chunk !== null && message.chunk !== undefined) {
+            safeChunk = String(message.chunk);
+          }
+          
+          console.log('🔍 [DEBUG] safeChunk:', safeChunk);
+          console.log('🔍 [DEBUG] [object Object]含む:', safeChunk.includes('[object Object]'));
+          
+          if (safeChunk && !safeChunk.includes('[object Object]')) {
+            onChunk(safeChunk, message.chunkIndex);
+          } else {
+            console.warn('🔍 [DEBUG] Invalid chunk detected, skipping:', message.chunk);
+          }
         }
         break;
 
       case 'completion':
+        console.log('🔍 [DEBUG] completion message received:', message);
+        console.log('🔍 [DEBUG] message.fullAnswer:', message.fullAnswer);
+        console.log('🔍 [DEBUG] typeof message.fullAnswer:', typeof message.fullAnswer);
+        
         if (message.fullAnswer && message.references) {
-          onCompletion(message.fullAnswer, message.references);
+          // 文字列型チェック
+          let safeAnswer = '';
+          if (typeof message.fullAnswer === 'string') {
+            safeAnswer = message.fullAnswer;
+          } else if (message.fullAnswer !== null && message.fullAnswer !== undefined) {
+            safeAnswer = String(message.fullAnswer);
+          }
+          
+          console.log('🔍 [DEBUG] safeAnswer:', safeAnswer);
+          console.log('🔍 [DEBUG] [object Object]含む:', safeAnswer.includes('[object Object]'));
+          
+          if (safeAnswer && !safeAnswer.includes('[object Object]')) {
+            onCompletion(safeAnswer, message.references);
+          } else {
+            console.warn('🔍 [DEBUG] Invalid fullAnswer detected, using fallback');
+            onCompletion('回答の生成中にエラーが発生しました。', message.references);
+          }
         }
         break;
 
