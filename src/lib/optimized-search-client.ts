@@ -26,7 +26,6 @@ export interface OptimizedSearchParams {
   limit?: number;
   labelFilters?: LabelFilterOptions;
   excludeLabels?: string[];
-  excludeTitlePatterns?: string[];
   distanceThreshold?: number;
   qualityThreshold?: number;
 }
@@ -118,7 +117,6 @@ export class OptimizedSearchClient {
       limit = 10,
       labelFilters = { includeMeetingNotes: false },
       excludeLabels = labelManager.buildExcludeLabels(labelFilters),
-      excludeTitlePatterns = ['xxx_*'],
       distanceThreshold = 2,
       qualityThreshold = 0
     } = params;
@@ -146,8 +144,8 @@ export class OptimizedSearchClient {
 
       // 3. 既存のフィルタリングロジックを適用
       const normalizedLabelFilters = labelFilters || { excludeMeetingNotes: true, excludeArchived: true };
-      const filteredVectorResults = this.applyFiltering(vectorResults, normalizedLabelFilters, excludeLabels, excludeTitlePatterns);
-      const filteredBM25Results = this.applyFiltering(bm25Results, normalizedLabelFilters, excludeLabels, excludeTitlePatterns);
+      const filteredVectorResults = this.applyFiltering(vectorResults, normalizedLabelFilters, excludeLabels);
+      const filteredBM25Results = this.applyFiltering(bm25Results, normalizedLabelFilters, excludeLabels);
 
       console.log('[OptimizedSearchClient] Vector search found', filteredVectorResults.length, 'results after filtering');
       console.log('[OptimizedSearchClient] BM25 search found', filteredBM25Results.length, 'results after filtering');
@@ -208,20 +206,10 @@ export class OptimizedSearchClient {
   private applyFiltering(
     results: any[], 
     labelFilters: LabelFilterOptions, 
-    excludeLabels: string[], 
-    excludeTitlePatterns: string[]
+    excludeLabels: string[]
   ): any[] {
     // LabelManagerを使用してラベルフィルタリング
     let filteredResults = labelManager.filterResults(results, labelFilters);
-
-    // タイトルパターンフィルタリング
-    if (excludeTitlePatterns && excludeTitlePatterns.length > 0) {
-      const beforeCount = filteredResults.length;
-      filteredResults = filteredResults.filter(result => {
-        return !isTitleExcluded(result.title, excludeTitlePatterns);
-      });
-      console.log('[OptimizedSearchClient] Excluded', beforeCount - filteredResults.length, 'results due to title pattern filtering');
-    }
 
     return filteredResults;
   }

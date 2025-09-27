@@ -33,8 +33,8 @@ export function calculateKeywordScore(
 
   let score = 0;
   
-  // タイトルマッチの重み付け
-  score += titleMatches * 3;
+  // タイトルマッチの重み付け（より重視）
+  score += titleMatches * 5;
   
   // ラベルマッチの重み付け
   score += labelMatches * 2;
@@ -76,8 +76,8 @@ export function calculateHybridScore(
   // ラベルスコアを0-1の範囲に正規化
   const normalizedLabelScore = Math.min(1, labelScore / 5);
   
-  // 重み付け平均
-  return (normalizedDistance * 0.4) + (normalizedKeywordScore * 0.4) + (normalizedLabelScore * 0.2);
+  // 重み付け平均（ベクトル検索を重視）
+  return (normalizedDistance * 0.6) + (normalizedKeywordScore * 0.3) + (normalizedLabelScore * 0.1);
 }
 
 /**

@@ -152,11 +152,10 @@ async function lancedbRetrieverTool(
     const unifiedResults = await searchLanceDB({
       query: optimizedQuery, // 最適化されたクエリを使用
       topK: 12,
-      useLunrIndex: false, // BM25検索を無効化してベクトル検索のみ使用
+      useLunrIndex: true, // BM25検索を有効化
       labelFilters: filters?.labelFilters || {
         includeMeetingNotes: false
       },
-      excludeTitlePatterns: ['xxx_*'], // xxx_で始まるページを除外
     });
     
     console.log('[lancedbRetrieverTool] Raw search results count:', unifiedResults.length);

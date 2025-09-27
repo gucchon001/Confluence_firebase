@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 import { APIErrorHandler, withAPIErrorHandling } from '@/lib/api-error-handler';
+import { screenTestLogger } from '@/lib/screen-test-logger';
 
 export const POST = withAPIErrorHandling(async (
   req: NextRequest,
@@ -26,7 +27,20 @@ export const POST = withAPIErrorHandling(async (
         return NextResponse.json(docs);
       }
       case 'summarizeConfluenceDocs': {
+        const aiStartTime = performance.now();
+        screenTestLogger.info('ai', `AI summarization request: "${body.question}"`, { contextLength: body.context?.length || 0 });
+        
         const result = await summarizeConfluenceDocs(body);
+        
+        const aiEndTime = performance.now();
+        const aiTime = aiEndTime - aiStartTime;
+        
+        screenTestLogger.logAIPerformance(body.question, aiTime, result.answer?.length || 0, {
+          contextDocs: body.context?.length || 0,
+          answerLength: result.answer?.length || 0,
+          references: result.references?.length || 0
+        });
+        
         return NextResponse.json(result);
       }
       default:

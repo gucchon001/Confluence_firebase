@@ -79,7 +79,6 @@ function setToCache(cacheKey: string, results: any[]): void {
 
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText } from './score-utils';
 import { unifiedSearchResultProcessor } from './unified-search-result-processor';
-import { isTitleExcluded } from './title-utils';
 
 /**
  * スコアを適切なパーセンテージに変換する関数（ハイブリッド検索対応）
@@ -113,7 +112,6 @@ export interface LanceDBSearchParams {
   exactTitleCandidates?: string[]; // タイトル厳格一致で必ず候補に合流させたい文字列
   useLunrIndex?: boolean; // Feature flag for Lunr inverted index
   originalQuery?: string; // 展開前の原文クエリ（優先度制御用）
-  excludeTitlePatterns?: string[]; // タイトル除外パターン
   titleWeight?: number; // タイトル重み（ベクトル検索でのタイトル重視度）
 }
 
@@ -216,12 +214,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const labelFilters = params.labelFilters || labelManager.getDefaultFilterOptions();
     const excludeLabels = labelManager.buildExcludeLabels(labelFilters);
     
-    // タイトル除外パターンの準備
-    const excludeTitlePatterns = params.excludeTitlePatterns || ['xxx_*'];
-    
     console.log('[searchLanceDB] Using labelFilters:', labelFilters);
     console.log('[searchLanceDB] Excluding labels:', excludeLabels);
-    console.log('[searchLanceDB] Excluding title patterns:', excludeTitlePatterns);
 
     // 1. ベクトル検索の実行
     try {
@@ -234,7 +228,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
-    const distanceThreshold = params.maxDistance || 2.0; // 最適化: 1.0 -> 2.0 (ベクトル検索を有効化)
+    const distanceThreshold = params.maxDistance || 1.5; // 最適化: 2.0 -> 1.5 (より関連性の高い結果を取得)
     const qualityThreshold = params.qualityThreshold || 0.0; // 最適化: 0.1 -> 0.0 (品質閾値を無効化)
     
     console.log(`[searchLanceDB] Using distance threshold: ${distanceThreshold}, quality threshold: ${qualityThreshold}`);
@@ -271,18 +265,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         console.log(`[searchLanceDB] Excluded ${beforeCount - vectorResults.length} results due to label filtering`);
       }
       
-      // タイトル除外フィルタリングを適用
-      if (excludeTitlePatterns.length > 0) {
-        const beforeCount = vectorResults.length;
-        vectorResults = vectorResults.filter(result => {
-          if (isTitleExcluded(result.title, excludeTitlePatterns)) {
-            console.log(`[searchLanceDB] Excluded result due to title pattern: ${result.title}`);
-            return false;
-          }
-          return true;
-        });
-        console.log(`[searchLanceDB] Excluded ${beforeCount - vectorResults.length} results due to title pattern filtering`);
-      }
 
       
       // タイトル重みを適用（ベクトル検索結果の調整）
@@ -662,14 +644,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
         }
         
-        // タイトル除外フィルタリングをBM25結果にも適用
-        if (excludeTitlePatterns.length > 0) {
-          const beforeBm25 = bm25Results.length;
-          bm25Results = bm25Results.filter((result: any) => {
-            return !isTitleExcluded(result.title, excludeTitlePatterns);
-          });
-          console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to title pattern filtering`);
-        }
             
             console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows to candidates for keywords=[${searchKeywords.join(', ')}]`);
           }

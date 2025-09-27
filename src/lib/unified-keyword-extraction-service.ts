@@ -446,6 +446,7 @@ export class UnifiedKeywordExtractionService {
     return 'search';
   }
 
+
   private extractPatternsDynamically(query: string, coreWords: string[]): string[] {
     const patterns: string[] = [];
 

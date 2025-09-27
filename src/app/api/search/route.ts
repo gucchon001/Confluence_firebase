@@ -7,6 +7,7 @@ import { hybridSearchEngine } from '../../../lib/hybrid-search-engine';
 import { lunrInitializer } from '../../../lib/lunr-initializer';
 import { calculateSimilarityScore } from '../../../lib/score-utils';
 import { APIErrorHandler, withAPIErrorHandling } from '../../../lib/api-error-handler';
+import { screenTestLogger } from '../../../lib/screen-test-logger';
 
 export const POST = withAPIErrorHandling(async (req: NextRequest) => {
   // 統一初期化サービスを使用
@@ -34,10 +35,13 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
     }
 
     console.log(`Search query: "${query}", topK: ${topK}, tableName: ${tableName}, hybrid: ${useHybridSearch}`);
+    screenTestLogger.info('search', `Search request received: "${query}"`, { topK, tableName, useHybridSearch });
 
     // ハイブリッド検索を使用する場合
     if (useHybridSearch) {
       try {
+        const searchStartTime = performance.now();
+        
         const hybridResults = await hybridSearchEngine.search({
           query,
           topK,
@@ -48,6 +52,9 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
           },
           tableName
         });
+
+        const searchEndTime = performance.now();
+        const searchTime = searchEndTime - searchStartTime;
 
         // 結果を整形
         const formattedResults = hybridResults.map(result => ({
@@ -63,6 +70,13 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
           scoreKind: result.scoreKind,
           scoreText: result.scoreText
         }));
+
+        // パフォーマンスログを記録
+        screenTestLogger.logSearchPerformance(query, searchTime, formattedResults.length, {
+          source: 'hybrid',
+          useLunrIndex: lunrReady,
+          results: formattedResults.slice(0, 3).map(r => ({ title: r.title, source: r.source }))
+        });
 
         return NextResponse.json({ results: formattedResults });
       } catch (hybridError: any) {
