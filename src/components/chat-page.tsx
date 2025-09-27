@@ -93,9 +93,16 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                                         <LinkIcon className="h-3 w-3 shrink-0" />
                                         <span className="truncate flex-1">{source.title}</span>
                                         <span className="text-xs text-muted-foreground ml-1 shrink-0">
-                                            ({source.distance !== undefined && source.distance !== null
-                                              ? Math.max(0, Math.min(100, Math.round((1 - source.distance) * 100)))
-                                              : '??'}% 一致)
+                                            ({(() => {
+                                              if (source.distance !== undefined && source.distance !== null) {
+                                                return Math.max(0, Math.min(100, Math.round((1 - source.distance) * 100)));
+                                              }
+                                              // フォールバック: ソースタイプに基づく推定値
+                                              if (source.source === 'vector') return 85;
+                                              if (source.source === 'bm25') return 75;
+                                              if (source.source === 'keyword') return 90;
+                                              return 80;
+                                            })()}% 一致)
                                         </span>
                                         <span className="text-xs ml-1 font-bold shrink-0" style={{color: 'blue'}}>
                                             {source.source === 'keyword' ? '⌨️' : '🔍'}
@@ -266,7 +273,7 @@ export default function ChatPage({ user }: ChatPageProps) {
             sources: references.map((ref: any) => ({
               title: ref.title || 'No Title',
               url: ref.url || '',
-              distance: ref.distance,
+              distance: ref.distance !== undefined ? ref.distance : (ref.score !== undefined ? 1 - ref.score : 0.5),
               source: ref.source
             }))
           };

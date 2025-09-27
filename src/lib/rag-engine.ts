@@ -34,7 +34,7 @@ export async function answerWithRag(
   // 検索（BM25+ベクトル融合は内部で実施）
   const results = await searchLanceDB({
     query,
-    topK: 12,
+    topK: 8,
     useLunrIndex: false,
     labelFilters: options.labelFilters,
   });

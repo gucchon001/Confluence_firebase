@@ -144,14 +144,14 @@ async function lancedbRetrieverTool(
     // スクリプトと同一のパイプラインで検索（最適化されたクエリを使用）
     console.log('[lancedbRetrieverTool] Calling searchLanceDB with params:', {
       query: optimizedQuery,
-      topK: 12,
+      topK: 8,
       useLunrIndex: false,
       labelFilters: filters?.labelFilters
     });
     
     const unifiedResults = await searchLanceDB({
       query: optimizedQuery, // 最適化されたクエリを使用
-      topK: 12,
+      topK: 8,
       useLunrIndex: true, // BM25検索を有効化
       labelFilters: filters?.labelFilters || {
         includeMeetingNotes: false

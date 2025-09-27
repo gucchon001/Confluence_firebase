@@ -55,7 +55,7 @@ export class HybridSearchEngine {
   async search(params: HybridSearchParams): Promise<HybridSearchResult[]> {
     const {
       query,
-      topK = 12,
+      topK = 8,
       useLunrIndex = true,
       labelFilters = { includeMeetingNotes: false },
       tableName = 'confluence'
