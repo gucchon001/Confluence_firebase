@@ -482,6 +482,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
                 content: r.content,
                 labels: r.labels,
                 pageId: r.pageId,
+                url: r.url,
+                space_key: r.space_key,
+                lastUpdated: r.lastUpdated,
                 _bm25Score: r.score || 1.0 // Use Lunr's native score, fallback to 1.0
               }));
               console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows via Lunr for core='${core}' (using native scores)`);
@@ -501,7 +504,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
                 const dl = Math.max(1, Array.from(title).length / 2);
                 const tf = (title.match(new RegExp(esc, 'g')) || []).length || 1;
                 const score = idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (dl / avgdl))));
-                return { ...r, _bm25Score: score };
+                return { 
+                  ...r, 
+                  url: r.url,
+                  space_key: r.space_key,
+                  lastUpdated: r.lastUpdated,
+                  _bm25Score: score 
+                };
               });
               console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows via LIKE fallback for core='${core}' (idf=${idf.toFixed(3)})`);
             }
@@ -632,7 +641,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             }
           }
               
-              return { ...r, _bm25Score: totalScore };
+              return { 
+                ...r, 
+                url: r.url,
+                space_key: r.space_key,
+                lastUpdated: r.lastUpdated,
+                _bm25Score: totalScore 
+              };
             });
 
         // ラベルフィルタリングをBM25結果にも適用

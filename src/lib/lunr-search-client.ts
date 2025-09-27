@@ -185,6 +185,9 @@ export class LunrSearchClient {
             labels: doc.labels,
             pageId: doc.pageId,
             score: result.score,
+            url: doc.url,
+            space_key: doc.space_key,
+            lastUpdated: doc.lastUpdated,
           };
         })
         .filter((result): result is LunrSearchResult => result !== null);
