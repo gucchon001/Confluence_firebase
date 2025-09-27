@@ -8,6 +8,9 @@ async function syncSpecificPage(pageId: string) {
   try {
     console.log(`=== ページID ${pageId} の個別同期 ===`);
     
+    // pageIdを数値に変換
+    const pageIdNumber = parseInt(pageId);
+    
     // Confluence APIからページを取得
     const baseUrl = process.env.CONFLUENCE_BASE_URL;
     const username = process.env.CONFLUENCE_USER_EMAIL;
@@ -56,7 +59,7 @@ async function syncSpecificPage(pageId: string) {
     
     // 既存のレコードを削除
     console.log('既存のレコードを削除中...');
-    await tbl.delete(`"pageId" = '${pageId}'`);
+    await tbl.delete(`"pageId" = ${pageIdNumber}`);
     
     // 新しいレコードを作成
     const records = [];
@@ -80,7 +83,7 @@ async function syncSpecificPage(pageId: string) {
         content: String(chunk || ''),
         space_key: String(page.space?.key || ''),
         labels: Array.isArray(labels) ? labels : [],
-        pageId: String(pageId),
+        pageId: pageIdNumber,
         chunkIndex: Number(i),
         url: `${baseUrl}/wiki/spaces/${page.space?.key}/pages/${pageId}`,
         lastUpdated: String(page.version?.when || '')
@@ -102,7 +105,7 @@ async function syncSpecificPage(pageId: string) {
     
     // 確認
     const verifyResults = await tbl.query()
-      .where(`"pageId" = '${pageId}'`)
+      .where(`"pageId" = ${pageIdNumber}`)
       .toArray();
     
     console.log(`確認: ${verifyResults.length}件のレコードが保存されました`);

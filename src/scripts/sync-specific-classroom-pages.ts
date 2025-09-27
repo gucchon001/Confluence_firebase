@@ -23,7 +23,7 @@ async function syncSpecificClassroomPages() {
       
       // 既存のページを検索
       const existingPages = await tbl.query()
-        .where(`"pageId" = '${pageId}'`)
+        .where(`"pageId" = ${parseInt(pageId)}`)
         .toArray();
       
       console.log(`既存のページ数: ${existingPages.length}`);
@@ -80,7 +80,7 @@ async function syncSpecificClassroomPages() {
     console.log('\n=== 最終確認 ===');
     for (const pageId of specificPageIds) {
       const pages = await tbl.query()
-        .where(`"pageId" = '${pageId}'`)
+        .where(`"pageId" = ${parseInt(pageId)}`)
         .toArray();
       
       console.log(`\nページID ${pageId}:`);
