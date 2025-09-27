@@ -170,13 +170,14 @@ export async function* streamingSummarizeConfluenceDocs(
         source: doc.source || 'vector'
       }));
 
-      return {
+      yield {
         chunk: fallbackAnswer,
         chunkIndex: 1,
         totalChunks: 1,
         isComplete: true,
         references: references
       };
+      return;
     }
 
     // 参照元の準備
