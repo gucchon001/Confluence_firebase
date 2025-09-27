@@ -895,7 +895,19 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // すでにハイブリッドスコアでソート済みなので、ここではソートしない
     // 上位の結果を取得
-    const finalResults = combinedResults.slice(0, topK);
+    let finalResults = combinedResults.slice(0, topK);
+    
+    // 最終的なラベルフィルタリングを適用
+    if (excludeLabels.length > 0) {
+      const beforeFinal = finalResults.length;
+      finalResults = finalResults.filter((result: any) => {
+        return !labelManager.isExcluded(result.labels, excludeLabels);
+      });
+      if (beforeFinal !== finalResults.length) {
+        console.log(`[searchLanceDB] Excluded ${beforeFinal - finalResults.length} results due to final label filtering`);
+      }
+    }
+    
     console.log(`[searchLanceDB] Returning top ${finalResults.length} results based on hybrid score`);
     
     // 結果を整形（統一サービスを使用）
