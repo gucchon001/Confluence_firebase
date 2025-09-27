@@ -181,7 +181,21 @@ export async function* streamingSummarizeConfluenceDocs(
     }));
 
     // ストリーミングをシミュレート
-    const answer = result.text || '回答を生成できませんでした。';
+    let answer = '';
+    if (typeof result.text === 'string') {
+      answer = result.text;
+    } else if (result.text !== null && result.text !== undefined) {
+      answer = String(result.text);
+    } else {
+      answer = '回答を生成できませんでした。';
+    }
+    
+    // オブジェクトが混入していないかチェック
+    if (answer.includes('[object Object]')) {
+      console.warn('Object detected in answer, using fallback');
+      answer = '回答の生成中にエラーが発生しました。';
+    }
+    
     const chunks = splitIntoChunks(answer, 100);
     
     // チャンクを順次出力
@@ -241,6 +255,18 @@ function isChunkComplete(chunk: string): boolean {
  * テキストをチャンクに分割
  */
 function splitIntoChunks(text: string, chunkSize: number): string[] {
+  // 入力の安全性チェック
+  if (typeof text !== 'string') {
+    console.warn('splitIntoChunks received non-string input:', text);
+    text = String(text);
+  }
+  
+  // オブジェクトが混入していないかチェック
+  if (text.includes('[object Object]')) {
+    console.warn('Object detected in splitIntoChunks input, using fallback');
+    return ['回答の生成中にエラーが発生しました。'];
+  }
+  
   const chunks: string[] = [];
   let currentChunk = '';
   
@@ -261,7 +287,7 @@ function splitIntoChunks(text: string, chunkSize: number): string[] {
     chunks.push(currentChunk.trim());
   }
   
-  return chunks;
+  return chunks.length > 0 ? chunks : [text];
 }
 
 /**
