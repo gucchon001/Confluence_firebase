@@ -256,12 +256,16 @@ export default function ChatPage({ user }: ChatPageProps) {
         // チャンク受信コールバック
         (chunk: string, chunkIndex: number) => {
           console.log(`チャンク受信 ${chunkIndex}:`, chunk);
-          setStreamingAnswer(prev => prev + chunk);
+          // 文字列型チェック
+          const safeChunk = typeof chunk === 'string' ? chunk : String(chunk);
+          setStreamingAnswer(prev => prev + safeChunk);
         },
         // 完了コールバック
         (fullAnswer: string, references: any[]) => {
           console.log('ストリーミング完了:', fullAnswer);
-          setStreamingAnswer(fullAnswer);
+          // 文字列型チェック
+          const safeAnswer = typeof fullAnswer === 'string' ? fullAnswer : String(fullAnswer);
+          setStreamingAnswer(safeAnswer);
           setStreamingReferences(references);
           
           // 最終的なメッセージを作成
@@ -594,7 +598,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                               pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
                             }}
                           >
-                            {streamingAnswer}
+                            {typeof streamingAnswer === 'string' ? streamingAnswer : String(streamingAnswer)}
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
                           </ReactMarkdown>
                         </CardContent>
