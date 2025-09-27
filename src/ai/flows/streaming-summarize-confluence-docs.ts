@@ -182,6 +182,9 @@ export async function* streamingSummarizeConfluenceDocs(
 
     // ストリーミングをシミュレート
     let answer = '';
+    console.log('🔍 [DEBUG] result.text:', result.text);
+    console.log('🔍 [DEBUG] typeof result.text:', typeof result.text);
+    
     if (typeof result.text === 'string') {
       answer = result.text;
     } else if (result.text !== null && result.text !== undefined) {
@@ -190,11 +193,16 @@ export async function* streamingSummarizeConfluenceDocs(
       answer = '回答を生成できませんでした。';
     }
     
+    console.log('🔍 [DEBUG] answer after processing:', answer);
+    console.log('🔍 [DEBUG] answer.includes("[object Object]"):', answer.includes('[object Object]'));
+    
     // オブジェクトが混入していないかチェック
     if (answer.includes('[object Object]')) {
       console.warn('Object detected in answer, using fallback');
       answer = '回答の生成中にエラーが発生しました。';
     }
+    
+    console.log('🔍 [DEBUG] final answer:', answer);
     
     const chunks = splitIntoChunks(answer, 100);
     
