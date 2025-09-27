@@ -153,11 +153,12 @@ export async function* streamingSummarizeConfluenceDocs(
       
       // フォールバック結果を返す
       const references = context.map((doc, index) => ({
-        id: doc.id,
-        title: doc.title,
+        id: doc.id || `${doc.pageId}-${index}`,
+        title: doc.title || 'タイトル不明',
         url: doc.url,
-        distance: doc.distance || 0,
-        source: 'vector'
+        distance: doc.distance || 0.5,
+        score: doc.score || 0,
+        source: doc.source || 'vector'
       }));
 
       return {
@@ -174,7 +175,9 @@ export async function* streamingSummarizeConfluenceDocs(
       id: doc.id || `${doc.pageId}-${index}`,
       title: doc.title || 'タイトル不明',
       url: doc.url,
-      score: doc.score || 0
+      distance: doc.distance,
+      score: doc.score || 0,
+      source: doc.source || 'vector'
     }));
 
     // ストリーミングをシミュレート

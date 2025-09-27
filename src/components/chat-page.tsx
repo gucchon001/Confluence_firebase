@@ -578,10 +578,25 @@ export default function ChatPage({ user }: ChatPageProps) {
                     <div className="flex flex-col gap-2 items-start max-w-[85%] sm:max-w-[75%]">
                       <Card className="bg-white w-full min-w-[200px]">
                         <CardContent className="p-4 text-sm break-words">
-                          <div className="whitespace-pre-wrap">
+                          <ReactMarkdown
+                            className="prose prose-sm max-w-none"
+                            components={{
+                              h1: ({children}) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                              h2: ({children}) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                              h3: ({children}) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                              p: ({children}) => <p className="mb-2">{children}</p>,
+                              ul: ({children}) => <ul className="list-disc list-inside mb-2">{children}</ul>,
+                              ol: ({children}) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
+                              li: ({children}) => <li className="mb-1">{children}</li>,
+                              strong: ({children}) => <strong className="font-bold">{children}</strong>,
+                              em: ({children}) => <em className="italic">{children}</em>,
+                              code: ({children}) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
+                              pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
+                            }}
+                          >
                             {streamingAnswer}
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
-                          </div>
+                          </ReactMarkdown>
                         </CardContent>
                       </Card>
                     </div>

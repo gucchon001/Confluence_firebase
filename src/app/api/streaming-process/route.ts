@@ -204,8 +204,9 @@ export const POST = async (req: NextRequest) => {
                 id: doc.id || `${doc.pageId}-${index}`,
                 title: doc.title || 'タイトル不明',
                 url: doc.url || '',
-                distance: doc.distance || 0,
-                source: 'vector'
+                distance: doc.distance || 0.5,
+                score: doc.score || 0,
+                source: doc.source || 'vector'
               })),
               step: 2,
               stepId: 'ai_generation',
