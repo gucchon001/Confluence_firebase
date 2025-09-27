@@ -154,7 +154,7 @@ export class HybridSearchEngine {
         title: result.title,
         content: result.content,
         labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
-        url: '#',
+        url: result.url || '#', // BM25検索結果のURLを使用
         source: 'bm25' as const,
         scoreKind: 'bm25' as const,
         scoreRaw: result.score,
