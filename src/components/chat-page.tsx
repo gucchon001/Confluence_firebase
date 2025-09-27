@@ -145,8 +145,45 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStep, setCurrentStep] = useState<ProcessingStep | null>(null);
   const [streamingError, setStreamingError] = useState<string | null>(null);
-  const [streamingAnswer, setStreamingAnswer] = useState('');
+  const [streamingAnswer, setStreamingAnswer] = useState<string>('');
   const [streamingReferences, setStreamingReferences] = useState<any[]>([]);
+
+  // ストリーミング回答の安全な更新関数
+  const updateStreamingAnswer = (newContent: any) => {
+    let safeContent = '';
+    
+    if (typeof newContent === 'string') {
+      safeContent = newContent;
+    } else if (newContent !== null && newContent !== undefined) {
+      safeContent = String(newContent);
+    }
+    
+    // オブジェクトが混入していないかチェック
+    if (safeContent && !safeContent.includes('[object Object]')) {
+      setStreamingAnswer(prev => prev + safeContent);
+    } else {
+      console.warn('Invalid content detected, skipping:', newContent);
+    }
+  };
+
+  // ストリーミング回答の安全な設定関数
+  const setStreamingAnswerSafe = (content: any) => {
+    let safeContent = '';
+    
+    if (typeof content === 'string') {
+      safeContent = content;
+    } else if (content !== null && content !== undefined) {
+      safeContent = String(content);
+    }
+    
+    // オブジェクトが混入していないかチェック
+    if (safeContent && !safeContent.includes('[object Object]')) {
+      setStreamingAnswer(safeContent);
+    } else {
+      console.warn('Invalid content detected, using fallback:', content);
+      setStreamingAnswer('回答の生成中にエラーが発生しました。');
+    }
+  };
   
   // ラベルフィルタの状態
   const [labelFilters, setLabelFilters] = useState({
@@ -256,45 +293,12 @@ export default function ChatPage({ user }: ChatPageProps) {
         // チャンク受信コールバック
         (chunk: string, chunkIndex: number) => {
           console.log(`チャンク受信 ${chunkIndex}:`, chunk);
-          // 文字列型チェックとサニタイズ
-          let safeChunk = '';
-          if (typeof chunk === 'string') {
-            safeChunk = chunk;
-          } else if (chunk !== null && chunk !== undefined) {
-            safeChunk = String(chunk);
-          }
-          
-          // 空文字列やnullは無視
-          if (safeChunk && safeChunk.trim()) {
-            setStreamingAnswer(prev => {
-              const newAnswer = prev + safeChunk;
-              // オブジェクトが混入していないかチェック
-              if (typeof newAnswer === 'string' && !newAnswer.includes('[object Object]')) {
-                return newAnswer;
-              }
-              console.warn('Invalid chunk detected, skipping:', chunk);
-              return prev;
-            });
-          }
+          updateStreamingAnswer(chunk);
         },
         // 完了コールバック
         (fullAnswer: string, references: any[]) => {
           console.log('ストリーミング完了:', fullAnswer);
-          // 文字列型チェックとサニタイズ
-          let safeAnswer = '';
-          if (typeof fullAnswer === 'string') {
-            safeAnswer = fullAnswer;
-          } else if (fullAnswer !== null && fullAnswer !== undefined) {
-            safeAnswer = String(fullAnswer);
-          }
-          
-          // オブジェクトが混入していないかチェック
-          if (safeAnswer && !safeAnswer.includes('[object Object]')) {
-            setStreamingAnswer(safeAnswer);
-          } else {
-            console.warn('Invalid full answer detected:', fullAnswer);
-            setStreamingAnswer('回答の生成中にエラーが発生しました。');
-          }
+          setStreamingAnswerSafe(fullAnswer);
           setStreamingReferences(references);
           
           // 最終的なメッセージを作成
@@ -627,15 +631,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                               pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
                             }}
                           >
-                            {(() => {
-                              // ストリーミング回答の安全性チェック
-                              if (typeof streamingAnswer === 'string' && !streamingAnswer.includes('[object Object]')) {
-                                return streamingAnswer;
-                              }
-                              // オブジェクトが混入している場合は空文字列を返す
-                              console.warn('Invalid streaming answer detected:', streamingAnswer);
-                              return '';
-                            })()}
+                            {streamingAnswer}
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
                           </ReactMarkdown>
                         </CardContent>
