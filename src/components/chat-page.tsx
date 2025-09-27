@@ -615,45 +615,48 @@ export default function ChatPage({ user }: ChatPageProps) {
                     <div className="flex flex-col gap-2 items-start max-w-[85%] sm:max-w-[75%]">
                       <Card className="bg-white w-full min-w-[200px]">
                         <CardContent className="p-4 text-sm break-words">
-                          <ReactMarkdown
-                            className="prose prose-sm max-w-none"
-                            components={{
-                              h1: ({children}) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                              h2: ({children}) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                              h3: ({children}) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                              p: ({children}) => <p className="mb-2">{children}</p>,
-                              ul: ({children}) => <ul className="list-disc list-inside mb-2">{children}</ul>,
-                              ol: ({children}) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
-                              li: ({children}) => <li className="mb-1">{children}</li>,
-                              strong: ({children}) => <strong className="font-bold">{children}</strong>,
-                              em: ({children}) => <em className="italic">{children}</em>,
-                              code: ({children}) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
-                              pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
-                            }}
-                          >
-                            {(() => {
-                              console.log('🔍 [DEBUG] streamingAnswer before ReactMarkdown:', streamingAnswer);
-                              console.log('🔍 [DEBUG] typeof streamingAnswer:', typeof streamingAnswer);
-                              
-                              let safeAnswer = '';
-                              if (typeof streamingAnswer === 'string') {
-                                safeAnswer = streamingAnswer;
-                              } else if (streamingAnswer !== null && streamingAnswer !== undefined) {
-                                safeAnswer = String(streamingAnswer);
-                              }
-                              
-                              console.log('🔍 [DEBUG] safeAnswer:', safeAnswer);
-                              console.log('🔍 [DEBUG] [object Object]含む:', safeAnswer.includes('[object Object]'));
-                              
-                              if (safeAnswer.includes('[object Object]')) {
-                                console.warn('🔍 [DEBUG] [object Object] detected in streamingAnswer, using fallback');
-                                safeAnswer = '回答の生成中にエラーが発生しました。';
-                              }
-                              
-                              return safeAnswer;
-                            })()}
+                          <div className="flex items-center">
+                            <div className="prose prose-sm max-w-none prose-headings:font-bold prose-strong:font-bold prose-em:italic prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-pre:bg-gray-100 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs prose-pre:font-mono prose-pre:overflow-x-auto">
+                              <ReactMarkdown
+                                components={{
+                                h1: ({children}) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                                h2: ({children}) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                                h3: ({children}) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                                p: ({children}) => <p className="mb-2">{children}</p>,
+                                ul: ({children}) => <ul className="list-disc list-inside mb-2">{children}</ul>,
+                                ol: ({children}) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
+                                li: ({children}) => <li className="mb-1">{children}</li>,
+                                strong: ({children}) => <strong className="font-bold">{children}</strong>,
+                                em: ({children}) => <em className="italic">{children}</em>,
+                                code: ({children}) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
+                                pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
+                              }}
+                            >
+                              {(() => {
+                                console.log('🔍 [DEBUG] streamingAnswer before ReactMarkdown:', streamingAnswer);
+                                console.log('🔍 [DEBUG] typeof streamingAnswer:', typeof streamingAnswer);
+                                
+                                let safeAnswer = '';
+                                if (typeof streamingAnswer === 'string') {
+                                  safeAnswer = streamingAnswer;
+                                } else if (streamingAnswer !== null && streamingAnswer !== undefined) {
+                                  safeAnswer = String(streamingAnswer);
+                                }
+                                
+                                console.log('🔍 [DEBUG] safeAnswer:', safeAnswer);
+                                console.log('🔍 [DEBUG] [object Object]含む:', safeAnswer.includes('[object Object]'));
+                                
+                                if (safeAnswer.includes('[object Object]')) {
+                                  console.warn('🔍 [DEBUG] [object Object] detected in streamingAnswer, using fallback');
+                                  safeAnswer = '回答の生成中にエラーが発生しました。';
+                                }
+                                
+                                return safeAnswer;
+                              })()}
+                              </ReactMarkdown>
+                            </div>
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
-                          </ReactMarkdown>
+                          </div>
                         </CardContent>
                       </Card>
                     </div>
