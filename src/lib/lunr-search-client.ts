@@ -22,6 +22,10 @@ export interface LunrDocument {
   // 表示用の元のテキスト
   originalTitle: string;
   originalContent: string;
+  // URLとメタデータ
+  url: string;
+  space_key: string;
+  lastUpdated: string;
 }
 
 export interface LunrSearchResult {
@@ -31,6 +35,10 @@ export interface LunrSearchResult {
   labels: string[];
   pageId: number;
   score: number;
+  // URLとメタデータ
+  url: string;
+  space_key: string;
+  lastUpdated: string;
 }
 
 export class LunrSearchClient {
@@ -243,6 +251,9 @@ export class LunrSearchClient {
             labels: doc.labels,
             pageId: doc.pageId,
             score: result.score,
+            url: doc.url,
+            space_key: doc.space_key,
+            lastUpdated: doc.lastUpdated,
           };
         })
         .filter((result): result is LunrSearchResult => result !== null);

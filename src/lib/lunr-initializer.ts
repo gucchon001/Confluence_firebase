@@ -8,6 +8,31 @@ import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { lancedbClient } from './lancedb-client';
 import { getLabelsAsArray } from './label-utils';
 
+/**
+ * HTMLタグを除去してテキストのみを抽出
+ */
+function stripHtmlTags(html: string): string {
+  if (!html) return '';
+  
+  // HTMLタグを除去
+  let text = html.replace(/<[^>]*>/g, '');
+  
+  // HTMLエンティティをデコード
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+  
+  // 連続する空白を単一の空白に置換
+  text = text.replace(/\s+/g, ' ').trim();
+  
+  return text;
+}
+
 interface LunrInitializerStatus {
   isInitialized: boolean;
   isInitializing: boolean;
@@ -61,9 +86,12 @@ export class LunrInitializer {
       
       for (const doc of docs) {
         try {
-          // 日本語テキストをトークン化
-          const tokenizedTitle = await tokenizeJapaneseText(doc.title || '');
-          const tokenizedContent = await tokenizeJapaneseText(doc.content || '');
+          // HTMLタグを除去してからトークン化
+          const cleanTitle = stripHtmlTags(doc.title || '');
+          const cleanContent = stripHtmlTags(doc.content || '');
+          
+          const tokenizedTitle = await tokenizeJapaneseText(cleanTitle);
+          const tokenizedContent = await tokenizeJapaneseText(cleanContent);
           
           // ラベルを配列として処理
           let labels: string[] = [];
@@ -73,14 +101,17 @@ export class LunrInitializer {
 
           lunrDocs.push({
             id: doc.id || '',
-            title: doc.title || '',
-            content: doc.content || '',
+            title: cleanTitle,
+            content: cleanContent,
             labels,
             pageId: doc.pageId || 0,
             tokenizedTitle,
             tokenizedContent,
             originalTitle: doc.title || '',
             originalContent: doc.content || '',
+            url: doc.url || '',
+            space_key: doc.space_key || '',
+            lastUpdated: doc.lastUpdated || '',
           });
         } catch (error) {
           console.warn(`[LunrInitializer] Failed to process document ${doc.id}:`, error);

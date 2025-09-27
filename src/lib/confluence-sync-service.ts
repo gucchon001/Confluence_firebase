@@ -753,8 +753,9 @@ export class ConfluenceSyncService {
    * ページをチャンクに分割（1800文字程度でセット管理）
    */
   private splitPageIntoChunks(page: ConfluencePage): ConfluenceChunk[] {
-    const content = page.content || '';
-    const title = page.title || 'No Title';
+    // HTMLタグを除去してクリーンなテキストを取得
+    const cleanContent = this.extractTextFromHtml(page.content || '');
+    const cleanTitle = this.extractTextFromHtml(page.title || 'No Title');
     const pageId = page.id;
     const lastUpdated = page.lastModified || new Date().toISOString();
     const spaceKey = page.spaceKey || 'N/A';
@@ -762,7 +763,7 @@ export class ConfluenceSyncService {
     // 1800文字程度でチャンク分割（セット管理対応）
     const chunkSize = 1800;
     const chunks: ConfluenceChunk[] = [];
-    let currentText = content;
+    let currentText = cleanContent;
 
     // テキストを1800文字程度で分割
     for (let i = 0; i < currentText.length; i += chunkSize) {
@@ -772,7 +773,7 @@ export class ConfluenceSyncService {
       if (chunk && this.isValidChunk(chunk)) {
         chunks.push({
           pageId: parseInt(pageId), // stringからnumberに変換
-          title,
+          title: cleanTitle,
           content: chunk,
           chunkIndex: Math.floor(i / chunkSize), // 枝番（0, 1, 2, ...）
           lastUpdated,
@@ -786,8 +787,8 @@ export class ConfluenceSyncService {
     if (chunks.length === 0) {
       chunks.push({
         pageId: parseInt(pageId), // stringからnumberに変換
-        title,
-        content: title, // コンテンツがない場合はタイトルを使用
+        title: cleanTitle,
+        content: cleanTitle, // コンテンツがない場合はタイトルを使用
         chunkIndex: 0, // 枝番0
         lastUpdated,
         spaceKey,
@@ -797,6 +798,38 @@ export class ConfluenceSyncService {
 
     console.log(`  📝 チャンク分割完了: ${chunks.length}チャンク (pageId: ${pageId})`);
     return chunks;
+  }
+
+  /**
+   * HTMLからテキストを抽出する
+   */
+  private extractTextFromHtml(html: string): string {
+    if (!html) return '';
+    
+    // HTML特殊文字をデコード
+    const htmlEntities: { [key: string]: string } = {
+      '&amp;': '&',
+      '&lt;': '<',
+      '&gt;': '>',
+      '&quot;': '"',
+      '&#39;': "'",
+      '&nbsp;': ' ',
+      '&apos;': "'"
+    };
+    
+    let text = html;
+    for (const [entity, char] of Object.entries(htmlEntities)) {
+      text = text.replace(new RegExp(entity, 'g'), char);
+    }
+    
+    // HTMLタグを削除して空白に置換
+    const withoutTags = text.replace(/<[^>]*>/g, ' ');
+    
+    // 連続する空白を1つにまとめる
+    const normalizedSpaces = withoutTags.replace(/\s+/g, ' ');
+    
+    // 前後の空白を削除
+    return normalizedSpaces.trim();
   }
 
   /**
