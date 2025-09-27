@@ -136,7 +136,7 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         distance: result._distance,
         space_key: result.space_key || '',
         labels: result.labels || [],
-        url: result.url || '#',
+        url: result.url || '',
         lastUpdated: result.lastUpdated || null,
         source: 'vector',
         scoreKind: 'vector',

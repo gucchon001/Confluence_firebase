@@ -165,7 +165,7 @@ async function lancedbRetrieverTool(
     const mapped = unifiedResults.slice(0, 12).map(r => ({
       id: String(r.pageId ?? r.id ?? ''),
       content: r.content || '',
-      url: r.url || '#',
+      url: r.url || '',
       lastUpdated: (r as any).lastUpdated || null,
       spaceName: (r as any).space_key || 'Unknown',
       title: r.title || 'No Title',

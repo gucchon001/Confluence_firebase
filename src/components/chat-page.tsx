@@ -291,7 +291,7 @@ export default function ChatPage({ user }: ChatPageProps) {
       const mappedSources = res.references.map((ref: any) => {
         const source = {
           title: ref.title || 'No Title',
-          url: ref.url || '#',
+          url: ref.url || '',
           distance: ref.distance,
           source: ref.source
         };
