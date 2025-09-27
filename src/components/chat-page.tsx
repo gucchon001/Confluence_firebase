@@ -30,6 +30,8 @@ import { useToast } from '@/hooks/use-toast';
 import { showErrorToast, showSuccessToast, showApiErrorToast, handleNetworkError } from '@/lib/toast-helpers';
 import { EmptyStateHandler, NoResultsFound, ErrorState } from '@/components/empty-state-handler';
 import { TimeoutHandler, useSearchTimeout } from '@/components/timeout-handler';
+import { StreamingProcessingUI, StreamingErrorUI } from '@/components/streaming-processing-ui';
+import { streamingProcessClient, ProcessingStep } from '@/lib/streaming-process-client';
 // import MigrationButton from '@/components/migration-button';
 
 interface ChatPageProps {
@@ -119,58 +121,7 @@ const MessageCard = ({ msg }: { msg: Message }) => {
     );
 };
 
-const SkeletonMessage = () => (
-    <div className="flex items-start gap-4 max-w-full">
-      <Avatar className="h-8 w-8 border shrink-0 bg-gradient-to-r from-blue-500 to-purple-500">
-        <AvatarFallback><Bot className="h-4 w-4 text-white" /></AvatarFallback>
-      </Avatar>
-      <div className="flex flex-col gap-2 items-start max-w-[85%] sm:max-w-[75%]">
-        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 w-full min-w-[200px]">
-          <CardContent className="p-4">
-            {/* プログレスバー */}
-            <div className="mb-4">
-              <div className="flex justify-between text-xs text-muted-foreground mb-2">
-                <span>処理中...</span>
-                <span>2/4</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full w-1/2 animate-pulse"></div>
-              </div>
-            </div>
-
-            {/* ステップ表示 */}
-            <div className="space-y-2">
-              {[
-                { icon: <Search className="h-3 w-3" />, text: '検索中...', desc: '関連ドキュメントを検索しています' },
-                { icon: <Brain className="h-3 w-3" />, text: 'AIが回答を生成中...', desc: '最適な回答を作成中' }
-              ].map((step, index) => (
-                <div key={index} className="flex items-center gap-3 p-2 rounded-lg bg-blue-100 border border-blue-300">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white">
-                    {index === 0 ? (
-                      <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    ) : (
-                      step.icon
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-blue-700">{step.text}</div>
-                    <div className="text-xs text-muted-foreground">{step.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* ヒント */}
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="text-xs text-yellow-800">
-                💡 <strong>ヒント:</strong> 初回検索は時間がかかりますが、次回からは高速になります
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
+// SkeletonMessageコンポーネントは削除されました
 
 export default function ChatPage({ user }: ChatPageProps) {
   const { signOut } = useAuthWrapper();
@@ -182,6 +133,13 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [conversations, setConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string }>>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  
+  // ストリーミング処理の状態
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [currentStep, setCurrentStep] = useState<ProcessingStep | null>(null);
+  const [streamingError, setStreamingError] = useState<string | null>(null);
+  const [streamingAnswer, setStreamingAnswer] = useState('');
+  const [streamingReferences, setStreamingReferences] = useState<any[]>([]);
   
   // ラベルフィルタの状態
   const [labelFilters, setLabelFilters] = useState({
@@ -248,9 +206,9 @@ export default function ChatPage({ user }: ChatPageProps) {
   // テキストエリアの参照を保持するためのref
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
     e?.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || isStreaming) return;
 
     // 入力内容を一時変数に保存（非同期処理で使用するため）
     const currentInput = input;
@@ -268,104 +226,110 @@ export default function ChatPage({ user }: ChatPageProps) {
 
     setMessages((prev: Message[]) => [...prev, userMessage]);
     setInput(''); // 入力フィールドをクリア
-    setIsLoading(true);
+    
+    // ストリーミング処理の初期化
+    setIsStreaming(true);
+    setCurrentStep(null);
+    setStreamingError(null);
+    setStreamingAnswer('');
+    setStreamingReferences([]);
 
-    // 非同期処理を実行
+    // ストリーミング処理を実行
     try {
-      const res = await askQuestion(currentInput, messages, labelFilters);
-      console.log('[handleSubmit] Response from askQuestion:', JSON.stringify(res, null, 2));
-      
-      // デバッグ用：ブラウザのコンソールにもログを出力
-      console.log('DEBUG - askQuestion response:', res);
-      
-      // レスポンスの参照元をログ出力
-      if (res.references && res.references.length > 0) {
-        console.log('[handleSubmit] References from response:');
-        res.references.forEach((ref: any, idx: number) => {
-          console.log(`[handleSubmit] Reference ${idx+1}: title=${ref.title}, source=${ref.source}`);
-        });
-      }
-      
-      // デバッグ用：参照元の詳細をログに出力
-      console.log('[handleSubmit] Mapping references to sources:');
-      const mappedSources = res.references.map((ref: any) => {
-        const source = {
-          title: ref.title || 'No Title',
-          url: ref.url || '',
-          distance: ref.distance,
-          source: ref.source
-        };
-        console.log(`[handleSubmit] Mapped source: ${JSON.stringify(source)}`);
-        return source;
-      });
-      
-      const assistantMessage: Message = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: res.answer,
-          sources: mappedSources,
-          createdAt: new Date().toISOString()
-      };
-      setMessages((prev: Message[]) => [...prev, assistantMessage]);
-      
-      // Firestoreに会話履歴を保存
-      if (currentConversationId) {
-        // 既存の会話に追加
-        await addMessageToConversation(user.uid, currentConversationId, 
-          { role: 'user', content: userMessage.content, user: userMessage.user }
-        );
-        await addMessageToConversation(user.uid, currentConversationId, 
-          { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-        );
-        console.log(`[handleSubmit] Added messages to existing conversation: ${currentConversationId}`);
-      } else {
-        // 新しい会話を作成
-        try {
-          // まずユーザーメッセージで会話を作成
-          const newConversationId = await createConversation(user.uid, 
-            { role: 'user', content: userMessage.content, user: userMessage.user }
-          );
+      // ストリーミング処理を開始
+      await streamingProcessClient.startStreaming(
+        currentInput,
+        messages,
+        labelFilters,
+        // ステップ更新コールバック
+        (step: ProcessingStep) => {
+          console.log('ステップ更新:', step);
+          setCurrentStep(step);
+        },
+        // チャンク受信コールバック
+        (chunk: string, chunkIndex: number) => {
+          console.log(`チャンク受信 ${chunkIndex}:`, chunk);
+          setStreamingAnswer(prev => prev + chunk);
+        },
+        // 完了コールバック
+        (fullAnswer: string, references: any[]) => {
+          console.log('ストリーミング完了:', fullAnswer);
+          setStreamingAnswer(fullAnswer);
+          setStreamingReferences(references);
           
-          // AIの応答を追加
-          await addMessageToConversation(user.uid, newConversationId, 
-            { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-          );
-          
-          // 現在の会話IDを更新
-          setCurrentConversationId(newConversationId);
-          
-          // 会話一覧を更新
-          const updatedConversations = await getConversations(user.uid);
-          setConversations(updatedConversations);
-          
-          console.log(`[handleSubmit] Created new conversation: ${newConversationId}`);
-        } catch (error) {
-          console.error("Failed to create new conversation:", error);
-          
-          // 従来の方法でメッセージを保存（フォールバック）
-          await addMessageBatch(user.uid, [
-            { role: 'user', content: userMessage.content, user: userMessage.user },
-            { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-          ]);
-          console.log('[handleSubmit] Saved messages using legacy method');
-        }
-      }
+          // 最終的なメッセージを作成
+          const assistantMessage: Message = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: fullAnswer,
+            createdAt: new Date().toISOString(),
+            sources: references.map((ref: any) => ({
+              title: ref.title || 'No Title',
+              url: ref.url || '',
+              distance: ref.distance,
+              source: ref.source
+            }))
+          };
 
+          setMessages((prev: Message[]) => [...prev, assistantMessage]);
+          
+          // 会話にメッセージを追加
+          if (currentConversationId) {
+            addMessageToConversation(user.uid, currentConversationId, 
+              { role: 'user', content: userMessage.content, user: userMessage.user }
+            );
+            addMessageToConversation(user.uid, currentConversationId, 
+              { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+            );
+          }
+
+          // ストリーミング状態をリセット
+          setTimeout(() => {
+            setIsStreaming(false);
+            setCurrentStep(null);
+            setStreamingAnswer('');
+            setStreamingReferences([]);
+          }, 1000);
+        },
+        // エラーコールバック
+        (error: string) => {
+          console.error('ストリーミングエラー:', error);
+          setStreamingError(error);
+          setIsStreaming(false);
+          setCurrentStep(null);
+          
+          // エラーメッセージを表示
+          const errorMessage: Message = {
+            id: `error-${Date.now()}`,
+            role: 'assistant',
+            content: `エラーが発生しました: ${error}`,
+            createdAt: new Date().toISOString(),
+            sources: []
+          };
+          
+          setMessages((prev: Message[]) => [...prev, errorMessage]);
+        }
+      );
 
     } catch (error) {
-      console.error('Failed to get answer:', error);
+      console.error('Error starting streaming:', error);
+      setStreamingError(error instanceof Error ? error.message : 'Unknown error');
+      setIsStreaming(false);
+      setCurrentStep(null);
+      
       const errorMessage: Message = {
-          id: `error-${Date.now()}`,
-          role: 'assistant',
-          content: "Sorry, something went wrong. Please try again.",
-          createdAt: new Date().toISOString()
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: "Sorry, something went wrong. Please try again.",
+        createdAt: new Date().toISOString()
       };
       setMessages((prev: Message[]) => [...prev, errorMessage]);
+      
       if (!handleNetworkError(error)) {
         showApiErrorToast(error);
       }
     } finally {
-      setIsLoading(false);
+      // ストリーミング状態はコールバック内で管理されるため、ここでは何もしない
       // 処理完了後にテキストエリアにフォーカスを当てる
       setTimeout(() => {
         if (textareaRef.current) {
@@ -555,7 +519,12 @@ export default function ChatPage({ user }: ChatPageProps) {
                 </div>
             ) : isLoadingHistory ? (
                 <div className="space-y-6">
-                  {Array.from({ length: 3 }).map((_, i) => <SkeletonMessage key={i} />)}
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-start gap-4 max-w-full">
+                      <div className="h-8 w-8 border shrink-0 bg-gray-200 animate-pulse rounded-full" />
+                      <div className="flex-1 bg-gray-100 animate-pulse rounded-lg h-20" />
+                    </div>
+                  ))}
                 </div>
             ) : messages.length > 0 ? (
                 <div className="space-y-6">
@@ -581,7 +550,38 @@ export default function ChatPage({ user }: ChatPageProps) {
                     </div>
                 </div>
             )}
-            {isLoading && <SkeletonMessage />}
+            {/* ストリーミング処理中の表示 */}
+            {isStreaming && (
+              <div className="space-y-6">
+                <StreamingProcessingUI 
+                  currentStep={currentStep} 
+                  isVisible={isStreaming} 
+                />
+                {streamingError && (
+                  <StreamingErrorUI 
+                    error={streamingError} 
+                    isVisible={true} 
+                  />
+                )}
+                {streamingAnswer && (
+                  <div className="flex items-start gap-4 max-w-full">
+                    <div className="h-8 w-8 border shrink-0 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+                      <Bot className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="flex flex-col gap-2 items-start max-w-[85%] sm:max-w-[75%]">
+                      <Card className="bg-white w-full min-w-[200px]">
+                        <CardContent className="p-4 text-sm break-words">
+                          <div className="whitespace-pre-wrap">
+                            {streamingAnswer}
+                            <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </ScrollArea>
       </main>
@@ -615,15 +615,15 @@ export default function ChatPage({ user }: ChatPageProps) {
                     handleSubmit();
                   }
                 }}
-                disabled={isLoading}
+                disabled={isLoading || isStreaming}
               />
               <Button 
                 type="submit" 
-                disabled={isLoading || !input.trim()} 
+                disabled={isLoading || isStreaming || !input.trim()} 
                 size="icon" 
-                className={`${isLoading ? 'bg-muted' : 'bg-accent hover:bg-accent/90'}`}
+                className={`${isLoading || isStreaming ? 'bg-muted' : 'bg-accent hover:bg-accent/90'}`}
               >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {isLoading || isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </form>
           </div>
