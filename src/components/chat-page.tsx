@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown } from 'lucide-react';
+import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -28,6 +28,8 @@ import {
 } from '@/lib/conversation-service';
 import { useToast } from '@/hooks/use-toast';
 import { showErrorToast, showSuccessToast, showApiErrorToast, handleNetworkError } from '@/lib/toast-helpers';
+import { EmptyStateHandler, NoResultsFound, ErrorState } from '@/components/empty-state-handler';
+import { TimeoutHandler, useSearchTimeout } from '@/components/timeout-handler';
 // import MigrationButton from '@/components/migration-button';
 
 interface ChatPageProps {
@@ -119,20 +121,50 @@ const MessageCard = ({ msg }: { msg: Message }) => {
 
 const SkeletonMessage = () => (
     <div className="flex items-start gap-4 max-w-full">
-      <Avatar className="h-8 w-8 border shrink-0">
-        <AvatarFallback><Bot className="h-4 w-4" /></AvatarFallback>
+      <Avatar className="h-8 w-8 border shrink-0 bg-gradient-to-r from-blue-500 to-purple-500">
+        <AvatarFallback><Bot className="h-4 w-4 text-white" /></AvatarFallback>
       </Avatar>
       <div className="flex flex-col gap-2 items-start max-w-[85%] sm:max-w-[75%]">
-        <Card className="bg-white w-full min-w-[200px]">
+        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 w-full min-w-[200px]">
           <CardContent className="p-4">
-            <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse"></div>
-                    <div className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse delay-75"></div>
-                    <div className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse delay-150"></div>
+            {/* プログレスバー */}
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                <span>処理中...</span>
+                <span>2/4</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full w-1/2 animate-pulse"></div>
+              </div>
+            </div>
+
+            {/* ステップ表示 */}
+            <div className="space-y-2">
+              {[
+                { icon: <Search className="h-3 w-3" />, text: '検索中...', desc: '関連ドキュメントを検索しています' },
+                { icon: <Brain className="h-3 w-3" />, text: 'AIが回答を生成中...', desc: '最適な回答を作成中' }
+              ].map((step, index) => (
+                <div key={index} className="flex items-center gap-3 p-2 rounded-lg bg-blue-100 border border-blue-300">
+                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                    {index === 0 ? (
+                      <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      step.icon
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-blue-700">{step.text}</div>
+                    <div className="text-xs text-muted-foreground">{step.desc}</div>
+                  </div>
                 </div>
-                <div className="h-2 w-24 bg-muted-foreground/20 rounded animate-pulse"></div>
-                <div className="h-2 w-32 bg-muted-foreground/20 rounded animate-pulse"></div>
+              ))}
+            </div>
+
+            {/* ヒント */}
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="text-xs text-yellow-800">
+                💡 <strong>ヒント:</strong> 初回検索は時間がかかりますが、次回からは高速になります
+              </div>
             </div>
           </CardContent>
         </Card>
