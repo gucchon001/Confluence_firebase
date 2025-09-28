@@ -290,10 +290,11 @@ export default function ChatPage({ user }: ChatPageProps) {
           console.log('ステップ更新:', step);
           setCurrentStep(step);
         },
-        // チャンク受信コールバック
+        // チャンク受信コールバック（リアルタイム表示）
         (chunk: string, chunkIndex: number) => {
           console.log(`チャンク受信 ${chunkIndex}:`, chunk);
-          updateStreamingAnswer(chunk);
+          // 即座にUIを更新してリアルタイム表示を実現
+          setStreamingAnswer(prev => prev + chunk);
         },
         // 完了コールバック
         (fullAnswer: string, references: any[]) => {

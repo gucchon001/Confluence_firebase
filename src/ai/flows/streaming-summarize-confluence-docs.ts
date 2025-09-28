@@ -277,11 +277,12 @@ ${doc.content}`
     console.log('🔍 [DEBUG] final answer:', answer);
     console.log('🔍 [DEBUG] answer length:', answer.length);
     
-    const chunks = splitIntoChunks(answer, 300);
+    // より細かいチャンクでリアルタイム表示を実現
+    const chunks = splitIntoChunks(answer, 150); // より小さなチャンクサイズ
     console.log('🔍 [DEBUG] chunks created:', chunks.length);
     console.log('🔍 [DEBUG] chunks:', chunks.map((chunk, i) => `[${i}]: ${chunk.substring(0, 50)}...`));
     
-    // チャンクを順次出力
+    // チャンクを順次出力（リアルタイム表示）
     for (let i = 0; i < chunks.length; i++) {
       console.log(`🔍 [DEBUG] yielding chunk ${i + 1}/${chunks.length}:`, chunks[i].substring(0, 100) + '...');
       
@@ -289,11 +290,12 @@ ${doc.content}`
         chunk: chunks[i],
         isComplete: false,
         chunkIndex: i,
+        totalChunks: chunks.length,
         references: references
       };
       
-      // チャンク間の遅延をシミュレート
-      await new Promise(resolve => setTimeout(resolve, 20));
+      // より短い遅延でリアルタイム感を向上
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
 
     // 完了チャンク
@@ -355,24 +357,34 @@ function splitIntoChunks(text: string, chunkSize: number): string[] {
   const chunks: string[] = [];
   let currentChunk = '';
   
-  const sentences = text.split(/([。！？\.!?])/);
+  // より細かい分割でリアルタイム表示を実現
+  // 改行、句読点、マークダウン記法で分割
+  const splitPoints = text.split(/(\n|。|！|？|\.|!|\?|\*\*|\*|###|##|#)/);
   
-  for (let i = 0; i < sentences.length; i += 2) {
-    const sentence = sentences[i] + (sentences[i + 1] || '');
+  for (let i = 0; i < splitPoints.length; i++) {
+    const segment = splitPoints[i];
     
-    if (currentChunk.length + sentence.length > chunkSize && currentChunk.length > 0) {
+    // 空のセグメントをスキップ
+    if (!segment.trim()) continue;
+    
+    // チャンクが指定サイズを超える場合、新しいチャンクを開始
+    if (currentChunk.length + segment.length > chunkSize && currentChunk.length > 0) {
       chunks.push(currentChunk.trim());
-      currentChunk = sentence;
+      currentChunk = segment;
     } else {
-      currentChunk += sentence;
+      currentChunk += segment;
     }
   }
   
+  // 最後のチャンクを追加
   if (currentChunk.trim()) {
     chunks.push(currentChunk.trim());
   }
   
-  return chunks.length > 0 ? chunks : [text];
+  // 空のチャンクをフィルタリング
+  return chunks.filter(chunk => chunk.trim().length > 0).length > 0 
+    ? chunks.filter(chunk => chunk.trim().length > 0)
+    : [text];
 }
 
 /**
