@@ -293,8 +293,17 @@ export default function ChatPage({ user }: ChatPageProps) {
         // チャンク受信コールバック（リアルタイム表示）
         (chunk: string, chunkIndex: number) => {
           console.log(`チャンク受信 ${chunkIndex}:`, chunk);
+          console.log(`🔍 [DEBUG] チャンク内容確認:`, {
+            hasMarkdown: chunk.includes('**') || chunk.includes('###') || chunk.includes('* '),
+            chunkLength: chunk.length,
+            chunkPreview: chunk.substring(0, 100)
+          });
           // 即座にUIを更新してリアルタイム表示を実現
-          setStreamingAnswer(prev => prev + chunk);
+          setStreamingAnswer(prev => {
+            const newAnswer = prev + chunk;
+            console.log(`🔍 [DEBUG] 更新後のstreamingAnswer:`, newAnswer.substring(0, 200));
+            return newAnswer;
+          });
         },
         // 完了コールバック
         (fullAnswer: string, references: any[]) => {
@@ -654,6 +663,12 @@ export default function ChatPage({ user }: ChatPageProps) {
                                 
                                 console.log('🔍 [DEBUG] safeAnswer:', safeAnswer);
                                 console.log('🔍 [DEBUG] [object Object]含む:', safeAnswer.includes('[object Object]'));
+                                console.log('🔍 [DEBUG] マークダウン記法確認:', {
+                                  hasBold: safeAnswer.includes('**'),
+                                  hasHeadings: safeAnswer.includes('###'),
+                                  hasList: safeAnswer.includes('* '),
+                                  sampleText: safeAnswer.substring(0, 300)
+                                });
                                 
                                 if (safeAnswer.includes('[object Object]')) {
                                   console.warn('🔍 [DEBUG] [object Object] detected in streamingAnswer, using fallback');
