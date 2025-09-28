@@ -275,11 +275,16 @@ ${doc.content}`
     }
     
     console.log('🔍 [DEBUG] final answer:', answer);
+    console.log('🔍 [DEBUG] answer length:', answer.length);
     
-    const chunks = splitIntoChunks(answer, 100);
+    const chunks = splitIntoChunks(answer, 300);
+    console.log('🔍 [DEBUG] chunks created:', chunks.length);
+    console.log('🔍 [DEBUG] chunks:', chunks.map((chunk, i) => `[${i}]: ${chunk.substring(0, 50)}...`));
     
     // チャンクを順次出力
     for (let i = 0; i < chunks.length; i++) {
+      console.log(`🔍 [DEBUG] yielding chunk ${i + 1}/${chunks.length}:`, chunks[i].substring(0, 100) + '...');
+      
       yield {
         chunk: chunks[i],
         isComplete: false,
@@ -288,7 +293,7 @@ ${doc.content}`
       };
       
       // チャンク間の遅延をシミュレート
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 20));
     }
 
     // 完了チャンク
@@ -326,7 +331,7 @@ function isChunkComplete(chunk: string): boolean {
   
   return (
     punctuationMarks.includes(lastChar) ||
-    chunk.length >= 150 || // 最大チャンクサイズ
+    chunk.length >= 400 || // 最大チャンクサイズを増加
     chunk.includes('\n\n') // 段落区切り
   );
 }
