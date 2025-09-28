@@ -299,7 +299,7 @@ export default function ChatPage({ user }: ChatPageProps) {
         // 完了コールバック
         (fullAnswer: string, references: any[]) => {
           console.log('ストリーミング完了:', fullAnswer);
-          setStreamingAnswerSafe(fullAnswer);
+          // setStreamingAnswerSafeは呼ばない（既にストリーミングで更新済み）
           setStreamingReferences(references);
           
           // 最終的なメッセージを作成

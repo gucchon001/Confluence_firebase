@@ -77,10 +77,12 @@ const STREAMING_PROMPT_TEMPLATE = `
 1) 1段落の要約
 2) 章立て（定義/機能/関連情報等、該当するもの）
 
-# フォーマット指示
-- マークダウン記法（**太文字**、*斜体*、###見出しなど）を適切に使用してください
-- 見出しの前後には適切な改行を入れてください
-- 箇条書きの前後には空行を入れてください
+# フォーマット指示（必須）
+- 必ずマークダウン記法を使用してください
+- 見出しは ### 見出し名 で作成してください
+- 重要な項目は **太文字** で強調してください
+- 箇条書きは * 項目 で作成してください
+- 段落間には空行を入れてください
 - 最後のチャンクでは「以上です」で終了してください
 
 # 参考情報
@@ -207,6 +209,15 @@ ${doc.content.substring(0, 2000)}` // 内容を2000文字に制限
     } else {
       answer = '回答を生成できませんでした。';
     }
+    
+    // マークダウン記法の確認
+    console.log('🔍 [DEBUG] answer contains markdown:', {
+      hasBold: answer.includes('**'),
+      hasHeadings: answer.includes('###'),
+      hasList: answer.includes('* '),
+      hasNewlines: answer.includes('\n'),
+      sampleText: answer.substring(0, 200)
+    });
     
     console.log('🔍 [DEBUG] answer after processing:', answer);
     console.log('🔍 [DEBUG] answer.includes("[object Object]"):', answer.includes('[object Object]'));
