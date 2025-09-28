@@ -616,8 +616,9 @@ export default function ChatPage({ user }: ChatPageProps) {
                       <Card className="bg-white w-full min-w-[200px]">
                         <CardContent className="p-4 text-sm break-words">
                           <div className="flex items-center">
-                            <div className="prose prose-sm max-w-none prose-headings:font-bold prose-strong:font-bold prose-em:italic prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-pre:bg-gray-100 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs prose-pre:font-mono prose-pre:overflow-x-auto">
+                            <div className="prose prose-sm max-w-none prose-headings:font-bold prose-strong:font-bold prose-em:italic prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-pre:bg-gray-100 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs prose-pre:font-mono prose-pre:overflow-x-auto prose-table:border-collapse prose-table:border prose-th:border prose-th:px-2 prose-th:py-1 prose-th:bg-gray-50 prose-td:border prose-td:px-2 prose-td:py-1">
                               <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
                                 components={{
                                 h1: ({children}) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
                                 h2: ({children}) => <h2 className="text-base font-bold mb-2">{children}</h2>,
@@ -630,6 +631,12 @@ export default function ChatPage({ user }: ChatPageProps) {
                                 em: ({children}) => <em className="italic">{children}</em>,
                                 code: ({children}) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
                                 pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
+                                table: ({children}) => <table className="border-collapse border border-gray-300 w-full mb-4">{children}</table>,
+                                thead: ({children}) => <thead className="bg-gray-50">{children}</thead>,
+                                tbody: ({children}) => <tbody>{children}</tbody>,
+                                tr: ({children}) => <tr className="border-b border-gray-200">{children}</tr>,
+                                th: ({children}) => <th className="border border-gray-300 px-2 py-1 text-left font-bold bg-gray-50">{children}</th>,
+                                td: ({children}) => <td className="border border-gray-300 px-2 py-1">{children}</td>,
                               }}
                             >
                               {(() => {
