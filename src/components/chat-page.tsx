@@ -661,7 +661,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                                 
                                 return safeAnswer;
                               })()}
-                              </ReactMarkdown>
+                            </ReactMarkdown>
                             </div>
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
                           </div>
