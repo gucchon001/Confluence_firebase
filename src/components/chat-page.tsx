@@ -34,6 +34,182 @@ import { StreamingProcessingUI, StreamingErrorUI } from '@/components/streaming-
 import { streamingProcessClient, ProcessingStep } from '@/lib/streaming-process-client';
 // import MigrationButton from '@/components/migration-button';
 
+// --- Markdown utilities ------------------------------------------------------
+/**
+ * Try to normalize malformed markdown tables produced by LLM so that remark-gfm
+ * can render them. Heuristics:
+ * - Ensure table header lines start with a single '|'
+ * - Collapse multiple leading pipes (e.g. "|| 項目 |...")
+ * - Insert separator line like "|:---|:---|" if missing after header
+ * - Ensure each table row starts/ends with a pipe and is on its own line
+ */
+function fixMarkdownTables(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const fixed: string[] = [];
+  let inTable = false;
+  let pendingHeaderColumns: number | null = null;
+  let currentColumns: number | null = null; // 現在のテーブル列数を保持
+
+  const isSeparatorLine = (s: string) => /^\s*\|?\s*(:?-{3,}\s*\|\s*)+(:?-{3,}\s*)?\|?\s*$/.test(s);
+  const normalizeRow = (s: string) => {
+    let row = s.trim();
+    // collapse multiple leading pipes
+    row = row.replace(/^\|{2,}/, '|');
+    // add leading pipe
+    if (!row.startsWith('|')) row = '|' + row;
+    // ensure single spaces around pipes for readability
+    row = row.replace(/\s*\|\s*/g, ' | ');
+    // add trailing pipe
+    if (!row.endsWith('|')) row = row + ' |';
+    return row;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const original = lines[i];
+    const trimmed = original.trim();
+
+    const looksLikeRow = trimmed.includes('|') && (trimmed.match(/\|/g)?.length || 0) >= 2 && !trimmed.startsWith('```') && !trimmed.startsWith('- ');
+    
+    // 複数のテーブル行が1行に連結されている場合を検出
+    const multipleRowsPattern = /(\|[^|]*\|)\s*(\|[^|]*\|)/;
+    if (looksLikeRow && multipleRowsPattern.test(trimmed)) {
+      // 複数の行を分割
+      const rows = trimmed.split(/(?<=\|)\s*(?=\|)/).filter(row => row.trim());
+      for (const row of rows) {
+        const normalized = normalizeRow(row.trim());
+        if (!inTable) {
+          if (fixed.length > 0 && fixed[fixed.length - 1].trim() !== '') fixed.push('');
+          inTable = true;
+          pendingHeaderColumns = normalized.split('|').filter(c => c.trim().length > 0).length - 1;
+          currentColumns = pendingHeaderColumns;
+        }
+        fixed.push(normalized);
+      }
+      continue;
+    }
+
+    if (looksLikeRow) {
+      const normalized = normalizeRow(trimmed);
+      if (!inTable) {
+        // Ensure blank line before table for GFM
+        if (fixed.length > 0 && fixed[fixed.length - 1].trim() !== '') fixed.push('');
+        inTable = true;
+        // compute column count from header
+        pendingHeaderColumns = normalized.split('|').filter(c => c.trim().length > 0).length - 1; // exclude leading/trailing
+        currentColumns = pendingHeaderColumns;
+      }
+      // 行を列数で分割して複数行に展開（1行に複数レコードが連結されている場合の対策）
+      const cells = normalized
+        .slice(1, normalized.length - 1) // 先頭/末尾のパイプを除去
+        .split('|')
+        .map(c => c.trim())
+        .filter(c => !(c === '' && currentColumns !== null));
+
+      if (currentColumns && cells.length > currentColumns) {
+        for (let off = 0; off < cells.length; off += currentColumns) {
+          const rowCells = cells.slice(off, off + currentColumns);
+          if (rowCells.length === currentColumns) {
+            fixed.push('| ' + rowCells.join(' | ') + ' |');
+          }
+        }
+      } else {
+        fixed.push(normalized);
+      }
+
+      // If it's the first line of the table (header) and next line isn't a separator, insert one
+      const next = lines[i + 1]?.trim() ?? '';
+      if (pendingHeaderColumns && !isSeparatorLine(next)) {
+        const sepCells = Array(pendingHeaderColumns).fill(':---');
+        fixed.push('| ' + sepCells.join(' | ') + ' |');
+        pendingHeaderColumns = null;
+        currentColumns = currentColumns || sepCells.length;
+      } else if (isSeparatorLine(next)) {
+        // We will let the next loop push the existing separator
+        pendingHeaderColumns = null;
+        currentColumns = currentColumns || (next.split('|').filter(c => c.includes('-')).length);
+      }
+      continue;
+    }
+
+    // If we encounter a separator that LLM emitted, pass it through normalized
+    if (isSeparatorLine(trimmed)) {
+      inTable = true;
+      currentColumns = trimmed.split('|').filter(c => c.includes('-')).length;
+      const normalized = '| ' + trimmed.replace(/\|/g, ' | ').replace(/\s+/g, ' ').trim() + ' |';
+      fixed.push(normalized);
+      continue;
+    }
+
+    if (inTable && trimmed === '') {
+      // end of table block maintained
+      fixed.push('');
+      inTable = false;
+      currentColumns = null;
+      continue;
+    }
+
+    // Non-table content
+    fixed.push(original);
+    inTable = false;
+    pendingHeaderColumns = null;
+    currentColumns = null;
+  }
+
+  return fixed.join('\n');
+}
+
+// 全角記号などを半角Markdown記号に正規化し、連結したヘッダー/区切りを改行で分離
+function normalizeMarkdownSymbols(markdown: string): string {
+  if (!markdown) return markdown;
+  let text = markdown
+    // 全角→半角
+    .replace(/｜/g, '|')       // U+FF5C FULLWIDTH VERTICAL LINE
+    .replace(/：/g, ':')       // U+FF1A FULLWIDTH COLON
+    .replace(/－/g, '-')       // U+FF0D FULLWIDTH HYPHEN-MINUS
+    .replace(/〜/g, '~')
+    .replace(/　/g, ' ');      // U+3000 IDEOGRAPHIC SPACE
+
+  // ヘッダー行と区切り行が1行に連結されているケースを改行で分離
+  // 例: "| 項目 | 説明 | 備考 | |:---|:---|:---|"
+  text = text.replace(/(\|[^\n]*?\|)\s*(\|\s*:?-{3,}[^\n]*?\|)/g, '$1\n$2');
+  
+  // より複雑な連結パターンに対応（ヘッダー + セパレーター + データ行）
+  // 例: "| 項目名 | 説明 | 備考 | |:---|:---|:---| | 教室情報 | | |"
+  text = text.replace(/(\|[^\n]*?\|)\s*(\|\s*:?-{3,}[^\n]*?\|)\s*(\|[^\n]*?\|)/g, '$1\n$2\n$3');
+  
+  // 連続するパイプの間に改行を挿入（テーブル行の分離）
+  // 例: "| 項目名 | 説明 | 備考 | | 教室情報 | | | | 基本情報 | ..."
+  text = text.replace(/\|\s*\|\s*\|/g, ' |\n| ');
+
+  // パイプの前後のスペースを統一
+  text = text.replace(/\s*\|\s*/g, ' | ');
+  
+  return text;
+}
+
+// 共通のMarkdownコンポーネント（保存済み表示/ストリーミングで共通化）
+const sharedMarkdownComponents = {
+  h1: ({children}: any) => <h1 className="text-lg font-bold mb-4 mt-4">{children}</h1>,
+  h2: ({children}: any) => <h2 className="text-lg font-bold mb-4 mt-6 text-gray-800">{children}</h2>,
+  h3: ({children}: any) => <h3 className="text-sm font-bold mb-2 mt-2">{children}</h3>,
+  h4: ({children}: any) => <h4 className="text-sm font-semibold mb-1">{children}</h4>,
+  p: ({children}: any) => <p className="mb-3 leading-relaxed">{children}</p>,
+  ul: ({children}: any) => <ul className="list-disc list-outside mb-3 ml-4">{children}</ul>,
+  ol: ({children}: any) => <ol className="list-decimal list-outside mb-3 ml-4">{children}</ol>,
+  li: ({children}: any) => <li className="mb-1 leading-relaxed">{children}</li>,
+  hr: ({children}: any) => <hr className="my-4 border-gray-300" />,
+  strong: ({children}: any) => <strong className="font-bold">{children}</strong>,
+  em: ({children}: any) => <em className="italic">{children}</em>,
+  code: ({children}: any) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
+  pre: ({children}: any) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
+  table: ({children}: any) => <div className="overflow-x-auto"><table className="border-collapse border border-gray-300 w-full mb-4 min-w-max">{children}</table></div>,
+  thead: ({children}: any) => <thead className="bg-gray-50">{children}</thead>,
+  tbody: ({children}: any) => <tbody>{children}</tbody>,
+  tr: ({children}: any) => <tr className="border-b border-gray-200">{children}</tr>,
+  th: ({children}: any) => <th className="border border-gray-300 px-3 py-2 text-left font-semibold align-top break-words whitespace-pre-wrap bg-gray-50">{children}</th>,
+  td: ({children}: any) => <td className="border border-gray-300 px-3 py-2 align-top break-words whitespace-pre-wrap">{children}</td>,
+} as const;
+
 interface ChatPageProps {
   user: User;
 }
@@ -49,25 +225,12 @@ const MessageCard = ({ msg }: { msg: Message }) => {
         )}
         <div className={`flex flex-col gap-2 ${isAssistant ? 'items-start' : 'items-end'} max-w-[85%] sm:max-w-[75%]`}>
             <Card className={`w-full ${isAssistant ? 'bg-white' : 'bg-primary text-primary-foreground'}`}>
-            <CardContent className="p-4 text-sm break-words">
+            <CardContent className={`p-4 text-sm break-words ${isAssistant ? 'prose prose-sm max-w-none' : ''}`}>
                 <ReactMarkdown 
                   remarkPlugins={[remarkGfm]}
-                  components={{
-                    h1: ({children}) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                    h2: ({children}) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                    h3: ({children}) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                    h4: ({children}) => <h4 className="text-sm font-semibold mb-1">{children}</h4>,
-                    p: ({children}) => <p className="mb-2">{children}</p>,
-                    ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                    ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                    li: ({children}) => <li className="text-sm">{children}</li>,
-                    strong: ({children}) => <strong className="font-semibold">{children}</strong>,
-                    em: ({children}) => <em className="italic">{children}</em>,
-                    code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                    pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
-                  }}
+                  components={sharedMarkdownComponents as any}
                 >
-                  {msg.content}
+                  {isAssistant ? fixMarkdownTables(normalizeMarkdownSymbols(msg.content)) : msg.content}
                 </ReactMarkdown>
             </CardContent>
             {isAssistant && msg.sources && msg.sources.length > 0 && (
@@ -250,7 +413,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   // テキストエリアの参照を保持するためのref
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
     e?.preventDefault();
     if (!input.trim() || isLoading || isStreaming) return;
 
@@ -296,15 +459,15 @@ export default function ChatPage({ user }: ChatPageProps) {
           updateStreamingAnswer(chunk);
         },
         // 完了コールバック
-        (fullAnswer: string, references: any[]) => {
+        async (fullAnswer: string, references: any[]) => {
           console.log('ストリーミング完了:', fullAnswer);
           setStreamingAnswerSafe(fullAnswer);
           setStreamingReferences(references);
           
           // 最終的なメッセージを作成
-          const assistantMessage: Message = {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
+      const assistantMessage: Message = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
             content: fullAnswer,
             createdAt: new Date().toISOString(),
             sources: references.map((ref: any) => ({
@@ -315,16 +478,43 @@ export default function ChatPage({ user }: ChatPageProps) {
             }))
           };
 
-          setMessages((prev: Message[]) => [...prev, assistantMessage]);
-          
+      setMessages((prev: Message[]) => [...prev, assistantMessage]);
+      
           // 会話にメッセージを追加
-          if (currentConversationId) {
-            addMessageToConversation(user.uid, currentConversationId, 
-              { role: 'user', content: userMessage.content, user: userMessage.user }
-            );
-            addMessageToConversation(user.uid, currentConversationId, 
-              { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-            );
+          try {
+      if (currentConversationId) {
+              // 既存の会話にメッセージを追加
+              console.log(`[Firebase] Adding messages to existing conversation: ${currentConversationId}`);
+        await addMessageToConversation(user.uid, currentConversationId, 
+          { role: 'user', content: userMessage.content, user: userMessage.user }
+        );
+        await addMessageToConversation(user.uid, currentConversationId, 
+          { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+        );
+              console.log(`[Firebase] Successfully saved messages to conversation: ${currentConversationId}`);
+      } else {
+        // 新しい会話を作成
+              console.log(`[Firebase] Creating new conversation`);
+          const newConversationId = await createConversation(user.uid, 
+            { role: 'user', content: userMessage.content, user: userMessage.user }
+          );
+          await addMessageToConversation(user.uid, newConversationId, 
+            { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+          );
+          setCurrentConversationId(newConversationId);
+              console.log(`[Firebase] Successfully created new conversation: ${newConversationId}`);
+          
+          // 会話一覧を更新
+              try {
+          const updatedConversations = await getConversations(user.uid);
+          setConversations(updatedConversations);
+              } catch (error) {
+                console.error("Failed to refresh conversations:", error);
+              }
+            }
+          } catch (error) {
+            console.error('[Firebase] Failed to save messages:', error);
+            // エラーが発生してもUIの動作は継続
           }
 
           // ストリーミング状態をリセット
@@ -362,10 +552,10 @@ export default function ChatPage({ user }: ChatPageProps) {
       setCurrentStep(null);
       
       const errorMessage: Message = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        content: "Sorry, something went wrong. Please try again.",
-        createdAt: new Date().toISOString()
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: "Sorry, something went wrong. Please try again.",
+          createdAt: new Date().toISOString()
       };
       setMessages((prev: Message[]) => [...prev, errorMessage]);
       
@@ -619,31 +809,9 @@ export default function ChatPage({ user }: ChatPageProps) {
                             <div className="prose prose-sm max-w-none prose-headings:font-bold prose-strong:font-bold prose-em:italic prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-pre:bg-gray-100 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs prose-pre:font-mono prose-pre:overflow-x-auto prose-table:border-collapse prose-table:border prose-th:border prose-th:px-2 prose-th:py-1 prose-th:bg-gray-50 prose-td:border prose-td:px-2 prose-td:py-1 prose-p:mb-3 prose-p:leading-relaxed prose-h1:mb-4 prose-h2:mb-3 prose-h3:mb-2 prose-ul:mb-3 prose-ol:mb-3 prose-li:mb-1 prose-hr:my-4">
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
-                                components={{
-                                h1: ({children}) => <h1 className="text-lg font-bold mb-4 mt-4">{children}</h1>,
-                                h2: ({children}) => <h2 className="text-base font-bold mb-3 mt-3">{children}</h2>,
-                                h3: ({children}) => <h3 className="text-sm font-bold mb-2 mt-2">{children}</h3>,
-                                p: ({children}) => <p className="mb-3 leading-relaxed">{children}</p>,
-                                ul: ({children}) => <ul className="list-disc list-inside mb-3 ml-4">{children}</ul>,
-                                ol: ({children}) => <ol className="list-decimal list-inside mb-3 ml-4">{children}</ol>,
-                                li: ({children}) => <li className="mb-1">{children}</li>,
-                                hr: ({children}) => <hr className="my-4 border-gray-300" />,
-                                strong: ({children}) => <strong className="font-bold">{children}</strong>,
-                                em: ({children}) => <em className="italic">{children}</em>,
-                                code: ({children}) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
-                                pre: ({children}) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
-                                table: ({children}) => <table className="border-collapse border border-gray-300 w-full mb-4">{children}</table>,
-                                thead: ({children}) => <thead className="bg-gray-50">{children}</thead>,
-                                tbody: ({children}) => <tbody>{children}</tbody>,
-                                tr: ({children}) => <tr className="border-b border-gray-200">{children}</tr>,
-                                th: ({children}) => <th className="border border-gray-300 px-2 py-1 text-left font-bold bg-gray-50">{children}</th>,
-                                td: ({children}) => <td className="border border-gray-300 px-2 py-1">{children}</td>,
-                              }}
+                                components={sharedMarkdownComponents as any}
                             >
                               {(() => {
-                                console.log('🔍 [DEBUG] streamingAnswer before ReactMarkdown:', streamingAnswer);
-                                console.log('🔍 [DEBUG] typeof streamingAnswer:', typeof streamingAnswer);
-                                
                                 let safeAnswer = '';
                                 if (typeof streamingAnswer === 'string') {
                                   safeAnswer = streamingAnswer;
@@ -651,15 +819,11 @@ export default function ChatPage({ user }: ChatPageProps) {
                                   safeAnswer = String(streamingAnswer);
                                 }
                                 
-                                console.log('🔍 [DEBUG] safeAnswer:', safeAnswer);
-                                console.log('🔍 [DEBUG] [object Object]含む:', safeAnswer.includes('[object Object]'));
-                                
                                 if (safeAnswer.includes('[object Object]')) {
-                                  console.warn('🔍 [DEBUG] [object Object] detected in streamingAnswer, using fallback');
                                   safeAnswer = '回答の生成中にエラーが発生しました。';
                                 }
                                 
-                                return safeAnswer;
+                                return fixMarkdownTables(normalizeMarkdownSymbols(safeAnswer));
                               })()}
                               </ReactMarkdown>
                             </div>
@@ -723,5 +887,3 @@ export default function ChatPage({ user }: ChatPageProps) {
     </div>
   );
 }
-
-    
