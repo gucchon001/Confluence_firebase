@@ -184,6 +184,24 @@ function normalizeMarkdownSymbols(markdown: string): string {
   // パイプの前後のスペースを統一
   text = text.replace(/\s*\|\s*/g, ' | ');
   
+  // 見出しの前後の空行を正規化
+  text = text.replace(/(\n|^)(#{1,6}\s+[^\n]+)(\n|$)/g, '\n\n$2\n\n');
+  
+  // 箇条書きの改行を統一的に正規化（順序依存を解決）
+  // 1. 段落内の箇条書きパターンを全て検出して改行（複数回実行）
+  for (let i = 0; i < 3; i++) {
+    text = text.replace(/([^-\n])(- [^:\n]+:\s*)([^\n]+)/g, '$1\n$2\n  $3');
+  }
+  
+  // 2. 既存の箇条書き項目の説明文を改行
+  text = text.replace(/(\*\*[^*]+\*\*:\s*)([^\n]+)/g, '$1\n  $2');
+  text = text.replace(/(\*\*- [^*]+:\s*\*\*)([^\n]+)/g, '$1\n  $2');
+  text = text.replace(/(- \*\*[^*]+:\*\*\s*)([^\n]+)/g, '$1\n  $2');
+  text = text.replace(/(- [^:\n]+:\s*)([^\n]+)/g, '$1\n  $2');
+  
+  // 連続する空行を2行までに制限
+  text = text.replace(/\n{3,}/g, '\n\n');
+  
   return text;
 }
 
