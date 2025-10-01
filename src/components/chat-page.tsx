@@ -209,7 +209,7 @@ function normalizeMarkdownSymbols(markdown: string): string {
 const sharedMarkdownComponents = {
   h1: ({children}: any) => <h1 className="text-lg font-bold mb-4 mt-4">{children}</h1>,
   h2: ({children}: any) => <h2 className="text-lg font-bold mb-4 mt-6 text-gray-800">{children}</h2>,
-  h3: ({children}: any) => <h3 className="text-sm font-bold mb-2 mt-2">{children}</h3>,
+  h3: ({children}: any) => <h3 className="text-base font-bold mb-3 mt-4 text-gray-900">{children}</h3>,
   h4: ({children}: any) => <h4 className="text-sm font-semibold mb-1">{children}</h4>,
   p: ({children}: any) => <p className="mb-3 leading-relaxed">{children}</p>,
   ul: ({children}: any) => <ul className="list-disc list-outside mb-3 ml-4">{children}</ul>,
@@ -824,7 +824,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                       <Card className="bg-white w-full min-w-[200px]">
                         <CardContent className="p-4 text-sm break-words">
                           <div className="flex items-center">
-                            <div className="prose prose-sm max-w-none prose-headings:font-bold prose-strong:font-bold prose-em:italic prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-pre:bg-gray-100 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs prose-pre:font-mono prose-pre:overflow-x-auto prose-table:border-collapse prose-table:border prose-th:border prose-th:px-2 prose-th:py-1 prose-th:bg-gray-50 prose-td:border prose-td:px-2 prose-td:py-1 prose-p:mb-3 prose-p:leading-relaxed prose-h1:mb-4 prose-h2:mb-3 prose-h3:mb-2 prose-ul:mb-3 prose-ol:mb-3 prose-li:mb-1 prose-hr:my-4">
+                            <div>
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 components={sharedMarkdownComponents as any}
