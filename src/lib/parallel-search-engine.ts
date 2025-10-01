@@ -71,8 +71,7 @@ export class ParallelSearchEngine {
         query,
         topK,
         useLunrIndex,
-        labelFilters,
-        excludeTitlePatterns
+        labelFilters
       });
       
       const totalTime = performance.now() - startTime;

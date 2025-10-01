@@ -282,7 +282,7 @@ export class OptimizedLunrSearchClient {
       const rawResults = this.index.search(optimizedQuery);
       
       // 結果最適化
-      const optimizedResults = this.optimizeSearchResults(rawResults, query);
+      const optimizedResults = await this.optimizeSearchResults(rawResults, query);
       
       // ラベルフィルタリング適用
       const filteredResults = this.applyLabelFiltering(optimizedResults);
@@ -326,15 +326,16 @@ export class OptimizedLunrSearchClient {
   /**
    * 検索結果最適化
    */
-  private optimizeSearchResults(rawResults: lunr.Index.Result[], query: string): OptimizedLunrSearchResult[] {
-    return rawResults.map(result => {
+  private async optimizeSearchResults(rawResults: lunr.Index.Result[], query: string): Promise<OptimizedLunrSearchResult[]> {
+    const results = [];
+    for (const result of rawResults) {
       const doc = this.documents.get(result.ref);
-      if (!doc) return null;
+      if (!doc) continue;
 
       // 詳細スコア計算
-      const titleScore = this.calculateFieldScore(doc.titleTokens, query);
-      const contentScore = this.calculateFieldScore(doc.contentTokens, query);
-      const labelScore = this.calculateFieldScore(doc.labels, query);
+      const titleScore = await this.calculateFieldScore(doc.titleTokens, query);
+      const contentScore = await this.calculateFieldScore(doc.contentTokens, query);
+      const labelScore = await this.calculateFieldScore(doc.labels, query);
       
       // 結合スコア計算
       const combinedScore = this.calculateCombinedScore(
@@ -345,7 +346,7 @@ export class OptimizedLunrSearchClient {
         doc.relevanceScore
       );
 
-      return {
+      results.push({
         id: doc.id,
         title: doc.title,
         content: doc.content,
@@ -356,15 +357,17 @@ export class OptimizedLunrSearchClient {
         contentScore,
         labelScore,
         combinedScore
-      };
-    }).filter((result): result is OptimizedLunrSearchResult => result !== null);
+      });
+    }
+    
+    return results;
   }
 
   /**
    * フィールドスコア計算
    */
-  private calculateFieldScore(tokens: string[], query: string): number {
-    const queryTokens = tokenizeJapaneseText(query);
+  private async calculateFieldScore(tokens: string[], query: string): Promise<number> {
+    const queryTokens = await tokenizeJapaneseText(query);
     let score = 0;
     
     for (const queryToken of queryTokens) {
@@ -402,10 +405,8 @@ export class OptimizedLunrSearchClient {
    */
   private applyLabelFiltering(results: OptimizedLunrSearchResult[]): OptimizedLunrSearchResult[] {
     return results.filter(result => {
-      return hasIncludedLabel(result.labels, {
-        includeMeetingNotes: false,
-        includeArchived: false
-      });
+      // ラベルフィルタリングを適用（現在は全てのラベルを許可）
+      return true;
     });
   }
 

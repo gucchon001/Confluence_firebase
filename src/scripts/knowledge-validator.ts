@@ -1,6 +1,15 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { ExtractedKnowledge } from './llm-knowledge-extractor';
+// import { ExtractedKnowledge } from './llm-knowledge-extractor';
+interface ExtractedKnowledge {
+  pageId: string;
+  title: string;
+  pageTitle: string;
+  content: string;
+  knowledge: any[];
+  functions: any;
+  confidence: number;
+}
 
 interface ValidationResult {
   pageId: string;
@@ -316,7 +325,7 @@ class KeywordQualityValidationRule extends ValidationRule {
     let scoreDeduction = 0;
 
     Object.entries(knowledge.functions).forEach(([functionName, keywords]) => {
-      if (keywords.length === 0) {
+      if (Array.isArray(keywords) && keywords.length === 0) {
         issues.push({
           type: 'error',
           message: `機能 "${functionName}" にキーワードがありません`,
@@ -325,7 +334,7 @@ class KeywordQualityValidationRule extends ValidationRule {
         scoreDeduction += 10;
       }
 
-      if (keywords.length > 15) {
+      if (Array.isArray(keywords) && keywords.length > 15) {
         issues.push({
           type: 'warning',
           message: `機能 "${functionName}" のキーワードが多すぎます (${keywords.length}個)`,
@@ -336,37 +345,41 @@ class KeywordQualityValidationRule extends ValidationRule {
       }
 
       // キーワードの重複チェック
-      const uniqueKeywords = new Set(keywords);
-      if (uniqueKeywords.size !== keywords.length) {
-        issues.push({
-          type: 'warning',
-          message: `機能 "${functionName}" に重複するキーワードがあります`,
-          field: 'functions'
-        });
-        scoreDeduction += 2;
-      }
-
-      // キーワードの長さチェック
-      keywords.forEach(keyword => {
-        if (keyword.length < 1) {
-          issues.push({
-            type: 'error',
-            message: `空のキーワードが含まれています`,
-            field: 'functions'
-          });
-          scoreDeduction += 5;
-        }
-
-        if (keyword.length > 30) {
+      if (Array.isArray(keywords)) {
+        const uniqueKeywords = new Set(keywords);
+        if (uniqueKeywords.size !== keywords.length) {
           issues.push({
             type: 'warning',
-            message: `キーワードが長すぎます: "${keyword}"`,
-            field: 'functions',
-            suggestion: 'より簡潔なキーワードを使用してください'
+            message: `機能 "${functionName}" に重複するキーワードがあります`,
+            field: 'functions'
           });
           scoreDeduction += 2;
         }
-      });
+      }
+
+      // キーワードの長さチェック
+      if (Array.isArray(keywords)) {
+        keywords.forEach(keyword => {
+          if (keyword.length < 1) {
+            issues.push({
+              type: 'error',
+              message: `空のキーワードが含まれています`,
+              field: 'functions'
+            });
+            scoreDeduction += 5;
+          }
+
+          if (keyword.length > 30) {
+            issues.push({
+              type: 'warning',
+              message: `キーワードが長すぎます: "${keyword}"`,
+              field: 'functions',
+              suggestion: 'より簡潔なキーワードを使用してください'
+            });
+            scoreDeduction += 2;
+          }
+        });
+      }
     });
 
     return { issues, scoreDeduction };

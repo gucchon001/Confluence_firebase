@@ -189,11 +189,7 @@ class OptimizedEmbeddingService {
       console.log('🔧 埋め込みエクストラクタ初期化中...');
       const startTime = performance.now();
       
-      extractor = await pipeline('feature-extraction', MODEL_ID, {
-        // メモリ最適化オプション
-        device: 'cpu',
-        dtype: 'float32'
-      });
+      extractor = await pipeline('feature-extraction', MODEL_ID);
       
       const endTime = performance.now();
       console.log(`✅ 埋め込みエクストラクタ初期化完了: ${(endTime - startTime).toFixed(2)}ms`);

@@ -100,7 +100,7 @@ export class LanceDBClient {
         };
         
         try {
-          table = await db.createTable(this.config.tableName!, emptyData, lanceSchema);
+          table = await db.createTable(this.config.tableName!, emptyData);
           console.log(`[LanceDBClient] Created new table '${this.config.tableName}'`);
           
           // ダミーデータを削除

@@ -56,10 +56,12 @@ async function fixVectorStorage(): Promise<void> {
         
         console.log(`✅ 埋め込み生成成功: ${embedding.length}次元`);
         
-        // ベクトルの更新（Float32Arrayとして保存）
+        // ベクトルの更新（Arrayとして保存）
         await tbl.update({
-          id: record.id,
-          vector: new Float32Array(embedding)
+          values: {
+            id: record.id,
+            vector: Array.from(embedding)
+          }
         });
         
         console.log(`✅ ベクトル更新成功`);

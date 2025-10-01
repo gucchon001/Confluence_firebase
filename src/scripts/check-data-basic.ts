@@ -40,7 +40,7 @@ async function checkDataBasic(): Promise<void> {
       const pageSearch = await tbl.search(new Array(768).fill(0.1))
         .where('pageId = 705232936')
         .limit(1)
-        .execute();
+        .toArray();
       
       console.log(`ページID 705232936 の検索結果: ${pageSearch?.length || 0}件`);
       
@@ -64,7 +64,7 @@ async function checkDataBasic(): Promise<void> {
       const labelSearch = await tbl.search(new Array(768).fill(0.1))
         .where('labels IS NOT NULL')
         .limit(10)
-        .execute();
+        .toArray();
       
       console.log(`ラベル有りレコード検索結果: ${labelSearch?.length || 0}件`);
       
@@ -118,7 +118,7 @@ async function checkDataBasic(): Promise<void> {
     try {
       const randomSearch = await tbl.search(new Array(768).fill(Math.random()))
         .limit(5)
-        .execute();
+        .toArray();
       
       console.log(`ランダム検索結果: ${randomSearch?.length || 0}件`);
       

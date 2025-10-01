@@ -54,7 +54,7 @@ async function verifyDataExists(): Promise<void> {
         console.log(`\nテストベクトル ${i + 1}:`);
         const results = await tbl.search(testVectors[i])
           .limit(5)
-          .execute();
+          .toArray();
         
         console.log(`   検索結果: ${results?.length || 0}件`);
         
@@ -119,7 +119,7 @@ async function verifyDataExists(): Promise<void> {
     try {
       const results = await tbl.search(new Array(768).fill(0.0))
         .limit(100) // より多くのサンプルを取得
-        .execute();
+        .toArray();
       
       if (results && results.length > 0) {
         let recordsWithLabels = 0;

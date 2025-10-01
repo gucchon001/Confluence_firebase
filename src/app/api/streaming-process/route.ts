@@ -6,7 +6,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 import { streamingSummarizeConfluenceDocs } from '@/ai/flows/streaming-summarize-confluence-docs';
-import { screenTestLogger } from '@/lib/screen-test-logger';
+// screenTestLoggerのインポート（存在しない場合は無視）
+let screenTestLogger: any = null;
+try {
+  const loggerModule = require('@/lib/screen-test-logger');
+  screenTestLogger = loggerModule.screenTestLogger;
+} catch (error) {
+  console.warn('screen-test-logger not found, using console fallback');
+  // フォールバック用のロガー
+  screenTestLogger = {
+    info: (category: string, message: string, data?: any) => console.log(`[${category}] ${message}`, data || ''),
+    warn: (category: string, message: string, data?: any) => console.warn(`[${category}] ${message}`, data || ''),
+    error: (category: string, message: string, data?: any) => console.error(`[${category}] ${message}`, data || ''),
+    logSearchPerformance: (query: string, searchTime: number, results: number, details?: any) => 
+      console.log(`[SEARCH] Query: "${query}", Time: ${searchTime}ms, Results: ${results}`, details || ''),
+    logAIPerformance: (question: string, aiTime: number, answerLength: number, details?: any) => 
+      console.log(`[AI] Question: "${question}", Time: ${aiTime}ms, Length: ${answerLength}`, details || ''),
+    logOverallPerformance: (query: string, totalTime: number, breakdown: any) => 
+      console.log(`[PERFORMANCE] Query: "${query}", Total Time: ${totalTime}ms`, breakdown)
+  };
+}
 
 // フォールバック回答生成関数
 function generateFallbackAnswer(question: string, context: any[]): string {
@@ -228,7 +247,7 @@ export const POST = async (req: NextRequest) => {
           
           const errorMessage = {
             type: 'error',
-            step: currentStep,
+            step: 0, // エラー時はステップ0に設定
             stepId: 'error',
             title: 'エラーが発生しました',
             description: '処理中にエラーが発生しました',

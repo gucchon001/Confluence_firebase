@@ -68,8 +68,10 @@ async function generateEmbeddingsOnly(): Promise<void> {
         
         // レコード更新（ベクトルデータを正しい形式で保存）
         await tbl.update({
-          id: record.id,
-          vector: new Float32Array(embedding)
+          values: {
+            id: record.id,
+            vector: Array.from(embedding)
+          }
         });
         
         console.log(`✅ レコード更新成功`);

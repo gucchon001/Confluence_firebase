@@ -67,8 +67,7 @@ export class UnifiedEmbeddingService {
       },
       {
         maxRetries: opts.maxRetries,
-        initialDelay: opts.initialDelay,
-        onError: async (error: any, retryCount: number) => {
+        onRetry: async (error: any, retryCount: number, delay: number) => {
           await ErrorHandler.logError('embedding_generation_single', error, {
             textLength: text.length,
             retryCount
@@ -121,8 +120,7 @@ export class UnifiedEmbeddingService {
         },
         {
           maxRetries: options.maxRetries,
-          initialDelay: options.initialDelay,
-          onError: async (error: any, retryCount: number) => {
+          onRetry: async (error: any, retryCount: number, delay: number) => {
             await ErrorHandler.logError('embedding_generation_batch', error, {
               batchSize: batch.length,
               retryCount,

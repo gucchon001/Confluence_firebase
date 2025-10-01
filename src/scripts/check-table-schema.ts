@@ -24,13 +24,13 @@ async function checkTableSchema(): Promise<void> {
       for (const [key, value] of Object.entries(record)) {
         const type = typeof value;
         const isArray = Array.isArray(value);
-        const hasToArray = value && typeof value.toArray === 'function';
+        const hasToArray = value && typeof (value as any).toArray === 'function';
         
         console.log(`  ${key}: ${type}${isArray ? ' (Array)' : ''}${hasToArray ? ' (ArrowArray)' : ''}`);
         
         if (key === 'vector' && value) {
           if (hasToArray) {
-            const vectorArray = value.toArray();
+            const vectorArray = (value as any).toArray();
             console.log(`    ベクトル次元数: ${vectorArray.length}`);
             console.log(`    ベクトル範囲: ${Math.min(...vectorArray).toFixed(4)} ～ ${Math.max(...vectorArray).toFixed(4)}`);
           } else if (isArray) {

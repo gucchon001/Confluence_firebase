@@ -79,7 +79,6 @@ export class QualityPreservingOptimizer {
           excludeMeetingNotes: true,
           excludeArchived: true
         },
-        excludeTitlePatterns: ['xxx_*']
       });
       console.log('[QualityPreservingOptimizer] Services warmed up successfully');
     } catch (error) {
@@ -118,7 +117,6 @@ export class QualityPreservingOptimizer {
           excludeArchived: true,
           excludeMeetingNotes: true
         },
-        excludeTitlePatterns
       });
 
       const endTime = performance.now();

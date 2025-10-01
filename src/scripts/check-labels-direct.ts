@@ -27,7 +27,7 @@ async function checkLabelsDirect(): Promise<void> {
     
     const searchResults = await tbl.search(new Array(768).fill(0.1))
       .limit(10)
-      .execute();
+      .toArray();
     
     console.log(`検索結果件数: ${searchResults?.length || 0}`);
     
