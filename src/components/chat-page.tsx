@@ -500,26 +500,34 @@ export default function ChatPage({ user }: ChatPageProps) {
       
           // 会話にメッセージを追加
           try {
-      if (currentConversationId) {
+            // デバッグ情報を出力
+            console.log('[DEBUG] User info:', {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              emailVerified: user.emailVerified
+            });
+            
+            if (currentConversationId) {
               // 既存の会話にメッセージを追加
               console.log(`[Firebase] Adding messages to existing conversation: ${currentConversationId}`);
-        await addMessageToConversation(user.uid, currentConversationId, 
-          { role: 'user', content: userMessage.content, user: userMessage.user }
-        );
-        await addMessageToConversation(user.uid, currentConversationId, 
-          { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-        );
+              await addMessageToConversation(user.uid, currentConversationId, 
+                { role: 'user', content: userMessage.content, user: userMessage.user }
+              );
+              await addMessageToConversation(user.uid, currentConversationId, 
+                { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+              );
               console.log(`[Firebase] Successfully saved messages to conversation: ${currentConversationId}`);
-      } else {
-        // 新しい会話を作成
-              console.log(`[Firebase] Creating new conversation`);
-          const newConversationId = await createConversation(user.uid, 
-            { role: 'user', content: userMessage.content, user: userMessage.user }
-          );
-          await addMessageToConversation(user.uid, newConversationId, 
-            { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-          );
-          setCurrentConversationId(newConversationId);
+            } else {
+              // 新しい会話を作成
+              console.log(`[Firebase] Creating new conversation for user: ${user.uid}`);
+              const newConversationId = await createConversation(user.uid, 
+                { role: 'user', content: userMessage.content, user: userMessage.user }
+              );
+              await addMessageToConversation(user.uid, newConversationId, 
+                { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+              );
+              setCurrentConversationId(newConversationId);
               console.log(`[Firebase] Successfully created new conversation: ${newConversationId}`);
           
           // 会話一覧を更新

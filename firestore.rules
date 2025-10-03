@@ -1,14 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 認証済みかつ許可されたドメインのユーザーのみアクセス可能
+    // 認証済みかつtomonokai-corp.comドメインのユーザーのみアクセス可能
     function isAllowedUser() {
       return request.auth != null 
         && request.auth.token.email_verified == true
-        && (
-          request.auth.token.email.endsWith('@tomonokai-corp.com') || 
-          request.auth.token.email.endsWith('@des')
-        );
+        && request.auth.token.email.matches('.*@tomonokai-corp\\.com$');
     }
 
     // 全てのドキュメントに対するアクセス制御
@@ -16,28 +13,33 @@ service cloud.firestore {
       allow read, write: if isAllowedUser();
     }
 
-    // チャンクデータ
-    match /chunks/{chunkId} {
-      allow read: if isAllowedUser();
-      allow write: if isAllowedUser();
-    }
-
-    // 同期ログ
-    match /syncLogs/{logId} {
-      allow read: if isAllowedUser();
-      allow write: if isAllowedUser();
-    }
-
-    // ユーザープロファイル
+    // ユーザー関連データ
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isAllowedUser() && request.auth.uid == userId;
+      allow write: if isAllowedUser() && request.auth.uid == userId;
+      
+      // 会話履歴
+      match /conversations/{conversationId} {
+        allow read: if isAllowedUser() && request.auth.uid == userId;
+        allow write: if isAllowedUser() && request.auth.uid == userId;
+      }
     }
 
-    // チャット履歴
-    match /chats/{chatId} {
-      allow read: if isAllowedUser() && resource.data.userId == request.auth.uid;
-      allow write: if isAllowedUser() && request.resource.data.userId == request.auth.uid;
+    // ユーザー設定
+    match /userPreferences/{userId} {
+      allow read: if isAllowedUser() && request.auth.uid == userId;
+      allow write: if isAllowedUser() && request.auth.uid == userId;
+    }
+
+    // システムメトリクス（管理者のみ）
+    match /systemMetrics/{metricId} {
+      allow read, write: if isAllowedUser();
+    }
+
+    // ユーザーフィードバック
+    match /feedback/{feedbackId} {
+      allow read: if isAllowedUser();
+      allow write: if isAllowedUser() && request.auth.uid == request.resource.data.userId;
     }
   }
 }
