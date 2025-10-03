@@ -6,6 +6,13 @@
 
 ## 2. 基本方針（更新）
 
+### 現在の実装状況（2025年1月）
+* 現在は直接API呼び出しを使用（Genkit統合は予定段階）
+* Next.js API Routes から直接Gemini APIを呼び出し
+* ストリーミング機能を実装済み
+* Firebase認証とドメイン制限を実装済み
+
+### 将来のGenkit統合方針
 * アプリケーションの主要なAI処理は、Genkitの core（`genkit`）を直接呼び出して実装する。
 * `@genkit-ai/flow` は使用しないが、`@genkit-ai/next` は必要に応じて使用する。
 * Next.js の API Route (`app/api/**`) から、プレーンな関数（LLM生成・検索関数）を直接呼び出す。
@@ -118,6 +125,20 @@ APIキーやプロジェクトIDなどの機密情報は、`.env` / デプロイ
 
 Vector Search実装におけるGCS/Firestoreの役割は従来方針（保存/メタデータ取得）に準ずる。
 
+## 7. 現在の実装とGenkit統合の移行計画
+
+### 現在の実装（2025年1月）
+- **直接API呼び出し**: Gemini APIを直接呼び出し
+- **ストリーミング**: `/api/streaming-process/route.ts` で実装済み
+- **認証**: Firebase Authentication + @tomonokai-corp.com ドメイン制限
+- **検索**: ハイブリッド検索（LanceDB + Lunr.js + キーワード検索）
+
+### Genkit統合への移行計画
+1. **Phase 1**: 現在の直接API呼び出しをGenkitのプレーン関数に移行
+2. **Phase 2**: ストリーミング機能をGenkitのストリーミングAPIに移行
+3. **Phase 3**: テレメトリーとロギングの統合
+4. **Phase 4**: パフォーマンス最適化とモニタリング強化
+
 ---
 
-注: 旧方針（`@genkit-ai/flow` による Flow 実装例）は廃止。プレーン関数 + Next API に統一し、`@genkit-ai/next` は必要に応じて使用する。
+注: 現在は直接API呼び出しを使用中。Genkit統合は将来の拡張として計画中。プレーン関数 + Next API に統一し、`@genkit-ai/next` は必要に応じて使用する。

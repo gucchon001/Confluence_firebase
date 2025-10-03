@@ -3,7 +3,12 @@
 このドキュメントでは、LanceDBを使用したConfluence Vector Search システムのコンポーネント図、データフロー図、シーケンス図を示します。
 
 ## 更新履歴
-- **2024年12月**: 現在の実装に合わせて最新化
+- **2025年1月**: 現在の実装に合わせて最新化
+  - ストリーミング機能: リアルタイム回答生成とプログレス表示
+  - Firebase認証: @tomonokai-corp.com ドメイン制限
+  - マークダウン表示: 高度な正規化とテーブル表示機能
+  - 会話履歴: Firestore統合による永続化
+  - 技術スタック: Next.js 15.3.3, React 18.3.1, Firebase 11.9.1
   - 埋め込みモデル: paraphrase-multilingual-mpnet-base-v2（768次元）
   - LLM: Gemini API (gemini-2.5-flash)
   - ハイブリッド検索: ベクトル検索 + BM25検索 + キーワード検索
@@ -11,13 +16,20 @@
   - ドメイン知識抽出システム: 8,122個のキーワードを管理する知識ベース
   - 動的キーワード抽出器: クエリに応じた動的な検索精度向上
 
+- **2024年12月**: 初期実装完了
+  - 基本検索機能の実装
+  - LanceDB統合
+  - 基本的なUI/UX実装
+
 ## コンポーネント図
 
 ```mermaid
 graph TB
     subgraph "フロントエンド"
-        A[Next.js UI] --- B[Chat Page]
+        A[Next.js 15.3.3 UI] --- B[Chat Page]
         B --- C[RAG Components]
+        B --- D[Streaming UI]
+        B --- E[Markdown Renderer]
     end
     
     subgraph "バックエンド"
@@ -26,8 +38,10 @@ graph TB
     end
     
     subgraph "データストア"
-        H[Firestore] --- I[ユーザーデータ/ログ]
-        L[LanceDB] --- M[ベクトル/メタデータ]
+        H[Firestore 11.9.1] --- I[ユーザーデータ/会話履歴]
+        L[LanceDB 0.22.0] --- M[ベクトル/メタデータ]
+        H --- N[認証データ]
+        H --- O[セキュリティルール]
     end
     
     subgraph "外部サービス"
@@ -43,6 +57,7 @@ graph TB
     
     %% コンポーネント間の関係
     C -.-> |"API呼び出し"| D
+    D -.-> |"ストリーミングAPI"| D
     E -.-> |"Gemini API呼び出し"| P
     G -.-> |"データ取得"| N
     G -.-> |"埋め込み生成"| S
@@ -52,6 +67,7 @@ graph TB
     D -.-> |"BM25検索"| N2["Lunr.js"]
     L -.-> |"キーワード抽出"| V
     V -.-> |"ドメイン知識参照"| U
+    H -.-> |"認証チェック"| N
 ```
 
 ## データフロー図
@@ -67,7 +83,9 @@ graph TD
     C -->|5. ベクトルとメタデータ保存| E[LanceDB]
     B -->|6. 同期ログ保存| Z
     
-    I[ユーザークエリ] -->|7. 質問| J[ハイブリッド検索フロー]
+    I[ユーザークエリ] -->|7. 質問| J[ストリーミング検索フロー]
+    J -->|7a. 認証チェック| AA[Firebase Auth]
+    AA -->|7b. ドメイン検証| J
     J -->|8a. クエリベクトル化| D
     J -->|8b. 動的キーワード抽出| W[動的キーワード抽出器]
     W -->|8c. ドメイン知識参照| X[ドメイン知識DB]
@@ -81,10 +99,13 @@ graph TD
     E -->|10d. タイトル検索結果| J
     J -->|11. スコアリング統合・重複除去| Y[結果統合]
     Y -->|12. 統合検索結果| J
-    J -->|13. コンテキスト生成| K[LLM API]
-    K -->|14. 回答生成| J
-    J -->|15. 回答| I
-    J -->|16. 会話履歴保存| Z
+    J -->|13. ストリーミング開始| BB[Streaming API]
+    BB -->|14. プログレス表示| CC[Progress UI]
+    BB -->|15. コンテキスト生成| K[LLM API]
+    K -->|16. ストリーミング回答生成| BB
+    BB -->|17. マークダウン正規化| DD[Markdown Processor]
+    DD -->|18. リアルタイム表示| I
+    J -->|19. 会話履歴保存| Z
 ```
 
 ## シーケンス図
@@ -127,8 +148,11 @@ sequenceDiagram
     Batch->>FS: 同期完了ログ保存
     Batch-->>User: 同期完了通知
     
-    %% ハイブリッド検索・回答生成フロー
+    %% ストリーミング検索・回答生成フロー
     User->>RAG: 質問入力
+    RAG->>Auth: Firebase認証チェック
+    Auth->>Auth: @tomonokai-corp.com ドメイン検証
+    Auth-->>RAG: 認証成功
     RAG->>Embed: クエリテキスト埋め込み生成（768次元、L2正規化）
     Embed-->>RAG: クエリベクトル返却
     RAG->>KW: 動的キーワード抽出要求
@@ -151,10 +175,19 @@ sequenceDiagram
     RAG->>RAG: 早期ラベルフィルタリング
     RAG->>RAG: スコアリング統合（キーワード・ラベル・ハイブリッド）
     RAG->>RAG: 重複除去・結果統合
-    RAG->>LLM: コンテキスト付き質問送信（Gemini API）
-    LLM-->>RAG: 回答生成
-    RAG->>FS: 会話履歴保存
-    RAG-->>User: 回答表示
+    RAG->>Stream: ストリーミングAPI開始
+    Stream->>UI: プログレス表示（検索中...）
+    Stream->>UI: プログレス表示（分析中...）
+    Stream->>UI: プログレス表示（AI生成中...）
+    Stream->>LLM: コンテキスト付き質問送信（Gemini API）
+    loop ストリーミング回答生成
+        LLM-->>Stream: 回答チャンク生成
+        Stream->>Markdown: マークダウン正規化
+        Markdown-->>Stream: 正規化済みテキスト
+        Stream->>UI: リアルタイム回答表示
+    end
+    Stream->>FS: 会話履歴保存
+    Stream-->>User: 回答完了表示
 ```
 
 ## 実装フローの詳細
@@ -174,34 +207,42 @@ sequenceDiagram
   - 同期の開始・完了・エラー情報
   - ユーザーアカウント情報と会話履歴
 
-### 3. ハイブリッド検索と回答生成
-- ユーザーの質問をベクトル化（Xenova Transformersライブラリ使用、768次元、L2正規化）
-- 動的キーワード抽出（ドメイン知識データベースから関連キーワードを抽出・分類）
-- 並列実行による複数検索ソースの組み合わせ：
+### 3. ストリーミング検索と回答生成
+- **認証・認可**: Firebase Authenticationでユーザー認証（@tomonokai-corp.com ドメイン制限）
+- **クエリ処理**: ユーザーの質問をベクトル化（Xenova Transformersライブラリ使用、768次元、L2正規化）
+- **動的キーワード抽出**: ドメイン知識データベースから関連キーワードを抽出・分類
+- **並列検索実行**: 複数検索ソースの組み合わせ：
   - **ベクトル検索**: LanceDBで類似ベクトル検索（意味的類似性）
   - **キーワード検索**: LanceDBのLIKE句によるタイトル・コンテンツ検索
   - **BM25検索**: Lunr.jsによる全文検索（BM25アルゴリズム）
   - **タイトル厳格一致検索**: タイトルがクエリに完全一致する検索
-- 早期ラベルフィルタリング（議事録、アーカイブ等の除外）
-- スコアリング統合（キーワードスコア、ラベルスコア、ハイブリッドスコア）
-- 重複除去と結果統合
-- LanceDBから直接メタデータを取得（Firestoreアクセス不要）
-- 取得したコンテキストと質問をGemini APIに送信
-- 生成された回答をユーザーに表示
-- 会話履歴をFirestoreに保存
+- **フィルタリング・統合**: 早期ラベルフィルタリング、スコアリング統合、重複除去
+- **ストリーミング処理**: 
+  - 段階的プログレス表示（検索中→分析中→AI生成中）
+  - リアルタイム回答生成と表示
+  - マークダウン正規化とテーブル表示の最適化
+- **データ管理**: LanceDBから直接メタデータを取得、会話履歴をFirestoreに保存
 
 ## 技術スタック
 
-- **フロントエンド**: Next.js
-- **バックエンド**: Next.js API Routes + Node.js Scripts
+- **フロントエンド**: Next.js 15.3.3 (React 18.3.1, TypeScript 5.9.2)
+  - Tailwind CSS 3.4.1 + @tailwindcss/typography
+  - Radix UI (Headless UI)
+  - ReactMarkdown + remark-gfm
+  - ストリーミングUI、マークダウンレンダラー
+- **バックエンド**: Next.js API Routes + Node.js Scripts (tsx)
 - **データベース**: 
-  - Firestore（ユーザーデータ、会話履歴、ログ）
-  - LanceDB（ベクトルデータ、検索メタデータ）
+  - Firestore 11.9.1（ユーザーデータ、会話履歴、ログ、認証データ）
+  - LanceDB 0.22.0（ベクトルデータ、検索メタデータ）
+- **認証**: Firebase Authentication 11.9.1
+  - @tomonokai-corp.com ドメイン制限
+  - Firestoreセキュリティルール
 - **検索エンジン**: ハイブリッド検索システム
   - ベクトル検索: LanceDBによる意味的類似性検索
   - キーワード検索: LanceDBのLIKE句による部分一致検索
-  - BM25検索: Lunr.jsによる全文検索
+  - BM25検索: Lunr.js 2.3.9による全文検索
   - タイトル厳格一致検索: 完全一致による高精度検索
+- **ストリーミング**: リアルタイム回答生成とプログレス表示
 - **ベクトル生成**: Xenova Transformersライブラリ（paraphrase-multilingual-mpnet-base-v2、768次元）
 - **LLM**: Google AI Gemini API (gemini-2.5-flash)
 - **AI Framework**: 現在は直接API呼び出し（Genkit統合予定）
@@ -209,19 +250,24 @@ sequenceDiagram
 ## コンポーネントの詳細説明
 
 ### フロントエンド
-- **Next.js UI**: Reactベースのフロントエンドフレームワーク
+- **Next.js 15.3.3 UI**: React 18.3.1ベースのフロントエンドフレームワーク
 - **Chat Page**: ユーザーとのチャットインターフェース
 - **RAG Components**: 検索結果表示や回答生成のUIコンポーネント
+- **Streaming UI**: リアルタイム回答生成とプログレス表示
+- **Markdown Renderer**: 高度な正規化とテーブル表示機能
 
 ### バックエンド
 - **Next.js API Routes**: フロントエンドからのAPIリクエストを処理
+- **Streaming API Routes**: リアルタイム回答生成のためのストリーミングAPI
 - **AI API Routes**: Gemini APIとの直接連携（Genkit統合予定）
 - **Node.js Scripts**: バッチ処理やスケジュールされたタスクを実行
 - **Batch Processing**: Confluenceデータの定期同期処理
 
 ### データストア
-- **Firestore**: ユーザーデータ、会話履歴、同期ログを保存
-- **LanceDB**: ローカルベクトルデータベース（埋め込みベクトルとメタデータを保存）
+- **Firestore 11.9.1**: ユーザーデータ、会話履歴、同期ログ、認証データを保存
+  - @tomonokai-corp.com ドメイン制限
+  - セキュリティルールによる適切なアクセス制御
+- **LanceDB 0.22.0**: ローカルベクトルデータベース（埋め込みベクトルとメタデータを保存）
   - ベクトル検索と検索結果表示に必要なすべてのデータを一元管理
 
 ### 外部サービス

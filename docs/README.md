@@ -1,77 +1,93 @@
-# Confluence仕様書要約チャットボット - ドキュメント
+# 📚 Confluence Firebase ドキュメント
 
-## 📁 ドキュメント構成
+このディレクトリには、Confluence Firebaseプロジェクトの包括的なドキュメントが含まれています。
 
-### **📋 基本仕様**
-- `spec.md` - プロダクト仕様書（機能要件・非機能要件・アーキテクチャ）
-- `blueprint.md` - 開発方針・スタイルガイド
-- `current-implementation-status.md` - 現在の実装状況（最新）
+## 🗂️ ドキュメント構成
 
-### **🔧 技術実装**
-- `lancedb-integration-guide.md` - LanceDB統合ガイド（768次元ベクトル）
-- `lancedb-data-structure-specification.md` - **LanceDBデータ構造仕様書（本番仕様）**
-- `hybrid-search-contract.md` - ハイブリッド検索仕様・実装状況
-- `search-bm25.md` - BM25/Lunr検索仕様
-- `search-tuning-plan.md` - 検索チューニング設計・要件
+### 🏗️ [architecture/](./architecture/) - アーキテクチャ・設計
+システムの全体的な設計とアーキテクチャに関するドキュメント
 
-### **🧠 AI・検索品質**
-- `keyword-extraction-strategy.md` - キーワード抽出戦略
-- `keyword-extraction-algorithm-design.md` - キーワード抽出アルゴリズム設計
-- `keyword-extractor-class-design.md` - キーワード抽出クラス設計
-- `vector-search-testing-guide.md` - ベクトル検索テストガイド
-- `case_classroom-management-search-quality-test.md` - 教室管理検索品質テスト
+- **[blueprint.md](./architecture/blueprint.md)** - プロジェクト概要と全体設計
+- **[data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - LanceDBデータフロー図
+- **[genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
+- **[graphrag-tuned-architecture.md](./architecture/graphrag-tuned-architecture.md)** - GraphRAG調整アーキテクチャ
+- **[hybrid-search-contract.md](./architecture/hybrid-search-contract.md)** - ハイブリッド検索契約
+- **[prompt-design.md](./architecture/prompt-design.md)** - プロンプト設計
+- **[search-system-comprehensive-guide.md](./architecture/search-system-comprehensive-guide.md)** - 検索システム総合ガイド
+- **[ui-ux-performance-strategy.md](./architecture/ui-ux-performance-strategy.md)** - UI/UXパフォーマンス戦略
 
-### **📊 データ・ドメイン知識**
-- `domain-knowledge-extraction-strategy.md` - ドメイン知識抽出戦略
-- `domain-knowledge-extraction-production-guide.md` - ドメイン知識抽出本番ガイド
-- `domain-knowledge-extraction-readme.md` - ドメイン知識抽出README
+### 🛠️ [implementation/](./implementation/) - 実装・開発
+具体的な実装方法と開発に関するドキュメント
 
-### **🏷️ ラベル・フィルタリング**
-- `label-system-overview.md` - ラベルシステム概要
-- `label-system-design.md` - ラベルシステム設計
-- `label-system-api.md` - ラベルシステムAPI
+- **[api-design.md](./implementation/api-design.md)** - API設計
+- **[current-implementation-status.md](./implementation/current-implementation-status.md)** - 現在の実装状況
+- **[domain-knowledge-extraction-comprehensive-guide.md](./implementation/domain-knowledge-extraction-comprehensive-guide.md)** - ドメイン知識抽出総合ガイド
+- **[error-handling.md](./implementation/error-handling.md)** - エラーハンドリング
+- **[firestore-integration-guide.md](./implementation/firestore-integration-guide.md)** - Firestore統合ガイド
+- **[label-system-api.md](./implementation/label-system-api.md)** - ラベルシステムAPI
+- **[label-system-design.md](./implementation/label-system-design.md)** - ラベルシステム設計
+- **[label-system-overview.md](./implementation/label-system-overview.md)** - ラベルシステム概要
+- **[lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様
 
-### **🔌 統合・API**
-- `api-design.md` - API設計
-- `firestore-integration-guide.md` - Firestore統合ガイド
-- `genkit-design.md` - Genkit設計
+### 🚀 [operations/](./operations/) - 運用・デプロイ
+システムの運用、デプロイ、移行に関するドキュメント
 
-### **🚀 運用・デプロイ**
-- `deployment-guide.md` - デプロイメントガイド
-- `error-handling.md` - エラーハンドリング
-- `differential-sync-test-plan.md` - 差分同期テスト計画
+- **[deployment-guide.md](./operations/deployment-guide.md)** - デプロイガイド
+- **[migration-guide.md](./operations/migration-guide.md)** - 移行ガイド
+- **[network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有ガイド
 
-### **📈 分析・最適化**
-- `search-tuning-results.md` - 検索チューニング結果
-- `confluence-fetch-analysis.md` - Confluence取得分析
-- `confluence-sync-duplicate-analysis.md` - Confluence同期重複分析
+### 📊 [testing/](./testing/) - テスト・分析
+テスト計画、分析結果、品質評価に関するドキュメント
 
-### **📁 アーカイブ**
-- `archive/` - 古いバージョンのドキュメント
+- **[case_classroom-management-search-quality-test.md](./testing/case_classroom-management-search-quality-test.md)** - 教室管理検索品質テスト
+- **[chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - チャットボットパフォーマンス改善計画
+- **[confluence-fetch-analysis.md](./testing/confluence-fetch-analysis.md)** - Confluence取得分析
+- **[confluence-sync-duplicate-analysis.md](./testing/confluence-sync-duplicate-analysis.md)** - Confluence同期重複分析
+- **[differential-sync-test-plan.md](./testing/differential-sync-test-plan.md)** - 差分同期テスト計画
+- **[real-vector-search-testing-guide.md](./testing/real-vector-search-testing-guide.md)** - リアルベクトル検索テストガイド
 
-## 🔄 最近の更新
+### 📋 [specifications/](./specifications/) - 仕様書
+システムの詳細仕様と技術仕様に関するドキュメント
 
-### 2024年12月
-- **LanceDBデータ構造仕様書の作成**: 本番環境の正しいデータ構造を文書化
-- **ラベル機能の仕様明確化**: ラベル抽出・保存・検索の正しい実装方法を定義
-- **データ型の統一**: pageId（数値型）、lastUpdatedフィールド名の統一
-- **重複ドキュメントの統合**: キーワード抽出・ベクトル検索テスト関連の重複を解消
-- **ハイブリッド検索の完全実装**: BM25検索のシングルトン問題解決、完全実装完了
-- **ベクトル次元の統一**: 全ドキュメントで768次元に統一
-- **UI表示の改善**: マークダウン表示、参照元表示、一致表示の修正
-- **検索品質の向上**: 動的関連性スコアリング、ハードコーディングの除去
-- **ストリーミング機能の試行**: 一時的に実装したが、安定性を重視して削除
+- **[lancedb-integration-guide.md](./specifications/lancedb-integration-guide.md)** - LanceDB統合ガイド
+- **[spec.md](./specifications/spec.md)** - システム仕様書
 
-## 📝 ドキュメント更新ガイドライン
+### 📁 [archive/](./archive/) - アーカイブ
+過去の分析レポート、テスト結果、最適化計画
 
-1. **重複の回避**: 類似の内容は既存ドキュメントを更新
-2. **実装状況の反映**: コードの変更に合わせてドキュメントを更新
-3. **一貫性の維持**: 用語・仕様の一貫性を保つ
-4. **アーカイブの活用**: 古いバージョンはarchiveフォルダに移動
+- 過去のパフォーマンス分析レポート
+- 最適化計画書
+- 古いテスト結果
+- プロジェクトクリーンアップ計画
 
-## 🚨 注意事項
+## 🚀 クイックスタート
 
-- ベクトル次元は **768次元** で統一
-- ハイブリッド検索は **完全実装**（ベクトル検索 + BM25検索）
-- 検索品質テストは **教室管理** を中心に実施
-- ストリーミング機能は **一時的に削除**（安定性を重視）
+### 新規開発者向け
+1. **[architecture/blueprint.md](./architecture/blueprint.md)** - プロジェクト概要を理解
+2. **[implementation/current-implementation-status.md](./implementation/current-implementation-status.md)** - 現在の実装状況を確認
+3. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイ手順を確認
+
+### 運用担当者向け
+1. **[operations/migration-guide.md](./operations/migration-guide.md)** - 移行手順を確認
+2. **[operations/network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有設定
+3. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
+
+### 開発者向け
+1. **[architecture/genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
+2. **[implementation/api-design.md](./implementation/api-design.md)** - API設計
+3. **[implementation/error-handling.md](./implementation/error-handling.md)** - エラーハンドリング
+
+## 📝 ドキュメント更新
+
+ドキュメントを更新する際は、以下の点にご注意ください：
+
+- 関連するディレクトリに適切に配置する
+- 更新日時を記録する
+- 関連ドキュメントへのリンクを更新する
+- アーカイブが必要な場合は `archive/` ディレクトリに移動する
+
+## 🔗 関連リンク
+
+- [プロジェクトルートのREADME.md](../README.md)
+- [セットアップガイド](../SETUP_GUIDE.md)
+- [クイックスタートガイド](../QUICK_START.md)
