@@ -5,13 +5,15 @@ import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 import { APIErrorHandler, withAPIErrorHandling } from '@/lib/api-error-handler';
 import { screenTestLogger } from '@/lib/screen-test-logger';
+import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
 
 export const POST = withAPIErrorHandling(async (
   req: NextRequest,
   context: { params: Promise<{ flow: string }> }
 ) => {
-  // 統一初期化サービスを使用
-  await APIErrorHandler.handleUnifiedInitialization();
+  try {
+    // 統一初期化サービスを使用
+    await APIErrorHandler.handleUnifiedInitialization();
 
     const body = await req.json();
     const params = await context.params;
@@ -46,5 +48,19 @@ export const POST = withAPIErrorHandling(async (
       default:
         return APIErrorHandler.notFoundError('Flow not found');
     }
+  } catch (error) {
+    // Genkitエラーハンドリングを追加（既存のエラーハンドリングと並行動作）
+    const genkitErrorResponse = createAPIErrorResponse(
+      error,
+      'flow-api',
+      500,
+      { requestId: crypto.randomUUID() }
+    );
+    
+    console.log('[GenkitErrorHandler] Additional error handling applied');
+    
+    // 既存のエラーハンドリングを優先（段階的移行のため）
+    throw error;
+  }
 });
 

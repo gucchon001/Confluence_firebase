@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 import { streamingSummarizeConfluenceDocs } from '@/ai/flows/streaming-summarize-confluence-docs';
+import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
 try {
@@ -245,6 +246,17 @@ export const POST = async (req: NextRequest) => {
         } catch (error) {
           console.error('❌ 処理ステップストリーミングエラー:', error);
           
+          // Genkitエラーハンドリングを追加（既存のエラーハンドリングと並行動作）
+          const genkitErrorResponse = createAPIErrorResponse(
+            error,
+            'streaming-process',
+            500,
+            { requestId: crypto.randomUUID() }
+          );
+          
+          console.log('[GenkitErrorHandler] Streaming error handling applied:', genkitErrorResponse.body);
+          
+          // 既存のエラーメッセージ形式を維持
           const errorMessage = {
             type: 'error',
             step: 0, // エラー時はステップ0に設定
@@ -252,7 +264,12 @@ export const POST = async (req: NextRequest) => {
             title: 'エラーが発生しました',
             description: '処理中にエラーが発生しました',
             error: 'Streaming process failed',
-            message: error instanceof Error ? error.message : 'Unknown error'
+            message: error instanceof Error ? error.message : 'Unknown error',
+            // Genkitエラー情報を追加（デバッグ用）
+            genkitError: {
+              code: genkitErrorResponse.body.code,
+              details: genkitErrorResponse.body.details
+            }
           };
           
           controller.enqueue(

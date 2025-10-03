@@ -10,20 +10,18 @@ async function testKeywordExtraction() {
 
   try {
     // 動的インポートを使用
-    const { extractKeywordsConfigured } = await import('../lib/keyword-extractor-wrapper');
+    const { unifiedKeywordExtractionService } = await import('../lib/unified-keyword-extraction-service');
     
-    const result = await extractKeywordsConfigured('教室管理の詳細は');
+    const result = await unifiedKeywordExtractionService.extractKeywordsConfigured('教室管理の詳細は');
     
     console.log('🔑 実際の抽出キーワード:');
-    result.keywords.forEach((keyword, index) => {
+    result.forEach((keyword, index) => {
       console.log(`  ${index + 1}. "${keyword}"`);
     });
     
     console.log('');
     console.log('📊 統計情報:');
-    console.log(`- 総キーワード数: ${result.keywords.length}`);
-    console.log(`- キーワードソース: ${result.metadata.keywordSource}`);
-    console.log(`- 処理時間: ${result.metadata.processingTime}ms`);
+    console.log(`- 総キーワード数: ${result.length}`);
     
     // 理想のキーワードとの比較
     const idealKeywords = [
@@ -36,14 +34,14 @@ async function testKeywordExtraction() {
     console.log(`- 理想のキーワード: [${idealKeywords.join(', ')}]`);
     
     const matchedKeywords = idealKeywords.filter(ideal => 
-      result.keywords.some(actual => actual.includes(ideal))
+      result.some(actual => actual.includes(ideal))
     );
     
     const missingKeywords = idealKeywords.filter(ideal => 
-      !result.keywords.some(actual => actual.includes(ideal))
+      !result.some(actual => actual.includes(ideal))
     );
     
-    const irrelevantKeywords = result.keywords.filter(actual => 
+    const irrelevantKeywords = result.filter(actual => 
       !idealKeywords.some(ideal => ideal.includes(actual)) &&
       !isClassroomRelated(actual)
     );
@@ -53,8 +51,8 @@ async function testKeywordExtraction() {
     console.log(`- 無関係なキーワード: [${irrelevantKeywords.join(', ')}]`);
     
     // 品質スコア計算
-    const precision = result.keywords.length > 0 ? 
-      (result.keywords.length - irrelevantKeywords.length) / result.keywords.length : 0;
+    const precision = result.length > 0 ? 
+      (result.length - irrelevantKeywords.length) / result.length : 0;
     const recall = idealKeywords.length > 0 ? 
       matchedKeywords.length / idealKeywords.length : 0;
     const f1Score = precision > 0 && recall > 0 ? 

@@ -51,13 +51,46 @@ async function analyzePerformance() {
   console.log(`   結果数: ${searchResults.length}`);
   console.log('');
 
-  // 5. Lunr検索の時間測定
-  console.log('5. Lunr検索の時間測定');
+  // 5. Lunr検索の時間測定（最適化版）
+  console.log('5. Lunr検索の時間測定（最適化版）');
   const lunrStart = Date.now();
-  const lunrResults = await lunrSearchClient.search(testQuery, 10);
-  const lunrTime = Date.now() - lunrStart;
-  console.log(`   検索時間: ${lunrTime}ms`);
-  console.log(`   結果数: ${lunrResults.length}`);
+  let lunrTime = 0;
+  let lunrResults = [];
+  try {
+    const { LunrSearchClient } = await import('../lib/lunr-search-client');
+    const { preInitializeTokenizer } = await import('../lib/japanese-tokenizer');
+    
+    // トークナイザーを事前初期化（既に初期化済みの場合はスキップ）
+    const { isTokenizerInitialized } = await import('../lib/japanese-tokenizer');
+    if (!isTokenizerInitialized()) {
+      console.log('   トークナイザー事前初期化中...');
+      const tokenizerStart = Date.now();
+      await preInitializeTokenizer();
+      const tokenizerTime = Date.now() - tokenizerStart;
+      console.log(`   トークナイザー初期化時間: ${tokenizerTime}ms`);
+    } else {
+      console.log('   トークナイザーは既に初期化済み');
+    }
+    
+    const lunrSearchClient = LunrSearchClient.getInstance();
+    
+    // 初期化をスキップして直接検索を試行
+    try {
+      lunrResults = await lunrSearchClient.search(testQuery, 10);
+    } catch (initError) {
+      // 初期化エラーの場合はキャッシュから初期化を試行
+      await lunrSearchClient.initializeFromCache();
+      lunrResults = await lunrSearchClient.search(testQuery, 10);
+    }
+    
+    lunrTime = Date.now() - lunrStart;
+    console.log(`   検索時間: ${lunrTime}ms`);
+    console.log(`   結果数: ${lunrResults.length}`);
+  } catch (error) {
+    lunrTime = Date.now() - lunrStart;
+    console.log(`   検索時間: ${lunrTime}ms`);
+    console.log(`   エラー: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
   console.log('');
 
   // 6. 総合時間の計算

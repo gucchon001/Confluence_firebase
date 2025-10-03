@@ -60,15 +60,49 @@ export class LunrSearchClient {
     // プライベートコンストラクタ
   }
 
+  public isInitialized(): boolean {
+    return this.isInitialized;
+  }
+
+  async initializeFromCache(): Promise<void> {
+    try {
+      console.log('[LunrSearchClient] Initializing from cache...');
+      
+      // トークナイザーを事前初期化
+      const { preInitializeTokenizer } = await import('./japanese-tokenizer');
+      await preInitializeTokenizer();
+      
+      // キャッシュから読み込み
+      const cacheExists = await this.loadFromCache();
+      if (cacheExists) {
+        console.log('[LunrSearchClient] Initialized from cache successfully');
+        return;
+      }
+      
+      console.log('[LunrSearchClient] No cache found, initialization skipped');
+    } catch (error) {
+      console.error('[LunrSearchClient] Cache initialization failed:', error);
+      throw error;
+    }
+  }
+
   async initialize(documents: LunrDocument[]): Promise<void> {
     try {
       console.log(`[LunrSearchClient] Initializing with ${documents.length} documents`);
+      
+      // トークナイザーを事前初期化（並列処理）
+      const tokenizerInit = import('./japanese-tokenizer').then(({ preInitializeTokenizer }) => 
+        preInitializeTokenizer()
+      );
       
       // ドキュメントをMapに保存
       this.documents.clear();
       for (const doc of documents) {
         this.documents.set(doc.id, doc);
       }
+      
+      // トークナイザーの初期化完了を待つ
+      await tokenizerInit;
 
       // Lunrインデックスを日本語用に正しく構築
       this.index = lunr(function() {
@@ -113,7 +147,7 @@ export class LunrSearchClient {
     }
   }
 
-  async loadFromDisk(cachePath: string = this.defaultCachePath): Promise<boolean> {
+  async loadFromCache(cachePath: string = this.defaultCachePath): Promise<boolean> {
     try {
       const filePath = path.resolve(cachePath);
       const json = JSON.parse(await fs.readFile(filePath, 'utf-8')) as {
@@ -195,6 +229,14 @@ export class LunrSearchClient {
       console.error('[LunrSearchClient] Search failed:', error);
       return [];
     }
+  }
+
+  async search(
+    query: string,
+    limit: number = 50
+  ): Promise<LunrSearchResult[]> {
+    // searchCandidatesメソッドを呼び出す
+    return this.searchCandidates(query, limit);
   }
 
   async searchWithFilters(

@@ -14,6 +14,20 @@ let tokenizer: kuromoji.Tokenizer<kuromoji.IpadicFeatures> | null = null;
 let tokenizerPromise: Promise<kuromoji.Tokenizer<kuromoji.IpadicFeatures>> | null = null;
 
 /**
+ * kuromojiトークナイザーを事前初期化
+ */
+export async function preInitializeTokenizer(): Promise<void> {
+  await getTokenizer();
+}
+
+/**
+ * トークナイザーの初期化状態を確認
+ */
+export function isTokenizerInitialized(): boolean {
+  return tokenizer !== null;
+}
+
+/**
  * kuromojiトークナイザーを初期化（シングルトン）
  */
 async function getTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.IpadicFeatures>> {

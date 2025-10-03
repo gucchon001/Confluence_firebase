@@ -145,9 +145,14 @@ export class OptimizedLunrSearchClient {
       this.field('content', { boost: boostFactors.content });
       this.field('labels', { boost: boostFactors.labels });
       
-      // 日本語対応の検索関数
+      // 日本語対応の検索関数（修正版）
       this.pipeline.before(lunr.trimmer, function(token) {
-        return token.toString().toLowerCase();
+        if (token && typeof token.update === 'function') {
+          return token.update(function(str) {
+            return str.toLowerCase();
+          });
+        }
+        return token;
       });
 
       // ドキュメント追加
