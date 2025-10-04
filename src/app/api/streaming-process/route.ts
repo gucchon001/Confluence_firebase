@@ -88,24 +88,40 @@ function getAdminFirestore() {
   return adminDb;
 }
 
-// サーバー側で投稿ログを保存する関数
-async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<string> {
-  try {
-    const db = getAdminFirestore();
-    const postLogsRef = db.collection('postLogs');
-    const docRef = await postLogsRef.add({
-      ...logData,
-      timestamp: Timestamp.fromDate(logData.timestamp),
-      processingSteps: logData.processingSteps.map(step => ({
-        ...step,
-        timestamp: Timestamp.fromDate(step.timestamp)
-      })),
-      errors: logData.errors?.map(error => ({
-        ...error,
-        timestamp: Timestamp.fromDate(error.timestamp),
-        resolvedAt: error.resolvedAt ? Timestamp.fromDate(error.resolvedAt) : null
-      }))
-    });
+    // サーバー側で投稿ログを保存する関数
+    async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<string> {
+      try {
+        const db = getAdminFirestore();
+        const postLogsRef = db.collection('postLogs');
+        
+        // undefined値を除去してFirestoreドキュメントを作成
+        const firestoreData: any = {
+          userId: logData.userId,
+          question: logData.question,
+          answer: logData.answer,
+          searchTime: logData.searchTime,
+          aiGenerationTime: logData.aiGenerationTime,
+          totalTime: logData.totalTime,
+          referencesCount: logData.referencesCount,
+          answerLength: logData.answerLength,
+          timestamp: Timestamp.fromDate(logData.timestamp),
+          processingSteps: logData.processingSteps.map(step => ({
+            ...step,
+            timestamp: Timestamp.fromDate(step.timestamp)
+          })),
+          metadata: logData.metadata
+        };
+        
+        // errorsが存在する場合のみ追加
+        if (logData.errors && logData.errors.length > 0) {
+          firestoreData.errors = logData.errors.map(error => ({
+            ...error,
+            timestamp: Timestamp.fromDate(error.timestamp),
+            resolvedAt: error.resolvedAt ? Timestamp.fromDate(error.resolvedAt) : null
+          }));
+        }
+        
+        const docRef = await postLogsRef.add(firestoreData);
     
     console.log('📝 投稿ログをAdmin SDKで保存しました:', docRef.id);
     return docRef.id;
