@@ -197,14 +197,30 @@ function normalizeMarkdownSymbols(markdown: string): string {
     return `\n\n## ${content}\n\n`;
   });
   
-  // 箇条書きの改行を正規化（シンプル化）
-  // 1. 段落内の箇条書きパターンを改行で分離
+  // 3. 番号付きのセクション見出し（1. 2. 3. など）
+  text = text.replace(/(\n|^)(\d+\.\s+[^:\n]+)(\n|$)/g, (match, prefix, content, suffix) => {
+    // 既に#記号がある場合は追加しない
+    if (content.startsWith('#')) {
+      return match;
+    }
+    return `\n\n### ${content}\n\n`;
+  });
+  
+  // 番号付きリストの正規化
+  // 1. 段落内の番号付きリストパターンを改行で分離
+  text = text.replace(/([^\d\n])(\d+\.\s+[^:\n]+:\s*)([^\n]+)/g, '$1\n$2\n  $3');
+  
+  // 2. 番号付きリスト項目の説明文を改行
+  text = text.replace(/(\d+\.\s+[^:\n]+:\s*)([^\n]+)/g, '$1\n  $2');
+  
+  // 箇条書きの改行を正規化
+  // 3. 段落内の箇条書きパターンを改行で分離
   text = text.replace(/([^-\n])(- [^:\n]+:\s*)([^\n]+)/g, '$1\n$2\n  $3');
   
-  // 2. 太字の項目名の後の説明文を改行
+  // 4. 太字の項目名の後の説明文を改行
   text = text.replace(/(\*\*[^*]+\*\*:\s*)([^\n]+)/g, '$1\n  $2');
   
-  // 3. 通常の箇条書き項目の説明文を改行
+  // 5. 通常の箇条書き項目の説明文を改行
   text = text.replace(/(- [^:\n]+:\s*)([^\n]+)/g, '$1\n  $2');
   
   // 連続する空行を2行までに制限
