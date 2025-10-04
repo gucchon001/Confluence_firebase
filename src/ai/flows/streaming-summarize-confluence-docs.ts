@@ -78,6 +78,8 @@ const STREAMING_PROMPT_TEMPLATE = `
 9. ユーザーからの挨拶や感謝には、フレンドリーに返答してください。
 10. 提供された参考情報にあるラベルやスペース情報も活用して、より関連性の高い回答を提供してください。
 11. 情報の確実性が低い場合は、推測や不確かな情報を提供するのではなく、「この点についての詳細な情報は見つかりませんでした」と正直に伝えてください。
+12. 機能に関する質問には、具体的な操作手順、設定項目、制約事項を含めて詳細に回答してください。
+13. システムの仕様やワークフローについては、実際の利用シーンを想定した実用的な情報を提供してください。
 
 # 項目リスト出力の特別ルール (Special Rules for Item Lists)
 以下の質問パターンが検出された場合、項目を表形式で出力してください：
@@ -248,10 +250,15 @@ export async function* streamingSummarizeConfluenceDocs(
   try {
     // コンテキストの準備（元の仕様と同じ詳細形式）
     const contextText = context
-      .slice(0, 5)
+      .slice(0, 3) // 文書数を3件に制限
       .map(
-        (doc) =>
-          `## ドキュメント: ${doc.title}
+        (doc) => {
+          // 各文書の内容を800文字に制限
+          const truncatedContent = doc.content.length > 800 
+            ? doc.content.substring(0, 800) + '...' 
+            : doc.content;
+          
+          return `## ドキュメント: ${doc.title}
 **URL**: ${doc.url}
 **スペース**: ${doc.spaceName || 'Unknown'}
 **最終更新**: ${doc.lastUpdated || 'Unknown'}
@@ -259,7 +266,8 @@ export async function* streamingSummarizeConfluenceDocs(
 **関連度スコア**: ${(doc as any).scoreText || 'N/A'}
 
 ### 内容
-${doc.content}`
+${truncatedContent}`;
+        }
       )
       .join('\n\n---\n\n');
 
@@ -291,9 +299,9 @@ ${doc.content}`
         model: 'googleai/gemini-2.5-flash',
         prompt: prompt,
         config: {
-          maxOutputTokens: 8192,
-          temperature: 0.1,
-          topP: 0.8,
+          maxOutputTokens: 4096, // 出力トークンを削減
+          temperature: 0.3, // 温度を上げて応答性向上
+          topP: 0.9, // topPを上げて多様性向上
         }
       });
       

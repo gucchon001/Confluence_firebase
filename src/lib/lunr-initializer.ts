@@ -64,7 +64,7 @@ export class LunrInitializer {
 
       // まずはキャッシュからロードを試みる（再インデックス回避）
       const lunrSearchClient = LunrSearchClient.getInstance();
-      const loaded = await lunrSearchClient.loadFromDisk();
+      const loaded = await lunrSearchClient.loadFromCache();
       if (loaded) {
         this.status.isInitialized = true;
         this.status.documentCount = await lunrSearchClient.getDocumentCount();

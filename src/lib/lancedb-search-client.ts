@@ -228,7 +228,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
-    const distanceThreshold = params.maxDistance || 1.5; // 最適化: 2.0 -> 1.5 (より関連性の高い結果を取得)
+    const distanceThreshold = params.maxDistance || 2.0; // Recall向上: 1.5 -> 2.0 (より多くの関連文書を検出)
     const qualityThreshold = params.qualityThreshold || 0.0; // 最適化: 0.1 -> 0.0 (品質閾値を無効化)
     
     console.log(`[searchLanceDB] Using distance threshold: ${distanceThreshold}, quality threshold: ${qualityThreshold}`);
@@ -625,7 +625,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             const contentPlain = content.replace(/[\s　]+/g, '');
             const phraseInTitle = titlePlain.includes(phrase);
             const phraseInBody = contentPlain.includes(phrase);
-            if (phraseInTitle) totalScore += 1.2; // タイトル一致ボーナス
+            if (phraseInTitle) totalScore += 2.0; // タイトル一致ボーナス（強化）
             if (phraseInBody) totalScore += 0.5;  // 本文一致ボーナス
 
             // 近接（タイトル内でクエリ語の距離が近い場合の微小加点）

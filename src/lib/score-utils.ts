@@ -112,9 +112,13 @@ export function generateScoreText(
       const similarityPct = calculateSimilarityPercentage(distance ?? 1);
       return `${sourceType === 'hybrid' ? 'Hybrid' : 'Vector'} ${similarityPct}%`;
     case 'bm25':
-      return `BM25 ${(score ?? 0).toFixed(2)}`;
+      // BM25スコアをパーセンテージで統一表示
+      const normalizedBM25 = normalizeBM25Score(score ?? 0, 30); // 最大スコアを30に調整
+      return `BM25 ${normalizedBM25}%`;
     case 'keyword':
-      return `Keyword ${(score ?? 0).toFixed(2)}`;
+      // キーワードスコアもパーセンテージで統一表示
+      const normalizedKeyword = Math.min(100, Math.max(0, ((score ?? 0) / 20) * 100));
+      return `Keyword ${Math.round(normalizedKeyword)}%`;
     default:
       return 'Unknown';
   }

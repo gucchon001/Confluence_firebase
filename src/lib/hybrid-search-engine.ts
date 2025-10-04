@@ -242,7 +242,7 @@ export class HybridSearchEngine {
       console.log('[HybridSearchEngine] Starting direct Lunr client initialization...');
       
       // キャッシュから読み込みを試行
-      const loaded = await lunrSearchClient.loadFromDisk();
+      const loaded = await lunrSearchClient.loadFromCache();
       if (loaded) {
         console.log('[HybridSearchEngine] Lunr client loaded from cache successfully');
         return;

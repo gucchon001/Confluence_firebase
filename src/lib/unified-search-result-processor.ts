@@ -140,7 +140,51 @@ export class UnifiedSearchResultProcessor {
         ...result,
         _hybridScore: hybridScore
       };
+    }).filter(result => {
+      // 関連性の低い文書を除外するフィルタリング
+      return this.isRelevantResult(result, options);
     });
+  }
+
+  /**
+   * 関連性チェック
+   */
+  private isRelevantResult(result: RawSearchResult, options: Required<ScoreCalculationOptions>): boolean {
+    // 1. スコア閾値チェック
+    const minScore = 0.15; // 最低スコア閾値
+    if ((result._hybridScore ?? 0) < minScore) {
+      return false;
+    }
+
+    // 2. タイトル関連性チェック
+    const title = result.title.toLowerCase();
+    const irrelevantPatterns = [
+      '請求', 'invoice', '支払い', 'payment',
+      '応募履歴', 'application history',
+      'メール', 'mail template',
+      '議事録', 'meeting notes',
+      'アーカイブ', 'archive'
+    ];
+
+    // タイトルに無関係なキーワードが含まれている場合は除外
+    const hasIrrelevantTitle = irrelevantPatterns.some(pattern => title.includes(pattern));
+    if (hasIrrelevantTitle) {
+      return false;
+    }
+
+    // 3. ラベル関連性チェック
+    const labels = Array.isArray(result.labels) ? result.labels : [result.labels].filter(Boolean);
+    const irrelevantLabels = ['アーカイブ', 'archive', '議事録', 'meeting-notes'];
+    const hasIrrelevantLabel = labels.some(label => {
+      // ラベルが文字列でない場合はスキップ
+      if (typeof label !== 'string') return false;
+      return irrelevantLabels.some(irrelevant => label.toLowerCase().includes(irrelevant));
+    });
+    if (hasIrrelevantLabel) {
+      return false;
+    }
+
+    return true;
   }
 
   /**
