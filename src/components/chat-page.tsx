@@ -197,7 +197,7 @@ function normalizeMarkdownSymbols(markdown: string): string {
     return `\n\n## ${content}\n\n`;
   });
   
-  // 番号付きリストと箇条書きの統一処理（重複を避けるため統合）
+  // 番号付きリストと箇条書きの統一処理（処理順序を最適化）
   // 1. 番号付きセクション見出し（:がない場合）
   text = text.replace(/(\n|^)(\d+\.\s+[^:\n]+)(\n|$)/g, (match, prefix, content, suffix) => {
     if (content.startsWith('#')) {
@@ -206,16 +206,22 @@ function normalizeMarkdownSymbols(markdown: string): string {
     return `\n\n### ${content}\n\n`;
   });
   
-  // 2. 番号付きリスト項目（:がある場合）- 改行で分離
+  // 2. 文中の箇条書きパターンを先に処理（干渉を避けるため）
+  text = text.replace(/([。、])\s*(- [^\n]+)/g, '$1\n$2');
+  
+  // 3. 項目名の後の文中箇条書き（:の後の箇条書き）
+  text = text.replace(/([^-\n]+:\s*)([^-\n]+?)\s*(- [^\n]+)/g, '$1$2\n$3');
+  
+  // 4. 番号付きリスト項目（:がある場合）- 改行で分離
   text = text.replace(/([^\d\n])(\d+\.\s+[^:\n]+:\s*)([^\n]+)/g, '$1\n$2\n  $3');
   
-  // 3. 箇条書き項目 - 改行で分離
+  // 5. 箇条書き項目 - 改行で分離
   text = text.replace(/([^-\n])(- [^:\n]+:\s*)([^\n]+)/g, '$1\n$2\n  $3');
   
-  // 4. 連続する箇条書きの分離
+  // 6. 連続する箇条書きの分離
   text = text.replace(/(- [^:\n]+:\s*)(- [^\n]+)/g, '$1\n  $2');
   
-  // 5. 太字項目名の後の説明文を改行
+  // 7. 太字項目名の後の説明文を改行
   text = text.replace(/(\*\*[^*]+\*\*:\s*)([^\n]+)/g, '$1\n  $2');
   
   // 連続する空行を2行までに制限
