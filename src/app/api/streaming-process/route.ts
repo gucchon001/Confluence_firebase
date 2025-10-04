@@ -8,6 +8,9 @@ import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb'
 import { streamingSummarizeConfluenceDocs } from '@/ai/flows/streaming-summarize-confluence-docs';
 import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
 import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
+import { postLogService } from '@/lib/post-log-service';
+import { doc, updateDoc } from 'firebase/firestore';
+import type { PostLog, ProcessingStep } from '@/types';
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
 try {
@@ -122,9 +125,24 @@ export const POST = async (req: NextRequest) => {
           let currentStep = 0;
           let fullAnswer = '';
           let relevantDocs: any[] = [];
+          
+          // 投稿ログの初期化
+          const startTime = Date.now();
+          const processingSteps: ProcessingStep[] = [];
+          let searchTime = 0;
+          let aiGenerationTime = 0;
+          let totalTime = 0;
+          let postLogId: string | null = null;
+          
+          // ユーザーIDの取得（匿名化）
+          const userId = req.headers.get('x-user-id') || 'anonymous';
+          const sessionId = req.headers.get('x-session-id') || `session_${Date.now()}`;
+          const userAgent = req.headers.get('user-agent') || '';
+          const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
 
           // ステップ1: 検索中...
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
+          const searchStartTime = Date.now();
           await delay(500); // 視覚的効果のための遅延
 
           // 実際の検索処理
@@ -132,6 +150,14 @@ export const POST = async (req: NextRequest) => {
             question,
             labels: [],
             labelFilters
+          });
+          
+          searchTime = Date.now() - searchStartTime;
+          processingSteps.push({
+            step: 'search',
+            status: 'completed',
+            duration: searchTime,
+            timestamp: new Date()
           });
 
           // ステップ2: ドキュメント処理中...
@@ -148,6 +174,7 @@ export const POST = async (req: NextRequest) => {
           // ストリーミング要約の実行
           let chunkIndex = 0;
           let totalChunks = 0;
+          const aiStartTime = Date.now();
 
           try {
             for await (const result of streamingSummarizeConfluenceDocs({
@@ -159,6 +186,15 @@ export const POST = async (req: NextRequest) => {
             if (result.isComplete) {
               totalChunks = result.chunkIndex;
               fullAnswer = fullAnswer.trim();
+              
+              // AI生成時間の記録
+              aiGenerationTime = Date.now() - aiStartTime;
+              processingSteps.push({
+                step: 'ai_generation',
+                status: 'completed',
+                duration: aiGenerationTime,
+                timestamp: new Date()
+              });
               
               // ステップ4: 最終調整中...
               await updateStep(controller, encoder, 3, 'finalizing', '回答を最終確認しています...');
@@ -181,12 +217,45 @@ export const POST = async (req: NextRequest) => {
                 encoder.encode(`data: ${JSON.stringify(completionMessage)}\n\n`)
               );
               
+              // 投稿ログの保存
+              totalTime = Date.now() - startTime;
+              processingSteps.push({
+                step: 'finalizing',
+                status: 'completed',
+                duration: totalTime,
+                timestamp: new Date()
+              });
+              
+              try {
+                postLogId = await postLogService.createPostLog({
+                  userId,
+                  question,
+                  answer: fullAnswer,
+                  searchTime,
+                  aiGenerationTime,
+                  totalTime,
+                  referencesCount: result.references.length,
+                  answerLength: fullAnswer.length,
+                  timestamp: new Date(),
+                  processingSteps,
+                  metadata: {
+                    sessionId,
+                    userAgent,
+                    ipAddress
+                  }
+                });
+                console.log('📝 投稿ログを保存しました:', postLogId);
+              } catch (logError) {
+                console.error('❌ 投稿ログの保存に失敗しました:', logError);
+              }
+              
               // ログ記録
-              screenTestLogger.logAIPerformance(question, performance.now(), fullAnswer.length, {
+              screenTestLogger.logAIPerformance(question, aiGenerationTime, fullAnswer.length, {
                 streamingChunks: totalChunks,
                 references: result.references.length,
                 isStreaming: true,
-                processingSteps: 4
+                processingSteps: 4,
+                postLogId
               });
               
               break;
@@ -214,6 +283,16 @@ export const POST = async (req: NextRequest) => {
           }
           } catch (streamingError) {
             console.error('❌ ストリーミング要約エラー:', streamingError);
+            
+            // AI生成時間の記録（エラー時）
+            aiGenerationTime = Date.now() - aiStartTime;
+            processingSteps.push({
+              step: 'ai_generation',
+              status: 'error',
+              duration: aiGenerationTime,
+              timestamp: new Date(),
+              details: { error: streamingError.message || 'Unknown error' }
+            });
             
             // フォールバック回答を生成
             const fallbackAnswer = generateFallbackAnswer(question, relevantDocs);
@@ -243,6 +322,44 @@ export const POST = async (req: NextRequest) => {
             );
             
             fullAnswer = fallbackAnswer;
+            
+            // エラー時の投稿ログの保存
+            totalTime = Date.now() - startTime;
+            try {
+              postLogId = await postLogService.createPostLog({
+                userId,
+                question,
+                answer: fallbackAnswer,
+                searchTime,
+                aiGenerationTime,
+                totalTime,
+                referencesCount: relevantDocs.length,
+                answerLength: fallbackAnswer.length,
+                timestamp: new Date(),
+                processingSteps,
+                errors: [{
+                  id: `error_${Date.now()}`,
+                  timestamp: new Date(),
+                  level: 'error',
+                  category: 'ai',
+                  message: streamingError.message || 'AI generation failed',
+                  context: {
+                    userId,
+                    sessionId,
+                    operation: 'ai_generation'
+                  },
+                  resolved: false
+                }],
+                metadata: {
+                  sessionId,
+                  userAgent,
+                  ipAddress
+                }
+              });
+              console.log('📝 エラー投稿ログを保存しました:', postLogId);
+            } catch (logError) {
+              console.error('❌ エラー投稿ログの保存に失敗しました:', logError);
+            }
           }
           
           controller.close();

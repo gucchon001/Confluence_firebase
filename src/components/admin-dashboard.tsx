@@ -20,9 +20,11 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  MessageSquare
+  MessageSquare,
+  FileText
 } from 'lucide-react';
 import { adminService } from '@/lib/admin-service';
+import { postLogService } from '@/lib/post-log-service';
 import { useAdmin } from '@/hooks/use-admin';
 import type { AdminUser, PostLog } from '@/types';
 
@@ -75,7 +77,7 @@ const mockPostLogs: PostLog[] = [
 const AdminDashboard: React.FC = () => {
   const { isAdmin, isLoading: isAdminLoading } = useAdmin();
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [postLogs] = useState<PostLog[]>(mockPostLogs);
+  const [postLogs, setPostLogs] = useState<PostLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,18 +95,25 @@ const AdminDashboard: React.FC = () => {
   }
 
   useEffect(() => {
-    loadUsers();
+    loadData();
   }, []);
 
-  const loadUsers = async () => {
+  const loadData = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const userList = await adminService.getAllUsers();
+      
+      // ユーザー一覧と投稿ログを並行して取得
+      const [userList, recentLogs] = await Promise.all([
+        adminService.getAllUsers(),
+        postLogService.getRecentPostLogs(20)
+      ]);
+      
       setUsers(userList);
+      setPostLogs(recentLogs);
     } catch (err) {
-      console.error('Error loading users:', err);
-      setError('ユーザー一覧の取得中にエラーが発生しました');
+      console.error('Error loading data:', err);
+      setError('データの取得中にエラーが発生しました');
     } finally {
       setIsLoading(false);
     }
@@ -117,7 +126,7 @@ const AdminDashboard: React.FC = () => {
       } else {
         await adminService.grantAdminPrivileges(userId, 'admin');
       }
-      await loadUsers(); // ユーザー一覧を再読み込み
+      await loadData(); // データを再読み込み
     } catch (err) {
       console.error('Error toggling admin status:', err);
       setError('管理者権限の変更中にエラーが発生しました');
@@ -214,37 +223,66 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5" />
-                現在進行中の会話
+                最近の投稿ログ
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {postLogs.slice(0, 3).map((log) => (
-                  <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <p className="font-medium truncate">{log.question}</p>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {new Date(log.timestamp).toLocaleTimeString()}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Search className="h-3 w-3" />
-                          {(log.searchTime / 1000).toFixed(1)}s
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Brain className="h-3 w-3" />
-                          {(log.aiGenerationTime / 1000).toFixed(1)}s
-                        </span>
-                      </div>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {postLogs.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>投稿ログがありません</p>
                     </div>
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      完了
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    postLogs.slice(0, 5).map((log) => (
+                      <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <p className="font-medium truncate">{log.question}</p>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {new Date(log.timestamp).toLocaleTimeString()}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Search className="h-3 w-3" />
+                              {(log.searchTime / 1000).toFixed(1)}s
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Brain className="h-3 w-3" />
+                              {(log.aiGenerationTime / 1000).toFixed(1)}s
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <FileText className="h-3 w-3" />
+                              {log.answerLength}文字
+                            </span>
+                          </div>
+                        </div>
+                        <Badge 
+                          variant={log.errors && log.errors.length > 0 ? "destructive" : "outline"} 
+                          className="flex items-center gap-1"
+                        >
+                          {log.errors && log.errors.length > 0 ? (
+                            <>
+                              <XCircle className="h-3 w-3" />
+                              エラー
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-3 w-3" />
+                              完了
+                            </>
+                          )}
+                        </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
