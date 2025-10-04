@@ -33,7 +33,15 @@
     "sync:confluence": "tsx src/scripts/batch-sync-confluence.ts --all",
     "domain-knowledge-extraction-v2": "tsx src/scripts/run-domain-knowledge-extraction-v2.ts",
     "complete-pipeline": "tsx src/scripts/run-complete-pipeline.ts",
-    "lightweight-pipeline": "tsx src/scripts/run-lightweight-pipeline.ts"
+    "lightweight-pipeline": "tsx src/scripts/run-lightweight-pipeline.ts",
+    "backup": "tsx src/scripts/backup-firestore-data.ts",
+    "backup-schedule": "tsx src/scripts/schedule-backups.ts",
+    "backup:full": "tsx src/scripts/backup-firestore-data.ts full",
+    "backup:emergency": "tsx src/scripts/backup-firestore-data.ts emergency",
+    "backup:restore": "tsx src/scripts/backup-firestore-data.ts restore",
+    "backup:schedule:start": "tsx src/scripts/schedule-backups.ts start",
+    "backup:now": "tsx src/scripts/schedule-backups.ts backup-now",
+    "backup:emergency-now": "tsx src/scripts/schedule-backups.ts emergency"
   },
   "dependencies": {
     "@genkit-ai/google-cloud": "^1.19.2",

@@ -79,6 +79,7 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [postLogs, setPostLogs] = useState<PostLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [backupStatus, setBackupStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   // 管理者権限がない場合はアクセス拒否
@@ -123,6 +124,37 @@ const AdminDashboard: React.FC = () => {
       setError('データの取得中にエラーが発生しました');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const runBackup = async (type: 'full' | 'emergency' = 'full') => {
+    try {
+      setBackupStatus('running');
+      console.log(`🔄 ${type === 'full' ? 'フル' : '緊急'}バックアップを開始...`);
+      
+      // バックアップAPIを呼び出し
+      const response = await fetch('/api/admin/backup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('バックアップに失敗しました');
+      }
+      
+      const result = await response.json();
+      console.log('✅ バックアップが完了しました:', result);
+      
+      setBackupStatus('success');
+      setTimeout(() => setBackupStatus('idle'), 3000);
+      
+    } catch (error) {
+      console.error('❌ バックアップ中にエラーが発生しました:', error);
+      setBackupStatus('error');
+      setTimeout(() => setBackupStatus('idle'), 3000);
     }
   };
 
