@@ -183,6 +183,13 @@ export const POST = async (req: NextRequest) => {
           const sessionId = req.headers.get('x-session-id') || `session_${Date.now()}`;
           const userAgent = req.headers.get('user-agent') || '';
           const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+          
+          console.log('🔍 投稿ログ用データ:', {
+            userId,
+            sessionId,
+            userAgent: userAgent.substring(0, 50) + '...',
+            ipAddress
+          });
 
           // ステップ1: 検索中...
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
@@ -271,7 +278,7 @@ export const POST = async (req: NextRequest) => {
               });
               
               try {
-                postLogId = await savePostLogToAdminDB({
+                const logData = {
                   userId,
                   question,
                   answer: fullAnswer,
@@ -287,10 +294,26 @@ export const POST = async (req: NextRequest) => {
                     userAgent,
                     ipAddress
                   }
+                };
+                
+                console.log('💾 投稿ログ保存開始:', {
+                  userId,
+                  questionLength: question.length,
+                  answerLength: fullAnswer.length,
+                  searchTime,
+                  aiGenerationTime,
+                  totalTime
                 });
-                console.log('📝 投稿ログを保存しました:', postLogId);
+                
+                postLogId = await savePostLogToAdminDB(logData);
+                console.log('✅ 投稿ログを保存しました:', postLogId);
               } catch (logError) {
                 console.error('❌ 投稿ログの保存に失敗しました:', logError);
+                console.error('❌ エラー詳細:', {
+                  message: logError.message,
+                  code: logError.code,
+                  stack: logError.stack
+                });
               }
               
               // ログ記録

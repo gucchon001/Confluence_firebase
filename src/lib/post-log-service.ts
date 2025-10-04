@@ -91,6 +91,8 @@ export class PostLogService {
    */
   async getRecentPostLogs(count: number = 50): Promise<PostLog[]> {
     try {
+      console.log('📝 PostLogService: 最近の投稿ログを取得開始', { count });
+      
       const postLogsRef = collection(db, 'postLogs');
       const q = query(
         postLogsRef,
@@ -99,6 +101,11 @@ export class PostLogService {
       );
       
       const querySnapshot = await getDocs(q);
+      
+      console.log('📝 PostLogService: 投稿ログ取得完了', { 
+        totalCount: querySnapshot.size,
+        empty: querySnapshot.empty 
+      });
       
       return querySnapshot.docs.map(doc => {
         const data = doc.data();

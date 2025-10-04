@@ -104,10 +104,17 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       
       // ユーザー一覧と投稿ログを並行して取得
+      console.log('🔍 管理ダッシュボード: データ取得開始');
+      
       const [userList, recentLogs] = await Promise.all([
         adminService.getAllUsers(),
         postLogService.getRecentPostLogs(20)
       ]);
+      
+      console.log('📊 管理ダッシュボード: データ取得完了', {
+        userCount: userList.length,
+        postLogCount: recentLogs.length
+      });
       
       setUsers(userList);
       setPostLogs(recentLogs);
