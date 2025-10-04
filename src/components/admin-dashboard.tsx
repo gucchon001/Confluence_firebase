@@ -23,6 +23,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { adminService } from '@/lib/admin-service';
+import { useAdmin } from '@/hooks/use-admin';
 import type { AdminUser, PostLog } from '@/types';
 
 // ダミーデータ（実際の実装ではAPIから取得）
@@ -72,10 +73,24 @@ const mockPostLogs: PostLog[] = [
 ];
 
 const AdminDashboard: React.FC = () => {
+  const { isAdmin, isLoading: isAdminLoading } = useAdmin();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [postLogs] = useState<PostLog[]>(mockPostLogs);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 管理者権限がない場合はアクセス拒否
+  if (!isAdminLoading && !isAdmin) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-red-600">アクセス拒否</h3>
+          <p className="text-muted-foreground">管理者権限が必要です。</p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     loadUsers();

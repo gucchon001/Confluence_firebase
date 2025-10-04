@@ -745,7 +745,7 @@ export default function ChatPage({ user }: ChatPageProps) {
           
           <div className="flex items-center gap-2">
             {/* 管理者ダッシュボードトグルボタン */}
-            {isAdmin && (
+            {!isAdminLoading && isAdmin && (
               <Button
                 variant={showAdminDashboard ? "default" : "outline"}
                 size="sm"
@@ -764,7 +764,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                     <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName ?? 'User'} />
                     <AvatarFallback>{user.displayName?.charAt(0) ?? 'U'}</AvatarFallback>
                   </Avatar>
-                  {isAdmin && (
+                  {!isAdminLoading && isAdmin && (
                     <div className="absolute -top-1 -right-1 h-3 w-3 bg-blue-500 rounded-full flex items-center justify-center">
                       <Shield className="h-2 w-2 text-white" />
                     </div>
@@ -775,10 +775,10 @@ export default function ChatPage({ user }: ChatPageProps) {
                 <div className="p-2">
                   <p className="text-sm font-medium flex items-center gap-2">
                     {user.displayName}
-                    {isAdmin && <Shield className="h-3 w-3 text-blue-500" />}
+                    {!isAdminLoading && isAdmin && <Shield className="h-3 w-3 text-blue-500" />}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                  {isAdmin && (
+                  {!isAdminLoading && isAdmin && (
                     <p className="text-xs text-blue-600 font-medium">管理者</p>
                   )}
                 </div>

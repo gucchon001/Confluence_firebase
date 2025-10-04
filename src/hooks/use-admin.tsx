@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './use-auth';
+import { useState, useEffect } from 'react';
+import { useAuthWrapper } from './use-auth-wrapper';
 import { adminService } from '@/lib/admin-service';
 
 interface AdminContextType {
@@ -12,7 +12,7 @@ interface AdminContextType {
 }
 
 export function useAdmin(): AdminContextType {
-  const { user } = useContext(AuthContext);
+  const { user, loading } = useAuthWrapper();
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +40,10 @@ export function useAdmin(): AdminContextType {
   };
 
   useEffect(() => {
-    checkAdminStatus();
-  }, [user]);
+    if (!loading) {
+      checkAdminStatus();
+    }
+  }, [user, loading]);
 
   return {
     isAdmin,
