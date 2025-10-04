@@ -1,0 +1,52 @@
+'use client';
+
+import { useState, useEffect, useContext } from 'react';
+import { AuthContext } from './use-auth';
+import { adminService } from '@/lib/admin-service';
+
+interface AdminContextType {
+  isAdmin: boolean;
+  isLoading: boolean;
+  error: string | null;
+  checkAdminStatus: () => Promise<void>;
+}
+
+export function useAdmin(): AdminContextType {
+  const { user } = useContext(AuthContext);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const checkAdminStatus = async () => {
+    if (!user) {
+      setIsAdmin(false);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const adminStatus = await adminService.isUserAdmin(user.uid);
+      setIsAdmin(adminStatus);
+    } catch (err) {
+      console.error('Error checking admin status:', err);
+      setError('管理者権限の確認中にエラーが発生しました');
+      setIsAdmin(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAdminStatus();
+  }, [user]);
+
+  return {
+    isAdmin,
+    isLoading,
+    error,
+    checkAdminStatus
+  };
+}

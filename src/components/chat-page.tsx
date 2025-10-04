@@ -8,11 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain } from 'lucide-react';
+import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain, Shield, BarChart3 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useAuthWrapper } from '@/hooks/use-auth-wrapper';
+import { useAdmin } from '@/hooks/use-admin';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { type Message } from '@/types';
@@ -32,6 +33,7 @@ import { EmptyStateHandler, NoResultsFound, ErrorState } from '@/components/empt
 import { TimeoutHandler, useSearchTimeout } from '@/components/timeout-handler';
 import { StreamingProcessingUI, StreamingErrorUI } from '@/components/streaming-processing-ui';
 import { streamingProcessClient, ProcessingStep } from '@/lib/streaming-process-client';
+import AdminDashboard from '@/components/admin-dashboard';
 // import MigrationButton from '@/components/migration-button';
 
 // --- Markdown utilities ------------------------------------------------------
@@ -338,12 +340,14 @@ const MessageCard = ({ msg }: { msg: Message }) => {
 
 export default function ChatPage({ user }: ChatPageProps) {
   const { signOut } = useAuthWrapper();
+  const { isAdmin, isLoading: isAdminLoading } = useAdmin();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [conversations, setConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string }>>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   
@@ -533,33 +537,33 @@ export default function ChatPage({ user }: ChatPageProps) {
               emailVerified: user.emailVerified
             });
             
-            if (currentConversationId) {
+      if (currentConversationId) {
               // 既存の会話にメッセージを追加
               console.log(`[Firebase] Adding messages to existing conversation: ${currentConversationId}`);
-              await addMessageToConversation(user.uid, currentConversationId, 
-                { role: 'user', content: userMessage.content, user: userMessage.user }
-              );
-              await addMessageToConversation(user.uid, currentConversationId, 
-                { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-              );
+        await addMessageToConversation(user.uid, currentConversationId, 
+          { role: 'user', content: userMessage.content, user: userMessage.user }
+        );
+        await addMessageToConversation(user.uid, currentConversationId, 
+          { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+        );
               console.log(`[Firebase] Successfully saved messages to conversation: ${currentConversationId}`);
-            } else {
-              // 新しい会話を作成
+      } else {
+        // 新しい会話を作成
               console.log(`[Firebase] Creating new conversation for user: ${user.uid}`);
-              const newConversationId = await createConversation(user.uid, 
-                { role: 'user', content: userMessage.content, user: userMessage.user }
-              );
-              await addMessageToConversation(user.uid, newConversationId, 
-                { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-              );
-              setCurrentConversationId(newConversationId);
+          const newConversationId = await createConversation(user.uid, 
+            { role: 'user', content: userMessage.content, user: userMessage.user }
+          );
+          await addMessageToConversation(user.uid, newConversationId, 
+            { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+          );
+          setCurrentConversationId(newConversationId);
               console.log(`[Firebase] Successfully created new conversation: ${newConversationId}`);
           
           // 会話一覧を更新
               try {
           const updatedConversations = await getConversations(user.uid);
           setConversations(updatedConversations);
-              } catch (error) {
+        } catch (error) {
                 console.error("Failed to refresh conversations:", error);
               }
             }
@@ -734,37 +738,68 @@ export default function ChatPage({ user }: ChatPageProps) {
         <header className="flex h-16 items-center justify-between border-b bg-white/80 backdrop-blur-sm px-4 md:px-6 sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <Bot className="h-6 w-6 text-primary" />
-            <h1 className="text-lg font-semibold">Confluence Spec Chat</h1>
+            <h1 className="text-lg font-semibold">
+              {showAdminDashboard ? '管理ダッシュボード' : 'Confluence Spec Chat'}
+            </h1>
           </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName ?? 'User'} />
-                <AvatarFallback>{user.displayName?.charAt(0) ?? 'U'}</AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end" forceMount>
-            <div className="p-2">
-              <p className="text-sm font-medium">{user.displayName}</p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-            </div>
-            <DropdownMenuItem onClick={() => setShowSettings(!showSettings)}>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>設定</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleSignOut}>
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>ログアウト</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </header>
+          
+          <div className="flex items-center gap-2">
+            {/* 管理者ダッシュボードトグルボタン */}
+            {isAdmin && (
+              <Button
+                variant={showAdminDashboard ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowAdminDashboard(!showAdminDashboard)}
+                className="flex items-center gap-2"
+              >
+                <BarChart3 className="h-4 w-4" />
+                {showAdminDashboard ? 'チャットに戻る' : '管理画面'}
+              </Button>
+            )}
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName ?? 'User'} />
+                    <AvatarFallback>{user.displayName?.charAt(0) ?? 'U'}</AvatarFallback>
+                  </Avatar>
+                  {isAdmin && (
+                    <div className="absolute -top-1 -right-1 h-3 w-3 bg-blue-500 rounded-full flex items-center justify-center">
+                      <Shield className="h-2 w-2 text-white" />
+                    </div>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <div className="p-2">
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    {user.displayName}
+                    {isAdmin && <Shield className="h-3 w-3 text-blue-500" />}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  {isAdmin && (
+                    <p className="text-xs text-blue-600 font-medium">管理者</p>
+                  )}
+                </div>
+                <DropdownMenuItem onClick={() => setShowSettings(!showSettings)}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>設定</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>ログアウト</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
       <main className="flex-1 overflow-hidden">
         <ScrollArea className="h-full" viewportRef={scrollAreaRef}>
           <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
-            {showSettings ? (
+            {showAdminDashboard ? (
+              <AdminDashboard />
+            ) : showSettings ? (
                 <div className="max-w-xl mx-auto space-y-6 py-6">
                     <Card className="mb-6">
                         <CardHeader>

@@ -36,6 +36,22 @@ service cloud.firestore {
       allow read, write: if isAllowedUser();
     }
 
+    // 管理者権限の確認関数
+    function isAdmin() {
+      return isAllowedUser() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // 管理者専用コレクション
+    match /adminLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /postLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
     // ユーザーフィードバック
     match /feedback/{feedbackId} {
       allow read: if isAllowedUser();

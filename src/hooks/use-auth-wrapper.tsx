@@ -1,8 +1,9 @@
 'use client';
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect } from 'react';
 import { AuthProvider } from './use-auth';
 import { MockAuthProvider } from './use-mock-auth';
+import { initializeDefaultAdmin } from '@/scripts/initialize-default-admin';
 
 // 環境変数またはブラウザのURLパラメータでモックモードを切り替え
 const isUsingMockAuth = () => {
@@ -32,6 +33,13 @@ const isUsingMockAuth = () => {
 export function AuthProviderWrapper({ children }: { children: ReactNode }) {
   // モック認証を使用するかどうかを判定
   const useMock = isUsingMockAuth();
+  
+  // デフォルト管理者の初期化（実際の認証でのみ）
+  useEffect(() => {
+    if (!useMock) {
+      initializeDefaultAdmin();
+    }
+  }, [useMock]);
   
   // 適切な認証プロバイダーでラップ
   return useMock ? (

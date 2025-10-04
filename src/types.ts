@@ -49,4 +49,68 @@ export type UserProfile = {
   displayName: string | null;
   email: string;
   createdAt: Date;
+  isAdmin?: boolean; // 管理者権限
+  adminGrantedAt?: Date; // 管理者権限付与日時
+  adminGrantedBy?: string; // 管理者権限付与者
+};
+
+// 管理者関連の型
+export type AdminUser = {
+  uid: string;
+  displayName: string | null;
+  email: string;
+  createdAt: Date;
+  isAdmin: boolean;
+  adminGrantedAt?: Date;
+  adminGrantedBy?: string;
+};
+
+// 投稿ログ型（管理画面用）
+export type PostLog = {
+  id: string;
+  userId: string; // 匿名化済み
+  question: string;
+  answer: string;
+  searchTime: number; // ミリ秒
+  aiGenerationTime: number; // ミリ秒
+  totalTime: number; // ミリ秒
+  referencesCount: number;
+  answerLength: number;
+  qualityScore?: number;
+  timestamp: Date;
+  processingSteps: ProcessingStep[];
+  errors?: ErrorLog[];
+  metadata: {
+    userAgent?: string;
+    ipAddress?: string; // 匿名化済み
+    sessionId: string;
+  };
+};
+
+// 処理ステップ型
+export type ProcessingStep = {
+  step: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  duration?: number;
+  timestamp: Date;
+  details?: any;
+};
+
+// エラーログ型
+export type ErrorLog = {
+  id: string;
+  timestamp: Date;
+  level: 'error' | 'warning' | 'info';
+  category: 'search' | 'ai' | 'system' | 'auth';
+  message: string;
+  stack?: string;
+  context: {
+    userId?: string;
+    sessionId?: string;
+    requestId?: string;
+    operation?: string;
+  };
+  resolved: boolean;
+  resolvedAt?: Date;
+  resolvedBy?: string;
 };
