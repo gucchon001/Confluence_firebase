@@ -39,6 +39,8 @@ export class StreamingProcessClient {
     question: string,
     chatHistory: any[] = [],
     labelFilters: any = { includeMeetingNotes: false },
+    userId?: string,
+    sessionId?: string,
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
     onCompletion: (fullAnswer: string, references: any[]) => void,
@@ -55,11 +57,21 @@ export class StreamingProcessClient {
 
       console.log('🌊 ストリーミング処理開始:', question);
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (userId) {
+        headers['x-user-id'] = userId;
+      }
+      
+      if (sessionId) {
+        headers['x-session-id'] = sessionId;
+      }
+
       const response = await fetch('/api/streaming-process', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           question,
           chatHistory,

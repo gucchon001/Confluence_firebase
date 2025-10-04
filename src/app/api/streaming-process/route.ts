@@ -9,7 +9,8 @@ import { streamingSummarizeConfluenceDocs } from '@/ai/flows/streaming-summarize
 import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
 import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
 import { postLogService } from '@/lib/post-log-service';
-import { doc, updateDoc } from 'firebase/firestore';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import type { PostLog, ProcessingStep } from '@/types';
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
@@ -69,6 +70,49 @@ function generateFallbackAnswer(question: string, context: any[]): string {
   answer += `AIサービスが復旧次第、より詳細な回答を提供いたします。`;
   
   return answer;
+}
+
+// Firebase Admin SDKの初期化
+let adminDb: FirebaseFirestore.Firestore | null = null;
+
+function getAdminFirestore() {
+  if (!adminDb) {
+    if (getApps().length === 0) {
+      initializeApp({
+        credential: undefined, // 環境変数から自動取得
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+      });
+    }
+    adminDb = getFirestore();
+  }
+  return adminDb;
+}
+
+// サーバー側で投稿ログを保存する関数
+async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<string> {
+  try {
+    const db = getAdminFirestore();
+    const postLogsRef = db.collection('postLogs');
+    const docRef = await postLogsRef.add({
+      ...logData,
+      timestamp: Timestamp.fromDate(logData.timestamp),
+      processingSteps: logData.processingSteps.map(step => ({
+        ...step,
+        timestamp: Timestamp.fromDate(step.timestamp)
+      })),
+      errors: logData.errors?.map(error => ({
+        ...error,
+        timestamp: Timestamp.fromDate(error.timestamp),
+        resolvedAt: error.resolvedAt ? Timestamp.fromDate(error.resolvedAt) : null
+      }))
+    });
+    
+    console.log('📝 投稿ログをAdmin SDKで保存しました:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Admin SDKでの投稿ログ保存に失敗しました:', error);
+    throw error;
+  }
 }
 
 // 処理ステップの定義
@@ -227,7 +271,7 @@ export const POST = async (req: NextRequest) => {
               });
               
               try {
-                postLogId = await postLogService.createPostLog({
+                postLogId = await savePostLogToAdminDB({
                   userId,
                   question,
                   answer: fullAnswer,
@@ -326,7 +370,7 @@ export const POST = async (req: NextRequest) => {
             // エラー時の投稿ログの保存
             totalTime = Date.now() - startTime;
             try {
-              postLogId = await postLogService.createPostLog({
+              postLogId = await savePostLogToAdminDB({
                 userId,
                 question,
                 answer: fallbackAnswer,

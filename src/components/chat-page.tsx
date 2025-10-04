@@ -495,6 +495,8 @@ export default function ChatPage({ user }: ChatPageProps) {
         currentInput,
         messages,
         labelFilters,
+        user?.uid, // ユーザーID
+        `session_${Date.now()}`, // セッションID
         // ステップ更新コールバック
         (step: ProcessingStep) => {
           console.log('ステップ更新:', step);

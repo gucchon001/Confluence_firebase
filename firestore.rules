@@ -49,7 +49,8 @@ service cloud.firestore {
     }
 
     match /postLogs/{logId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if isAllowedUser();
     }
 
     // ユーザーフィードバック
