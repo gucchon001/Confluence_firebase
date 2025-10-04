@@ -118,10 +118,15 @@ export class LunrSearchClient {
         
         // =================== フィールド定義 ===================
         
-        // 分かち書き済みのフィールドのみをインデックス対象とする
-        this.field('tokenizedTitle', { boost: 2.0 });
+        // Phase 2最適化: フィールド重みの調整
+        this.field('tokenizedTitle', { boost: 3.0 }); // タイトル重みを強化
         this.field('tokenizedContent', { boost: 1.0 });
-        this.field('labels', { boost: 1.5 });
+        this.field('labels', { boost: 2.0 }); // ラベル重みを強化
+        
+        // Phase 2最適化: パイプライン処理の最適化
+        this.pipeline.remove(lunr.stopWordFilter); // 日本語では不要
+        this.pipeline.remove(lunr.stemmer); // 分かち書き済みなので不要
+        this.pipeline.remove(lunr.trimmer); // 分かち書き済みなので不要（Phase 2追加）
         
         // リファレンス設定
         this.ref('id');
@@ -192,27 +197,30 @@ export class LunrSearchClient {
       const tokenizedQuery = await tokenizeJapaneseText(query);
       console.log(`[LunrSearchClient] Searching with tokenized query: '${tokenizedQuery}'`);
 
-      // 検索実行（トークン化されたクエリを使用）
-      // 分かち書き済みフィールドのみを検索対象とする
-      const searchResults = this.index.search(tokenizedQuery, {
+      // Phase 2最適化: 動的閾値とフィールド重みの調整
+      const searchOptions = {
         fields: {
-          tokenizedTitle: { boost: 2.0 },
+          tokenizedTitle: { boost: 3.0 }, // タイトル重みを強化
           tokenizedContent: { boost: 1.0 },
-          labels: { boost: 1.5 }
-        }
-      });
+          labels: { boost: 2.0 } // ラベル重みを強化
+        },
+        // 検索結果数を事前に制限（パフォーマンス向上）
+        limit: Math.min(limit * 2, 50), // 必要数の2倍、最大50件に制限（Phase 2最適化）
+        // 動的スコア閾値（クエリの長さに応じて調整）
+        threshold: query.length > 10 ? 0.15 : 0.25 // 長いクエリは緩く、短いクエリは厳しく
+      };
 
-      // 結果を制限して返す
-      return searchResults
-        .slice(0, limit)
-        .map(result => {
-          const doc = this.documents.get(result.ref);
-          if (!doc) {
-            console.warn(`[LunrSearchClient] Document ${result.ref} not found in documents map`);
-            return null;
-          }
+      const searchResults = this.index.search(tokenizedQuery, searchOptions);
 
-          return {
+      // Phase 2最適化: 効率的な結果処理
+      const validResults: LunrSearchResult[] = [];
+      
+      for (let i = 0; i < Math.min(searchResults.length, limit); i++) {
+        const result = searchResults[i];
+        const doc = this.documents.get(result.ref);
+        
+        if (doc) {
+          validResults.push({
             id: doc.id,
             title: doc.originalTitle,
             content: doc.originalContent,
@@ -222,9 +230,11 @@ export class LunrSearchClient {
             url: doc.url,
             space_key: doc.space_key,
             lastUpdated: doc.lastUpdated,
-          };
-        })
-        .filter((result): result is LunrSearchResult => result !== null);
+          });
+        }
+      }
+      
+      return validResults;
     } catch (error) {
       console.error('[LunrSearchClient] Search failed:', error);
       return [];

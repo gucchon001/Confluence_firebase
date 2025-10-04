@@ -7,10 +7,19 @@ import { unifiedKeywordExtractionService } from '../lib/unified-keyword-extracti
 import { getEmbeddings } from '../lib/embeddings';
 import { lancedbClient } from '../lib/lancedb-client';
 import { lunrSearchClient } from '../lib/lunr-search-client';
+import { initializeStartupOptimizations } from '../lib/startup-optimizer';
 
 async function analyzePerformance() {
   console.log('🔍 パフォーマンス分析開始');
   console.log('=' .repeat(60));
+
+  // 起動時最適化を実行
+  console.log('🚀 起動時最適化を実行中...');
+  const optimizationStart = Date.now();
+  await initializeStartupOptimizations();
+  const optimizationTime = Date.now() - optimizationStart;
+  console.log(`✅ 起動時最適化完了: ${optimizationTime}ms`);
+  console.log('');
 
   const testQuery = '教室管理の詳細は';
 
@@ -57,31 +66,11 @@ async function analyzePerformance() {
   let lunrTime = 0;
   let lunrResults = [];
   try {
-    const { LunrSearchClient } = await import('../lib/lunr-search-client');
-    const { preInitializeTokenizer } = await import('../lib/japanese-tokenizer');
+    console.log('   トークナイザーは事前初期化済み - キャッシュから初期化');
     
-    // トークナイザーを事前初期化（既に初期化済みの場合はスキップ）
-    const { isTokenizerInitialized } = await import('../lib/japanese-tokenizer');
-    if (!isTokenizerInitialized()) {
-      console.log('   トークナイザー事前初期化中...');
-      const tokenizerStart = Date.now();
-      await preInitializeTokenizer();
-      const tokenizerTime = Date.now() - tokenizerStart;
-      console.log(`   トークナイザー初期化時間: ${tokenizerTime}ms`);
-    } else {
-      console.log('   トークナイザーは既に初期化済み');
-    }
-    
-    const lunrSearchClient = LunrSearchClient.getInstance();
-    
-    // 初期化をスキップして直接検索を試行
-    try {
-      lunrResults = await lunrSearchClient.search(testQuery, 10);
-    } catch (initError) {
-      // 初期化エラーの場合はキャッシュから初期化を試行
-      await lunrSearchClient.initializeFromCache();
-      lunrResults = await lunrSearchClient.search(testQuery, 10);
-    }
+    // キャッシュから初期化してから検索を実行
+    await lunrSearchClient.initializeFromCache();
+    lunrResults = await lunrSearchClient.search(testQuery, 10);
     
     lunrTime = Date.now() - lunrStart;
     console.log(`   検索時間: ${lunrTime}ms`);

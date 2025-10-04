@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 import { streamingSummarizeConfluenceDocs } from '@/ai/flows/streaming-summarize-confluence-docs';
 import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
+import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
 try {
@@ -97,6 +98,9 @@ const PROCESSING_STEPS = [
 
 export const POST = async (req: NextRequest) => {
   try {
+    // 起動時最適化を実行（初回のみ）
+    await initializeStartupOptimizations();
+
     const body = await req.json();
     const { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
 
