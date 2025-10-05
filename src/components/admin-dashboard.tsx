@@ -1247,10 +1247,9 @@ const AdminDashboard: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[400px]">
-                    <div className="prose prose-sm max-w-none">
+                    <div className="prose prose-sm max-w-none text-sm leading-relaxed">
                       <ReactMarkdown 
                         components={sharedMarkdownComponents}
-                        className="text-sm leading-relaxed"
                       >
                         {selectedLog.answer}
                       </ReactMarkdown>
