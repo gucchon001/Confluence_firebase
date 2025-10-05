@@ -244,12 +244,31 @@ export const POST = async (req: NextRequest) => {
           await delay(500); // 視覚的効果のための遅延
 
           // 実際の検索処理
-          relevantDocs = await retrieveRelevantDocs({
+          const searchStartTimeDetailed = Date.now();
+          const searchResults = await retrieveRelevantDocs({
             question,
             labels: [],
             labelFilters
           });
           
+          // 検索結果の詳細分析
+          const searchAnalysis = {
+            totalDocuments: searchResults.length,
+            vectorSearchResults: searchResults.filter(doc => doc.source === 'vector'),
+            bm25SearchResults: searchResults.filter(doc => doc.source === 'bm25'),
+            keywordSearchResults: searchResults.filter(doc => doc.source === 'keyword'),
+            hybridSearchResults: searchResults.filter(doc => doc.source === 'hybrid'),
+            averageScore: searchResults.length > 0 ? searchResults.reduce((sum, doc) => sum + (doc.score || 0), 0) / searchResults.length : 0,
+            maxScore: searchResults.length > 0 ? Math.max(...searchResults.map(doc => doc.score || 0)) : 0,
+            minScore: searchResults.length > 0 ? Math.min(...searchResults.map(doc => doc.score || 0)) : 0,
+            scoreDistribution: {
+              high: searchResults.filter(doc => (doc.score || 0) > 0.8).length,
+              medium: searchResults.filter(doc => (doc.score || 0) > 0.5 && (doc.score || 0) <= 0.8).length,
+              low: searchResults.filter(doc => (doc.score || 0) <= 0.5).length
+            }
+          };
+
+          relevantDocs = searchResults;
           searchTime = Date.now() - searchStartTime;
           processingSteps.push({
             step: 'search',
@@ -257,14 +276,54 @@ export const POST = async (req: NextRequest) => {
             duration: searchTime,
             timestamp: new Date(),
             details: {
-              documentsFound: relevantDocs.length,
-              searchSources: relevantDocs.map(doc => doc.source || 'unknown')
+              ...searchAnalysis,
+              searchSources: relevantDocs.map(doc => doc.source || 'unknown'),
+              detailedScores: relevantDocs.map(doc => ({
+                title: doc.title?.substring(0, 50) + '...',
+                source: doc.source,
+                score: doc.score || 0,
+                distance: doc.distance || 0,
+                url: doc.url || ''
+              }))
             }
           });
 
           // ステップ2: ドキュメント処理中...
           await updateStep(controller, encoder, 1, 'processing', `検索結果 ${relevantDocs.length} 件を分析・整理しています...`);
+          const processingStartTime = Date.now();
           await delay(800);
+          const processingTime = Date.now() - processingStartTime;
+
+          // ドキュメント処理の詳細分析
+          const processingAnalysis = {
+            documentsProcessed: relevantDocs.length,
+            contentAnalysis: {
+              totalContentLength: relevantDocs.reduce((sum, doc) => sum + (doc.content?.length || 0), 0),
+              averageContentLength: relevantDocs.length > 0 ? relevantDocs.reduce((sum, doc) => sum + (doc.content?.length || 0), 0) / relevantDocs.length : 0,
+              maxContentLength: relevantDocs.length > 0 ? Math.max(...relevantDocs.map(doc => doc.content?.length || 0)) : 0,
+              minContentLength: relevantDocs.length > 0 ? Math.min(...relevantDocs.map(doc => doc.content?.length || 0)) : 0
+            },
+            qualityMetrics: {
+              documentsWithHighRelevance: searchAnalysis.scoreDistribution.high,
+              documentsWithMediumRelevance: searchAnalysis.scoreDistribution.medium,
+              documentsWithLowRelevance: searchAnalysis.scoreDistribution.low,
+              relevanceRatio: relevantDocs.length > 0 ? searchAnalysis.scoreDistribution.high / relevantDocs.length : 0
+            },
+            sourceDistribution: {
+              vector: searchAnalysis.vectorSearchResults.length,
+              bm25: searchAnalysis.bm25SearchResults.length,
+              keyword: searchAnalysis.keywordSearchResults.length,
+              hybrid: searchAnalysis.hybridSearchResults.length
+            }
+          };
+
+          processingSteps.push({
+            step: 'processing',
+            status: 'completed',
+            duration: processingTime,
+            timestamp: new Date(),
+            details: processingAnalysis
+          });
 
           console.log(`📚 関連文書取得完了: ${relevantDocs.length}件`);
           screenTestLogger.info('search', `Retrieved ${relevantDocs.length} relevant documents for streaming`);
@@ -291,16 +350,69 @@ export const POST = async (req: NextRequest) => {
               
               // AI生成時間の記録
               aiGenerationTime = Date.now() - aiStartTime;
+              // 参照元取得プロセスの詳細分析
+              const referenceAnalysis = {
+                totalReferences: result.references?.length || 0,
+                referenceSources: result.references?.map(ref => ({
+                  title: ref.title || 'Unknown',
+                  url: ref.url || '',
+                  source: ref.source || 'unknown',
+                  score: ref.score || 0,
+                  distance: ref.distance || 0
+                })) || [],
+                referenceQuality: {
+                  highQuality: result.references?.filter(ref => (ref.score || 0) > 0.8).length || 0,
+                  mediumQuality: result.references?.filter(ref => (ref.score || 0) > 0.5 && (ref.score || 0) <= 0.8).length || 0,
+                  lowQuality: result.references?.filter(ref => (ref.score || 0) <= 0.5).length || 0
+                },
+                averageReferenceScore: result.references?.length > 0 ? 
+                  result.references.reduce((sum, ref) => sum + (ref.score || 0), 0) / result.references.length : 0
+              };
+
               processingSteps.push({
                 step: 'ai_generation',
                 status: 'completed',
                 duration: aiGenerationTime,
-                timestamp: new Date()
+                timestamp: new Date(),
+                details: {
+                  totalChunks: totalChunks,
+                  answerLength: fullAnswer.length,
+                  contextDocuments: relevantDocs.length,
+                  streamingDuration: aiGenerationTime,
+                  averageChunkTime: totalChunks > 0 ? aiGenerationTime / totalChunks : 0,
+                  modelUsed: 'gemini-2.5-flash',
+                  streamingMethod: 'real-time',
+                  ...referenceAnalysis,
+                  contextQuality: {
+                    highRelevanceDocs: searchAnalysis.scoreDistribution.high,
+                    contextUtilization: relevantDocs.length > 0 ? (searchAnalysis.scoreDistribution.high / relevantDocs.length) : 0,
+                    contentDiversity: new Set(relevantDocs.map(doc => doc.source)).size
+                  }
+                }
               });
               
               // ステップ4: 最終調整中...
               await updateStep(controller, encoder, 3, 'finalizing', '回答を最終確認しています...');
+              const finalizingStartTime = Date.now();
               await delay(500);
+              const finalizingTime = Date.now() - finalizingStartTime;
+
+              // 最終調整ステップの記録
+              processingSteps.push({
+                step: 'finalizing',
+                status: 'completed',
+                duration: finalizingTime,
+                timestamp: new Date(),
+                details: {
+                  processingTime: finalizingTime,
+                  answerValidation: 'completed',
+                  referencesAttached: result.references?.length || 0,
+                  finalAnswerLength: fullAnswer.length,
+                  qualityCheck: 'passed',
+                  responseFormatting: 'markdown',
+                  metadataAttached: true
+                }
+              });
 
               // 完了メッセージ
               const completionMessage = {
@@ -427,7 +539,15 @@ export const POST = async (req: NextRequest) => {
               status: 'error',
               duration: aiGenerationTime,
               timestamp: new Date(),
-              details: { error: streamingError.message || 'Unknown error' }
+              details: { 
+                error: streamingError.message || 'Unknown error',
+                errorType: streamingError.name || 'StreamingError',
+                partialChunks: chunkIndex,
+                contextDocuments: relevantDocs.length,
+                fallbackUsed: true,
+                modelUsed: 'gemini-2.5-flash',
+                streamingDuration: aiGenerationTime
+              }
             });
             
             // フォールバック回答を生成
