@@ -65,6 +65,14 @@ export type AdminUser = {
   adminGrantedBy?: string;
 };
 
+// 参照元型
+export type Reference = {
+  title: string;
+  url: string;
+  score: number;
+  source: 'vector' | 'bm25' | 'keyword';
+};
+
 // 投稿ログ型（管理画面用）
 export type PostLog = {
   id: string;
@@ -75,6 +83,7 @@ export type PostLog = {
   aiGenerationTime: number; // ミリ秒
   totalTime: number; // ミリ秒
   referencesCount: number;
+  references?: Reference[]; // 参照元の詳細情報
   answerLength: number;
   qualityScore?: number;
   timestamp: Date;
