@@ -359,6 +359,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [streamingAnswer, setStreamingAnswer] = useState<string>('');
   const [streamingReferences, setStreamingReferences] = useState<any[]>([]);
   const [currentPostLogId, setCurrentPostLogId] = useState<string | null>(null);
+  const [isStreamingComplete, setIsStreamingComplete] = useState<boolean>(false);
 
   // ストリーミング回答の安全な更新関数
   const updateStreamingAnswer = (newContent: any) => {
@@ -485,6 +486,7 @@ export default function ChatPage({ user }: ChatPageProps) {
     
     // ストリーミング処理の初期化
     setIsStreaming(true);
+    setIsStreamingComplete(false);
     setCurrentStep(null);
     setStreamingError(null);
     setStreamingAnswer('');
@@ -573,6 +575,9 @@ export default function ChatPage({ user }: ChatPageProps) {
             // エラーが発生してもUIの動作は継続
           }
 
+          // ストリーミング完了をマーク
+          setIsStreamingComplete(true);
+          
           // ストリーミング状態をリセット
           setTimeout(() => {
             setIsStreaming(false);
@@ -585,6 +590,7 @@ export default function ChatPage({ user }: ChatPageProps) {
         (error: string) => {
           console.error('ストリーミングエラー:', error);
           setStreamingError(error);
+          setIsStreamingComplete(false);
           setIsStreaming(false);
           setCurrentStep(null);
           
@@ -609,6 +615,7 @@ export default function ChatPage({ user }: ChatPageProps) {
     } catch (error) {
       console.error('Error starting streaming:', error);
       setStreamingError(error instanceof Error ? error.message : 'Unknown error');
+      setIsStreamingComplete(false);
       setIsStreaming(false);
       setCurrentStep(null);
       
