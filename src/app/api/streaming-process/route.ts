@@ -505,25 +505,8 @@ export const POST = async (req: NextRequest) => {
                   allKeys: Object.keys(logData)
                 });
                 
-                console.log('💾 投稿ログ保存開始:', {
-                  userId,
-                  questionLength: question.length,
-                  answerLength: fullAnswer.length,
-                  searchTime,
-                  aiGenerationTime,
-                  totalTime
-                });
-                
-                postLogId = await savePostLogToAdminDB(logData);
-                console.log('✅ 投稿ログを保存しました:', postLogId);
-              } catch (logError) {
-                console.error('❌ 投稿ログの保存に失敗しました:', logError);
-                console.error('❌ エラー詳細:', {
-                  message: logError.message,
-                  code: logError.code,
-                  stack: logError.stack
-                });
-              }
+                // フォールバック回答時はここでは保存しない（後でストリーミング処理完了時に保存）
+                console.log('🔄 フォールバック回答生成完了 - 後でpostLogsを保存します');
               
               // ログ記録
               screenTestLogger.logAIPerformance(question, aiGenerationTime, fullAnswer.length, {

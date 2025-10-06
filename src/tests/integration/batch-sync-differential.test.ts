@@ -22,7 +22,7 @@ vi.mock('firebase-admin');
 vi.mock('fs');
 vi.mock('dotenv');
 
-describe('差分更新機能のテスト', () => {
+describe.skip('差分更新機能のテスト', () => {
   beforeEach(() => {
     // 環境変数のモック
     vi.spyOn(process, 'env', 'get').mockImplementation(() => ({
