@@ -708,7 +708,8 @@ const AdminDashboard: React.FC = () => {
                             {new Date(log.timestamp).toLocaleString('ja-JP')}
                           </TableCell>
                           <TableCell>
-                            {users.find(u => u.uid === log.userId)?.displayName || 
+                            {log.metadata?.userDisplayName || 
+                             users.find(u => u.uid === log.userId)?.displayName || 
                              users.find(u => u.uid === log.userId)?.email || 
                              log.userId}
                           </TableCell>

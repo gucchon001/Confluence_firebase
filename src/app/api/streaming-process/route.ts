@@ -284,39 +284,46 @@ export const POST = async (req: NextRequest) => {
           let fullAnswer = '';
           let relevantDocs: any[] = [];
           
-<<<<<<< HEAD
           // postLogs保存用の変数
           const startTime = Date.now();
           let searchTime = 0;
           let aiGenerationTime = 0;
           let totalTime = 0;
           let processingSteps: ProcessingStep[] = [];
-          const userId = 'anonymous'; // 実際の実装では認証から取得
-          const sessionId = crypto.randomUUID();
-          const userAgent = 'unknown';
-          const ipAddress = 'unknown';
-=======
-          // 投稿ログの初期化
-          const startTime = Date.now();
-          const processingSteps: ProcessingStep[] = [];
-          let searchTime = 0;
-          let aiGenerationTime = 0;
-          let totalTime = 0;
           let postLogId: string | null = null;
           
-          // ユーザーIDの取得（匿名化）
-          const userId = req.headers.get('x-user-id') || 'anonymous';
-          const sessionId = req.headers.get('x-session-id') || `session_${Date.now()}`;
-          const userAgent = req.headers.get('user-agent') || '';
+          // ユーザーIDの取得（認証ヘッダーから）
+          let userId = req.headers.get('x-user-id') || req.headers.get('authorization')?.replace('Bearer ', '') || 'anonymous';
+          const sessionId = req.headers.get('x-session-id') || crypto.randomUUID();
+          const userAgent = req.headers.get('user-agent') || 'unknown';
           const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+          
+          // ユーザーIDが有効な場合、実際のユーザー情報を取得
+          let userDisplayName = 'anonymous';
+          if (userId && userId !== 'anonymous') {
+            try {
+              const adminApp = initializeFirebaseAdmin();
+              const auth = admin.auth(adminApp);
+              const userRecord = await auth.getUser(userId);
+              userDisplayName = userRecord.displayName || userRecord.email || 'unknown';
+              console.log('👤 ユーザー情報取得:', {
+                uid: userRecord.uid,
+                displayName: userRecord.displayName,
+                email: userRecord.email
+              });
+            } catch (userError) {
+              console.warn('⚠️ ユーザー情報取得失敗:', userError);
+              // ユーザー情報が取得できない場合はanonymousのまま
+            }
+          }
           
           console.log('🔍 投稿ログ用データ:', {
             userId,
+            userDisplayName,
             sessionId,
             userAgent: userAgent.substring(0, 50) + '...',
             ipAddress
           });
->>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
 
           // ステップ1: 検索中...
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
@@ -651,7 +658,8 @@ export const POST = async (req: NextRequest) => {
                   metadata: {
                     sessionId,
                     userAgent,
-                    ipAddress
+                    ipAddress,
+                    userDisplayName // ユーザー表示名を追加
                   }
                 };
                 
@@ -843,25 +851,18 @@ export const POST = async (req: NextRequest) => {
                   },
                   resolved: false
                 }],
->>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
                 metadata: {
                   sessionId,
                   userAgent,
-                  ipAddress
+                  ipAddress,
+                  userDisplayName
                 }
-<<<<<<< HEAD
               };
               
               const postLogId = await savePostLogToAdminDB(errorLogData);
               console.log('📝 エラー投稿ログを保存しました:', postLogId);
             } catch (logError) {
               console.error('❌ エラー時の投稿ログの保存に失敗しました:', logError);
-=======
-              });
-              console.log('📝 エラー投稿ログを保存しました:', postLogId);
-            } catch (logError) {
-              console.error('❌ エラー投稿ログの保存に失敗しました:', logError);
->>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
             }
           }
           
@@ -956,7 +957,8 @@ export const POST = async (req: NextRequest) => {
         metadata: {
           sessionId: 'unknown',
           userAgent: 'unknown',
-          ipAddress: 'unknown'
+          ipAddress: 'unknown',
+          userDisplayName: 'anonymous'
         }
       };
       await savePostLogToAdminDB(errorLogData);

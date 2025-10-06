@@ -93,6 +93,7 @@ export type PostLog = {
     userAgent?: string;
     ipAddress?: string; // 匿名化済み
     sessionId: string;
+    userDisplayName?: string; // ユーザー表示名
   };
 };
 
