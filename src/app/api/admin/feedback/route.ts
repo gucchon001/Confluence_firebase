@@ -3,9 +3,27 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getFirebaseFirestore } from '@/lib/firebase-unified';
-import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
+import * as admin from 'firebase-admin';
+import { getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import type { SatisfactionRating } from '@/types';
+
+// Firebase Admin SDKを初期化する関数
+function initializeFirebaseAdmin() {
+  if (getApps().length === 0) {
+    try {
+      const serviceAccount = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS || '{}');
+      initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: process.env.FIREBASE_PROJECT_ID
+      });
+    } catch (error) {
+      console.error('Firebase Admin SDK初期化エラー:', error);
+      throw error;
+    }
+  }
+  return admin.app();
+}
 
 export const GET = async (req: NextRequest) => {
   try {
@@ -13,23 +31,26 @@ export const GET = async (req: NextRequest) => {
     const limitParam = searchParams.get('limit');
     const postLogId = searchParams.get('postLogId');
     
-    const db = getFirebaseFirestore();
-    let q = query(collection(db, 'feedbackRatings'), orderBy('timestamp', 'desc'));
+    // Firebase Admin SDKを使用
+    const adminApp = initializeFirebaseAdmin();
+    const db = getFirestore();
+    
+    let query = db.collection('feedbackRatings').orderBy('timestamp', 'desc');
     
     if (postLogId) {
-      q = query(q, where('postLogId', '==', postLogId));
+      query = query.where('postLogId', '==', postLogId);
     }
     
     if (limitParam) {
       const limitNum = parseInt(limitParam, 10);
       if (limitNum > 0 && limitNum <= 1000) {
-        q = query(q, limit(limitNum));
+        query = query.limit(limitNum);
       }
     } else {
-      q = query(q, limit(100)); // デフォルト100件
+      query = query.limit(100); // デフォルト100件
     }
     
-    const snapshot = await getDocs(q);
+    const snapshot = await query.get();
     const feedbacks: SatisfactionRating[] = [];
     
     snapshot.forEach((doc) => {

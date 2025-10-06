@@ -4,9 +4,27 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getFirebaseFirestore } from '@/lib/firebase-unified';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import * as admin from 'firebase-admin';
+import { getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import type { SatisfactionRating } from '@/types';
+
+// Firebase Admin SDKを初期化する関数
+function initializeFirebaseAdmin() {
+  if (getApps().length === 0) {
+    try {
+      const serviceAccount = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS || '{}');
+      initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: process.env.FIREBASE_PROJECT_ID
+      });
+    } catch (error) {
+      console.error('Firebase Admin SDK初期化エラー:', error);
+      throw error;
+    }
+  }
+  return admin.app();
+}
 
 export const POST = async (req: NextRequest) => {
   try {
@@ -46,8 +64,10 @@ export const POST = async (req: NextRequest) => {
       console.warn('ユーザー情報の取得に失敗:', error);
     }
 
-    // Firestoreに保存
-    const db = getFirebaseFirestore();
+    // Firebase Admin SDKを使用してFirestoreに保存
+    const adminApp = initializeFirebaseAdmin();
+    const db = getFirestore();
+    
     const feedbackData: Omit<SatisfactionRating, 'id'> = {
       userId,
       postLogId,
@@ -62,9 +82,9 @@ export const POST = async (req: NextRequest) => {
       }
     };
 
-    const docRef = await addDoc(collection(db, 'feedbackRatings'), {
+    const docRef = await db.collection('feedbackRatings').add({
       ...feedbackData,
-      timestamp: Timestamp.fromDate(feedbackData.timestamp)
+      timestamp: admin.firestore.Timestamp.fromDate(feedbackData.timestamp)
     });
 
     console.log('✅ 評価フィードバックを保存しました:', {
