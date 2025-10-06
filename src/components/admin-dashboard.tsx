@@ -305,12 +305,12 @@ const AdminDashboard: React.FC = () => {
   // 初期データ取得
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  }, []); // loadDataを依存配列から削除
 
   // フィルター適用
   useEffect(() => {
     applyFilters();
-  }, [applyFilters]);
+  }, [postLogs, dateFilter, userFilter, questionTypeFilter, searchQuery, pageSize]); // applyFiltersを依存配列から削除し、実際の依存関係を直接指定
 
   // リアルタイム更新（5秒間隔）
   useEffect(() => {
@@ -321,7 +321,7 @@ const AdminDashboard: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isRealTimeEnabled, loadData]);
+  }, [isRealTimeEnabled]); // loadDataを依存配列から削除
 
   const runBackup = async (type: 'full' | 'emergency' = 'full') => {
     try {

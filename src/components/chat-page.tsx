@@ -576,6 +576,7 @@ export default function ChatPage({ user }: ChatPageProps) {
           }
 
           // ストリーミング完了をマーク
+          console.log('🎯 ストリーミング完了 - isStreamingCompleteをtrueに設定');
           setIsStreamingComplete(true);
           
           // ストリーミング状態をリセット
@@ -938,6 +939,13 @@ export default function ChatPage({ user }: ChatPageProps) {
                                   console.log('評価が送信されました:', { rating, comment });
                                 }}
                               />
+                            </div>
+                          )}
+                          {/* デバッグ用 */}
+                          {process.env.NODE_ENV === 'development' && (
+                            <div className="mt-2 text-xs text-gray-500">
+                              Debug: isStreamingComplete={isStreamingComplete ? 'true' : 'false'}, 
+                              currentPostLogId={currentPostLogId || 'null'}
                             </div>
                           )}
                         </CardContent>
