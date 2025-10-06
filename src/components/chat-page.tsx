@@ -34,6 +34,7 @@ import { TimeoutHandler, useSearchTimeout } from '@/components/timeout-handler';
 import { StreamingProcessingUI, StreamingErrorUI } from '@/components/streaming-processing-ui';
 import { streamingProcessClient, ProcessingStep } from '@/lib/streaming-process-client';
 import AdminDashboard from '@/components/admin-dashboard';
+import { FeedbackRating } from '@/components/feedback-rating';
 // import MigrationButton from '@/components/migration-button';
 
 // --- Markdown utilities ------------------------------------------------------
@@ -357,6 +358,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [streamingError, setStreamingError] = useState<string | null>(null);
   const [streamingAnswer, setStreamingAnswer] = useState<string>('');
   const [streamingReferences, setStreamingReferences] = useState<any[]>([]);
+  const [currentPostLogId, setCurrentPostLogId] = useState<string | null>(null);
 
   // ストリーミング回答の安全な更新関数
   const updateStreamingAnswer = (newContent: any) => {
@@ -504,10 +506,11 @@ export default function ChatPage({ user }: ChatPageProps) {
           updateStreamingAnswer(chunk);
         },
         // 完了コールバック
-        async (fullAnswer: string, references: any[]) => {
+        async (fullAnswer: string, references: any[], postLogId?: string) => {
           console.log('ストリーミング完了:', fullAnswer);
           setStreamingAnswerSafe(fullAnswer);
           setStreamingReferences(references);
+          setCurrentPostLogId(postLogId || null);
           
           // 最終的なメッセージを作成
       const assistantMessage: Message = {
@@ -918,6 +921,18 @@ export default function ChatPage({ user }: ChatPageProps) {
                             </div>
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
                           </div>
+                          
+                          {/* 評価フィードバック機能 */}
+                          {isStreamingComplete && (
+                            <div className="mt-4">
+                              <FeedbackRating 
+                                postLogId={currentPostLogId || ''}
+                                onSubmitted={(rating, comment) => {
+                                  console.log('評価が送信されました:', { rating, comment });
+                                }}
+                              />
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     </div>

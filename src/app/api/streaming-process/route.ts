@@ -451,7 +451,8 @@ export const POST = async (req: NextRequest) => {
                 chunkIndex: result.chunkIndex,
                 totalChunks: result.totalChunks,
                 references: result.references,
-                fullAnswer: fullAnswer
+                fullAnswer: fullAnswer,
+                postLogId: postLogId || null
               };
               
               controller.enqueue(
@@ -507,6 +508,9 @@ export const POST = async (req: NextRequest) => {
                 
                 // フォールバック回答時はここでは保存しない（後でストリーミング処理完了時に保存）
                 console.log('🔄 フォールバック回答生成完了 - 後でpostLogsを保存します');
+              } catch (logError) {
+                console.error('❌ 投稿ログの保存に失敗しました:', logError);
+              }
               
               // ログ記録
               screenTestLogger.logAIPerformance(question, aiGenerationTime, fullAnswer.length, {

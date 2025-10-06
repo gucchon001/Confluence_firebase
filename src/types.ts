@@ -125,7 +125,7 @@ export type ErrorLog = {
   resolvedBy?: string;
 };
 
-// 満足度評価型
+// 満足度評価型（評価フィードバック機能用）
 export type SatisfactionRating = {
   id: string;
   userId: string;
@@ -133,9 +133,10 @@ export type SatisfactionRating = {
   rating: number; // 1-5の評価
   comment?: string;
   timestamp: Date;
-  metadata?: {
+  metadata: {
     userAgent?: string;
     ipAddress?: string;
-    sessionId?: string;
+    sessionId: string;
+    userDisplayName?: string;
   };
 };

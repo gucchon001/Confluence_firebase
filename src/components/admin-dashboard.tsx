@@ -35,7 +35,10 @@ import {
   BarChart,
   X,
   Copy,
-  CheckCircle2
+  CheckCircle2,
+  Star,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -55,7 +58,7 @@ import {
 import { adminService } from '@/lib/admin-service';
 import { postLogService } from '@/lib/post-log-service';
 import { useAdmin } from '@/hooks/use-admin';
-import type { AdminUser, PostLog, Reference } from '@/types';
+import type { AdminUser, PostLog, Reference, SatisfactionRating } from '@/types';
 
 // ダミーデータ（実際の実装ではAPIから取得）
 const mockPostLogs: PostLog[] = [
@@ -125,6 +128,7 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [postLogs, setPostLogs] = useState<PostLog[]>([]);
   const [filteredPostLogs, setFilteredPostLogs] = useState<PostLog[]>([]);
+  const [feedbacks, setFeedbacks] = useState<SatisfactionRating[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [backupStatus, setBackupStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -160,17 +164,33 @@ const AdminDashboard: React.FC = () => {
   }
 
   // データ取得関数
+  // 評価フィードバックを取得
+  const fetchFeedbacks = async (): Promise<SatisfactionRating[]> => {
+    try {
+      const response = await fetch('/api/admin/feedback?limit=100');
+      if (!response.ok) {
+        throw new Error('評価フィードバックの取得に失敗しました');
+      }
+      const data = await response.json();
+      return data.data || [];
+    } catch (error) {
+      console.error('評価フィードバック取得エラー:', error);
+      return [];
+    }
+  };
+
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // ユーザー一覧と投稿ログを並行して取得
+      // ユーザー一覧、投稿ログ、評価フィードバックを並行して取得
       console.log('🔍 管理ダッシュボード: データ取得開始');
       
-      const [userList, recentLogs] = await Promise.all([
+      const [userList, recentLogs, feedbackList] = await Promise.all([
         adminService.getAllUsers(),
-        postLogService.getRecentPostLogs(100) // より多くのログを取得
+        postLogService.getRecentPostLogs(100), // より多くのログを取得
+        fetchFeedbacks() // 評価フィードバックを取得
       ]);
       
       console.log('📊 管理ダッシュボード: データ取得完了', {
@@ -180,6 +200,7 @@ const AdminDashboard: React.FC = () => {
       
       setUsers(userList);
       setPostLogs(recentLogs);
+      setFeedbacks(feedbackList);
       setLastUpdateTime(new Date());
     } catch (err) {
       console.error('Error loading data:', err);
@@ -583,10 +604,11 @@ const AdminDashboard: React.FC = () => {
 
       {/* タブコンテンツ */}
       <Tabs defaultValue="monitoring" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="monitoring">リアルタイム監視</TabsTrigger>
           <TabsTrigger value="users">ユーザー管理</TabsTrigger>
           <TabsTrigger value="performance">パフォーマンス</TabsTrigger>
+          <TabsTrigger value="feedback">評価フィードバック</TabsTrigger>
           <TabsTrigger value="backup">バックアップ</TabsTrigger>
         </TabsList>
 
@@ -1054,6 +1076,86 @@ const AdminDashboard: React.FC = () => {
                       </TableBody>
                     </Table>
                   </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="feedback" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5" />
+                評価フィードバック ({feedbacks.length}件)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* 評価統計 */}
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  {[1, 2, 3, 4, 5].map((rating) => {
+                    const count = feedbacks.filter(f => f.rating === rating).length;
+                    const percentage = feedbacks.length > 0 ? (count / feedbacks.length) * 100 : 0;
+                    return (
+                      <Card key={rating}>
+                        <CardContent className="p-4 text-center">
+                          <div className="flex items-center justify-center mb-2">
+                            {Array.from({ length: rating }, (_, i) => (
+                              <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+                            ))}
+                          </div>
+                          <div className="text-2xl font-bold">{count}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {percentage.toFixed(1)}%
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {/* 評価一覧 */}
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold">評価一覧</h3>
+                  <ScrollArea className="h-96">
+                    <div className="space-y-2">
+                      {feedbacks.map((feedback) => (
+                        <Card key={feedback.id}>
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="flex items-center">
+                                    {Array.from({ length: feedback.rating }, (_, i) => (
+                                      <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+                                    ))}
+                                    {Array.from({ length: 5 - feedback.rating }, (_, i) => (
+                                      <Star key={i} className="w-4 h-4 text-gray-300" />
+                                    ))}
+                                  </div>
+                                  <span className="text-sm text-muted-foreground">
+                                    {feedback.metadata.userDisplayName || '匿名ユーザー'}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(feedback.timestamp).toLocaleString('ja-JP')}
+                                  </span>
+                                </div>
+                                {feedback.comment && (
+                                  <p className="text-sm text-gray-700 mt-2 p-2 bg-gray-50 rounded">
+                                    {feedback.comment}
+                                  </p>
+                                )}
+                                <div className="text-xs text-muted-foreground mt-2">
+                                  PostLog ID: {feedback.postLogId}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </div>
               </div>
             </CardContent>

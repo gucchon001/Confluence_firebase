@@ -27,6 +27,7 @@ export interface StreamingMessage {
   fullAnswer?: string;
   error?: string;
   message?: string;
+  postLogId?: string;
 }
 
 export class StreamingProcessClient {
@@ -39,7 +40,7 @@ export class StreamingProcessClient {
     question: string,
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
-    onCompletion: (fullAnswer: string, references: any[]) => void,
+    onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
     onError: (error: string) => void,
     chatHistory: any[] = [],
     labelFilters: any = { includeMeetingNotes: false },
@@ -148,7 +149,7 @@ export class StreamingProcessClient {
     message: StreamingMessage,
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
-    onCompletion: (fullAnswer: string, references: any[]) => void,
+    onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
     onError: (error: string) => void
   ): void {
     switch (message.type) {
@@ -209,7 +210,7 @@ export class StreamingProcessClient {
           console.log('🔍 [DEBUG] [object Object]含む:', safeAnswer.includes('[object Object]'));
           
           if (safeAnswer && !safeAnswer.includes('[object Object]')) {
-            onCompletion(safeAnswer, message.references);
+            onCompletion(safeAnswer, message.references, message.postLogId);
           } else {
             console.warn('🔍 [DEBUG] Invalid fullAnswer detected, using fallback');
             onCompletion('回答の生成中にエラーが発生しました。', message.references);
