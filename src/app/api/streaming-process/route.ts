@@ -10,6 +10,7 @@ import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
 import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
 import { getFirebaseFirestore } from '@/lib/firebase-unified';
 import * as admin from 'firebase-admin';
+import { postLogService } from '@/lib/post-log-service';
 import type { PostLog, ProcessingStep } from '@/types';
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
@@ -139,6 +140,88 @@ function generateFallbackAnswer(question: string, context: any[]): string {
   return answer;
 }
 
+// Firebase Admin SDKの初期化（サービスアカウントキーを使用）
+let adminDb: FirebaseFirestore.Firestore | null = null;
+
+function getAdminFirestore() {
+  if (!adminDb) {
+    if (getApps().length === 0) {
+      // サービスアカウントキーを直接読み込み
+      const serviceAccount = {
+        type: "service_account",
+        project_id: "confluence-copilot-ppjye",
+        private_key_id: "010abed595f7d7e3ec998c3d945608e77734dc4e",
+        private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDVRHxOZim7cOGE\n0eX6+bTSaJXnI3jW8SrwpsSovJOe5av1bsmY2PzRMMIU6TOK5XkOAQ+ywsJB+3Bp\nm5tVhmH/Zw9BhoDs1GLJU8J2dTyCsJYpDtbtX/SdRW9O4xfqWLUPoKaMFBN6qQJD\nv7J/9o+g2gW2h0mOkzKshkCZf3RITU7xdNyXab0EFSNPb1w4tXzZKllzJl0TOKyv\ned9Ckjzy64ztN9gvYcswOFRpdRcNy5w0ijJXt92xbttHjO6U+cWo/Lmla9NLWrrK\npt1lFCc5T+L4XHiS3UW6P0AvqAtkFDeRZv7FsA04N+WVje6Q5LkD3vz5swonspBx\nzpvVu78nAgMBAAECggEAA4OgFSSiBGiTdr5Re7i4oSaMoP6yVr+QYkXFNzVgRoqC\nfyyG3hT/pkZkGrcbAwUAx4yYU+0Mov/mXGWH6J/EJp+Ha1N9jvZGKHFP/E0c2Ara\nQ2C767TPxMJ1Pceh+1ngP4EsrWGftPI3yzwx6a57TTG6gJIrHp8DUAxB4HJus2N2\n/+F1PtxOaaO018auI1BIPKDiUYUxs9Bg0GFfe6PGP2FYnD0cYOAL0qO7mCkNrDXu\nJLTZcsKFveqp4W0WUK3yaXexaYWuem2NP7dawkmXSCjl1ew1NXozZYRrcXYRW6qf\nUGx5GcVdHrPITNmHhOFFJafPiP94bQew4J1Dx1nn6QKBgQD9qCgWpR4SyPVx84cB\nSufY85l1GAMW5ClYzxhAuw8mJX08/EJzZrhqEqfQ5scu5uIOWKi71csdEul+Yamg\nfQ99Ezf6pNeoYNdTC94oaM4eseiBBBorxoTvtggs2PQtUscJSPdM4HZC7qwslQM+\nDRiWZXBAhcAkntHjcK3wgQWMbwKBgQDXPNEkB+EdAQoyHCIfhf2Jsv8Q3+la8sG1\nOQVRMpuOewfbjIL8JjkVwf/H+YeE52dNFfAr2v6sdb7ZsDOicmjZ8jhpd7/zzC+0\niUdrv3rVaDAgEhIZMalqlsLa2iAgsl0v1i1J9VSajTm/QLr2TYNyT+GX64szjPmK\noS4KgZ1EyQKBgARqihAi3cwr7YIHYGFYYYL4csKEIYGjhUjDikOOPixG2NBX//ws\nXKeUHZHYgr1BTcw8JOvoQ/oEm0YVAzQFGWDvFblqZ0rKLNWITlzbvkLwjAC7Bo2e\nji/yNmA5gr7LQyXZPFz9R3HQ3/SCv6Sz66qqp3KoIXlBvpu8GXsnc+ZHAoGBALOG\nZ47c/5fYkS+ApbmTYgjjgroJeTNBve4xFE1In9T0q3YlOe+k1gJe4MBkUfO5q0Dx\npnR94ePpBfm+bSL2uJvo28KkfjeUPMohoq+tc3/iuhlV2UCoWn2sJ/Sw8RE0lGNd\nCkNg3GNYniz2ibr8pkHHfQvhDCdAU7ecfrGGsK15AoGAbv0+RBAd4bqO5muZJVoP\nozjwDN1LKsIjcAaeVrNZox47dySmB88QQx9OhTnP4J6GV1CSzttKmhvID6gil5Mv\n/7kYNqrKQmjpkC2GnAmwhKM3VMTodpuN3U3PuWk1jd7vstoPsG8ftTyVM4I7/9AS\nYlB8/A8nz+O1CsifMPRkzDw=\n-----END PRIVATE KEY-----\n",
+        client_email: "firebase-adminsdk-fbsvc@confluence-copilot-ppjye.iam.gserviceaccount.com",
+        client_id: "114253370830371856382",
+        auth_uri: "https://accounts.google.com/o/oauth2/auth",
+        token_uri: "https://oauth2.googleapis.com/token",
+        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+        client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40confluence-copilot-ppjye.iam.gserviceaccount.com",
+        universe_domain: "googleapis.com"
+      };
+      
+      initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: "confluence-copilot-ppjye"
+      });
+    }
+    adminDb = getFirestore();
+  }
+  return adminDb;
+}
+
+    // Firebase Admin SDKで投稿ログを保存する関数
+    async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<string> {
+      try {
+        const db = getAdminFirestore();
+        const postLogsRef = db.collection('postLogs');
+        
+        console.log('🔍 投稿ログデータの詳細:', {
+          userId: logData.userId,
+          question: logData.question?.substring(0, 50) + '...',
+          answer: logData.answer?.substring(0, 50) + '...',
+          searchTime: logData.searchTime,
+          aiGenerationTime: logData.aiGenerationTime,
+          totalTime: logData.totalTime
+        });
+        
+        // Firestoreドキュメントを作成
+        const firestoreData: any = {
+          userId: logData.userId,
+          question: logData.question,
+          answer: logData.answer,
+          searchTime: logData.searchTime,
+          aiGenerationTime: logData.aiGenerationTime,
+          totalTime: logData.totalTime,
+          referencesCount: logData.referencesCount,
+          answerLength: logData.answerLength,
+          timestamp: Timestamp.fromDate(logData.timestamp),
+          processingSteps: logData.processingSteps.map(step => ({
+            ...step,
+            timestamp: Timestamp.fromDate(step.timestamp)
+          })),
+          metadata: logData.metadata
+        };
+        
+        // errorsが存在する場合のみ追加
+        if (logData.errors && Array.isArray(logData.errors) && logData.errors.length > 0) {
+          firestoreData.errors = logData.errors.map(error => ({
+            ...error,
+            timestamp: Timestamp.fromDate(error.timestamp),
+            resolvedAt: error.resolvedAt ? Timestamp.fromDate(error.resolvedAt) : null
+          }));
+        }
+        
+        const docRef = await postLogsRef.add(firestoreData);
+        console.log('📝 投稿ログをAdmin SDKで保存しました:', docRef.id);
+        return docRef.id;
+      } catch (error) {
+        console.error('❌ Admin SDKでの投稿ログ保存に失敗しました:', error);
+        throw error;
+      }
+    }
+
 // 処理ステップの定義
 const PROCESSING_STEPS = [
   {
@@ -168,12 +251,19 @@ const PROCESSING_STEPS = [
 ];
 
 export const POST = async (req: NextRequest) => {
+  console.log('🚀 [API] streaming-process route called');
   try {
     // 起動時最適化を実行（初回のみ）
     await initializeStartupOptimizations();
 
     const body = await req.json();
     const { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
+    
+    console.log('📝 [API] Request data:', {
+      questionLength: question?.length,
+      chatHistoryLength: chatHistory?.length,
+      labelFilters
+    });
 
     if (!question) {
       return NextResponse.json({ error: 'question is required' }, { status: 400 });
@@ -194,6 +284,7 @@ export const POST = async (req: NextRequest) => {
           let fullAnswer = '';
           let relevantDocs: any[] = [];
           
+<<<<<<< HEAD
           // postLogs保存用の変数
           const startTime = Date.now();
           let searchTime = 0;
@@ -204,23 +295,124 @@ export const POST = async (req: NextRequest) => {
           const sessionId = crypto.randomUUID();
           const userAgent = 'unknown';
           const ipAddress = 'unknown';
+=======
+          // 投稿ログの初期化
+          const startTime = Date.now();
+          const processingSteps: ProcessingStep[] = [];
+          let searchTime = 0;
+          let aiGenerationTime = 0;
+          let totalTime = 0;
+          let postLogId: string | null = null;
+          
+          // ユーザーIDの取得（匿名化）
+          const userId = req.headers.get('x-user-id') || 'anonymous';
+          const sessionId = req.headers.get('x-session-id') || `session_${Date.now()}`;
+          const userAgent = req.headers.get('user-agent') || '';
+          const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+          
+          console.log('🔍 投稿ログ用データ:', {
+            userId,
+            sessionId,
+            userAgent: userAgent.substring(0, 50) + '...',
+            ipAddress
+          });
+>>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
 
           // ステップ1: 検索中...
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
+          const searchStartTime = Date.now();
           await delay(500); // 視覚的効果のための遅延
 
           // 実際の検索処理
+<<<<<<< HEAD
           const searchStartTime = Date.now();
           relevantDocs = await retrieveRelevantDocs({
+=======
+          const searchStartTimeDetailed = Date.now();
+          const searchResults = await retrieveRelevantDocs({
+>>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
             question,
             labels: [],
             labelFilters
           });
+<<<<<<< HEAD
           searchTime = Date.now() - searchStartTime;
+=======
+          
+          // 検索結果の詳細分析
+          const searchAnalysis = {
+            totalDocuments: searchResults.length,
+            vectorSearchResults: searchResults.filter(doc => doc.source === 'vector'),
+            bm25SearchResults: searchResults.filter(doc => doc.source === 'bm25'),
+            keywordSearchResults: searchResults.filter(doc => doc.source === 'keyword'),
+            hybridSearchResults: searchResults.filter(doc => doc.source === 'hybrid'),
+            averageScore: searchResults.length > 0 ? searchResults.reduce((sum, doc) => sum + (doc.score || 0), 0) / searchResults.length : 0,
+            maxScore: searchResults.length > 0 ? Math.max(...searchResults.map(doc => doc.score || 0)) : 0,
+            minScore: searchResults.length > 0 ? Math.min(...searchResults.map(doc => doc.score || 0)) : 0,
+            scoreDistribution: {
+              high: searchResults.filter(doc => (doc.score || 0) > 0.8).length,
+              medium: searchResults.filter(doc => (doc.score || 0) > 0.5 && (doc.score || 0) <= 0.8).length,
+              low: searchResults.filter(doc => (doc.score || 0) <= 0.5).length
+            }
+          };
+
+          relevantDocs = searchResults;
+          searchTime = Date.now() - searchStartTime;
+          processingSteps.push({
+            step: 'search',
+            status: 'completed',
+            duration: searchTime,
+            timestamp: new Date(),
+            details: {
+              ...searchAnalysis,
+              searchSources: relevantDocs.map(doc => doc.source || 'unknown'),
+              detailedScores: relevantDocs.map(doc => ({
+                title: doc.title?.substring(0, 50) + '...',
+                source: doc.source,
+                score: doc.score || 0,
+                distance: doc.distance || 0,
+                url: doc.url || ''
+              }))
+            }
+          });
+>>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
 
           // ステップ2: ドキュメント処理中...
           await updateStep(controller, encoder, 1, 'processing', `検索結果 ${relevantDocs.length} 件を分析・整理しています...`);
+          const processingStartTime = Date.now();
           await delay(800);
+          const processingTime = Date.now() - processingStartTime;
+
+          // ドキュメント処理の詳細分析
+          const processingAnalysis = {
+            documentsProcessed: relevantDocs.length,
+            contentAnalysis: {
+              totalContentLength: relevantDocs.reduce((sum, doc) => sum + (doc.content?.length || 0), 0),
+              averageContentLength: relevantDocs.length > 0 ? relevantDocs.reduce((sum, doc) => sum + (doc.content?.length || 0), 0) / relevantDocs.length : 0,
+              maxContentLength: relevantDocs.length > 0 ? Math.max(...relevantDocs.map(doc => doc.content?.length || 0)) : 0,
+              minContentLength: relevantDocs.length > 0 ? Math.min(...relevantDocs.map(doc => doc.content?.length || 0)) : 0
+            },
+            qualityMetrics: {
+              documentsWithHighRelevance: searchAnalysis.scoreDistribution.high,
+              documentsWithMediumRelevance: searchAnalysis.scoreDistribution.medium,
+              documentsWithLowRelevance: searchAnalysis.scoreDistribution.low,
+              relevanceRatio: relevantDocs.length > 0 ? searchAnalysis.scoreDistribution.high / relevantDocs.length : 0
+            },
+            sourceDistribution: {
+              vector: searchAnalysis.vectorSearchResults.length,
+              bm25: searchAnalysis.bm25SearchResults.length,
+              keyword: searchAnalysis.keywordSearchResults.length,
+              hybrid: searchAnalysis.hybridSearchResults.length
+            }
+          };
+
+          processingSteps.push({
+            step: 'processing',
+            status: 'completed',
+            duration: processingTime,
+            timestamp: new Date(),
+            details: processingAnalysis
+          });
 
           console.log(`📚 関連文書取得完了: ${relevantDocs.length}件`);
           screenTestLogger.info('search', `Retrieved ${relevantDocs.length} relevant documents for streaming`);
@@ -246,9 +438,71 @@ export const POST = async (req: NextRequest) => {
               fullAnswer = fullAnswer.trim();
               aiGenerationTime = Date.now() - aiStartTime;
               
+              // AI生成時間の記録
+              aiGenerationTime = Date.now() - aiStartTime;
+              // 参照元取得プロセスの詳細分析
+              const referenceAnalysis = {
+                totalReferences: result.references?.length || 0,
+                referenceSources: result.references?.map(ref => ({
+                  title: ref.title || 'Unknown',
+                  url: ref.url || '',
+                  source: ref.source || 'unknown',
+                  score: ref.score || 0,
+                  distance: ref.distance || 0
+                })) || [],
+                referenceQuality: {
+                  highQuality: result.references?.filter(ref => (ref.score || 0) > 0.8).length || 0,
+                  mediumQuality: result.references?.filter(ref => (ref.score || 0) > 0.5 && (ref.score || 0) <= 0.8).length || 0,
+                  lowQuality: result.references?.filter(ref => (ref.score || 0) <= 0.5).length || 0
+                },
+                averageReferenceScore: result.references?.length > 0 ? 
+                  result.references.reduce((sum, ref) => sum + (ref.score || 0), 0) / result.references.length : 0
+              };
+
+              processingSteps.push({
+                step: 'ai_generation',
+                status: 'completed',
+                duration: aiGenerationTime,
+                timestamp: new Date(),
+                details: {
+                  totalChunks: totalChunks,
+                  answerLength: fullAnswer.length,
+                  contextDocuments: relevantDocs.length,
+                  streamingDuration: aiGenerationTime,
+                  averageChunkTime: totalChunks > 0 ? aiGenerationTime / totalChunks : 0,
+                  modelUsed: 'gemini-2.5-flash',
+                  streamingMethod: 'real-time',
+                  ...referenceAnalysis,
+                  contextQuality: {
+                    highRelevanceDocs: searchAnalysis.scoreDistribution.high,
+                    contextUtilization: relevantDocs.length > 0 ? (searchAnalysis.scoreDistribution.high / relevantDocs.length) : 0,
+                    contentDiversity: new Set(relevantDocs.map(doc => doc.source)).size
+                  }
+                }
+              });
+              
               // ステップ4: 最終調整中...
               await updateStep(controller, encoder, 3, 'finalizing', '回答を最終確認しています...');
+              const finalizingStartTime = Date.now();
               await delay(500);
+              const finalizingTime = Date.now() - finalizingStartTime;
+
+              // 最終調整ステップの記録
+              processingSteps.push({
+                step: 'finalizing',
+                status: 'completed',
+                duration: finalizingTime,
+                timestamp: new Date(),
+                details: {
+                  processingTime: finalizingTime,
+                  answerValidation: 'completed',
+                  referencesAttached: result.references?.length || 0,
+                  finalAnswerLength: fullAnswer.length,
+                  qualityCheck: 'passed',
+                  responseFormatting: 'markdown',
+                  metadataAttached: true
+                }
+              });
 
               // 完了メッセージ
               const completionMessage = {
@@ -267,12 +521,79 @@ export const POST = async (req: NextRequest) => {
                 encoder.encode(`data: ${JSON.stringify(completionMessage)}\n\n`)
               );
               
+              // 投稿ログの保存
+              totalTime = Date.now() - startTime;
+              console.log('🎯 [API] Starting post log save process');
+              processingSteps.push({
+                step: 'finalizing',
+                status: 'completed',
+                duration: totalTime,
+                timestamp: new Date()
+              });
+              
+              try {
+                // 参照元情報を準備
+                const references = result.references.map((ref: any, index: number) => ({
+                  title: ref.title || `参照元 ${index + 1}`,
+                  url: ref.url || '',
+                  score: ref.score || ref.distance || 0,
+                  source: ref.source || 'vector'
+                }));
+
+                const logData = {
+                  userId,
+                  question,
+                  answer: fullAnswer,
+                  searchTime,
+                  aiGenerationTime,
+                  totalTime,
+                  referencesCount: result.references.length,
+                  references, // 参照元の詳細情報を追加
+                  answerLength: fullAnswer.length,
+                  timestamp: new Date(),
+                  processingSteps,
+                  metadata: {
+                    sessionId,
+                    userAgent,
+                    ipAddress
+                  }
+                };
+                
+                // デバッグ: logDataの構造を確認
+                console.log('🔍 正常処理でのlogData構造:', {
+                  hasErrors: 'errors' in logData,
+                  errorsValue: logData.errors,
+                  errorsType: typeof logData.errors,
+                  allKeys: Object.keys(logData)
+                });
+                
+                console.log('💾 投稿ログ保存開始:', {
+                  userId,
+                  questionLength: question.length,
+                  answerLength: fullAnswer.length,
+                  searchTime,
+                  aiGenerationTime,
+                  totalTime
+                });
+                
+                postLogId = await savePostLogToAdminDB(logData);
+                console.log('✅ 投稿ログを保存しました:', postLogId);
+              } catch (logError) {
+                console.error('❌ 投稿ログの保存に失敗しました:', logError);
+                console.error('❌ エラー詳細:', {
+                  message: logError.message,
+                  code: logError.code,
+                  stack: logError.stack
+                });
+              }
+              
               // ログ記録
-              screenTestLogger.logAIPerformance(question, performance.now(), fullAnswer.length, {
+              screenTestLogger.logAIPerformance(question, aiGenerationTime, fullAnswer.length, {
                 streamingChunks: totalChunks,
                 references: result.references.length,
                 isStreaming: true,
-                processingSteps: 4
+                processingSteps: 4,
+                postLogId
               });
               
               // 成功時の投稿ログの保存
@@ -366,6 +687,24 @@ export const POST = async (req: NextRequest) => {
           } catch (streamingError) {
             console.error('❌ ストリーミング要約エラー:', streamingError);
             
+            // AI生成時間の記録（エラー時）
+            aiGenerationTime = Date.now() - aiStartTime;
+            processingSteps.push({
+              step: 'ai_generation',
+              status: 'error',
+              duration: aiGenerationTime,
+              timestamp: new Date(),
+              details: { 
+                error: streamingError.message || 'Unknown error',
+                errorType: streamingError.name || 'StreamingError',
+                partialChunks: chunkIndex,
+                contextDocuments: relevantDocs.length,
+                fallbackUsed: true,
+                modelUsed: 'gemini-2.5-flash',
+                streamingDuration: aiGenerationTime
+              }
+            });
+            
             // フォールバック回答を生成
             const fallbackAnswer = generateFallbackAnswer(question, relevantDocs);
             
@@ -395,6 +734,7 @@ export const POST = async (req: NextRequest) => {
             
             fullAnswer = fallbackAnswer;
             
+<<<<<<< HEAD
             // フォールバック回答の完了メッセージを送信
             const fallbackCompletionMessage = {
               type: 'completion',
@@ -423,10 +763,25 @@ export const POST = async (req: NextRequest) => {
             totalTime = Date.now() - startTime;
             try {
               const errorLogData = {
+=======
+            // エラー時の投稿ログの保存
+            totalTime = Date.now() - startTime;
+            try {
+              // エラー時の参照元情報を準備
+              const errorReferences = relevantDocs.map((doc: any, index: number) => ({
+                title: doc.title || `参照元 ${index + 1}`,
+                url: doc.url || '',
+                score: doc.score || doc.distance || 0,
+                source: doc.source || 'vector'
+              }));
+
+              postLogId = await savePostLogToAdminDB({
+>>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
                 userId,
                 question,
                 answer: fallbackAnswer,
                 searchTime,
+<<<<<<< HEAD
                 aiGenerationTime: 0, // AI生成は失敗したため0
                 totalTime,
                 referencesCount: relevantDocs.length,
@@ -467,17 +822,46 @@ export const POST = async (req: NextRequest) => {
                     resolved: false
                   }
                 ],
+=======
+                aiGenerationTime,
+                totalTime,
+                referencesCount: relevantDocs.length,
+                references: errorReferences, // エラー時の参照元情報も追加
+                answerLength: fallbackAnswer.length,
+                timestamp: new Date(),
+                processingSteps,
+                errors: [{
+                  id: `error_${Date.now()}`,
+                  timestamp: new Date(),
+                  level: 'error',
+                  category: 'ai',
+                  message: streamingError.message || 'AI generation failed',
+                  context: {
+                    userId,
+                    sessionId,
+                    operation: 'ai_generation'
+                  },
+                  resolved: false
+                }],
+>>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
                 metadata: {
                   sessionId,
                   userAgent,
                   ipAddress
                 }
+<<<<<<< HEAD
               };
               
               const postLogId = await savePostLogToAdminDB(errorLogData);
               console.log('📝 エラー投稿ログを保存しました:', postLogId);
             } catch (logError) {
               console.error('❌ エラー時の投稿ログの保存に失敗しました:', logError);
+=======
+              });
+              console.log('📝 エラー投稿ログを保存しました:', postLogId);
+            } catch (logError) {
+              console.error('❌ エラー投稿ログの保存に失敗しました:', logError);
+>>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
             }
           }
           
