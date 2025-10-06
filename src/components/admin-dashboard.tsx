@@ -893,7 +893,7 @@ const AdminDashboard: React.FC = () => {
                     <YAxis />
                     <Tooltip 
                       formatter={(value, name) => [
-                        `${value.toFixed(1)}s`, 
+                        `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
                         name === 'searchTime' ? '検索時間' : 
                         name === 'aiTime' ? 'AI生成時間' : 
                         name === 'totalTime' ? '総処理時間' : name
@@ -945,7 +945,7 @@ const AdminDashboard: React.FC = () => {
                       <YAxis />
                       <Tooltip 
                         formatter={(value, name) => [
-                          `${value.toFixed(1)}s`, 
+                          `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
                           name === 'avgSearchTime' ? '平均検索時間' : 
                           name === 'avgAiTime' ? '平均AI生成時間' : name
                         ]}
@@ -1011,7 +1011,7 @@ const AdminDashboard: React.FC = () => {
                       <YAxis dataKey="userName" type="category" width={100} />
                       <Tooltip 
                         formatter={(value, name) => [
-                          `${value.toFixed(1)}s`, 
+                          `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
                           name === 'avgSearchTime' ? '平均検索時間' : 
                           name === 'avgAiTime' ? '平均AI生成時間' : name
                         ]}
@@ -1321,7 +1321,7 @@ const AdminDashboard: React.FC = () => {
                             <div className="flex items-center gap-2">
                               {step.status === 'completed' ? (
                                 <CheckCircle2 className="h-4 w-4 text-green-600" />
-                              ) : step.status === 'failed' ? (
+                              ) : step.status === 'error' ? (
                                 <XCircle className="h-4 w-4 text-red-600" />
                               ) : (
                                 <Clock className="h-4 w-4 text-blue-600" />
@@ -1336,7 +1336,7 @@ const AdminDashboard: React.FC = () => {
                               )}
                               <Badge 
                                 variant={step.status === 'completed' ? 'default' : 
-                                        step.status === 'failed' ? 'destructive' : 'secondary'}
+                                        step.status === 'error' ? 'destructive' : 'secondary'}
                                 className="text-xs"
                               >
                                 {step.status}

@@ -93,9 +93,9 @@ export class AdminService {
           uid: data.uid,
           displayName: data.displayName,
           email: data.email,
-          createdAt: data.createdAt instanceof Date ? data.createdAt : data.createdAt.toDate(),
+          createdAt: data.createdAt instanceof Date ? data.createdAt : (data.createdAt as any)?.toDate?.() || new Date(),
           isAdmin: data.isAdmin || false,
-          adminGrantedAt: data.adminGrantedAt instanceof Date ? data.adminGrantedAt : data.adminGrantedAt?.toDate(),
+          adminGrantedAt: data.adminGrantedAt instanceof Date ? data.adminGrantedAt : (data.adminGrantedAt as any)?.toDate?.() || null,
           adminGrantedBy: data.adminGrantedBy
         };
       });
@@ -158,9 +158,9 @@ export class AdminService {
           uid: data.uid,
           displayName: data.displayName,
           email: data.email,
-          createdAt: data.createdAt instanceof Date ? data.createdAt : data.createdAt.toDate(),
+          createdAt: data.createdAt instanceof Date ? data.createdAt : (data.createdAt as any)?.toDate?.() || new Date(),
           isAdmin: true,
-          adminGrantedAt: data.adminGrantedAt instanceof Date ? data.adminGrantedAt : data.adminGrantedAt?.toDate(),
+          adminGrantedAt: data.adminGrantedAt instanceof Date ? data.adminGrantedAt : (data.adminGrantedAt as any)?.toDate?.() || null,
           adminGrantedBy: data.adminGrantedBy
         };
       });
@@ -187,9 +187,9 @@ export class AdminService {
         uid: data.uid,
         displayName: data.displayName,
         email: data.email,
-        createdAt: data.createdAt instanceof Date ? data.createdAt : data.createdAt.toDate(),
+        createdAt: data.createdAt instanceof Date ? data.createdAt : (data.createdAt as any)?.toDate?.() || new Date(),
         isAdmin: data.isAdmin || false,
-        adminGrantedAt: data.adminGrantedAt instanceof Date ? data.adminGrantedAt : data.adminGrantedAt?.toDate(),
+        adminGrantedAt: data.adminGrantedAt instanceof Date ? data.adminGrantedAt : (data.adminGrantedAt as any)?.toDate?.() || null,
         adminGrantedBy: data.adminGrantedBy
       };
     } catch (error) {

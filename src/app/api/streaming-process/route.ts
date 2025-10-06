@@ -164,7 +164,7 @@ function getAdminFirestore() {
       };
       
       initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+        credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
         projectId: "confluence-copilot-ppjye"
       });
     }
@@ -489,6 +489,7 @@ export const POST = async (req: NextRequest) => {
                   answerLength: fullAnswer.length,
                   timestamp: new Date(),
                   processingSteps,
+                  errors: [], // errorsプロパティを追加
                   metadata: {
                     sessionId,
                     userAgent,

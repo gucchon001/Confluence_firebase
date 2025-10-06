@@ -37,14 +37,14 @@ export class StreamingProcessClient {
    */
   async startStreaming(
     question: string,
-    chatHistory: any[] = [],
-    labelFilters: any = { includeMeetingNotes: false },
-    userId?: string,
-    sessionId?: string,
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
     onCompletion: (fullAnswer: string, references: any[]) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    chatHistory: any[] = [],
+    labelFilters: any = { includeMeetingNotes: false },
+    userId?: string,
+    sessionId?: string
   ): Promise<void> {
     try {
       // 既存のストリーミングを停止

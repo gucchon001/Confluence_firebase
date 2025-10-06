@@ -8,6 +8,4 @@ enableGoogleCloudTelemetry();
 // GenkitをGoogle AIプラグインで初期化
 export const ai = genkit({
   plugins: [googleAI()],
-  logLevel: 'debug',
-  enableTracingAndMetrics: true,
 });

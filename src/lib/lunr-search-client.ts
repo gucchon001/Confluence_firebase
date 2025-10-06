@@ -45,7 +45,7 @@ export class LunrSearchClient {
   private static instance: LunrSearchClient | null = null;
   private index: lunr.Index | null = null;
   private documents: Map<string, LunrDocument> = new Map();
-  private isInitialized = false;
+  private initialized = false;
   private defaultCachePath = path.join('.cache', 'lunr-index.json');
 
   // シングルトンパターン
@@ -61,7 +61,7 @@ export class LunrSearchClient {
   }
 
   public isInitialized(): boolean {
-    return this.isInitialized;
+    return this.initialized;
   }
 
   async initializeFromCache(): Promise<void> {
@@ -143,7 +143,7 @@ export class LunrSearchClient {
         });
       });
 
-      this.isInitialized = true;
+      this.initialized = true;
       console.log(`[LunrSearchClient] Initialization complete with ${documents.length} documents`);
       console.log(`[LunrSearchClient] Index ready: ${this.index !== null}`);
     } catch (error) {
@@ -165,7 +165,7 @@ export class LunrSearchClient {
       for (const doc of json.documents) {
         this.documents.set(doc.id, doc);
       }
-      this.isInitialized = true;
+      this.initialized = true;
       console.log(`[LunrSearchClient] Loaded index from cache: ${filePath} (docs=${this.documents.size})`);
       return true;
     } catch (error) {
@@ -188,7 +188,7 @@ export class LunrSearchClient {
     query: string,
     limit: number = 50
   ): Promise<LunrSearchResult[]> {
-    if (!this.index || !this.isInitialized) {
+    if (!this.index || !this.initialized) {
       throw new Error('LunrSearchClient not initialized');
     }
 
@@ -257,7 +257,7 @@ export class LunrSearchClient {
     } = {},
     limit: number = 50
   ): Promise<LunrSearchResult[]> {
-    if (!this.index || !this.isInitialized) {
+    if (!this.index || !this.initialized) {
       throw new Error('LunrSearchClient not initialized');
     }
 
@@ -333,12 +333,12 @@ export class LunrSearchClient {
   }
 
   isReady(): boolean {
-    return this.isInitialized && this.index !== null;
+    return this.initialized && this.index !== null;
   }
 
-  getStatus(): { isInitialized: boolean; documentCount: number; hasIndex: boolean } {
+  getStatus(): { initialized: boolean; documentCount: number; hasIndex: boolean } {
     return {
-      isInitialized: this.isInitialized,
+      initialized: this.initialized,
       documentCount: this.documents.size,
       hasIndex: this.index !== null
     };
@@ -347,7 +347,7 @@ export class LunrSearchClient {
   async destroy(): Promise<void> {
     this.index = null;
     this.documents.clear();
-    this.isInitialized = false;
+    this.initialized = false;
   }
 }
 

@@ -493,10 +493,6 @@ export default function ChatPage({ user }: ChatPageProps) {
       // ストリーミング処理を開始
       await streamingProcessClient.startStreaming(
         currentInput,
-        messages,
-        labelFilters,
-        user?.uid, // ユーザーID
-        `session_${Date.now()}`, // セッションID
         // ステップ更新コールバック
         (step: ProcessingStep) => {
           console.log('ステップ更新:', step);
@@ -599,7 +595,12 @@ export default function ChatPage({ user }: ChatPageProps) {
           };
           
           setMessages((prev: Message[]) => [...prev, errorMessage]);
-        }
+        },
+        // オプションパラメータ
+        messages,
+        labelFilters,
+        user?.uid, // ユーザーID
+        `session_${Date.now()}` // セッションID
       );
 
     } catch (error) {

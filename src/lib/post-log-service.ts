@@ -1,6 +1,6 @@
 'use client';
 
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, where, Timestamp } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, where, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { app } from './firebase';
 import type { PostLog, ProcessingStep, ErrorLog } from '@/types';
 

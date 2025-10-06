@@ -3,7 +3,8 @@
  * 定期的に重要なデータをローカルにバックアップ
  */
 
-import { initializeApp, getApps, getFirestore } from 'firebase-admin';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 

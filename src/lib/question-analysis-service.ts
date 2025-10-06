@@ -3,7 +3,10 @@
  * 頻出質問、回答品質、ユーザー満足度の分析機能を提供
  */
 
-import { db } from '@/lib/firebase';
+import { getFirestore } from 'firebase/firestore';
+import { app } from '@/lib/firebase';
+
+const db = getFirestore(app);
 import { collection, query, orderBy, limit, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { PostLog } from '@/types';
 

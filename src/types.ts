@@ -124,3 +124,18 @@ export type ErrorLog = {
   resolvedAt?: Date;
   resolvedBy?: string;
 };
+
+// 満足度評価型
+export type SatisfactionRating = {
+  id: string;
+  userId: string;
+  postLogId: string;
+  rating: number; // 1-5の評価
+  comment?: string;
+  timestamp: Date;
+  metadata?: {
+    userAgent?: string;
+    ipAddress?: string;
+    sessionId?: string;
+  };
+};
