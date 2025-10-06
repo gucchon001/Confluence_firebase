@@ -10,6 +10,8 @@ import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
 import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
 import { getFirebaseFirestore } from '@/lib/firebase-unified';
 import * as admin from 'firebase-admin';
+import { getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { postLogService } from '@/lib/post-log-service';
 import type { PostLog, ProcessingStep } from '@/types';
 // screenTestLoggerのインポート（存在しない場合は無視）
@@ -171,56 +173,26 @@ function getAdminFirestore() {
   return adminDb;
 }
 
-    // Firebase Admin SDKで投稿ログを保存する関数
-    async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<string> {
-      try {
-        const db = getAdminFirestore();
-        const postLogsRef = db.collection('postLogs');
-        
-        console.log('🔍 投稿ログデータの詳細:', {
-          userId: logData.userId,
-          question: logData.question?.substring(0, 50) + '...',
-          answer: logData.answer?.substring(0, 50) + '...',
-          searchTime: logData.searchTime,
-          aiGenerationTime: logData.aiGenerationTime,
-          totalTime: logData.totalTime
-        });
-        
-        // Firestoreドキュメントを作成
-        const firestoreData: any = {
-          userId: logData.userId,
-          question: logData.question,
-          answer: logData.answer,
-          searchTime: logData.searchTime,
-          aiGenerationTime: logData.aiGenerationTime,
-          totalTime: logData.totalTime,
-          referencesCount: logData.referencesCount,
-          answerLength: logData.answerLength,
-          timestamp: Timestamp.fromDate(logData.timestamp),
-          processingSteps: logData.processingSteps.map(step => ({
-            ...step,
-            timestamp: Timestamp.fromDate(step.timestamp)
-          })),
-          metadata: logData.metadata
-        };
-        
-        // errorsが存在する場合のみ追加
-        if (logData.errors && Array.isArray(logData.errors) && logData.errors.length > 0) {
-          firestoreData.errors = logData.errors.map(error => ({
-            ...error,
-            timestamp: Timestamp.fromDate(error.timestamp),
-            resolvedAt: error.resolvedAt ? Timestamp.fromDate(error.resolvedAt) : null
-          }));
-        }
-        
-        const docRef = await postLogsRef.add(firestoreData);
-        console.log('📝 投稿ログをAdmin SDKで保存しました:', docRef.id);
-        return docRef.id;
-      } catch (error) {
-        console.error('❌ Admin SDKでの投稿ログ保存に失敗しました:', error);
-        throw error;
-      }
-    }
+
+// ステップ更新関数
+async function updateStep(controller: ReadableStreamDefaultController, encoder: TextEncoder, step: number, stepId: string, description: string) {
+  const message = {
+    type: 'step_update',
+    step,
+    stepId,
+    title: PROCESSING_STEPS[step]?.title || '処理中...',
+    description,
+    totalSteps: PROCESSING_STEPS.length,
+    icon: PROCESSING_STEPS[step]?.icon || '⚙️'
+  };
+  
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
+}
+
+// 遅延関数
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // 処理ステップの定義
 const PROCESSING_STEPS = [
@@ -327,43 +299,15 @@ export const POST = async (req: NextRequest) => {
 
           // ステップ1: 検索中...
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
-          const searchStartTime = Date.now();
           await delay(500); // 視覚的効果のための遅延
 
           // 実際の検索処理
-<<<<<<< HEAD
           const searchStartTime = Date.now();
           relevantDocs = await retrieveRelevantDocs({
-=======
-          const searchStartTimeDetailed = Date.now();
-          const searchResults = await retrieveRelevantDocs({
->>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
             question,
             labels: [],
             labelFilters
           });
-<<<<<<< HEAD
-          searchTime = Date.now() - searchStartTime;
-=======
-          
-          // 検索結果の詳細分析
-          const searchAnalysis = {
-            totalDocuments: searchResults.length,
-            vectorSearchResults: searchResults.filter(doc => doc.source === 'vector'),
-            bm25SearchResults: searchResults.filter(doc => doc.source === 'bm25'),
-            keywordSearchResults: searchResults.filter(doc => doc.source === 'keyword'),
-            hybridSearchResults: searchResults.filter(doc => doc.source === 'hybrid'),
-            averageScore: searchResults.length > 0 ? searchResults.reduce((sum, doc) => sum + (doc.score || 0), 0) / searchResults.length : 0,
-            maxScore: searchResults.length > 0 ? Math.max(...searchResults.map(doc => doc.score || 0)) : 0,
-            minScore: searchResults.length > 0 ? Math.min(...searchResults.map(doc => doc.score || 0)) : 0,
-            scoreDistribution: {
-              high: searchResults.filter(doc => (doc.score || 0) > 0.8).length,
-              medium: searchResults.filter(doc => (doc.score || 0) > 0.5 && (doc.score || 0) <= 0.8).length,
-              low: searchResults.filter(doc => (doc.score || 0) <= 0.5).length
-            }
-          };
-
-          relevantDocs = searchResults;
           searchTime = Date.now() - searchStartTime;
           processingSteps.push({
             step: 'search',
@@ -371,7 +315,6 @@ export const POST = async (req: NextRequest) => {
             duration: searchTime,
             timestamp: new Date(),
             details: {
-              ...searchAnalysis,
               searchSources: relevantDocs.map(doc => doc.source || 'unknown'),
               detailedScores: relevantDocs.map(doc => ({
                 title: doc.title?.substring(0, 50) + '...',
@@ -382,7 +325,6 @@ export const POST = async (req: NextRequest) => {
               }))
             }
           });
->>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
 
           // ステップ2: ドキュメント処理中...
           await updateStep(controller, encoder, 1, 'processing', `検索結果 ${relevantDocs.length} 件を分析・整理しています...`);
@@ -398,18 +340,6 @@ export const POST = async (req: NextRequest) => {
               averageContentLength: relevantDocs.length > 0 ? relevantDocs.reduce((sum, doc) => sum + (doc.content?.length || 0), 0) / relevantDocs.length : 0,
               maxContentLength: relevantDocs.length > 0 ? Math.max(...relevantDocs.map(doc => doc.content?.length || 0)) : 0,
               minContentLength: relevantDocs.length > 0 ? Math.min(...relevantDocs.map(doc => doc.content?.length || 0)) : 0
-            },
-            qualityMetrics: {
-              documentsWithHighRelevance: searchAnalysis.scoreDistribution.high,
-              documentsWithMediumRelevance: searchAnalysis.scoreDistribution.medium,
-              documentsWithLowRelevance: searchAnalysis.scoreDistribution.low,
-              relevanceRatio: relevantDocs.length > 0 ? searchAnalysis.scoreDistribution.high / relevantDocs.length : 0
-            },
-            sourceDistribution: {
-              vector: searchAnalysis.vectorSearchResults.length,
-              bm25: searchAnalysis.bm25SearchResults.length,
-              keyword: searchAnalysis.keywordSearchResults.length,
-              hybrid: searchAnalysis.hybridSearchResults.length
             }
           };
 
@@ -481,8 +411,8 @@ export const POST = async (req: NextRequest) => {
                   streamingMethod: 'real-time',
                   ...referenceAnalysis,
                   contextQuality: {
-                    highRelevanceDocs: searchAnalysis.scoreDistribution.high,
-                    contextUtilization: relevantDocs.length > 0 ? (searchAnalysis.scoreDistribution.high / relevantDocs.length) : 0,
+                    highRelevanceDocs: relevantDocs.filter(doc => (doc.score || 0) > 0.8).length,
+                    contextUtilization: relevantDocs.length > 0 ? (relevantDocs.filter(doc => (doc.score || 0) > 0.8).length / relevantDocs.length) : 0,
                     contentDiversity: new Set(relevantDocs.map(doc => doc.source)).size
                   }
                 }
@@ -569,8 +499,8 @@ export const POST = async (req: NextRequest) => {
                 // デバッグ: logDataの構造を確認
                 console.log('🔍 正常処理でのlogData構造:', {
                   hasErrors: 'errors' in logData,
-                  errorsValue: logData.errors,
-                  errorsType: typeof logData.errors,
+                  errorsValue: logData.errors || [],
+                  errorsType: typeof (logData.errors || []),
                   allKeys: Object.keys(logData)
                 });
                 
@@ -655,6 +585,7 @@ export const POST = async (req: NextRequest) => {
                   answerLength: fullAnswer.length,
                   timestamp: new Date(),
                   processingSteps,
+                  errors: [],
                   metadata: {
                     sessionId,
                     userAgent,
@@ -742,7 +673,6 @@ export const POST = async (req: NextRequest) => {
             
             fullAnswer = fallbackAnswer;
             
-<<<<<<< HEAD
             // フォールバック回答の完了メッセージを送信
             const fallbackCompletionMessage = {
               type: 'completion',
@@ -771,25 +701,10 @@ export const POST = async (req: NextRequest) => {
             totalTime = Date.now() - startTime;
             try {
               const errorLogData = {
-=======
-            // エラー時の投稿ログの保存
-            totalTime = Date.now() - startTime;
-            try {
-              // エラー時の参照元情報を準備
-              const errorReferences = relevantDocs.map((doc: any, index: number) => ({
-                title: doc.title || `参照元 ${index + 1}`,
-                url: doc.url || '',
-                score: doc.score || doc.distance || 0,
-                source: doc.source || 'vector'
-              }));
-
-              postLogId = await savePostLogToAdminDB({
->>>>>>> 72c6361b3ee1e39f4218275120c3de0bb6ac7e0a
                 userId,
                 question,
                 answer: fallbackAnswer,
                 searchTime,
-<<<<<<< HEAD
                 aiGenerationTime: 0, // AI生成は失敗したため0
                 totalTime,
                 referencesCount: relevantDocs.length,
@@ -830,27 +745,6 @@ export const POST = async (req: NextRequest) => {
                     resolved: false
                   }
                 ],
-=======
-                aiGenerationTime,
-                totalTime,
-                referencesCount: relevantDocs.length,
-                references: errorReferences, // エラー時の参照元情報も追加
-                answerLength: fallbackAnswer.length,
-                timestamp: new Date(),
-                processingSteps,
-                errors: [{
-                  id: `error_${Date.now()}`,
-                  timestamp: new Date(),
-                  level: 'error',
-                  category: 'ai',
-                  message: streamingError.message || 'AI generation failed',
-                  context: {
-                    userId,
-                    sessionId,
-                    operation: 'ai_generation'
-                  },
-                  resolved: false
-                }],
                 metadata: {
                   sessionId,
                   userAgent,
@@ -974,33 +868,6 @@ export const POST = async (req: NextRequest) => {
   }
 };
 
-// ステップ更新ヘルパー関数
-async function updateStep(
-  controller: ReadableStreamDefaultController,
-  encoder: TextEncoder,
-  stepIndex: number,
-  stepId: string,
-  description: string
-) {
-  const stepMessage = {
-    type: 'step_update',
-    step: stepIndex + 1,
-    stepId,
-    title: PROCESSING_STEPS[stepIndex]?.title || '処理中...',
-    description,
-    totalSteps: PROCESSING_STEPS.length,
-    icon: PROCESSING_STEPS[stepIndex]?.icon || 'default'
-  };
-  
-  controller.enqueue(
-    encoder.encode(`data: ${JSON.stringify(stepMessage)}\n\n`)
-  );
-}
-
-// 遅延ヘルパー関数
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 // OPTIONS メソッドのサポート（CORS）
 export const OPTIONS = async () => {
