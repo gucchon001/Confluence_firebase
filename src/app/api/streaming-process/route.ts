@@ -8,6 +8,9 @@ import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb'
 import { streamingSummarizeConfluenceDocs } from '@/ai/flows/streaming-summarize-confluence-docs';
 import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
 import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
+import { getFirebaseFirestore } from '@/lib/firebase-unified';
+import * as admin from 'firebase-admin';
+import type { PostLog, ProcessingStep } from '@/types';
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
 try {
@@ -27,6 +30,74 @@ try {
     logOverallPerformance: (query: string, totalTime: number, breakdown: any) => 
       console.log(`[PERFORMANCE] Query: "${query}", Total Time: ${totalTime}ms`, breakdown)
   };
+}
+
+// Firebase Admin SDKを初期化する関数
+function initializeFirebaseAdmin() {
+  if (admin.apps.length === 0) {
+    try {
+      // 環境変数からサービスアカウントキーを取得
+      const serviceAccount = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      if (serviceAccount) {
+        const serviceAccountData = require(serviceAccount);
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccountData)
+        });
+        console.log('✅ Firebase Admin SDK initialized');
+      } else {
+        console.warn('⚠️ GOOGLE_APPLICATION_CREDENTIALS not set, using default credentials');
+        admin.initializeApp();
+      }
+    } catch (error) {
+      console.error('❌ Firebase Admin SDK initialization failed:', error);
+      throw error;
+    }
+  }
+  return admin.app();
+}
+
+// サーバーサイド用の投稿ログ保存関数
+async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<string> {
+  try {
+    // Firebase Admin SDKを使用
+    const adminApp = initializeFirebaseAdmin();
+    const db = admin.firestore();
+    const postLogsRef = db.collection('postLogs');
+    
+    console.log('🔍 サーバーサイド投稿ログデータの詳細:', {
+      userId: logData.userId,
+      question: logData.question?.substring(0, 50) + '...',
+      answer: logData.answer?.substring(0, 50) + '...',
+      searchTime: logData.searchTime,
+      aiGenerationTime: logData.aiGenerationTime,
+      totalTime: logData.totalTime,
+      referencesCount: logData.referencesCount,
+      answerLength: logData.answerLength,
+      timestamp: logData.timestamp
+    });
+    
+    const firestoreData = {
+      ...logData,
+      timestamp: admin.firestore.Timestamp.fromDate(logData.timestamp),
+      processingSteps: logData.processingSteps.map(step => ({
+        ...step,
+        timestamp: admin.firestore.Timestamp.fromDate(step.timestamp)
+      })),
+      errors: logData.errors?.map(error => ({
+        ...error,
+        timestamp: admin.firestore.Timestamp.fromDate(error.timestamp),
+        resolvedAt: error.resolvedAt ? admin.firestore.Timestamp.fromDate(error.resolvedAt) : null
+      })) || [],
+      metadata: logData.metadata
+    };
+    
+    const docRef = await postLogsRef.add(firestoreData);
+    console.log('📝 サーバーサイド投稿ログを保存しました:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ サーバーサイド投稿ログ保存に失敗しました:', error);
+    throw error;
+  }
 }
 
 // フォールバック回答生成関数
@@ -122,17 +193,30 @@ export const POST = async (req: NextRequest) => {
           let currentStep = 0;
           let fullAnswer = '';
           let relevantDocs: any[] = [];
+          
+          // postLogs保存用の変数
+          const startTime = Date.now();
+          let searchTime = 0;
+          let aiGenerationTime = 0;
+          let totalTime = 0;
+          let processingSteps: ProcessingStep[] = [];
+          const userId = 'anonymous'; // 実際の実装では認証から取得
+          const sessionId = crypto.randomUUID();
+          const userAgent = 'unknown';
+          const ipAddress = 'unknown';
 
           // ステップ1: 検索中...
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
           await delay(500); // 視覚的効果のための遅延
 
           // 実際の検索処理
+          const searchStartTime = Date.now();
           relevantDocs = await retrieveRelevantDocs({
             question,
             labels: [],
             labelFilters
           });
+          searchTime = Date.now() - searchStartTime;
 
           // ステップ2: ドキュメント処理中...
           await updateStep(controller, encoder, 1, 'processing', `検索結果 ${relevantDocs.length} 件を分析・整理しています...`);
@@ -148,6 +232,7 @@ export const POST = async (req: NextRequest) => {
           // ストリーミング要約の実行
           let chunkIndex = 0;
           let totalChunks = 0;
+          const aiStartTime = Date.now();
 
           try {
             for await (const result of streamingSummarizeConfluenceDocs({
@@ -159,6 +244,7 @@ export const POST = async (req: NextRequest) => {
             if (result.isComplete) {
               totalChunks = result.chunkIndex;
               fullAnswer = fullAnswer.trim();
+              aiGenerationTime = Date.now() - aiStartTime;
               
               // ステップ4: 最終調整中...
               await updateStep(controller, encoder, 3, 'finalizing', '回答を最終確認しています...');
@@ -188,6 +274,71 @@ export const POST = async (req: NextRequest) => {
                 isStreaming: true,
                 processingSteps: 4
               });
+              
+              // 成功時の投稿ログの保存
+              console.log('🎯 ストリーミング処理完了 - postLogs保存処理を開始します');
+              totalTime = Date.now() - startTime;
+              processingSteps = [
+                {
+                  step: 'search',
+                  status: 'completed' as const,
+                  duration: searchTime,
+                  timestamp: new Date(startTime)
+                },
+                {
+                  step: 'processing',
+                  status: 'completed' as const,
+                  duration: 800,
+                  timestamp: new Date(startTime + searchTime)
+                },
+                {
+                  step: 'ai_generation',
+                  status: 'completed' as const,
+                  duration: aiGenerationTime,
+                  timestamp: new Date(startTime + searchTime + 800)
+                },
+                {
+                  step: 'finalizing',
+                  status: 'completed' as const,
+                  duration: 500,
+                  timestamp: new Date(startTime + searchTime + 800 + aiGenerationTime)
+                }
+              ];
+              
+              try {
+                console.log('📊 postLogs保存データを準備中:', {
+                  userId,
+                  question: question.substring(0, 50) + '...',
+                  answerLength: fullAnswer.length,
+                  searchTime,
+                  aiGenerationTime,
+                  totalTime,
+                  referencesCount: result.references.length
+                });
+                
+                const logData = {
+                  userId,
+                  question,
+                  answer: fullAnswer,
+                  searchTime,
+                  aiGenerationTime,
+                  totalTime,
+                  referencesCount: result.references.length,
+                  answerLength: fullAnswer.length,
+                  timestamp: new Date(),
+                  processingSteps,
+                  metadata: {
+                    sessionId,
+                    userAgent,
+                    ipAddress
+                  }
+                };
+                
+                const postLogId = await savePostLogToAdminDB(logData);
+                console.log('✅ 投稿ログを保存しました:', postLogId);
+              } catch (logError) {
+                console.error('❌ 投稿ログの保存に失敗しました:', logError);
+              }
               
               break;
             } else {
@@ -243,6 +394,91 @@ export const POST = async (req: NextRequest) => {
             );
             
             fullAnswer = fallbackAnswer;
+            
+            // フォールバック回答の完了メッセージを送信
+            const fallbackCompletionMessage = {
+              type: 'completion',
+              step: 4,
+              stepId: 'completed',
+              title: '完了',
+              description: 'フォールバック回答が生成されました',
+              chunkIndex: 1,
+              totalChunks: 1,
+              references: relevantDocs.map((doc, index) => ({
+                id: doc.id || `${doc.pageId}-${index}`,
+                title: doc.title || 'タイトル不明',
+                url: doc.url || '',
+                distance: doc.distance || 0.5,
+                score: doc.score || 0,
+                source: doc.source || 'vector'
+              })),
+              fullAnswer: fallbackAnswer
+            };
+            
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(fallbackCompletionMessage)}\n\n`)
+            );
+            
+            // エラー時の投稿ログの保存
+            totalTime = Date.now() - startTime;
+            try {
+              const errorLogData = {
+                userId,
+                question,
+                answer: fallbackAnswer,
+                searchTime,
+                aiGenerationTime: 0, // AI生成は失敗したため0
+                totalTime,
+                referencesCount: relevantDocs.length,
+                answerLength: fallbackAnswer.length,
+                timestamp: new Date(),
+                processingSteps: [
+                  {
+                    step: 'search',
+                    status: 'completed' as const,
+                    duration: searchTime,
+                    timestamp: new Date(startTime)
+                  },
+                  {
+                    step: 'processing',
+                    status: 'completed' as const,
+                    duration: 800,
+                    timestamp: new Date(startTime + searchTime)
+                  },
+                  {
+                    step: 'ai_generation',
+                    status: 'error' as const,
+                    duration: 0, // AI生成は失敗したため0
+                    timestamp: new Date(startTime + searchTime + 800)
+                  }
+                ],
+                errors: [
+                  {
+                    id: `error_${Date.now()}`,
+                    timestamp: new Date(),
+                    level: 'error' as const,
+                    category: 'ai' as const,
+                    message: 'AI generation failed - using fallback',
+                    context: {
+                      userId,
+                      sessionId,
+                      operation: 'ai_generation'
+                    },
+                    resolved: false
+                  }
+                ],
+                metadata: {
+                  sessionId,
+                  userAgent,
+                  ipAddress
+                }
+              };
+              
+              const postLogId = await savePostLogToAdminDB(errorLogData);
+              console.log('📝 エラー投稿ログを保存しました:', postLogId);
+            } catch (logError) {
+              console.error('❌ エラー時の投稿ログの保存に失敗しました:', logError);
+            }
           }
           
           controller.close();
@@ -299,6 +535,51 @@ export const POST = async (req: NextRequest) => {
 
   } catch (error) {
     console.error('❌ 処理ステップストリーミングAPIエラー:', error);
+    
+    // システムエラー時の投稿ログの保存
+    try {
+      const errorLogData = {
+        userId: 'anonymous',
+        question: 'Unknown question',
+        answer: 'エラーが発生しました',
+        searchTime: 0,
+        aiGenerationTime: 0,
+        totalTime: 0,
+        referencesCount: 0,
+        answerLength: 0,
+        timestamp: new Date(),
+        processingSteps: [{
+          step: 'error',
+          status: 'error' as const,
+          duration: 0,
+          timestamp: new Date()
+        }],
+        errors: [{
+          id: `error_${Date.now()}`,
+          timestamp: new Date(),
+          level: 'error' as const,
+          category: 'system' as const,
+          message: error instanceof Error ? error.message : '不明なエラー',
+          context: {
+            userId: 'anonymous',
+            sessionId: 'unknown',
+            userAgent: 'unknown',
+            ipAddress: 'unknown',
+            operation: 'streaming_process_overall'
+          },
+          resolved: false
+        }],
+        metadata: {
+          sessionId: 'unknown',
+          userAgent: 'unknown',
+          ipAddress: 'unknown'
+        }
+      };
+      await savePostLogToAdminDB(errorLogData);
+      console.log('📝 システムエラー投稿ログを保存しました:', errorLogData);
+    } catch (logError) {
+      console.error('❌ システムエラー時の投稿ログの保存に失敗しました:', logError);
+    }
     
     return NextResponse.json({
       error: 'Internal server error',
