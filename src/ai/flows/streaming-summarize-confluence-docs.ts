@@ -205,9 +205,9 @@ export async function* streamingSummarizeConfluenceDocs(
       .slice(0, 5) // 上位5件（品質維持）
       .map(
         (doc) => {
-          // 各文書の内容を600文字に最適化（パフォーマンスと品質のバランス）
-          const truncatedContent = doc.content.length > 600 
-            ? doc.content.substring(0, 600) + '...' 
+          // 各文書の内容を3分の2に削減（800 → 530文字、パフォーマンスと品質のバランス）
+          const truncatedContent = doc.content.length > 530 
+            ? doc.content.substring(0, 530) + '...' 
             : doc.content;
           
           return `**${doc.title}**
