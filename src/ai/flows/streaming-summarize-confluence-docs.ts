@@ -200,14 +200,14 @@ export async function* streamingSummarizeConfluenceDocs(
   console.log('🌊 ストリーミング要約開始:', question);
   
   try {
-    // コンテキストの準備（完全性重視: より多くの情報を提供）
+    // コンテキストの準備（パフォーマンス最適化: 品質を維持しつつ削減）
     const contextText = context
-      .slice(0, 5) // 文書数を5件に増加（完全性重視）
+      .slice(0, 5) // 上位5件（品質維持）
       .map(
         (doc) => {
-          // 各文書の内容を800文字に増加（完全性重視）
-          const truncatedContent = doc.content.length > 800 
-            ? doc.content.substring(0, 800) + '...' 
+          // 各文書の内容を600文字に最適化（パフォーマンスと品質のバランス）
+          const truncatedContent = doc.content.length > 600 
+            ? doc.content.substring(0, 600) + '...' 
             : doc.content;
           
           return `**${doc.title}**
