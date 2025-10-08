@@ -223,8 +223,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       if (params.filter) {
         vectorQuery = vectorQuery.where(params.filter);
       }
-      // 除外される可能性を考慮して多めに取得
-      vectorResults = await vectorQuery.limit(topK * 2).toArray();
+      // パフォーマンス最適化: topKを削減（100 → 30相当）
+      vectorResults = await vectorQuery.limit(Math.max(topK, 30)).toArray();
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
@@ -343,7 +343,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           try {
             // 部分一致で拾い上げ（完全一致に限定しない）
             const like = `%${t.replace(/'/g, "''")}%`;
-            const exactRows = await tbl.query().where(`title LIKE '${like}'`).limit(50).toArray();
+            const exactRows = await tbl.query().where(`title LIKE '${like}'`).limit(20).toArray();
             for (const row of exactRows) {
               // 既存に同一idが無ければ合流
               if (!vectorResults.some(r => r.id === row.id)) {
