@@ -207,24 +207,39 @@ export const POST = async (req: NextRequest) => {
           const userAgent = req.headers.get('user-agent') || 'unknown';
           const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
           
-          // ユーザーIDが有効な場合、実際のユーザー情報を取得
+          // ステップ1: 検索中...
+          await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
+
+          // 検索処理とユーザー情報取得を並行実行（パフォーマンス最適化）
+          const searchStartTime = Date.now();
           let userDisplayName = 'anonymous';
-          if (userId && userId !== 'anonymous') {
-            try {
-              const adminApp = initializeFirebaseAdmin();
-              const auth = admin.auth(adminApp);
-              const userRecord = await auth.getUser(userId);
-              userDisplayName = userRecord.displayName || userRecord.email || 'unknown';
-              console.log('👤 ユーザー情報取得:', {
-                uid: userRecord.uid,
-                displayName: userRecord.displayName,
-                email: userRecord.email
-              });
-            } catch (userError) {
-              console.warn('⚠️ ユーザー情報取得失敗:', userError);
-              // ユーザー情報が取得できない場合はanonymousのまま
-            }
-          }
+          
+          const [searchResults, userInfo] = await Promise.all([
+            retrieveRelevantDocs({
+              question,
+              labels: [],
+              labelFilters
+            }),
+            // ユーザー情報を並行取得（検索と同時実行）
+            (async () => {
+              if (userId && userId !== 'anonymous') {
+                try {
+                  const adminApp = initializeFirebaseAdmin();
+                  const auth = admin.auth(adminApp);
+                  const userRecord = await auth.getUser(userId);
+                  return userRecord.displayName || userRecord.email || 'unknown';
+                } catch (userError) {
+                  console.warn('⚠️ ユーザー情報取得失敗:', userError);
+                  return 'anonymous';
+                }
+              }
+              return 'anonymous';
+            })()
+          ]);
+          
+          relevantDocs = searchResults;
+          userDisplayName = userInfo;
+          searchTime = Date.now() - searchStartTime;
           
           console.log('🔍 投稿ログ用データ:', {
             userId,
@@ -233,19 +248,6 @@ export const POST = async (req: NextRequest) => {
             userAgent: userAgent.substring(0, 50) + '...',
             ipAddress
           });
-
-          // ステップ1: 検索中...
-          await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
-          await delay(500); // 視覚的効果のための遅延
-
-          // 実際の検索処理
-          const searchStartTime = Date.now();
-          relevantDocs = await retrieveRelevantDocs({
-            question,
-            labels: [],
-            labelFilters
-          });
-          searchTime = Date.now() - searchStartTime;
           processingSteps.push({
             step: 'search',
             status: 'completed',
@@ -266,7 +268,7 @@ export const POST = async (req: NextRequest) => {
           // ステップ2: ドキュメント処理中...
           await updateStep(controller, encoder, 1, 'processing', `検索結果 ${relevantDocs.length} 件を分析・整理しています...`);
           const processingStartTime = Date.now();
-          await delay(800);
+          await delay(100); // 視覚的効果のための最小限の遅延
           const processingTime = Date.now() - processingStartTime;
 
           // ドキュメント処理の詳細分析
@@ -293,7 +295,7 @@ export const POST = async (req: NextRequest) => {
 
           // ステップ3: AIが回答を生成中...
           await updateStep(controller, encoder, 2, 'ai_generation', 'AIが回答を生成しています...');
-          await delay(300);
+          // delay削除: AI生成はすぐに開始
 
           // ストリーミング要約の実行
           let chunkIndex = 0;
@@ -357,7 +359,7 @@ export const POST = async (req: NextRequest) => {
               // ステップ4: 最終調整中...
               await updateStep(controller, encoder, 3, 'finalizing', '回答を最終確認しています...');
               const finalizingStartTime = Date.now();
-              await delay(500);
+              await delay(100); // 視覚的効果のための最小限の遅延
               const finalizingTime = Date.now() - finalizingStartTime;
 
               // 最終調整ステップの記録
