@@ -862,11 +862,34 @@ export default function ChatPage({ user }: ChatPageProps) {
                 </div>
             ) : messages.length > 0 ? (
                 <div className="space-y-6">
-                  {messages.map((msg: Message, index: number) => (
-                    <div key={`message-${msg.id || index}`}>
-                      <MessageCard msg={msg} />
-                    </div>
-                  ))}
+                  {messages.map((msg: Message, index: number) => {
+                    const isLastMessage = index === messages.length - 1;
+                    const isAssistantMessage = msg.role === 'assistant';
+                    const shouldShowFeedback = isLastMessage && isAssistantMessage && currentPostLogId;
+                    
+                    return (
+                      <div key={`message-${msg.id || index}`}>
+                        <MessageCard msg={msg} />
+                        {/* 最後のアシスタントメッセージの後に評価フィードバックを表示 */}
+                        {shouldShowFeedback && (
+                          <div className="ml-12 mt-4">
+                            <FeedbackRating 
+                              postLogId={currentPostLogId}
+                              onSubmitted={(rating, comment) => {
+                                console.log('評価が送信されました:', { rating, comment });
+                              }}
+                            />
+                          </div>
+                        )}
+                        {/* デバッグ用 */}
+                        {process.env.NODE_ENV === 'development' && shouldShowFeedback && (
+                          <div className="ml-12 mt-2 text-xs text-gray-500">
+                            Debug: currentPostLogId={currentPostLogId || 'null'}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
             ) : (
                 <div className="flex items-center justify-center min-h-[60vh]">
@@ -929,25 +952,6 @@ export default function ChatPage({ user }: ChatPageProps) {
                             </div>
                             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
                           </div>
-                          
-                          {/* 評価フィードバック機能 */}
-                          {isStreamingComplete && (
-                            <div className="mt-4">
-                              <FeedbackRating 
-                                postLogId={currentPostLogId || ''}
-                                onSubmitted={(rating, comment) => {
-                                  console.log('評価が送信されました:', { rating, comment });
-                                }}
-                              />
-                            </div>
-                          )}
-                          {/* デバッグ用 */}
-                          {process.env.NODE_ENV === 'development' && (
-                            <div className="mt-2 text-xs text-gray-500">
-                              Debug: isStreamingComplete={isStreamingComplete ? 'true' : 'false'}, 
-                              currentPostLogId={currentPostLogId || 'null'}
-                            </div>
-                          )}
                         </CardContent>
                       </Card>
                     </div>
