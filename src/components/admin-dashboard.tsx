@@ -1658,7 +1658,7 @@ const AdminDashboard: React.FC = () => {
                         remarkPlugins={[remarkGfm]}
                         components={sharedMarkdownComponents}
                       >
-                        {fixMarkdownTables(normalizeMarkdownSymbols(selectedLog.answer))}
+                        {normalizeMarkdownSymbols(fixMarkdownTables(selectedLog.answer))}
                       </ReactMarkdown>
                     </div>
                   </ScrollArea>

@@ -18,9 +18,30 @@ export function fixMarkdownTables(markdown: string): string {
   let pendingHeaderColumns: number | null = null;
   let currentColumns: number | null = null;
 
-  const isSeparatorLine = (s: string) => /^\s*\|?\s*(:?-{3,}\s*\|\s*)+(:?-{3,}\s*)?\|?\s*$/.test(s);
+  const isSeparatorLine = (s: string) => {
+    // タブ区切りまたはスペース区切りの区切り線も検出
+    return /^\s*\|?\s*(:?-{3,}\s*[\|\t]\s*)+(:?-{3,}\s*)?\|?\s*$/.test(s) ||
+           /^\s*:?-{3,}\s*[\|\t]\s*:?-{3,}/.test(s) ||
+           /^:---\s+:---/.test(s); // タブ区切りの区切り線
+  };
+  
+  const normalizeSeparator = (s: string, columnCount: number) => {
+    // タブ区切りまたは不完全な区切り線を正規化
+    const parts = s.split(/[\|\t]+/).map(p => p.trim()).filter(p => p);
+    const separators = Array(columnCount).fill(':---');
+    return '| ' + separators.join(' | ') + ' |';
+  };
+  
   const normalizeRow = (s: string) => {
     let row = s.trim();
+    
+    // タブ区切りをパイプに変換
+    if (row.includes('\t') && !row.includes('|')) {
+      const cells = row.split('\t').map(c => c.trim()).filter(c => c);
+      row = '| ' + cells.join(' | ') + ' |';
+      return row;
+    }
+    
     // collapse multiple leading pipes
     row = row.replace(/^\|{2,}/, '|');
     // add leading pipe
@@ -36,6 +57,23 @@ export function fixMarkdownTables(markdown: string): string {
     const original = lines[i];
     const trimmed = original.trim();
     
+    // テーブルヘッダーの直後の空行をスキップ（区切り線を探す）
+    if (trimmed === '' && pendingHeaderColumns !== null) {
+      // 次の行が区切り線かチェック
+      const nextLine = lines[i + 1]?.trim() ?? '';
+      if (isSeparatorLine(nextLine)) {
+        // 空行をスキップして次のループで区切り線を処理
+        continue;
+      } else {
+        // 区切り線がない場合は挿入
+        const sepCells = Array(pendingHeaderColumns).fill(':---');
+        fixed.push('| ' + sepCells.join(' | ') + ' |');
+        pendingHeaderColumns = null;
+        fixed.push(original);
+        continue;
+      }
+    }
+    
     // Skip empty lines but preserve them
     if (trimmed === '') {
       if (inTable) {
@@ -47,9 +85,49 @@ export function fixMarkdownTables(markdown: string): string {
       fixed.push(original);
       continue;
     }
-
+    
+    // タブ区切りの行を検出（テーブルの可能性）
+    const looksLikeTabDelimited = trimmed.includes('\t') && !trimmed.includes('|');
     const looksLikeRow = /^\s*\|/.test(trimmed) && trimmed.includes('|');
+    const looksLikeSeparator = isSeparatorLine(trimmed);
 
+    if (looksLikeSeparator && currentColumns) {
+      // 区切り線を正規化
+      fixed.push(normalizeSeparator(trimmed, currentColumns));
+      inTable = true;
+      pendingHeaderColumns = null;
+      continue;
+    }
+    
+    if (looksLikeTabDelimited) {
+      // タブ区切りのデータをテーブルに変換
+      const cells = trimmed.split('\t').map(c => c.trim()).filter(c => c);
+      const normalized = '| ' + cells.join(' | ') + ' |';
+      
+      if (!inTable) {
+        // テーブル開始
+        if (fixed.length > 0 && fixed[fixed.length - 1].trim() !== '') fixed.push('');
+        inTable = true;
+        
+        // これがヘッダーかデータかを判断（前の行を確認）
+        const prevLine = lines[i - 1]?.trim() ?? '';
+        const isPrevTableHeader = /^\|/.test(prevLine);
+        
+        if (!isPrevTableHeader) {
+          // これがヘッダーの可能性
+          currentColumns = cells.length;
+          pendingHeaderColumns = cells.length;
+          fixed.push(normalized);
+        } else {
+          // データ行
+          fixed.push(normalized);
+        }
+      } else {
+        fixed.push(normalized);
+      }
+      continue;
+    }
+    
     if (looksLikeRow) {
       const normalized = normalizeRow(trimmed);
       if (!inTable) {
@@ -60,34 +138,22 @@ export function fixMarkdownTables(markdown: string): string {
         pendingHeaderColumns = normalized.split('|').filter(c => c.trim().length > 0).length - 1;
         currentColumns = pendingHeaderColumns;
       }
-      // 行を列数で分割して複数行に展開（1行に複数レコードが連結されている場合の対策）
-      const cells = normalized
-        .slice(1, normalized.length - 1) // 先頭/末尾のパイプを除去
-        .split('|')
-        .map(c => c.trim())
-        .filter(c => !(c === '' && currentColumns !== null));
-
-      if (currentColumns && cells.length > currentColumns) {
-        for (let off = 0; off < cells.length; off += currentColumns) {
-          const rowCells = cells.slice(off, off + currentColumns);
-          if (rowCells.length === currentColumns) {
-            fixed.push('| ' + rowCells.join(' | ') + ' |');
-          }
-        }
-      } else {
-        fixed.push(normalized);
-      }
+      // 通常は行をそのまま追加
+      fixed.push(normalized);
 
       // If it's the first line of the table (header) and next line isn't a separator, insert one
       const next = lines[i + 1]?.trim() ?? '';
-      if (pendingHeaderColumns && !isSeparatorLine(next)) {
-        const sepCells = Array(pendingHeaderColumns).fill(':---');
-        fixed.push('| ' + sepCells.join(' | ') + ' |');
-        pendingHeaderColumns = null;
-        currentColumns = currentColumns || sepCells.length;
-      } else if (isSeparatorLine(next)) {
-        // We will let the next loop push the existing separator
-        pendingHeaderColumns = null;
+      if (pendingHeaderColumns) {
+        if (!isSeparatorLine(next)) {
+          // 区切り線がない場合は挿入
+          const sepCells = Array(pendingHeaderColumns).fill(':---');
+          fixed.push('| ' + sepCells.join(' | ') + ' |');
+          pendingHeaderColumns = null;
+          currentColumns = currentColumns || sepCells.length;
+        } else {
+          // 区切り線がある場合は正規化して次のループで処理
+          pendingHeaderColumns = null;
+        }
       }
     } else {
       // Not a table row
@@ -117,29 +183,150 @@ export function normalizeMarkdownSymbols(markdown: string): string {
     .replace(/〜/g, '~')
     .replace(/　/g, ' ');      // U+3000 IDEOGRAPHIC SPACE
   
+  // 見出しの後の余分な改行を削除（見出しとコンテンツの間を1行に）
+  text = text.replace(/(#{1,4}\s+[^\n]+)\n{3,}/g, '$1\n\n');
+  
   // 箇条書きの改行処理（「。-」パターンを「。\n-」に変換）
   text = text.replace(/([。！？])\s*-\s+/g, '$1\n- ');
   
-  // 番号付きリストの改行処理
-  // 1. 句読点の後の数字リスト：「。 2.」→「。\n2.」
-  text = text.replace(/([。！？])\s*(\d+\.)\s+/g, '$1\n$2 ');
-  // 2. 連続する数字リスト：「...時。1.会員登録」→「...時。\n1.会員登録」
-  text = text.replace(/([。！？])(\d+\.[^\n])/g, '$1\n$2');
+  // 番号付きリストの改行処理（見出しとテーブルを除外）
+  // 行ごとに処理して、見出しとテーブルを保護
+  const lines = text.split('\n');
+  const processedLines: string[] = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    const trimmed = line.trim();
+    
+    // 見出し行は保護（処理しない）
+    if (/^#{1,6}\s/.test(trimmed)) {
+      processedLines.push(line);
+      continue;
+    }
+    
+    // テーブル行は保護（処理しない）
+    if (/^\|/.test(trimmed) || /^:?-{3,}/.test(trimmed)) {
+      processedLines.push(line);
+      continue;
+    }
+    
+    // 同じ行内に複数の数字リストがある場合、分離
+    // 「1.項目A 2.項目B 3.項目C」→ 分離
+    if (/\d+\.[^\n]+\s+\d+\./.test(line)) {
+      // スペース + 数字. のパターンで分割
+      const parts = line.split(/\s+(?=\d+\.)/);
+      parts.forEach((part, idx) => {
+        if (idx === 0) {
+          // 最初の部分はそのまま（句読点などが含まれる可能性）
+          let processed = part.replace(/([。！？])\s*(\d+\.)/, '$1\n$2');
+          processedLines.push(processed);
+        } else {
+          // 残りはリスト項目として追加
+          processedLines.push(part);
+        }
+      });
+      continue;
+    }
+    
+    // 句読点の後の数字リストを改行
+    // 「します。 2.項目」→「します。\n2.項目」
+    line = line.replace(/([。！？])\s+(\d+\.)/g, '$1\n$2');
+    // 「します。1.項目」→「します。\n1.項目」
+    line = line.replace(/([。！？])(\d+\.)/g, '$1\n$2');
+    
+    processedLines.push(line);
+  }
+  
+  text = processedLines.join('\n');
   
   // 数字リストのMarkdown形式化
-  // 行頭または改行後の「1.テキスト」を「1. テキスト」に変換（スペースを追加）
-  text = text.replace(/^(\d+\.)([^\s\n])/gm, '$1 $2');
-  text = text.replace(/\n(\d+\.)([^\s\n])/g, '\n$1 $2');
+  // 「1.テキスト」を「1. テキスト」に変換（ピリオドの後にスペースを追加）
+  // ただし、見出し内は除外
+  const finalLines = text.split('\n');
+  const formattedLines: string[] = [];
   
-  // 数字リストの前に空行を追加（Markdown認識のため）
-  // ただし、既に空行がある場合や、リストが連続している場合は追加しない
-  text = text.replace(/([^\n])\n(\d+\.\s)/g, (match, before, listStart) => {
-    // 前の行が数字リストでない場合のみ空行を追加
-    if (!/^\d+\.\s/.test(before)) {
+  for (const line of finalLines) {
+    const trimmed = line.trim();
+    
+    // 見出し行は保護
+    if (/^#{1,6}\s/.test(trimmed)) {
+      formattedLines.push(line);
+      continue;
+    }
+    
+    // 数字リストのスペース追加
+    let formatted = line.replace(/^(\d+\.)([^\s\n])/gm, '$1 $2');
+    formattedLines.push(formatted);
+  }
+  
+  text = formattedLines.join('\n');
+  
+  // 見出し（##）の直後に数字リストがある場合、空行を確保
+  text = text.replace(/(#{1,4}\s+[^\n]+)\n(\d+\.\s)/g, '$1\n\n$2');
+  
+  // 段落と数字リストの間に空行を追加（Markdown認識のため）
+  text = text.replace(/([^\n#])\n(\d+\.\s)/g, (match, before, listStart) => {
+    // 前の文字が改行、見出し、または数字リストでない場合のみ空行を追加
+    if (!/[\n#]/.test(before) && !/^\d+\.\s/.test(before)) {
       return before + '\n\n' + listStart;
     }
     return match;
   });
+  
+  // サブ項目の処理（インデントされた項目）
+  // 「項目名: 説明」のパターンを箇条書きに変換
+  const subItemLines = text.split('\n');
+  const subItemProcessed: string[] = [];
+  let lastNumberedListIndex = -1;
+  
+  for (let i = 0; i < subItemLines.length; i++) {
+    const line = subItemLines[i];
+    const trimmed = line.trim();
+    
+    // 見出し行は保護
+    if (/^#{1,6}\s/.test(trimmed)) {
+      lastNumberedListIndex = -1;
+      subItemProcessed.push(line);
+      continue;
+    }
+    
+    // テーブル行は保護
+    if (/^\|/.test(trimmed) || /^:?-{3,}/.test(trimmed)) {
+      lastNumberedListIndex = -1;
+      subItemProcessed.push(line);
+      continue;
+    }
+    
+    // 数字リストの開始を検出
+    if (/^\d+\.\s/.test(trimmed)) {
+      lastNumberedListIndex = i;
+      subItemProcessed.push(line);
+    }
+    // 数字リストの後（5行以内）で、項目名: のパターンを検出
+    else if (
+      lastNumberedListIndex >= 0 && 
+      (i - lastNumberedListIndex) <= 5 &&
+      /^[^#\n\d\|-].+[:：].+/.test(trimmed) && 
+      !trimmed.startsWith('-') &&
+      trimmed.length < 200 // 長すぎる行は除外（説明文の可能性）
+    ) {
+      // サブ項目として箇条書きに変換
+      const colonIndex = trimmed.search(/[:：]/);
+      if (colonIndex > 0) {
+        const key = trimmed.substring(0, colonIndex);
+        const value = trimmed.substring(colonIndex + 1).trim();
+        subItemProcessed.push('   - **' + key + '**: ' + value);
+      } else {
+        subItemProcessed.push(line);
+      }
+    }
+    // その他の行
+    else {
+      subItemProcessed.push(line);
+    }
+  }
+  
+  text = subItemProcessed.join('\n');
   
   // 余分な改行を整理（3つ以上の連続改行を2つに）
   text = text.replace(/\n{3,}/g, '\n\n');

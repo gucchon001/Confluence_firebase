@@ -171,19 +171,29 @@ const PROCESSING_STEPS = [
   }
 ];
 
+// サーバー起動時に1回だけ初期化を実行（モジュールレベル）
+let isServerInitialized = false;
+let serverInitTime = 0;
+
+async function ensureServerInitialized() {
+  if (isServerInitialized) {
+    return serverInitTime;
+  }
+  
+  const startTime = Date.now();
+  await initializeStartupOptimizations();
+  serverInitTime = Date.now() - startTime;
+  isServerInitialized = true;
+  console.log(`🚀 サーバー初回起動完了: ${serverInitTime}ms`);
+  return serverInitTime;
+}
+
 export const POST = async (req: NextRequest) => {
   console.log('🚀 [API] streaming-process route called');
   
-  // サーバー起動処理時間の計測開始
-  const serverStartupStartTime = Date.now();
-  
   try {
-    // 起動時最適化を実行（初回のみ）
-    await initializeStartupOptimizations();
-    
-    // サーバー起動処理時間の計測終了
-    const serverStartupTime = Date.now() - serverStartupStartTime;
-    console.log(`🚀 サーバー起動処理時間: ${serverStartupTime}ms`);
+    // サーバー起動時に1回だけ初期化（2回目以降は即座にreturn）
+    const serverStartupTime = await ensureServerInitialized();
 
     const body = await req.json();
     const { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
