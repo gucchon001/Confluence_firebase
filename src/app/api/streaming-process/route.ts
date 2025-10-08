@@ -441,115 +441,11 @@ export const POST = async (req: NextRequest) => {
                 }
               });
 
-              // 完了メッセージ
-              const completionMessage = {
-                type: 'completion',
-                step: 4,
-                stepId: 'completed',
-                title: '完了',
-                description: '回答が生成されました',
-                chunkIndex: result.chunkIndex,
-                totalChunks: result.totalChunks,
-                references: result.references,
-                fullAnswer: fullAnswer,
-                postLogId: postLogId || null
-              };
-              
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify(completionMessage)}\n\n`)
-              );
-              
-              // 投稿ログの保存
+              // 投稿ログの保存（completionMessageの前に実行）
               totalTime = Date.now() - startTime;
-              console.log('🎯 [API] Starting post log save process');
-              processingSteps.push({
-                step: 'finalizing',
-                status: 'completed',
-                duration: totalTime,
-                timestamp: new Date()
-              });
-              
-              try {
-                // 参照元情報を準備
-                const references = result.references.map((ref: any, index: number) => ({
-                  title: ref.title || `参照元 ${index + 1}`,
-                  url: ref.url || '',
-                  score: ref.score || ref.distance || 0,
-                  source: ref.source || 'vector'
-                }));
-
-                const logData = {
-                  userId,
-                  question,
-                  answer: fullAnswer,
-                  searchTime,
-                  aiGenerationTime,
-                  totalTime,
-                  referencesCount: result.references.length,
-                  references, // 参照元の詳細情報を追加
-                  answerLength: fullAnswer.length,
-                  timestamp: new Date(),
-                  processingSteps,
-                  errors: [], // errorsプロパティを追加
-                  metadata: {
-                    sessionId,
-                    userAgent,
-                    ipAddress
-                  }
-                };
-                
-                // デバッグ: logDataの構造を確認
-                console.log('🔍 正常処理でのlogData構造:', {
-                  hasErrors: 'errors' in logData,
-                  errorsValue: logData.errors || [],
-                  errorsType: typeof (logData.errors || []),
-                  allKeys: Object.keys(logData)
-                });
-                
-                // フォールバック回答時はここでは保存しない（後でストリーミング処理完了時に保存）
-                console.log('🔄 フォールバック回答生成完了 - 後でpostLogsを保存します');
-              } catch (logError) {
-                console.error('❌ 投稿ログの保存に失敗しました:', logError);
-              }
-              
-              // ログ記録
-              screenTestLogger.logAIPerformance(question, aiGenerationTime, fullAnswer.length, {
-                streamingChunks: totalChunks,
-                references: result.references.length,
-                isStreaming: true,
-                processingSteps: 4,
-                postLogId
-              });
-              
-              // 成功時の投稿ログの保存
               console.log('🎯 ストリーミング処理完了 - postLogs保存処理を開始します');
-              totalTime = Date.now() - startTime;
-              processingSteps = [
-                {
-                  step: 'search',
-                  status: 'completed' as const,
-                  duration: searchTime,
-                  timestamp: new Date(startTime)
-                },
-                {
-                  step: 'processing',
-                  status: 'completed' as const,
-                  duration: 800,
-                  timestamp: new Date(startTime + searchTime)
-                },
-                {
-                  step: 'ai_generation',
-                  status: 'completed' as const,
-                  duration: aiGenerationTime,
-                  timestamp: new Date(startTime + searchTime + 800)
-                },
-                {
-                  step: 'finalizing',
-                  status: 'completed' as const,
-                  duration: 500,
-                  timestamp: new Date(startTime + searchTime + 800 + aiGenerationTime)
-                }
-              ];
+              
+              let savedPostLogId: string | null = null;
               
               try {
                 console.log('📊 postLogs保存データを準備中:', {
@@ -582,11 +478,38 @@ export const POST = async (req: NextRequest) => {
                   }
                 };
                 
-                const postLogId = await savePostLogToAdminDB(logData);
-                console.log('✅ 投稿ログを保存しました:', postLogId);
+                savedPostLogId = await savePostLogToAdminDB(logData);
+                console.log('✅ 投稿ログを保存しました:', savedPostLogId);
               } catch (logError) {
                 console.error('❌ 投稿ログの保存に失敗しました:', logError);
               }
+
+              // 完了メッセージ（保存されたpostLogIdを含める）
+              const completionMessage = {
+                type: 'completion',
+                step: 4,
+                stepId: 'completed',
+                title: '完了',
+                description: '回答が生成されました',
+                chunkIndex: result.chunkIndex,
+                totalChunks: result.totalChunks,
+                references: result.references,
+                fullAnswer: fullAnswer,
+                postLogId: savedPostLogId
+              };
+              
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify(completionMessage)}\n\n`)
+              );
+              
+              // ログ記録
+              screenTestLogger.logAIPerformance(question, aiGenerationTime, fullAnswer.length, {
+                streamingChunks: totalChunks,
+                references: result.references.length,
+                isStreaming: true,
+                processingSteps: 4,
+                postLogId: savedPostLogId
+              });
               
               break;
             } else {
@@ -661,32 +584,10 @@ export const POST = async (req: NextRequest) => {
             
             fullAnswer = fallbackAnswer;
             
-            // フォールバック回答の完了メッセージを送信
-            const fallbackCompletionMessage = {
-              type: 'completion',
-              step: 4,
-              stepId: 'completed',
-              title: '完了',
-              description: 'フォールバック回答が生成されました',
-              chunkIndex: 1,
-              totalChunks: 1,
-              references: relevantDocs.map((doc, index) => ({
-                id: doc.id || `${doc.pageId}-${index}`,
-                title: doc.title || 'タイトル不明',
-                url: doc.url || '',
-                distance: doc.distance || 0.5,
-                score: doc.score || 0,
-                source: doc.source || 'vector'
-              })),
-              fullAnswer: fallbackAnswer
-            };
-            
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(fallbackCompletionMessage)}\n\n`)
-            );
-            
-            // エラー時の投稿ログの保存
+            // エラー時の投稿ログの保存（completionMessageの前に実行）
             totalTime = Date.now() - startTime;
+            let fallbackPostLogId: string | null = null;
+            
             try {
               const errorLogData = {
                 userId,
@@ -741,11 +642,36 @@ export const POST = async (req: NextRequest) => {
                 }
               };
               
-              const postLogId = await savePostLogToAdminDB(errorLogData);
-              console.log('📝 エラー投稿ログを保存しました:', postLogId);
+              fallbackPostLogId = await savePostLogToAdminDB(errorLogData);
+              console.log('📝 エラー投稿ログを保存しました:', fallbackPostLogId);
             } catch (logError) {
               console.error('❌ エラー時の投稿ログの保存に失敗しました:', logError);
             }
+            
+            // フォールバック回答の完了メッセージを送信（postLogIdを含める）
+            const fallbackCompletionMessage = {
+              type: 'completion',
+              step: 4,
+              stepId: 'completed',
+              title: '完了',
+              description: 'フォールバック回答が生成されました',
+              chunkIndex: 1,
+              totalChunks: 1,
+              references: relevantDocs.map((doc, index) => ({
+                id: doc.id || `${doc.pageId}-${index}`,
+                title: doc.title || 'タイトル不明',
+                url: doc.url || '',
+                distance: doc.distance || 0.5,
+                score: doc.score || 0,
+                source: doc.source || 'vector'
+              })),
+              fullAnswer: fallbackAnswer,
+              postLogId: fallbackPostLogId
+            };
+            
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(fallbackCompletionMessage)}\n\n`)
+            );
           }
           
           controller.close();
