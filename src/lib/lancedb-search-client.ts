@@ -14,17 +14,14 @@ import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
+import { GenericCache } from './generic-cache';
 
-// 検索結果キャッシュ
-const searchCache = new Map<string, any>();
-const CACHE_SIZE_LIMIT = 1000;
-const CACHE_TTL = 5 * 60 * 1000; // 5分間
-
-interface CacheEntry {
-  results: any[];
-  timestamp: number;
-  ttl: number;
-}
+// 検索結果キャッシュ（ジェネリックキャッシュを使用）
+const searchCache = new GenericCache<any[]>({
+  ttl: 5 * 60 * 1000, // 5分間
+  maxSize: 1000,
+  evictionStrategy: 'lru'
+});
 
 /**
  * キャッシュキーを生成
@@ -57,24 +54,7 @@ function getFromCache(cacheKey: string): any[] | null {
   return entry.results;
 }
 
-/**
- * キャッシュに検索結果を保存
- */
-function setToCache(cacheKey: string, results: any[]): void {
-  // キャッシュサイズ制限
-  if (searchCache.size >= CACHE_SIZE_LIMIT) {
-    const firstKey = searchCache.keys().next().value;
-    searchCache.delete(firstKey);
-  }
-
-  searchCache.set(cacheKey, {
-    results,
-    timestamp: Date.now(),
-    ttl: CACHE_TTL
-  });
-
-  console.log(`💾 キャッシュ保存: "${cacheKey}" (${results.length}件)`);
-}
+// キャッシュ関数は削除（GenericCacheを直接使用）
 
 
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText } from './score-utils';
@@ -153,7 +133,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const cacheKey = generateCacheKey(params.query, params);
     
     // キャッシュから取得を試行
-    const cachedResults = getFromCache(cacheKey);
+    const cachedResults = searchCache.get(cacheKey);
     if (cachedResults) {
       console.log(`🚀 キャッシュから結果を返却: ${cachedResults.length}件`);
       return cachedResults;
@@ -223,8 +203,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       if (params.filter) {
         vectorQuery = vectorQuery.where(params.filter);
       }
-      // パフォーマンス最適化: topKを削減（100 → 30相当）
-      vectorResults = await vectorQuery.limit(Math.max(topK, 30)).toArray();
+      // ベクトル検索: 十分な結果を取得（topKの2倍）
+      vectorResults = await vectorQuery.limit(topK * 2).toArray();
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
@@ -758,7 +738,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     console.log(`[searchLanceDB] Processed ${processedResults.length} results using unified service`);
     
     // 結果をキャッシュに保存
-    setToCache(cacheKey, processedResults);
+    searchCache.set(cacheKey, processedResults);
+    console.log(`💾 キャッシュ保存: "${cacheKey}" (${processedResults.length}件)`);
     
     return processedResults;
   } catch (error: any) {
