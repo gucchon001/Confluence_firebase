@@ -147,44 +147,12 @@ export class UnifiedSearchResultProcessor {
   }
 
   /**
-   * 関連性チェック
+   * 関連性チェック（フィルタリングを無効化 - RRFに任せる）
    */
   private isRelevantResult(result: RawSearchResult, options: Required<ScoreCalculationOptions>): boolean {
-    // 1. スコア閾値チェック（緩和: 0.15 → 0.10）
-    const minScore = 0.10; // 最低スコア閾値
-    if ((result._hybridScore ?? 0) < minScore) {
-      return false;
-    }
-
-    // 2. タイトル関連性チェック（過度なフィルタリングを削除）
-    const title = result.title.toLowerCase();
-    const irrelevantPatterns = [
-      '請求書テンプレート', 'invoice template',  // より具体的に
-      '支払い履歴', 'payment history',  // より具体的に
-      '議事録アーカイブ', 'archived meeting notes'  // より具体的に
-      // 'メール'を削除（メールテンプレートも仕様の一部）
-      // '応募履歴'を削除（応募機能の仕様の一部）
-      // '議事録'を削除（議事録も参考情報として有用）
-    ];
-
-    // タイトルに無関係なキーワードが含まれている場合は除外
-    const hasIrrelevantTitle = irrelevantPatterns.some(pattern => title.includes(pattern));
-    if (hasIrrelevantTitle) {
-      return false;
-    }
-
-    // 3. ラベル関連性チェック
-    const labels = Array.isArray(result.labels) ? result.labels : [result.labels].filter(Boolean);
-    const irrelevantLabels = ['アーカイブ', 'archive', '議事録', 'meeting-notes'];
-    const hasIrrelevantLabel = labels.some(label => {
-      // ラベルが文字列でない場合はスキップ
-      if (typeof label !== 'string') return false;
-      return irrelevantLabels.some(irrelevant => label.toLowerCase().includes(irrelevant));
-    });
-    if (hasIrrelevantLabel) {
-      return false;
-    }
-
+    // フィルタリングは無効化
+    // RRFで既に適切にランキングされているため、ここでの除外は不要
+    // 過剰なフィルタリングにより重要な文書が除外される問題を解決
     return true;
   }
 
