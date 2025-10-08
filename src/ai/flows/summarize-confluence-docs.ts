@@ -5,6 +5,7 @@
 import * as z from 'zod';
 import Handlebars from 'handlebars';
 import { ai } from '../genkit';
+import { GeminiConfig } from '@/config/ai-models-config';
 
 // プロンプトテンプレート (変更なし)
 const PROMPT_TEMPLATE = `
@@ -232,7 +233,11 @@ ${doc.content}`
       console.log('[summarizeConfluenceDocs] Prompt length:', prompt.length);
       console.log('[summarizeConfluenceDocs] Documents for context:', documents.length);
       
-      const llmResponse = await ai.generate({ model: 'googleai/gemini-2.5-flash', prompt });
+      const llmResponse = await ai.generate({ 
+        model: GeminiConfig.model, 
+        prompt,
+        config: GeminiConfig.config 
+      });
       console.log('[summarizeConfluenceDocs] LLM Response type:', typeof llmResponse);
       console.log('[summarizeConfluenceDocs] LLM Response keys:', Object.keys(llmResponse || {}));
       console.log('[summarizeConfluenceDocs] LLM Response preview:', JSON.stringify(llmResponse).substring(0, 500) + '...');

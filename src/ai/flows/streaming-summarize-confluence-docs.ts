@@ -6,6 +6,7 @@
 import * as z from 'zod';
 import Handlebars from 'handlebars';
 import { ai } from '../genkit';
+import { GeminiConfig } from '@/config/ai-models-config';
 
 // フォールバック回答生成関数
 function generateFallbackAnswer(question: string, context: any[]): string {
@@ -197,19 +198,14 @@ ${truncatedContent}`;
       
       // Phase 3最適化: タイムアウト付きでAI生成を実行
       const generatePromise = ai.generate({
-        model: 'googleai/gemini-2.5-flash',
+        model: GeminiConfig.model,
         prompt: prompt,
-        config: {
-          maxOutputTokens: 4096, // 完全性重視: 出力トークンを増加
-          temperature: 0.1, // 完全性重視: 温度を下げて一貫性を向上
-          topP: 0.9, // 完全性重視: topPを上げて多様性を向上
-          topK: 50, // 完全性重視: topKを上げて選択肢を増加
-        }
+        config: GeminiConfig.config
       });
       
-      // 完全性重視: 60秒のタイムアウトを設定（より多くの時間を確保）
+      // 完全性重視: タイムアウトを設定（より多くの時間を確保）
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('AI generation timeout')), 60000)
+        setTimeout(() => reject(new Error('AI generation timeout')), GeminiConfig.timeout)
       );
       
       result = await Promise.race([generatePromise, timeoutPromise]);

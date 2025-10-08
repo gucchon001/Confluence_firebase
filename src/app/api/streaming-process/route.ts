@@ -14,6 +14,7 @@ import { initializeFirebaseAdmin } from '@/lib/firebase-admin-init';
 import { convertPostLogToAdminFirestore } from '@/lib/firestore-data-mapper-admin';
 import { postLogService } from '@/lib/post-log-service';
 import type { PostLog, ProcessingStep } from '@/types';
+import { GeminiConfig } from '@/config/ai-models-config';
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
 try {
@@ -374,7 +375,7 @@ export const POST = async (req: NextRequest) => {
                   contextDocuments: relevantDocs.length,
                   streamingDuration: aiGenerationTime,
                   averageChunkTime: totalChunks > 0 ? aiGenerationTime / totalChunks : 0,
-                  modelUsed: 'gemini-2.5-flash',
+                  modelUsed: GeminiConfig.model.replace('googleai/', ''),
                   streamingMethod: 'real-time',
                   ...referenceAnalysis,
                   contextQuality: {
@@ -533,7 +534,7 @@ export const POST = async (req: NextRequest) => {
                 partialChunks: chunkIndex,
                 contextDocuments: relevantDocs.length,
                 fallbackUsed: true,
-                modelUsed: 'gemini-2.5-flash',
+                modelUsed: GeminiConfig.model.replace('googleai/', ''),
                 streamingDuration: aiGenerationTime
               }
             });

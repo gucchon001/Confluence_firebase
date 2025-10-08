@@ -217,15 +217,34 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     console.log('[searchLanceDB] Using labelFilters:', labelFilters);
     console.log('[searchLanceDB] Excluding labels:', excludeLabels);
 
-    // 1. ベクトル検索の実行
+    // 1. ベクトル検索の実行（DB側フィルタリング最適化）
     try {
       let vectorQuery = tbl.search(vector);
+      
+      // フィルタ条件の構築（DB側で実行）
+      const filterConditions: string[] = [];
+      
       if (params.filter) {
-        vectorQuery = vectorQuery.where(params.filter);
+        filterConditions.push(params.filter);
       }
+      
+      // ラベル除外条件をDB側で実行（パフォーマンス向上）
+      if (excludeLabels.length > 0) {
+        const labelFilters = excludeLabels.map(label => {
+          // ラベルが含まれていない、またはnullのレコードのみを取得
+          return `(labels IS NULL OR labels NOT LIKE '%${label.replace(/'/g, "''")}%')`;
+        }).join(' AND ');
+        filterConditions.push(`(${labelFilters})`);
+      }
+      
+      // WHERE句を結合
+      if (filterConditions.length > 0) {
+        vectorQuery = vectorQuery.where(filterConditions.join(' AND '));
+      }
+      
       // パフォーマンス最適化: topKを削減（100 → 30相当）
       vectorResults = await vectorQuery.limit(Math.max(topK, 30)).toArray();
-      console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
+      console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results (with DB-side filtering)`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
     const distanceThreshold = params.maxDistance || 2.0; // Recall向上: 1.5 -> 2.0 (より多くの関連文書を検出)
@@ -252,20 +271,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         console.log(`[searchLanceDB] Applied quality threshold ${qualityThreshold}: ${beforeCount} -> ${vectorResults.length} results`);
       }
       
-      // ラベルフィルタリングを適用（処理速度向上）
-      if (excludeLabels.length > 0) {
-        const beforeCount = vectorResults.length;
-        vectorResults = vectorResults.filter(result => {
-          if (labelManager.isExcluded(result.labels, excludeLabels)) {
-            console.log(`[searchLanceDB] Excluded result due to label filter: ${result.title}`);
-            return false;
-          }
-          return true;
-        });
-        console.log(`[searchLanceDB] Excluded ${beforeCount - vectorResults.length} results due to label filtering`);
-      }
+      // ラベルフィルタリングはDB側で既に実行済み（パフォーマンス最適化）
+      console.log(`[searchLanceDB] Label filtering already applied at DB level`);
       
-
       
       // タイトル重みを適用（ベクトル検索結果の調整）
       if (titleWeight !== 1.0) {
@@ -374,7 +382,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         console.log('[searchLanceDB] Applying app-level includeLabels filter:', params.includeLabels);
       }
 
-      // 各結果にハイブリッドスコアを追加
+      // 各結果にハイブリッドスコアを追加（簡素化版 - パフォーマンス最適化）
       const resultsWithHybridScore = [];
       let keywordMatchCount = 0;
       
@@ -386,51 +394,56 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         // 結果のコピーを作成
         const resultWithScore = { ...originalResult };
         
-        // キーワードマッチングスコアを計算
-        const title = originalResult.title || '';
-        const content = originalResult.content || '';
+        // 基本情報の取得
+        const title = (originalResult.title || '').toLowerCase();
+        const content = (originalResult.content || '').toLowerCase();
         const labels = getLabelsAsArray(originalResult.labels);
-        
-        // デバッグ情報を出力
-        console.log(`[searchLanceDB] Processing result ${i+1}:`);
-        console.log(`  Title: ${title}`);
-        console.log(`  Labels: ${JSON.stringify(labels)}`);
-        console.log(`  Content snippet: ${content.substring(0, 50)}...`);
         
         // アプリ層の包含フィルタ（任意）
         if (includeLabelsNormalized.length > 0) {
           const resultLabelsNormalized = labels.map(l => normalize(String(l)));
           const hasAny = includeLabelsNormalized.some(q => resultLabelsNormalized.includes(q));
           if (!hasAny) {
-            console.log('  Excluded due to includeLabels (app-level)');
             excludedCount++;
             continue;
           }
         }
 
-        // ラベルスコアは使用しない（0に固定）
+        // 簡素化されたキーワードスコア計算（高速化）
+        let keywordScore = 0;
+        let titleMatches = 0;
+        let labelMatches = 0;
+        let contentMatches = 0;
         
-        // 検索重み付け関数を使用してスコアを計算
-        const scoreResult = calculateKeywordScore(title, content, labels, keywords, { highPriority, lowPriority });
-        const keywordScore = scoreResult.score;
-        const titleMatches = scoreResult.titleMatches;
-        const labelMatches = scoreResult.labelMatches;
-        const contentMatches = scoreResult.contentMatches;
-        
-        console.log(`  Score details: keyword=${keywordScore}, title=${titleMatches}, label=${labelMatches}, content=${contentMatches}, labelScore=0`);
+        // 高優先度キーワード（タイトル＋ラベルのみチェック）
+        for (const kw of highPriority) {
+          const kwLower = kw.toLowerCase();
+          if (title.includes(kwLower)) {
+            titleMatches++;
+            keywordScore += 10; // タイトル一致は高スコア
+          }
+          // ラベルチェック（簡素化）
+          const labelStr = labels.join(' ').toLowerCase();
+          if (labelStr.includes(kwLower)) {
+            labelMatches++;
+            keywordScore += 5;
+          }
+        }
         
         // キーワードマッチがある場合はカウント
         if (keywordScore > 0) {
           keywordMatchCount++;
         }
         
-        // ベクトル距離、キーワードスコア、ラベルスコアを組み合わせた複合スコア
-        const hybridScore = calculateHybridScore(resultWithScore._distance, keywordScore, labelMatches);
-        console.log(`  Hybrid score: ${hybridScore} (vector: ${resultWithScore._distance}, keyword: ${keywordScore}, label: ${labelMatches})`);
+        // 簡素化されたハイブリッドスコア
+        // ベクトル距離 + キーワードブースト
+        const distanceScore = resultWithScore._distance || 1.0;
+        const keywordBoost = keywordScore > 0 ? -0.3 : 0; // キーワードマッチで距離を短縮
+        const hybridScore = distanceScore + keywordBoost;
         
         // スコア情報を追加
         resultWithScore._keywordScore = keywordScore;
-        resultWithScore._labelScore = labelMatches;  // ラベルマッチ数をスコアとして使用
+        resultWithScore._labelScore = labelMatches;
         resultWithScore._hybridScore = hybridScore;
         resultWithScore._sourceType = keywordScore > 0 ? 'hybrid' : 'vector';
         resultWithScore._matchDetails = {
@@ -454,18 +467,17 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           r._hybridScore = (r._hybridScore ?? r._distance) - 0.05;
         }
       }
-      // 簡易BM25: タイトルに対してBM25風スコアを計算し、候補に合流
+      // 簡素化されたBM25検索（パフォーマンス最適化）
       try {
         const core = keywords[0];
         if (core) {
-          const kwCap = Math.min(50, Math.max(10, Math.floor(topK / 3)));
+          // 検索数を削減（50 → 20）
+          const kwCap = Math.min(20, Math.max(10, Math.floor(topK / 2)));
           
-          // 複数のキーワードでBM25検索を実行
-          const searchKeywords = keywords.slice(0, 5); // 上位5つのキーワードを使用（拡張）
+          // キーワード数を削減（5 → 3）
+          const searchKeywords = keywords.slice(0, 3);
           
-          // クエリ依存のキーワード注入は行わない（汎用ルールに統一）
-          
-          console.log(`[searchLanceDB] BM25 search keywords: ${searchKeywords.join(', ')}`);
+          console.log(`[searchLanceDB] Simplified BM25 search keywords: ${searchKeywords.join(', ')}`);
           
           // Use Lunr inverted index if available, otherwise fall back to LIKE search
           if (params.useLunrIndex && lunrInitializer.isReady()) {
@@ -580,44 +592,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             }
               }
 
-          // 見出し一致ブースト（汎用）: Markdownや番号付きの見出し行での一致を加点
-          try {
-            const headingLines = content
-              .split(/\n+/)
-              .filter((line) => /^(#{1,6}\s|\d+(?:\.\d+)*\s|\[[^\]]+\]\s|■|◇|◆|\*\s|【.+?】)/.test(line.trim()));
-            if (headingLines.length > 0) {
-              const joinedHeadings = headingLines.join('\n');
-              for (const keyword of searchKeywords) {
-                const safe = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const re = new RegExp(safe, 'g');
-                const hits = (joinedHeadings.match(re) || []).length;
-                if (hits > 0) {
-                  totalScore += Math.min(1.0, 0.15 * hits); // 最大+1.0まで
-                }
-              }
-            }
-          } catch {}
-
-          // 制約表現検出（汎用）: 否定/制限語や期間表現の共起に微加点
-          try {
-            const constraintRe = /(不可|できない|できません|禁止|制限|上限|下限|以内|以外|無効|不可視|送信できません|送信不可|拒否)/g;
-            const timeRe = /([0-9０-９]{1,4})\s*(日|日間|時間|週|週間|か月|ヶ月)/g;
-            const normalizedContent = content.replace(/\s+/g, '');
-            const consHits = (normalizedContent.match(constraintRe) || []).length;
-            const timeHits = (normalizedContent.match(timeRe) || []).length;
-            let cooccur = 0;
-            for (const kw of searchKeywords) {
-              if (!kw) continue;
-              const safe = String(kw).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const win = new RegExp(safe + '.{0,30}(不可|できない|できません|禁止|制限)|' + '(不可|できない|できません|禁止|制限).{0,30}' + safe, 'g');
-              cooccur += (content.match(win) || []).length;
-            }
-            const constraintBoost = Math.min(1.0, consHits * 0.08 + timeHits * 0.05 + cooccur * 0.12);
-            totalScore += constraintBoost;
-          } catch {}
-
-
-          // 近接・フレーズブースト（汎用）
+          // 簡素化されたブーストロジック（パフォーマンス最適化）
+          // フレーズブーストのみ（最も効果的）
           const rawQuery = (params.query || '').trim();
           if (rawQuery) {
             const phrase = rawQuery.replace(/[\s　]+/g, '');
@@ -625,20 +601,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             const contentPlain = content.replace(/[\s　]+/g, '');
             const phraseInTitle = titlePlain.includes(phrase);
             const phraseInBody = contentPlain.includes(phrase);
-            if (phraseInTitle) totalScore += 2.0; // タイトル一致ボーナス（強化）
+            if (phraseInTitle) totalScore += 2.0; // タイトル一致ボーナス
             if (phraseInBody) totalScore += 0.5;  // 本文一致ボーナス
-
-            // 近接（タイトル内でクエリ語の距離が近い場合の微小加点）
-            const terms = searchKeywords.slice(0, 3).filter(Boolean);
-            if (terms.length >= 2) {
-              const pos = terms.map(t => title.indexOf(t)).filter(p => p >= 0).sort((a,b)=>a-b);
-              if (pos.length >= 2) {
-                const span = pos[pos.length - 1] - pos[0];
-                if (span > 0 && span < 20) {
-                  totalScore += 0.3; // 近接ボーナス（小）
-                }
-              }
-            }
           }
               
               return { 
@@ -699,85 +663,24 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       } catch (e) {
         console.warn('[searchLanceDB] BM25 merge failed', e);
       }
-      // RRF融合（vector距離順位 + keyword順位 + 厳格タイトル順位 + BM25順位）
+      // 簡素化されたRRF融合（パフォーマンス最適化）
+      // ハイブリッドスコアのみでソート（vector + keyword）
       const kRrf = 60;
-      const byVector = [...resultsWithHybridScore].sort((a, b) => (a._distance ?? 1) - (b._distance ?? 1));
-      const byKeyword = [...resultsWithHybridScore].sort((a, b) => (b._keywordScore ?? 0) - (a._keywordScore ?? 0));
-      const byTitleExact = resultsWithHybridScore.filter(r => r._sourceType === 'title-exact');
-      const byBm25 = resultsWithHybridScore.filter(r => r._sourceType === 'bm25');
+      const byHybrid = [...resultsWithHybridScore].sort((a, b) => (a._hybridScore ?? 1) - (b._hybridScore ?? 1));
 
-      const vecRank = new Map<string, number>();
-      const kwRank = new Map<string, number>();
-      const titleRank = new Map<string, number>();
-      const bm25Rank = new Map<string, number>();
-      byVector.forEach((r, idx) => vecRank.set(r.id, idx + 1));
-      byKeyword.forEach((r, idx) => kwRank.set(r.id, idx + 1));
-      byTitleExact.forEach((r, idx) => titleRank.set(r.id, idx + 1));
-      byBm25.forEach((r, idx) => bm25Rank.set(r.id, idx + 1));
-
-      for (const r of resultsWithHybridScore) {
-        const vr = vecRank.get(r.id) ?? 1000000;
-        const kr = kwRank.get(r.id) ?? 1000000;
-        const tr = titleRank.get(r.id); // 厳格タイトルはある場合のみ加点
-        const br = bm25Rank.get(r.id);
-        // 重み: vector=1.0, keyword=0.8, title-exact=1.2, bm25=0.6（キーワードマッチングを重視）
-        let rrf = (1.0 / (kRrf + vr)) + 0.8 * (1 / (kRrf + kr)) + (tr ? 1.2 * (1 / (kRrf + tr)) : 0) + (br ? 0.6 * (1 / (kRrf + br)) : 0);
-        // ドメイン減衰（議事録）：順位の最後で軽く抑制
-        try {
-          const titleStr = String(r.title || '').toLowerCase();
-          const labelsArr: string[] = getLabelsAsArray(r.labels);
-          const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
-          const penaltyTerms = labelManager.getPenaltyTerms();
-          const genericTitleTerms = ['共通要件','非機能要件','用語','ワード','ディフィニション','definition','ガイドライン','一覧','フロー','要件'];
-          const hasPenalty = penaltyTerms.some(t => titleStr.includes(t)) || lowerLabels.some(l => penaltyTerms.some(t => l.includes(t)));
-          const isGenericDoc = genericTitleTerms.some(t => titleStr.includes(t));
-          if (hasPenalty) rrf *= 0.9; // 既存より強め
-          if (isGenericDoc) rrf *= 0.8; // 辞書・総論系をより減衰
-          // 「本システム外」を含むタイトルは追加減衰
-          if (String(r.title || '').includes('本システム外')) rrf *= 0.8;
-        } catch {}
-
-        // 制約表現の加点（RRF側）：本文に一般的制約語+時間表現が見られる場合に微加点
-        try {
-          const content = String(r.content || '');
-          const constraintRe = /(不可|できない|できません|禁止|制限|上限|下限|以内|以外|無効|送信できません|送信不可|拒否)/g;
-          const timeRe = /([0-9０-９]{1,4})\s*(日|日間|時間|週|週間|か月|ヶ月)/g;
-          const cHits = (content.match(constraintRe) || []).length;
-          const tHits = (content.match(timeRe) || []).length;
-          const add = Math.min(0.02, cHits * 0.003 + tHits * 0.002);
-          rrf += add;
-        } catch {}
+      for (let i = 0; i < byHybrid.length; i++) {
+        const r = byHybrid[i];
+        // シンプルなRRFスコア
+        let rrf = 1.0 / (kRrf + i + 1);
+        
+        // 簡素化されたペナルティ（議事録のみ）
+        const titleStr = String(r.title || '').toLowerCase();
+        if (titleStr.includes('議事録') || titleStr.includes('本システム外')) {
+          rrf *= 0.8;
+        }
+        
         r._rrfScore = rrf;
       }
-
-      // 合意スコア加点（汎用）: クエリ上位語（keywords）をタイトル/本文に含むドキュメント群の合意度で微加点
-      try {
-        const topicTerms = keywords.slice(0, 5).filter(Boolean);
-        const termToDocCount = new Map<string, number>();
-        for (const t of topicTerms) {
-          const safe = t.toLowerCase();
-          let count = 0;
-          for (const r of resultsWithHybridScore) {
-            const title = String(r.title || '').toLowerCase();
-            const content = String(r.content || '').toLowerCase();
-            if (title.includes(safe) || content.includes(safe)) count++;
-          }
-          termToDocCount.set(t, count);
-        }
-        for (const r of resultsWithHybridScore) {
-          let consensus = 0;
-          const title = String(r.title || '').toLowerCase();
-          const content = String(r.content || '').toLowerCase();
-          for (const t of topicTerms) {
-            const safe = t.toLowerCase();
-            if (title.includes(safe) || content.includes(safe)) {
-              const df = Math.max(0, (termToDocCount.get(t) || 0) - 1); // 自身以外
-              if (df > 0) consensus += Math.min(3, df) * 0.003; // 最大 ~0.009
-            }
-          }
-          r._rrfScore = (r._rrfScore ?? 0) + consensus;
-        }
-      } catch {}
 
       // 同一pageId/titleの重複を1件に正規化（最良スコアを残す）
       const dedupMap = new Map<string, any>();
@@ -790,88 +693,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       }
       const dedupedResults = Array.from(dedupMap.values());
 
-      // オプション: Cross-Encoder再ランクの足場（スタブ）
-      const useCrossEncoder = String(process.env.USE_CROSS_ENCODER || '').toLowerCase() === 'true';
-      if (useCrossEncoder) {
-        try {
-          const maxReRank = Math.min(30, dedupedResults.length);
-          console.log(`[searchLanceDB] Cross-Encoder rerank stub for top ${maxReRank} candidates`);
-          for (let i = 0; i < maxReRank; i++) {
-            const r = dedupedResults[i];
-            // スタブ: タイトルにクエリのcore語が含まれていれば微ブースト、そうでなければ0
-            const qCore = (params.query || '').trim();
-            const contains = String(r.title || '').includes(qCore);
-            r._crossScore = contains ? 0.02 : 0.0; // 後から本実装に置換
-          }
-          // Cross-Encoderスコアを微加点（RRFに対し追加）
-          for (let i = 0; i < dedupedResults.length; i++) {
-            const r = dedupedResults[i];
-            if (typeof r._crossScore === 'number') {
-              r._rrfScore = (r._rrfScore ?? 0) + r._crossScore;
-            }
-          }
-        } catch (e) {
-          console.warn('[searchLanceDB] Cross-Encoder rerank stub failed:', e);
-        }
-      }
-
-      // オプション: MMR多様化（タイトル重複・近似の抑制）
-      function titleBigrams(s: string): Set<string> {
-        const norm = String(s || '').toLowerCase();
-        const chars = Array.from(norm);
-        const grams = new Set<string>();
-        for (let i = 0; i < chars.length - 1; i++) {
-          grams.add(chars[i] + chars[i + 1]);
-        }
-        return grams;
-      }
-      function jaccard(a: Set<string>, b: Set<string>): number {
-        if (a.size === 0 && b.size === 0) return 0;
-        let inter = 0;
-        for (const x of a) if (b.has(x)) inter++;
-        const union = a.size + b.size - inter;
-        return union === 0 ? 0 : inter / union;
-      }
-      const useMMR = String(process.env.USE_MMR || 'true').toLowerCase() !== 'false';
-      let mmrResults = dedupedResults;
-      if (useMMR) {
-        try {
-          const lambda = 0.7; // 関連性重視
-          const pool = dedupedResults.slice(0, Math.min(50, dedupedResults.length));
-          const selected: any[] = [];
-          const precomputed = pool.map(r => ({ r, grams: titleBigrams(r.title) }));
-          while (selected.length < Math.min(topK, pool.length)) {
-            let bestIdx = -1;
-            let bestScore = -Infinity;
-            for (let i = 0; i < precomputed.length; i++) {
-              const cand = precomputed[i];
-              if (!cand) continue;
-              const rel = cand.r._rrfScore ?? 0;
-              let simToSelected = 0;
-              for (const s of selected) {
-                const sim = jaccard(cand.grams, s.grams);
-                if (sim > simToSelected) simToSelected = sim;
-              }
-              const mmr = lambda * rel - (1 - lambda) * simToSelected;
-              if (mmr > bestScore) {
-                bestScore = mmr;
-                bestIdx = i;
-              }
-            }
-            if (bestIdx === -1) break;
-            const chosen = precomputed[bestIdx];
-            selected.push(chosen);
-            precomputed.splice(bestIdx, 1);
-          }
-          mmrResults = selected.map(x => x.r).concat(dedupedResults.filter(r => !selected.some(x => x.r.id === r.id)));
-          console.log(`[searchLanceDB] Applied MMR diversification: selected ${selected.length}/${Math.min(50, dedupedResults.length)}`);
-        } catch (e) {
-          console.warn('[searchLanceDB] MMR diversification failed:', e);
-        }
-      }
-
-      // 最終: RRF降順（MMR適用済み配列） → ハイブリッドスコア昇順のタイブレーク
-      vectorResults = mmrResults.sort((a, b) => {
+      // 最終ソート: RRF降順（簡素化版 - パフォーマンス最適化）
+      vectorResults = dedupedResults.sort((a, b) => {
         const diff = (b._rrfScore ?? 0) - (a._rrfScore ?? 0);
         if (Math.abs(diff) > 1e-9) return diff;
         return (a._hybridScore ?? 0) - (b._hybridScore ?? 0);
