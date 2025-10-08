@@ -5,11 +5,15 @@ import { Star, Send, MessageSquare } from 'lucide-react';
 
 interface FeedbackRatingProps {
   postLogId: string;
+  userId?: string;
+  sessionId?: string;
   onSubmitted?: (rating: number, comment: string) => void;
 }
 
 export const FeedbackRating: React.FC<FeedbackRatingProps> = ({ 
   postLogId, 
+  userId,
+  sessionId,
   onSubmitted 
 }) => {
   const [rating, setRating] = useState<number>(0);
@@ -31,11 +35,22 @@ export const FeedbackRating: React.FC<FeedbackRatingProps> = ({
     setIsSubmitting(true);
 
     try {
+      // ヘッダーにユーザー情報を含める
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (userId) {
+        headers['x-user-id'] = userId;
+      }
+      
+      if (sessionId) {
+        headers['x-session-id'] = sessionId;
+      }
+
       const response = await fetch('/api/feedback', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           postLogId,
           rating,

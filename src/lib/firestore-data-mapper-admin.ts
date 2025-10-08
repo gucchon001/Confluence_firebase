@@ -10,7 +10,7 @@ import type { PostLog } from '@/types';
  * サーバー側 (Admin SDK): Date → Admin Firestore Timestamp
  */
 export function convertPostLogToAdminFirestore(logData: Omit<PostLog, 'id'>): any {
-  return {
+  const firestoreData = {
     ...logData,
     timestamp: admin.firestore.Timestamp.fromDate(logData.timestamp),
     processingSteps: logData.processingSteps.map(step => ({
@@ -24,5 +24,11 @@ export function convertPostLogToAdminFirestore(logData: Omit<PostLog, 'id'>): an
     })) || [],
     metadata: logData.metadata
   };
+  
+  // 🔍 デバッグ: serverStartupTimeが正しく含まれているか確認
+  console.log('🔍 [convertPostLogToAdminFirestore] 入力データのserverStartupTime:', logData.serverStartupTime);
+  console.log('🔍 [convertPostLogToAdminFirestore] 出力データのserverStartupTime:', firestoreData.serverStartupTime);
+  
+  return firestoreData;
 }
 

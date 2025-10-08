@@ -45,20 +45,31 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
     const db = admin.firestore();
     const postLogsRef = db.collection('postLogs');
     
+    console.log('🚀 [DEBUG] savePostLogToAdminDB関数が呼ばれました');
+    console.log('🚀 [DEBUG] logData.serverStartupTime:', logData.serverStartupTime);
     console.log('🔍 サーバーサイド投稿ログデータの詳細:', {
       userId: logData.userId,
       question: logData.question?.substring(0, 50) + '...',
       answer: logData.answer?.substring(0, 50) + '...',
+      serverStartupTime: logData.serverStartupTime, // サーバー起動時間を追加
       searchTime: logData.searchTime,
       aiGenerationTime: logData.aiGenerationTime,
       totalTime: logData.totalTime,
       referencesCount: logData.referencesCount,
       answerLength: logData.answerLength,
-      timestamp: logData.timestamp
+      timestamp: logData.timestamp,
+      metadata: logData.metadata // metadataも確認
     });
     
     // Timestamp変換ロジックを共通化
     const firestoreData = convertPostLogToAdminFirestore(logData);
+    
+    console.log('🔍 Firestore保存データ確認:', {
+      serverStartupTime: firestoreData.serverStartupTime,
+      searchTime: firestoreData.searchTime,
+      aiGenerationTime: firestoreData.aiGenerationTime,
+      totalTime: firestoreData.totalTime
+    });
     
     const docRef = await postLogsRef.add(firestoreData);
     console.log('📝 サーバーサイド投稿ログを保存しました:', docRef.id);
@@ -161,9 +172,17 @@ const PROCESSING_STEPS = [
 
 export const POST = async (req: NextRequest) => {
   console.log('🚀 [API] streaming-process route called');
+  
+  // サーバー起動処理時間の計測開始
+  const serverStartupStartTime = Date.now();
+  
   try {
     // 起動時最適化を実行（初回のみ）
     await initializeStartupOptimizations();
+    
+    // サーバー起動処理時間の計測終了
+    const serverStartupTime = Date.now() - serverStartupStartTime;
+    console.log(`🚀 サーバー起動処理時間: ${serverStartupTime}ms`);
 
     const body = await req.json();
     const { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
@@ -194,7 +213,17 @@ export const POST = async (req: NextRequest) => {
           let relevantDocs: any[] = [];
           
           // postLogs保存用の変数
-          const startTime = Date.now();
+          // クライアント側の開始時刻を取得（存在しない場合は現在時刻）
+          const clientStartTimeStr = req.headers.get('x-client-start-time');
+          const clientStartTime = clientStartTimeStr ? parseInt(clientStartTimeStr) : Date.now();
+          const startTime = clientStartTime;
+          
+          console.log('⏱️ 処理時間計測開始:', {
+            clientStartTime: new Date(clientStartTime).toISOString(),
+            serverReceiveTime: new Date().toISOString(),
+            latency: Date.now() - clientStartTime
+          });
+          
           let searchTime = 0;
           let aiGenerationTime = 0;
           let totalTime = 0;
@@ -396,10 +425,13 @@ export const POST = async (req: NextRequest) => {
                   referencesCount: result.references.length
                 });
                 
+                console.log('🔍 PostLog保存処理開始 - isComplete:', result.isComplete);
+                
                 const logData = {
                   userId,
                   question,
                   answer: fullAnswer,
+                  serverStartupTime, // サーバー起動処理時間を追加
                   searchTime,
                   aiGenerationTime,
                   totalTime,
@@ -416,8 +448,21 @@ export const POST = async (req: NextRequest) => {
                   }
                 };
                 
+                console.log('🔍 PostLog保存データ確認:', {
+                  serverStartupTime,
+                  searchTime,
+                  aiGenerationTime,
+                  totalTime
+                });
+                
                 savedPostLogId = await savePostLogToAdminDB(logData);
-                console.log('✅ 投稿ログを保存しました:', savedPostLogId);
+                console.log('✅ 投稿ログを保存しました:', {
+                  postLogId: savedPostLogId,
+                  userId: logData.userId,
+                  userDisplayName: logData.metadata.userDisplayName,
+                  question: logData.question.substring(0, 50) + '...',
+                  timestamp: logData.timestamp.toISOString()
+                });
               } catch (logError) {
                 console.error('❌ 投稿ログの保存に失敗しました:', logError);
               }
@@ -531,6 +576,7 @@ export const POST = async (req: NextRequest) => {
                 userId,
                 question,
                 answer: fallbackAnswer,
+                serverStartupTime, // サーバー起動処理時間を追加
                 searchTime,
                 aiGenerationTime: 0, // AI生成は失敗したため0
                 totalTime,
@@ -654,6 +700,7 @@ export const POST = async (req: NextRequest) => {
         userId: 'anonymous',
         question: 'Unknown question',
         answer: 'エラーが発生しました',
+        serverStartupTime: 0, // サーバー起動処理時間を追加
         searchTime: 0,
         aiGenerationTime: 0,
         totalTime: 0,
@@ -713,3 +760,4 @@ export const OPTIONS = async () => {
     },
   });
 };
+  

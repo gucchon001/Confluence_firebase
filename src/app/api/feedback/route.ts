@@ -30,7 +30,7 @@ export const POST = async (req: NextRequest) => {
     }
 
     // ユーザー情報の取得
-    const userId = req.headers.get('x-user-id') || 'anonymous';
+    const userId = req.headers.get('x-user-id') || req.headers.get('authorization')?.replace('Bearer ', '') || 'anonymous';
     const userAgent = req.headers.get('user-agent') || '';
     const ipAddress = req.headers.get('x-forwarded-for') || 
                      req.headers.get('x-real-ip') || 
@@ -38,11 +38,15 @@ export const POST = async (req: NextRequest) => {
     const sessionId = req.headers.get('x-session-id') || 
                      `session_${Date.now()}`;
 
-    // ユーザー表示名の取得（必要に応じて）
+    // ユーザー表示名の取得
     let userDisplayName = 'anonymous';
     try {
-      // ここでFirebase Authからユーザー情報を取得する処理を追加可能
-      // 現在は匿名ユーザーとして処理
+      if (userId && userId !== 'anonymous') {
+        const adminApp = initializeFirebaseAdmin();
+        const auth = admin.auth(adminApp);
+        const userRecord = await auth.getUser(userId);
+        userDisplayName = userRecord.displayName || userRecord.email || 'unknown';
+      }
     } catch (error) {
       console.warn('ユーザー情報の取得に失敗:', error);
     }

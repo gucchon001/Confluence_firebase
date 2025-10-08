@@ -28,6 +28,7 @@
 - **[label-system-design.md](./implementation/label-system-design.md)** - ラベルシステム設計
 - **[label-system-overview.md](./implementation/label-system-overview.md)** - ラベルシステム概要
 - **[lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様
+- **[remaining-issues.md](./implementation/remaining-issues.md)** - 残課題・既知の問題
 
 ### 🚀 [operations/](./operations/) - 運用・デプロイ
 システムの運用、デプロイ、移行に関するドキュメント

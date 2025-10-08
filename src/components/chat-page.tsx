@@ -47,189 +47,38 @@ import { FeedbackRating } from '@/components/feedback-rating';
  * - Ensure each table row starts/ends with a pipe and is on its own line
  */
 function fixMarkdownTables(markdown: string): string {
-  const lines = markdown.split(/\r?\n/);
-  const fixed: string[] = [];
-  let inTable = false;
-  let pendingHeaderColumns: number | null = null;
-  let currentColumns: number | null = null; // 現在のテーブル列数を保持
-
-  const isSeparatorLine = (s: string) => /^\s*\|?\s*(:?-{3,}\s*\|\s*)+(:?-{3,}\s*)?\|?\s*$/.test(s);
-  const normalizeRow = (s: string) => {
-    let row = s.trim();
-    // collapse multiple leading pipes
-    row = row.replace(/^\|{2,}/, '|');
-    // add leading pipe
-    if (!row.startsWith('|')) row = '|' + row;
-    // ensure single spaces around pipes for readability
-    row = row.replace(/\s*\|\s*/g, ' | ');
-    // add trailing pipe
-    if (!row.endsWith('|')) row = row + ' |';
-    return row;
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const original = lines[i];
-    const trimmed = original.trim();
-
-    const looksLikeRow = trimmed.includes('|') && (trimmed.match(/\|/g)?.length || 0) >= 2 && !trimmed.startsWith('```') && !trimmed.startsWith('- ');
-    
-    // 複数のテーブル行が1行に連結されている場合を検出
-    const multipleRowsPattern = /(\|[^|]*\|)\s*(\|[^|]*\|)/;
-    if (looksLikeRow && multipleRowsPattern.test(trimmed)) {
-      // 複数の行を分割
-      const rows = trimmed.split(/(?<=\|)\s*(?=\|)/).filter(row => row.trim());
-      for (const row of rows) {
-        const normalized = normalizeRow(row.trim());
-        if (!inTable) {
-          if (fixed.length > 0 && fixed[fixed.length - 1].trim() !== '') fixed.push('');
-          inTable = true;
-          pendingHeaderColumns = normalized.split('|').filter(c => c.trim().length > 0).length - 1;
-          currentColumns = pendingHeaderColumns;
-        }
-        fixed.push(normalized);
-      }
-      continue;
-    }
-
-    if (looksLikeRow) {
-      const normalized = normalizeRow(trimmed);
-      if (!inTable) {
-        // Ensure blank line before table for GFM
-        if (fixed.length > 0 && fixed[fixed.length - 1].trim() !== '') fixed.push('');
-        inTable = true;
-        // compute column count from header
-        pendingHeaderColumns = normalized.split('|').filter(c => c.trim().length > 0).length - 1; // exclude leading/trailing
-        currentColumns = pendingHeaderColumns;
-      }
-      // 行を列数で分割して複数行に展開（1行に複数レコードが連結されている場合の対策）
-      const cells = normalized
-        .slice(1, normalized.length - 1) // 先頭/末尾のパイプを除去
-        .split('|')
-        .map(c => c.trim())
-        .filter(c => !(c === '' && currentColumns !== null));
-
-      if (currentColumns && cells.length > currentColumns) {
-        for (let off = 0; off < cells.length; off += currentColumns) {
-          const rowCells = cells.slice(off, off + currentColumns);
-          if (rowCells.length === currentColumns) {
-            fixed.push('| ' + rowCells.join(' | ') + ' |');
-          }
-        }
-      } else {
-        fixed.push(normalized);
-      }
-
-      // If it's the first line of the table (header) and next line isn't a separator, insert one
-      const next = lines[i + 1]?.trim() ?? '';
-      if (pendingHeaderColumns && !isSeparatorLine(next)) {
-        const sepCells = Array(pendingHeaderColumns).fill(':---');
-        fixed.push('| ' + sepCells.join(' | ') + ' |');
-        pendingHeaderColumns = null;
-        currentColumns = currentColumns || sepCells.length;
-      } else if (isSeparatorLine(next)) {
-        // We will let the next loop push the existing separator
-        pendingHeaderColumns = null;
-        currentColumns = currentColumns || (next.split('|').filter(c => c.includes('-')).length);
-      }
-      continue;
-    }
-
-    // If we encounter a separator that LLM emitted, pass it through normalized
-    if (isSeparatorLine(trimmed)) {
-      inTable = true;
-      currentColumns = trimmed.split('|').filter(c => c.includes('-')).length;
-      const normalized = '| ' + trimmed.replace(/\|/g, ' | ').replace(/\s+/g, ' ').trim() + ' |';
-      fixed.push(normalized);
-      continue;
-    }
-
-    if (inTable && trimmed === '') {
-      // end of table block maintained
-      fixed.push('');
-      inTable = false;
-      currentColumns = null;
-      continue;
-    }
-
-    // Non-table content
-    fixed.push(original);
-    inTable = false;
-    pendingHeaderColumns = null;
-    currentColumns = null;
-  }
-
-  return fixed.join('\n');
+  // シンプルアプローチ：基本的な全角→半角変換とテーブル行の分離
+  // テーブル処理はReactMarkdownのremarkGfmプラグインに完全依存
+  
+  // 基本的な全角記号の変換
+  let result = markdown
+    .replace(/｜/g, '|')       // 全角パイプ
+    .replace(/：/g, ':')       // 全角コロン
+    .replace(/－/g, '-')       // 全角ハイフン
+    .replace(/　/g, ' ');      // 全角スペース
+  
+  // テーブルの前に空行を追加（GFMプラグインの要件）
+  // 「です。| ヘッダー |\n|:---|」のようなパターンを検出
+  // テーブルヘッダーの直後に区切り行がある場合のみマッチ
+  result = result.replace(/([。、！？])(\|\s*[^\n]+\s*\|\s*\n\s*\|:?-)/g, '$1\n\n$2');
+  
+  return result;
 }
 
-// 全角記号などを半角Markdown記号に正規化し、連結したヘッダー/区切りを改行で分離
+// 全角記号などを半角Markdown記号に正規化
 function normalizeMarkdownSymbols(markdown: string): string {
   if (!markdown) return markdown;
+  
+  // シンプルアプローチ：基本的な全角→半角変換のみ
   let text = markdown
-    // 全角→半角
     .replace(/｜/g, '|')       // U+FF5C FULLWIDTH VERTICAL LINE
     .replace(/：/g, ':')       // U+FF1A FULLWIDTH COLON
     .replace(/－/g, '-')       // U+FF0D FULLWIDTH HYPHEN-MINUS
     .replace(/〜/g, '~')
     .replace(/　/g, ' ');      // U+3000 IDEOGRAPHIC SPACE
-
-  // ヘッダー行と区切り行が1行に連結されているケースを改行で分離
-  // 例: "| 項目 | 説明 | 備考 | |:---|:---|:---|"
-  text = text.replace(/(\|[^\n]*?\|)\s*(\|\s*:?-{3,}[^\n]*?\|)/g, '$1\n$2');
   
-  // より複雑な連結パターンに対応（ヘッダー + セパレーター + データ行）
-  // 例: "| 項目名 | 説明 | 備考 | |:---|:---|:---| | 教室情報 | | |"
-  text = text.replace(/(\|[^\n]*?\|)\s*(\|\s*:?-{3,}[^\n]*?\|)\s*(\|[^\n]*?\|)/g, '$1\n$2\n$3');
-  
-  // 連続するパイプの間に改行を挿入（テーブル行の分離）
-  // 例: "| 項目名 | 説明 | 備考 | | 教室情報 | | | | 基本情報 | ..."
-  text = text.replace(/\|\s*\|\s*\|/g, ' |\n| ');
-
-  // パイプの前後のスペースを統一
-  text = text.replace(/\s*\|\s*/g, ' | ');
-  
-  // 見出しの前後の空行を正規化
-  // 1. 通常の見出し（#記号から始まる）
-  text = text.replace(/(\n|^)(#{1,6}\s+[^\n]+)(\n|$)/g, '\n\n$2\n\n');
-  
-  // 2. 絵文字見出し（#記号がない絵文字見出しに##を追加）
-  text = text.replace(/(\n|^)([🔑👥🔗⚙️📊🎯💡🚀✅❌⚠️🔥⭐📄❓]+ [^\n]+)(\n|$)/g, (match, prefix, content, suffix) => {
-    // 既に#記号がある場合は追加しない
-    if (content.startsWith('#')) {
-      return match;
-    }
-    return `\n\n## ${content}\n\n`;
-  });
-  
-  // 番号付きリストと箇条書きの統一処理（処理順序を最適化）
-  // 1. 番号付きセクション見出し（:がない場合）
-  text = text.replace(/(\n|^)(\d+\.\s+[^:\n]+)(\n|$)/g, (match, prefix, content, suffix) => {
-    if (content.startsWith('#')) {
-      return match;
-    }
-    return `\n\n### ${content}\n\n`;
-  });
-  
-  // 2. 文中の箇条書きパターンを先に処理（干渉を避けるため）
-  text = text.replace(/([。、])\s*(- [^\n]+)/g, '$1\n$2');
-  
-  // 3. 項目名の後の文中箇条書き（:の後の箇条書き）
-  text = text.replace(/([^-\n]+:\s*)([^-\n]+?)\s*(- [^\n]+)/g, '$1$2\n$3');
-  
-  // 4. 番号付きリスト項目（:がある場合）- 改行で分離
-  text = text.replace(/([^\d\n])(\d+\.\s+[^:\n]+:\s*)([^\n]+)/g, '$1\n$2\n  $3');
-  
-  // 5. 箇条書き項目 - 改行で分離
-  text = text.replace(/([^-\n])(- [^:\n]+:\s*)([^\n]+)/g, '$1\n$2\n  $3');
-  
-  // 6. 連続する箇条書きの分離
-  text = text.replace(/(- [^:\n]+:\s*)(- [^\n]+)/g, '$1\n  $2');
-  
-  // 7. 太字項目名の後の説明文を改行
-  text = text.replace(/(\*\*[^*]+\*\*:\s*)([^\n]+)/g, '$1\n  $2');
-  
-  // 連続する空行を2行までに制限
-  text = text.replace(/\n{3,}/g, '\n\n');
-  
+  // シンプルアプローチ：基本的な全角→半角変換のみ
+  // その他の処理はReactMarkdownのプラグインに依存
   return text;
 }
 
@@ -248,12 +97,26 @@ const sharedMarkdownComponents = {
   em: ({children}: any) => <em className="italic">{children}</em>,
   code: ({children}: any) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
   pre: ({children}: any) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
-  table: ({children}: any) => <div className="overflow-x-auto"><table className="border-collapse border border-gray-300 w-full mb-4 min-w-max">{children}</table></div>,
-  thead: ({children}: any) => <thead className="bg-gray-50">{children}</thead>,
+  table: ({children}: any) => (
+    <div className="overflow-x-auto my-4">
+      <table className="border-collapse border border-gray-300 w-full text-sm">
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({children}: any) => <thead className="bg-gray-100">{children}</thead>,
   tbody: ({children}: any) => <tbody>{children}</tbody>,
-  tr: ({children}: any) => <tr className="border-b border-gray-200">{children}</tr>,
-  th: ({children}: any) => <th className="border border-gray-300 px-3 py-2 text-left font-semibold align-top break-words whitespace-pre-wrap bg-gray-50">{children}</th>,
-  td: ({children}: any) => <td className="border border-gray-300 px-3 py-2 align-top break-words whitespace-pre-wrap">{children}</td>,
+  tr: ({children}: any) => <tr className="border-b border-gray-200 hover:bg-gray-50">{children}</tr>,
+  th: ({children}: any) => (
+    <th className="border border-gray-300 px-4 py-3 text-left font-bold align-top bg-gray-100 whitespace-normal break-words min-w-[120px] max-w-[300px]">
+      {children}
+    </th>
+  ),
+  td: ({children}: any) => (
+    <td className="border border-gray-300 px-4 py-3 align-top whitespace-normal break-words min-w-[120px] max-w-[400px]">
+      {children}
+    </td>
+  ),
 } as const;
 
 interface ChatPageProps {
@@ -276,7 +139,7 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                   remarkPlugins={[remarkGfm]}
                   components={sharedMarkdownComponents as any}
                 >
-                  {isAssistant ? fixMarkdownTables(normalizeMarkdownSymbols(msg.content)) : msg.content}
+                  {isAssistant ? normalizeMarkdownSymbols(fixMarkdownTables(msg.content)) : msg.content}
                 </ReactMarkdown>
             </CardContent>
             {isAssistant && msg.sources && msg.sources.length > 0 && (
@@ -360,6 +223,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [streamingReferences, setStreamingReferences] = useState<any[]>([]);
   const [currentPostLogId, setCurrentPostLogId] = useState<string | null>(null);
   const [isStreamingComplete, setIsStreamingComplete] = useState<boolean>(false);
+  const [currentSessionId] = useState<string>(() => `session_${Date.now()}`);
 
   // ストリーミング回答の安全な更新関数
   const updateStreamingAnswer = (newContent: any) => {
@@ -484,17 +348,27 @@ export default function ChatPage({ user }: ChatPageProps) {
     setMessages((prev: Message[]) => [...prev, userMessage]);
     setInput(''); // 入力フィールドをクリア
     
-    // ストリーミング処理の初期化
+    // 処理開始時刻を記録（ユーザー体感時間を正確に測定）
+    const clientStartTime = Date.now();
+    
+    // ストリーミング処理の初期化（即座に進捗表示を開始）
     setIsStreaming(true);
     setIsStreamingComplete(false);
-    setCurrentStep(null);
+    setCurrentStep({
+      step: 1,
+      stepId: 'initializing',
+      title: '処理を開始しています...',
+      description: 'サーバーに接続しています...',
+      totalSteps: 4,
+      icon: 'clock'
+    });
     setStreamingError(null);
     setStreamingAnswer('');
     setStreamingReferences([]);
 
     // ストリーミング処理を実行
     try {
-      // ストリーミング処理を開始
+      // ストリーミング処理を開始（開始時刻を渡す）
       await streamingProcessClient.startStreaming(
         currentInput,
         // ステップ更新コールバック
@@ -610,7 +484,8 @@ export default function ChatPage({ user }: ChatPageProps) {
         messages,
         labelFilters,
         user?.uid, // ユーザーID
-        `session_${Date.now()}` // セッションID
+        currentSessionId, // セッションID
+        clientStartTime // クライアント側の開始時刻
       );
 
     } catch (error) {
@@ -875,6 +750,8 @@ export default function ChatPage({ user }: ChatPageProps) {
                           <div className="ml-12 mt-4">
                             <FeedbackRating 
                               postLogId={currentPostLogId}
+                              userId={user?.uid}
+                              sessionId={currentSessionId}
                               onSubmitted={(rating, comment) => {
                                 console.log('評価が送信されました:', { rating, comment });
                               }}
@@ -946,7 +823,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                                   safeAnswer = '回答の生成中にエラーが発生しました。';
                                 }
                                 
-                                return fixMarkdownTables(normalizeMarkdownSymbols(safeAnswer));
+                                return normalizeMarkdownSymbols(fixMarkdownTables(safeAnswer));
                               })()}
                               </ReactMarkdown>
                             </div>

@@ -45,7 +45,8 @@ export class StreamingProcessClient {
     chatHistory: any[] = [],
     labelFilters: any = { includeMeetingNotes: false },
     userId?: string,
-    sessionId?: string
+    sessionId?: string,
+    clientStartTime?: number
   ): Promise<void> {
     try {
       // 既存のストリーミングを停止
@@ -68,6 +69,10 @@ export class StreamingProcessClient {
       
       if (sessionId) {
         headers['x-session-id'] = sessionId;
+      }
+      
+      if (clientStartTime) {
+        headers['x-client-start-time'] = clientStartTime.toString();
       }
 
       const response = await fetch('/api/streaming-process', {

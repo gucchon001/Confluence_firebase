@@ -11,6 +11,138 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+// --- Markdown utilities (chat-page.tsxから移植) ------------------------------------------------------
+/**
+ * Try to normalize malformed markdown tables produced by LLM so that remark-gfm
+ * can render them. Heuristics:
+ * - Ensure table header lines start with a single '|'
+ * - Collapse multiple leading pipes (e.g. "|| 項目 |...")
+ * - Insert separator line like "|:---|:---|" if missing after header
+ * - Ensure each table row starts/ends with a pipe and is on its own line
+ */
+function fixMarkdownTables(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const fixed: string[] = [];
+  let inTable = false;
+  let pendingHeaderColumns: number | null = null;
+  let currentColumns: number | null = null; // 現在のテーブル列数を保持
+
+  const isSeparatorLine = (s: string) => /^\s*\|?\s*(:?-{3,}\s*\|\s*)+(:?-{3,}\s*)?\|?\s*$/.test(s);
+  const normalizeRow = (s: string) => {
+    let row = s.trim();
+    // collapse multiple leading pipes
+    row = row.replace(/^\|{2,}/, '|');
+    // add leading pipe
+    if (!row.startsWith('|')) row = '|' + row;
+    // ensure single spaces around pipes for readability
+    row = row.replace(/\s*\|\s*/g, ' | ');
+    // add trailing pipe
+    if (!row.endsWith('|')) row = row + ' |';
+    return row;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const original = lines[i];
+    const trimmed = original.trim();
+    
+    // Skip empty lines but preserve them
+    if (trimmed === '') {
+      if (inTable) {
+        // End of table
+        inTable = false;
+        pendingHeaderColumns = null;
+        currentColumns = null;
+      }
+      fixed.push(original);
+      continue;
+    }
+
+    const looksLikeRow = /^\s*\|/.test(trimmed) && trimmed.includes('|');
+
+    if (looksLikeRow) {
+      const normalized = normalizeRow(trimmed);
+      if (!inTable) {
+        // Ensure blank line before table for GFM
+        if (fixed.length > 0 && fixed[fixed.length - 1].trim() !== '') fixed.push('');
+        inTable = true;
+        // compute column count from header
+        pendingHeaderColumns = normalized.split('|').filter(c => c.trim().length > 0).length - 1; // exclude leading/trailing
+        currentColumns = pendingHeaderColumns;
+      }
+      // 行を列数で分割して複数行に展開（1行に複数レコードが連結されている場合の対策）
+      const cells = normalized
+        .slice(1, normalized.length - 1) // 先頭/末尾のパイプを除去
+        .split('|')
+        .map(c => c.trim())
+        .filter(c => !(c === '' && currentColumns !== null));
+
+      if (currentColumns && cells.length > currentColumns) {
+        for (let off = 0; off < cells.length; off += currentColumns) {
+          const rowCells = cells.slice(off, off + currentColumns);
+          if (rowCells.length === currentColumns) {
+            fixed.push('| ' + rowCells.join(' | ') + ' |');
+          }
+        }
+      } else {
+        fixed.push(normalized);
+      }
+
+      // If it's the first line of the table (header) and next line isn't a separator, insert one
+      const next = lines[i + 1]?.trim() ?? '';
+      if (pendingHeaderColumns && !isSeparatorLine(next)) {
+        const sepCells = Array(pendingHeaderColumns).fill(':---');
+        fixed.push('| ' + sepCells.join(' | ') + ' |');
+        pendingHeaderColumns = null;
+        currentColumns = currentColumns || sepCells.length;
+      } else if (isSeparatorLine(next)) {
+        // We will let the next loop push the existing separator
+        pendingHeaderColumns = null;
+        currentColumns = currentColumns || (next.split('|').filter(c => c.includes('-')).length);
+      }
+      continue;
+    }
+
+    // If we encounter a separator that LLM emitted, pass it through normalized
+    if (isSeparatorLine(trimmed)) {
+      if (inTable) {
+        fixed.push(normalizeRow(trimmed));
+        pendingHeaderColumns = null;
+        currentColumns = currentColumns || (trimmed.split('|').filter(c => c.includes('-')).length);
+      } else {
+        fixed.push(original);
+      }
+      continue;
+    }
+
+    // Non-table line
+    if (inTable) {
+      // End of table
+      inTable = false;
+      pendingHeaderColumns = null;
+      currentColumns = null;
+    }
+    fixed.push(original);
+  }
+
+  return fixed.join('\n');
+}
+
+function normalizeMarkdownSymbols(markdown: string): string {
+  let text = markdown;
+  
+  // 特殊文字の正規化
+  text = text.replace(/【FIX】/g, '**FIX**');
+  text = text.replace(/【NEW】/g, '**NEW**');
+  text = text.replace(/【REVIEW】/g, '**REVIEW**');
+  text = text.replace(/【FIXME】/g, '**FIXME**');
+  
+  // 連続する改行を2つまでに制限
+  text = text.replace(/\n{3,}/g, '\n\n');
+  
+  return text;
+}
 import { 
   BarChart3, 
   Users, 
@@ -38,7 +170,9 @@ import {
   CheckCircle2,
   Star,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Database,
+  Trash2
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -106,7 +240,7 @@ const mockPostLogs: PostLog[] = [
   }
 ];
 
-// フロントエンドと同じマークダウンコンポーネント
+// フロントエンドと同じマークダウンコンポーネント（テーブル対応版）
 const sharedMarkdownComponents = {
   h1: ({children}: any) => <h1 className="text-lg font-bold mb-4 mt-4">{children}</h1>,
   h2: ({children}: any) => <h2 className="text-lg font-bold mb-4 mt-6 text-gray-800">{children}</h2>,
@@ -121,6 +255,12 @@ const sharedMarkdownComponents = {
   em: ({children}: any) => <em className="italic">{children}</em>,
   code: ({children}: any) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
   pre: ({children}: any) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
+  table: ({children}: any) => <div className="overflow-x-auto"><table className="border-collapse border border-gray-300 w-full mb-4 min-w-max">{children}</table></div>,
+  thead: ({children}: any) => <thead className="bg-gray-50">{children}</thead>,
+  tbody: ({children}: any) => <tbody>{children}</tbody>,
+  tr: ({children}: any) => <tr className="border-b border-gray-200">{children}</tr>,
+  th: ({children}: any) => <th className="border border-gray-300 px-3 py-2 text-left font-semibold align-top break-words whitespace-pre-wrap bg-gray-50">{children}</th>,
+  td: ({children}: any) => <td className="border border-gray-300 px-3 py-2 align-top break-words whitespace-pre-wrap">{children}</td>,
 };
 
 const AdminDashboard: React.FC = () => {
@@ -146,8 +286,8 @@ const AdminDashboard: React.FC = () => {
   const [pageSize, setPageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(0);
 
-  // リアルタイム更新の状態
-  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
+  // リアルタイム更新の状態（デフォルトで無効）
+  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date());
 
   // 管理者権限がない場合はアクセス拒否
@@ -163,29 +303,29 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
-  // データ取得関数
-  // 評価フィードバックを取得
-  const fetchFeedbacks = async (): Promise<SatisfactionRating[]> => {
-    try {
-      const response = await fetch('/api/admin/feedback?limit=100');
-      if (!response.ok) {
-        throw new Error('評価フィードバックの取得に失敗しました');
-      }
-      const data = await response.json();
-      return data.data || [];
-    } catch (error) {
-      console.error('評価フィードバック取得エラー:', error);
-      return [];
-    }
-  };
-
-  const loadData = useCallback(async () => {
+  // データ取得関数をuseCallbackなしで定義
+  const loadData = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
       // ユーザー一覧、投稿ログ、評価フィードバックを並行して取得
       console.log('🔍 管理ダッシュボード: データ取得開始');
+      
+      // 評価フィードバックを取得する内部関数
+      const fetchFeedbacks = async (): Promise<SatisfactionRating[]> => {
+        try {
+          const response = await fetch('/api/admin/feedback?limit=100');
+          if (!response.ok) {
+            throw new Error('評価フィードバックの取得に失敗しました');
+          }
+          const data = await response.json();
+          return data.data || [];
+        } catch (error) {
+          console.error('評価フィードバック取得エラー:', error);
+          return [];
+        }
+      };
       
       const [userList, recentLogs, feedbackList] = await Promise.all([
         adminService.getAllUsers(),
@@ -202,75 +342,17 @@ const AdminDashboard: React.FC = () => {
       setPostLogs(recentLogs);
       setFeedbacks(feedbackList);
       setLastUpdateTime(new Date());
+      
+      // データ取得後に即座にフィルター適用（useEffectを使わない）
+      // これにより、無限ループを防ぐ
     } catch (err) {
       console.error('Error loading data:', err);
       setError('データの取得中にエラーが発生しました');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  };
 
-  // フィルタリング関数
-  const applyFilters = useCallback(() => {
-    let filtered = [...postLogs];
-
-    // 日付フィルター
-    if (dateFilter !== 'all') {
-      const now = new Date();
-      const filterDate = new Date();
-      
-      switch (dateFilter) {
-        case 'today':
-          filterDate.setHours(0, 0, 0, 0);
-          break;
-        case 'week':
-          filterDate.setDate(now.getDate() - 7);
-          break;
-        case 'month':
-          filterDate.setMonth(now.getMonth() - 1);
-          break;
-      }
-      
-      filtered = filtered.filter(log => new Date(log.timestamp) >= filterDate);
-    }
-
-    // ユーザーフィルター
-    if (userFilter !== 'all') {
-      filtered = filtered.filter(log => log.userId === userFilter);
-    }
-
-    // 質問タイプフィルター（簡単なキーワードベース）
-    if (questionTypeFilter !== 'all') {
-      const keywords = {
-        'login': ['ログイン', '認証', 'パスワード'],
-        'classroom': ['教室', '求人', '管理'],
-        'system': ['システム', 'エラー', '設定']
-      };
-      
-      const targetKeywords = keywords[questionTypeFilter as keyof typeof keywords] || [];
-      filtered = filtered.filter(log => 
-        targetKeywords.some(keyword => 
-          log.question.toLowerCase().includes(keyword.toLowerCase())
-        )
-      );
-    }
-
-    // 検索クエリフィルター
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(log => 
-        log.question.toLowerCase().includes(query) ||
-        log.answer.toLowerCase().includes(query)
-      );
-    }
-
-    setFilteredPostLogs(filtered);
-    
-    // ページネーション計算
-    const total = filtered.length;
-    setTotalPages(Math.ceil(total / pageSize));
-    setCurrentPage(1); // フィルター変更時は最初のページに戻る
-  }, [postLogs, dateFilter, userFilter, questionTypeFilter, searchQuery, pageSize]);
 
   // ページネーション適用
   const paginatedLogs = filteredPostLogs.slice(
@@ -302,15 +384,75 @@ const AdminDashboard: React.FC = () => {
     setSelectedLog(null);
   };
 
+  // postLogsやフィルター条件が変わったらフィルター適用
+  useEffect(() => {
+    let filtered = [...postLogs];
+
+    // 日付フィルター
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = new Date();
+      
+      switch (dateFilter) {
+        case 'today':
+          filterDate.setHours(0, 0, 0, 0);
+          break;
+        case 'week':
+          filterDate.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          filterDate.setMonth(now.getMonth() - 1);
+          break;
+      }
+      
+      filtered = filtered.filter(log => new Date(log.timestamp) >= filterDate);
+    }
+
+    // ユーザーフィルター
+    if (userFilter !== 'all') {
+      filtered = filtered.filter(log => log.userId === userFilter);
+    }
+
+    // 質問タイプフィルター
+    if (questionTypeFilter !== 'all') {
+      const keywords = {
+        'login': ['ログイン', '認証', 'パスワード'],
+        'classroom': ['教室', '求人', '管理'],
+        'system': ['システム', 'エラー', '設定']
+      };
+      
+      const targetKeywords = keywords[questionTypeFilter as keyof typeof keywords] || [];
+      filtered = filtered.filter(log => 
+        targetKeywords.some(keyword => 
+          log.question.toLowerCase().includes(keyword.toLowerCase())
+        )
+      );
+    }
+
+    // 検索クエリフィルター
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(log => 
+        log.question.toLowerCase().includes(query) ||
+        log.answer.toLowerCase().includes(query)
+      );
+    }
+
+    setFilteredPostLogs(filtered);
+    setTotalPages(Math.ceil(filtered.length / pageSize));
+    // フィルター条件変更時のみページをリセット（postLogsの変更時はリセットしない）
+  }, [postLogs, dateFilter, userFilter, questionTypeFilter, searchQuery, pageSize]);
+  
+  // フィルター条件変更時のみページをリセット
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateFilter, userFilter, questionTypeFilter, searchQuery, pageSize]);
+
   // 初期データ取得
   useEffect(() => {
     loadData();
-  }, []); // loadDataを依存配列から削除
-
-  // フィルター適用
-  useEffect(() => {
-    applyFilters();
-  }, [postLogs, dateFilter, userFilter, questionTypeFilter, searchQuery, pageSize]); // applyFiltersを依存配列から削除し、実際の依存関係を直接指定
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 初回のみ実行
 
   // リアルタイム更新（5秒間隔）
   useEffect(() => {
@@ -321,7 +463,8 @@ const AdminDashboard: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isRealTimeEnabled]); // loadDataを依存配列から削除
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRealTimeEnabled]); // isRealTimeEnabledの変化のみ監視
 
   const runBackup = async (type: 'full' | 'emergency' = 'full') => {
     try {
@@ -351,6 +494,38 @@ const AdminDashboard: React.FC = () => {
       console.error('❌ バックアップ中にエラーが発生しました:', error);
       setBackupStatus('error');
       setTimeout(() => setBackupStatus('idle'), 3000);
+    }
+  };
+
+  // キャッシュクリア機能
+  const [cacheStatus, setCacheStatus] = useState<'idle' | 'clearing' | 'success' | 'error'>('idle');
+  
+  const clearCache = async () => {
+    try {
+      setCacheStatus('clearing');
+      console.log('🗑️ キャッシュクリアを開始...');
+      
+      const response = await fetch('/api/admin/clear-cache', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('キャッシュクリアに失敗しました');
+      }
+      
+      const result = await response.json();
+      console.log('✅ キャッシュクリアが完了しました:', result);
+      
+      setCacheStatus('success');
+      setTimeout(() => setCacheStatus('idle'), 3000);
+      
+    } catch (error) {
+      console.error('❌ キャッシュクリア中にエラーが発生しました:', error);
+      setCacheStatus('error');
+      setTimeout(() => setCacheStatus('idle'), 3000);
     }
   };
 
@@ -398,6 +573,10 @@ const AdminDashboard: React.FC = () => {
         return logTime >= hourStart && logTime < hourEnd;
       });
       
+      const avgServerStartupTime = logsInHour.length > 0 
+        ? logsInHour.reduce((sum, log) => sum + ((log as any).serverStartupTime || 0), 0) / logsInHour.length / 1000
+        : 0;
+      
       const avgSearchTime = logsInHour.length > 0 
         ? logsInHour.reduce((sum, log) => sum + log.searchTime, 0) / logsInHour.length / 1000
         : 0;
@@ -412,9 +591,10 @@ const AdminDashboard: React.FC = () => {
       
       hourlyData.push({
         time: `${hourStart.getHours()}:00`,
+        serverStartupTime: avgServerStartupTime,
         searchTime: avgSearchTime,
         aiTime: avgAiTime,
-        totalTime: avgSearchTime + avgAiTime,
+        totalTime: avgServerStartupTime + avgSearchTime + avgAiTime,
         posts: logsInHour.length,
         errorRate: errorRate
       });
@@ -451,6 +631,9 @@ const AdminDashboard: React.FC = () => {
     return Object.entries(types).map(([type, data]) => ({
       type,
       count: data.logs.length,
+      avgServerStartupTime: data.logs.length > 0 
+        ? data.logs.reduce((sum, log) => sum + ((log as any).serverStartupTime || 0), 0) / data.logs.length / 1000
+        : 0,
       avgSearchTime: data.logs.length > 0 
         ? data.logs.reduce((sum, log) => sum + log.searchTime, 0) / data.logs.length / 1000
         : 0,
@@ -692,13 +875,41 @@ const AdminDashboard: React.FC = () => {
           {/* 投稿ログ一覧 */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
-                投稿ログ ({filteredPostLogs.length}件)
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                ページ {currentPage} / {totalPages} (1ページあたり {pageSize}件)
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    投稿ログ ({filteredPostLogs.length}件)
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    ページ {currentPage} / {totalPages} (1ページあたり {pageSize}件)
+                    {lastUpdateTime && (
+                      <span className="ml-2">
+                        • 最終更新: {lastUpdateTime.toLocaleTimeString('ja-JP')}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefresh}
+                    disabled={isLoading}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                    更新
+                  </Button>
+                  <Button
+                    variant={isRealTimeEnabled ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setIsRealTimeEnabled(!isRealTimeEnabled)}
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    {isRealTimeEnabled ? 'リアルタイム ON' : 'リアルタイム OFF'}
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {paginatedLogs.length === 0 ? (
@@ -916,12 +1127,20 @@ const AdminDashboard: React.FC = () => {
                     <Tooltip 
                       formatter={(value, name) => [
                         `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
+                        name === 'serverStartupTime' ? 'サーバー起動時間' :
                         name === 'searchTime' ? '検索時間' : 
                         name === 'aiTime' ? 'AI生成時間' : 
                         name === 'totalTime' ? '総処理時間' : name
                       ]}
                     />
                     <Legend />
+                    <Line 
+                      type="monotone" 
+                      dataKey="serverStartupTime" 
+                      stroke="#8b5cf6" 
+                      strokeWidth={2}
+                      name="サーバー起動時間"
+                    />
                     <Line 
                       type="monotone" 
                       dataKey="searchTime" 
@@ -968,11 +1187,13 @@ const AdminDashboard: React.FC = () => {
                       <Tooltip 
                         formatter={(value, name) => [
                           `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
+                          name === 'avgServerStartupTime' ? '平均サーバー起動時間' :
                           name === 'avgSearchTime' ? '平均検索時間' : 
                           name === 'avgAiTime' ? '平均AI生成時間' : name
                         ]}
                       />
                       <Legend />
+                      <Bar dataKey="avgServerStartupTime" fill="#8b5cf6" name="平均サーバー起動時間" />
                       <Bar dataKey="avgSearchTime" fill="#3b82f6" name="平均検索時間" />
                       <Bar dataKey="avgAiTime" fill="#f97316" name="平均AI生成時間" />
                     </RechartsBarChart>
@@ -1120,40 +1341,71 @@ const AdminDashboard: React.FC = () => {
                   <h3 className="text-lg font-semibold">評価一覧</h3>
                   <ScrollArea className="h-96">
                     <div className="space-y-2">
-                      {feedbacks.map((feedback) => (
-                        <Card key={feedback.id}>
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <div className="flex items-center">
-                                    {Array.from({ length: feedback.rating }, (_, i) => (
-                                      <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
-                                    ))}
-                                    {Array.from({ length: 5 - feedback.rating }, (_, i) => (
-                                      <Star key={i} className="w-4 h-4 text-gray-300" />
-                                    ))}
+                      {feedbacks.map((feedback) => {
+                        // PostLog IDから対応する投稿ログを検索
+                        const relatedPostLog = postLogs.find(log => log.id === feedback.postLogId);
+                        
+                        return (
+                          <Card key={feedback.id}>
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="flex items-center">
+                                      {Array.from({ length: feedback.rating }, (_, i) => (
+                                        <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+                                      ))}
+                                      {Array.from({ length: 5 - feedback.rating }, (_, i) => (
+                                        <Star key={i} className="w-4 h-4 text-gray-300" />
+                                      ))}
+                                    </div>
+                                    <span className="text-sm text-muted-foreground">
+                                      {feedback.metadata.userDisplayName || feedback.userId || '匿名ユーザー'}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {new Date(feedback.timestamp).toLocaleString('ja-JP')}
+                                    </span>
                                   </div>
-                                  <span className="text-sm text-muted-foreground">
-                                    {feedback.metadata.userDisplayName || '匿名ユーザー'}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {new Date(feedback.timestamp).toLocaleString('ja-JP')}
-                                  </span>
-                                </div>
-                                {feedback.comment && (
-                                  <p className="text-sm text-gray-700 mt-2 p-2 bg-gray-50 rounded">
-                                    {feedback.comment}
-                                  </p>
-                                )}
-                                <div className="text-xs text-muted-foreground mt-2">
-                                  PostLog ID: {feedback.postLogId}
+                                  
+                                  {/* 評価された質問内容を表示 */}
+                                  {relatedPostLog && (
+                                    <div className="mb-2 p-2 bg-blue-50 rounded border-l-4 border-blue-200">
+                                      <div className="text-xs text-blue-600 font-medium mb-1">評価された質問:</div>
+                                      <div className="text-sm text-gray-700">
+                                        {relatedPostLog.question.length > 100 
+                                          ? `${relatedPostLog.question.substring(0, 100)}...` 
+                                          : relatedPostLog.question
+                                        }
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {feedback.comment && (
+                                    <p className="text-sm text-gray-700 mt-2 p-2 bg-gray-50 rounded">
+                                      {feedback.comment}
+                                    </p>
+                                  )}
+                                  
+                                  <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2">
+                                    <span>PostLog ID: {feedback.postLogId}</span>
+                                    {relatedPostLog && (
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={() => handleLogClick(relatedPostLog)}
+                                        className="h-6 px-2 text-xs"
+                                      >
+                                        <Eye className="w-3 h-3 mr-1" />
+                                        詳細表示
+                                      </Button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </ScrollArea>
                 </div>
@@ -1230,6 +1482,73 @@ const AdminDashboard: React.FC = () => {
                   </Card>
                 )}
               </div>
+
+              {/* キャッシュ管理セクション */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Database className="h-5 w-5" />
+                  <h3 className="text-lg font-semibold">キャッシュ管理</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  永続化キャッシュとメモリキャッシュを管理し、起動時間を最適化します
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                        <h4 className="font-medium">キャッシュクリア</h4>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        永続化キャッシュとメモリキャッシュをクリアし、次回起動時にフレッシュな状態にします
+                      </p>
+                      <Button 
+                        onClick={clearCache} 
+                        disabled={cacheStatus === 'clearing'}
+                        variant="outline"
+                        className="w-full border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        {cacheStatus === 'clearing' ? 'クリア中...' : 'キャッシュクリア'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Zap className="h-4 w-4 text-yellow-600" />
+                        <h4 className="font-medium">起動最適化</h4>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        キャッシュにより次回起動時間が大幅に短縮されます（通常3秒以下）
+                      </p>
+                      <div className="text-xs text-muted-foreground">
+                        <div>• トークナイザー状態: キャッシュ済み</div>
+                        <div>• 起動最適化: 有効</div>
+                        <div>• バックグラウンド更新: 有効</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {cacheStatus !== 'idle' && (
+                  <Card className={cacheStatus === 'success' ? 'border-green-200 bg-green-50' : cacheStatus === 'error' ? 'border-red-200 bg-red-50' : ''}>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-2">
+                        {cacheStatus === 'success' && <CheckCircle className="h-4 w-4 text-green-600" />}
+                        {cacheStatus === 'error' && <XCircle className="h-4 w-4 text-red-600" />}
+                        {cacheStatus === 'clearing' && <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />}
+                        <span className={cacheStatus === 'success' ? 'text-green-600' : cacheStatus === 'error' ? 'text-red-600' : 'text-blue-600'}>
+                          {cacheStatus === 'success' && 'キャッシュが正常にクリアされました'}
+                          {cacheStatus === 'error' && 'キャッシュクリア中にエラーが発生しました'}
+                          {cacheStatus === 'clearing' && 'キャッシュをクリア中...'}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1285,6 +1604,12 @@ const AdminDashboard: React.FC = () => {
                     <CardTitle className="text-sm">パフォーマンス指標</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">サーバー起動時間:</span>
+                      <Badge variant="outline" className="text-purple-600">
+                        {((selectedLog as any).serverStartupTime ? (selectedLog as any).serverStartupTime / 1000 : 0).toFixed(1)}s
+                      </Badge>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">検索時間:</span>
                       <Badge variant="outline" className="text-blue-600">
@@ -1352,9 +1677,10 @@ const AdminDashboard: React.FC = () => {
                   <ScrollArea className="h-[400px]">
                     <div className="prose prose-sm max-w-none text-sm leading-relaxed">
                       <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
                         components={sharedMarkdownComponents}
                       >
-                        {selectedLog.answer}
+                        {fixMarkdownTables(normalizeMarkdownSymbols(selectedLog.answer))}
                       </ReactMarkdown>
                     </div>
                   </ScrollArea>

@@ -29,17 +29,28 @@ export function convertPostLogToFirestore(logData: Omit<PostLog, 'id'>): any {
  * Firestore → PostLog (クライアント側)
  */
 export function convertFirestoreToPostLog(docId: string, data: any): PostLog {
-  return {
+  // 🔍 デバッグ: Firestoreから取得したデータを確認
+  console.log('🔍 [convertFirestoreToPostLog] Firestoreデータ確認:', {
+    docId,
+    serverStartupTime: data.serverStartupTime,
+    searchTime: data.searchTime,
+    aiGenerationTime: data.aiGenerationTime,
+    totalTime: data.totalTime,
+    referencesCount: data.referencesCount
+  });
+  
+  const postLog = {
     id: docId,
     userId: data.userId,
     question: data.question,
     answer: data.answer,
-    searchTime: data.searchTime,
-    aiGenerationTime: data.aiGenerationTime,
-    totalTime: data.totalTime,
-    referencesCount: data.referencesCount,
+    serverStartupTime: data.serverStartupTime || 0, // サーバー起動時間を追加（デフォルト0）
+    searchTime: data.searchTime || 0, // デフォルト値0を追加
+    aiGenerationTime: data.aiGenerationTime || 0, // デフォルト値0を追加
+    totalTime: data.totalTime || 0, // デフォルト値0を追加
+    referencesCount: data.referencesCount || 0, // デフォルト値0を追加
     references: data.references,
-    answerLength: data.answerLength,
+    answerLength: data.answerLength || 0, // デフォルト値0を追加
     qualityScore: data.qualityScore,
     timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp),
     processingSteps: data.processingSteps?.map((step: any) => ({
@@ -57,5 +68,17 @@ export function convertFirestoreToPostLog(docId: string, data: any): PostLog {
       ipAddress: 'unknown'
     }
   };
+  
+  // 🔍 デバッグ: 変換後のPostLogを確認
+  console.log('🔍 [convertFirestoreToPostLog] 変換後PostLog確認:', {
+    docId,
+    serverStartupTime: postLog.serverStartupTime,
+    searchTime: postLog.searchTime,
+    aiGenerationTime: postLog.aiGenerationTime,
+    totalTime: postLog.totalTime,
+    referencesCount: postLog.referencesCount
+  });
+  
+  return postLog;
 }
 
