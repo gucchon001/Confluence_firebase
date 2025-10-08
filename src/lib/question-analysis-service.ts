@@ -5,9 +5,10 @@
 
 import { getFirestore } from 'firebase/firestore';
 import { app } from '@/lib/firebase';
+import { collection, query, orderBy, limit, where, getDocs, Timestamp } from 'firebase/firestore';
+import { convertFirestoreToPostLog } from './firestore-data-mapper';
 
 const db = getFirestore(app);
-import { collection, query, orderBy, limit, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { PostLog } from '@/types';
 
 export interface QuestionAnalysis {
@@ -80,20 +81,7 @@ export class QuestionAnalysisService {
       );
       
       const snapshot = await getDocs(q);
-      const postLogs: PostLog[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp.toDate(),
-        processingSteps: doc.data().processingSteps?.map((step: any) => ({
-          ...step,
-          timestamp: step.timestamp.toDate()
-        })) || [],
-        errors: doc.data().errors?.map((error: any) => ({
-          ...error,
-          timestamp: error.timestamp.toDate(),
-          resolvedAt: error.resolvedAt?.toDate()
-        })) || []
-      })) as PostLog[];
+      const postLogs: PostLog[] = snapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
 
       console.log(`📊 質問分析: ${postLogs.length}件のログを分析中`);
 
@@ -387,11 +375,7 @@ export class QuestionAnalysisService {
       );
       
       const snapshot = await getDocs(q);
-      const postLogs: PostLog[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp.toDate()
-      })) as PostLog[];
+      const postLogs: PostLog[] = snapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
 
       // 質問パターンの抽出
       const patternMap = new Map<string, {

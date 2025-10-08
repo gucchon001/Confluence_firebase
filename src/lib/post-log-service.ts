@@ -2,6 +2,7 @@
 
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, where, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { app } from './firebase';
+import { convertPostLogToFirestore, convertFirestoreToPostLog } from './firestore-data-mapper';
 import type { PostLog, ProcessingStep, ErrorLog } from '@/types';
 
 const db = getFirestore(app);
@@ -26,19 +27,8 @@ export class PostLogService {
   async createPostLog(logData: Omit<PostLog, 'id'>): Promise<string> {
     try {
       const postLogsRef = collection(db, 'postLogs');
-      const docRef = await addDoc(postLogsRef, {
-        ...logData,
-        timestamp: Timestamp.fromDate(logData.timestamp),
-        processingSteps: logData.processingSteps.map(step => ({
-          ...step,
-          timestamp: Timestamp.fromDate(step.timestamp)
-        })),
-        errors: logData.errors?.map(error => ({
-          ...error,
-          timestamp: Timestamp.fromDate(error.timestamp),
-          resolvedAt: error.resolvedAt ? Timestamp.fromDate(error.resolvedAt) : null
-        }))
-      });
+      const firestoreData = convertPostLogToFirestore(logData);
+      const docRef = await addDoc(postLogsRef, firestoreData);
       
       console.log('Post log created with ID:', docRef.id);
       return docRef.id;
@@ -56,9 +46,9 @@ export class PostLogService {
       const postLogsRef = collection(db, 'postLogs');
       const docRef = doc(postLogsRef, logId);
       
+      // Timestamp変換を共通化（部分更新の場合は個別に変換）
       const updateData: any = { ...updates };
       
-      // タイムスタンプを適切に変換
       if (updates.timestamp) {
         updateData.timestamp = Timestamp.fromDate(updates.timestamp);
       }
@@ -107,32 +97,7 @@ export class PostLogService {
         empty: querySnapshot.empty 
       });
       
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          userId: data.userId,
-          question: data.question,
-          answer: data.answer,
-          searchTime: data.searchTime,
-          aiGenerationTime: data.aiGenerationTime,
-          totalTime: data.totalTime,
-          referencesCount: data.referencesCount,
-          answerLength: data.answerLength,
-          qualityScore: data.qualityScore,
-          timestamp: data.timestamp.toDate(),
-          processingSteps: data.processingSteps.map((step: any) => ({
-            ...step,
-            timestamp: step.timestamp.toDate()
-          })),
-          errors: data.errors?.map((error: any) => ({
-            ...error,
-            timestamp: error.timestamp.toDate(),
-            resolvedAt: error.resolvedAt?.toDate()
-          })),
-          metadata: data.metadata
-        } as PostLog;
-      });
+      return querySnapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
     } catch (error) {
       console.error('Error getting recent post logs:', error);
       throw error;
@@ -154,32 +119,7 @@ export class PostLogService {
       
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          userId: data.userId,
-          question: data.question,
-          answer: data.answer,
-          searchTime: data.searchTime,
-          aiGenerationTime: data.aiGenerationTime,
-          totalTime: data.totalTime,
-          referencesCount: data.referencesCount,
-          answerLength: data.answerLength,
-          qualityScore: data.qualityScore,
-          timestamp: data.timestamp.toDate(),
-          processingSteps: data.processingSteps.map((step: any) => ({
-            ...step,
-            timestamp: step.timestamp.toDate()
-          })),
-          errors: data.errors?.map((error: any) => ({
-            ...error,
-            timestamp: error.timestamp.toDate(),
-            resolvedAt: error.resolvedAt?.toDate()
-          })),
-          metadata: data.metadata
-        } as PostLog;
-      });
+      return querySnapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
     } catch (error) {
       console.error('Error getting post logs by date range:', error);
       throw error;
@@ -201,32 +141,7 @@ export class PostLogService {
       
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          userId: data.userId,
-          question: data.question,
-          answer: data.answer,
-          searchTime: data.searchTime,
-          aiGenerationTime: data.aiGenerationTime,
-          totalTime: data.totalTime,
-          referencesCount: data.referencesCount,
-          answerLength: data.answerLength,
-          qualityScore: data.qualityScore,
-          timestamp: data.timestamp.toDate(),
-          processingSteps: data.processingSteps.map((step: any) => ({
-            ...step,
-            timestamp: step.timestamp.toDate()
-          })),
-          errors: data.errors?.map((error: any) => ({
-            ...error,
-            timestamp: error.timestamp.toDate(),
-            resolvedAt: error.resolvedAt?.toDate()
-          })),
-          metadata: data.metadata
-        } as PostLog;
-      });
+      return querySnapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
     } catch (error) {
       console.error('Error getting post logs by user:', error);
       throw error;
@@ -248,32 +163,7 @@ export class PostLogService {
       const querySnapshot = await getDocs(q);
       
       return querySnapshot.docs
-        .map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            userId: data.userId,
-            question: data.question,
-            answer: data.answer,
-            searchTime: data.searchTime,
-            aiGenerationTime: data.aiGenerationTime,
-            totalTime: data.totalTime,
-            referencesCount: data.referencesCount,
-            answerLength: data.answerLength,
-            qualityScore: data.qualityScore,
-            timestamp: data.timestamp.toDate(),
-            processingSteps: data.processingSteps.map((step: any) => ({
-              ...step,
-              timestamp: step.timestamp.toDate()
-            })),
-            errors: data.errors?.map((error: any) => ({
-              ...error,
-              timestamp: error.timestamp.toDate(),
-              resolvedAt: error.resolvedAt?.toDate()
-            })),
-            metadata: data.metadata
-          } as PostLog;
-        })
+        .map(doc => convertFirestoreToPostLog(doc.id, doc.data()))
         .filter(log => log.errors && log.errors.length > 0);
     } catch (error) {
       console.error('Error getting error post logs:', error);

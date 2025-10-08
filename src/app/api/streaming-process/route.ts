@@ -11,6 +11,7 @@ import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
 import { getFirebaseFirestore } from '@/lib/firebase-unified';
 import * as admin from 'firebase-admin';
 import { initializeFirebaseAdmin } from '@/lib/firebase-admin-init';
+import { convertPostLogToAdminFirestore } from '@/lib/firestore-data-mapper-admin';
 import { postLogService } from '@/lib/post-log-service';
 import type { PostLog, ProcessingStep } from '@/types';
 // screenTestLoggerのインポート（存在しない場合は無視）
@@ -56,20 +57,8 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
       timestamp: logData.timestamp
     });
     
-    const firestoreData = {
-      ...logData,
-      timestamp: admin.firestore.Timestamp.fromDate(logData.timestamp),
-      processingSteps: logData.processingSteps.map(step => ({
-        ...step,
-        timestamp: admin.firestore.Timestamp.fromDate(step.timestamp)
-      })),
-      errors: logData.errors?.map(error => ({
-        ...error,
-        timestamp: admin.firestore.Timestamp.fromDate(error.timestamp),
-        resolvedAt: error.resolvedAt ? admin.firestore.Timestamp.fromDate(error.resolvedAt) : null
-      })) || [],
-      metadata: logData.metadata
-    };
+    // Timestamp変換ロジックを共通化
+    const firestoreData = convertPostLogToAdminFirestore(logData);
     
     const docRef = await postLogsRef.add(firestoreData);
     console.log('📝 サーバーサイド投稿ログを保存しました:', docRef.id);
