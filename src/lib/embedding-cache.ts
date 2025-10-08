@@ -4,39 +4,22 @@
  */
 
 import crypto from 'crypto';
+import { GenericCache } from './generic-cache';
 
-interface EmbeddingCacheEntry {
-  embedding: number[];
-  timestamp: number;
-  hits: number;
-}
+// ジェネリックキャッシュを使用
+const cache = new GenericCache<number[]>({
+  ttl: 7200000, // 2時間（エンベディングは長期間有効）
+  maxSize: 500, // 最大500エントリ
+  evictionStrategy: 'lru'
+});
 
 class EmbeddingCache {
-  private cache = new Map<string, EmbeddingCacheEntry>();
-  private readonly TTL = 7200000; // 2時間（エンベディングは長期間有効）
-  private readonly MAX_SIZE = 500; // 最大500エントリ
-
   /**
    * キャッシュからエンベディングを取得（同期版）
    */
   get(query: string): number[] | null {
     const key = this.generateKey(query);
-    const entry = this.cache.get(key);
-    
-    if (!entry) {
-      return null;
-    }
-    
-    // TTLチェック
-    if (Date.now() - entry.timestamp > this.TTL) {
-      this.cache.delete(key);
-      return null;
-    }
-    
-    // ヒット数を増やす
-    entry.hits++;
-    
-    return entry.embedding;
+    return cache.get(key);
   }
 
   /**
@@ -44,41 +27,21 @@ class EmbeddingCache {
    */
   async getCachedEmbedding(query: string): Promise<number[] | null> {
     const key = this.generateKey(query);
-    const entry = this.cache.get(key);
+    const result = cache.get(key);
     
-    if (!entry) {
-      return null;
+    if (result) {
+      console.log(`🚀 エンベディングキャッシュヒット: "${query.substring(0, 50)}..."`);
     }
     
-    // TTLチェック
-    if (Date.now() - entry.timestamp > this.TTL) {
-      this.cache.delete(key);
-      return null;
-    }
-    
-    // ヒット数を増やす
-    entry.hits++;
-    console.log(`🚀 エンベディングキャッシュヒット: "${query.substring(0, 50)}..." (${entry.hits}回目)`);
-    
-    return entry.embedding;
+    return result;
   }
 
   /**
-   * エンベディングをキャッシュに保存（同期版）
+   * エンベディングをキャッシュに保存
    */
   set(query: string, embedding: number[]): void {
     const key = this.generateKey(query);
-    
-    // キャッシュサイズ制限
-    if (this.cache.size >= this.MAX_SIZE) {
-      this.evictLRU();
-    }
-    
-    this.cache.set(key, {
-      embedding,
-      timestamp: Date.now(),
-      hits: 0
-    });
+    cache.set(key, embedding);
   }
 
   /**
@@ -86,18 +49,7 @@ class EmbeddingCache {
    */
   async setCachedEmbedding(query: string, embedding: number[]): Promise<void> {
     const key = this.generateKey(query);
-    
-    // キャッシュサイズ制限
-    if (this.cache.size >= this.MAX_SIZE) {
-      this.evictLRU();
-    }
-    
-    this.cache.set(key, {
-      embedding,
-      timestamp: Date.now(),
-      hits: 0
-    });
-    
+    cache.set(key, embedding);
     console.log(`💾 エンベディングをキャッシュに保存: "${query.substring(0, 50)}..."`);
   }
 
@@ -116,32 +68,10 @@ class EmbeddingCache {
   }
 
   /**
-   * LRU（Least Recently Used）でエントリを削除
-   */
-  private evictLRU(): void {
-    let oldestTime = Infinity;
-    let oldestKey = '';
-    
-    // 最も古く、ヒット数が少ないエントリを見つける
-    for (const [key, entry] of this.cache.entries()) {
-      const score = entry.timestamp + (entry.hits * 60000); // ヒット1回 = 1分の価値
-      if (score < oldestTime) {
-        oldestTime = score;
-        oldestKey = key;
-      }
-    }
-    
-    if (oldestKey) {
-      this.cache.delete(oldestKey);
-      console.log('🗑️ エンベディングキャッシュLRU削除');
-    }
-  }
-
-  /**
    * キャッシュをクリア
    */
   clear(): void {
-    this.cache.clear();
+    cache.clear();
     console.log('🗑️ エンベディングキャッシュをクリア');
   }
 
@@ -149,21 +79,7 @@ class EmbeddingCache {
    * キャッシュ統計を取得
    */
   getStats(): { size: number; avgHits: number; hitRate: number } {
-    let totalHits = 0;
-    let entriesWithHits = 0;
-    
-    for (const entry of this.cache.values()) {
-      totalHits += entry.hits;
-      if (entry.hits > 0) {
-        entriesWithHits++;
-      }
-    }
-    
-    return {
-      size: this.cache.size,
-      avgHits: totalHits / Math.max(this.cache.size, 1),
-      hitRate: entriesWithHits / Math.max(this.cache.size, 1)
-    };
+    return cache.getStats();
   }
 }
 

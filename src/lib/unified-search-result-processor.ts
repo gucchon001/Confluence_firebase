@@ -150,20 +150,21 @@ export class UnifiedSearchResultProcessor {
    * 関連性チェック
    */
   private isRelevantResult(result: RawSearchResult, options: Required<ScoreCalculationOptions>): boolean {
-    // 1. スコア閾値チェック
-    const minScore = 0.15; // 最低スコア閾値
+    // 1. スコア閾値チェック（緩和: 0.15 → 0.10）
+    const minScore = 0.10; // 最低スコア閾値
     if ((result._hybridScore ?? 0) < minScore) {
       return false;
     }
 
-    // 2. タイトル関連性チェック
+    // 2. タイトル関連性チェック（過度なフィルタリングを削除）
     const title = result.title.toLowerCase();
     const irrelevantPatterns = [
-      '請求', 'invoice', '支払い', 'payment',
-      '応募履歴', 'application history',
-      'メール', 'mail template',
-      '議事録', 'meeting notes',
-      'アーカイブ', 'archive'
+      '請求書テンプレート', 'invoice template',  // より具体的に
+      '支払い履歴', 'payment history',  // より具体的に
+      '議事録アーカイブ', 'archived meeting notes'  // より具体的に
+      // 'メール'を削除（メールテンプレートも仕様の一部）
+      // '応募履歴'を削除（応募機能の仕様の一部）
+      // '議事録'を削除（議事録も参考情報として有用）
     ];
 
     // タイトルに無関係なキーワードが含まれている場合は除外

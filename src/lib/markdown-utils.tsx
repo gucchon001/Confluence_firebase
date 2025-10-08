@@ -120,10 +120,28 @@ export function normalizeMarkdownSymbols(markdown: string): string {
   // 箇条書きの改行処理（「。-」パターンを「。\n-」に変換）
   text = text.replace(/([。！？])\s*-\s+/g, '$1\n- ');
   
-  // 番号付きリストの改行処理（「。 2.」「。3.」のようなパターンを「。\n2.」に変換）
+  // 番号付きリストの改行処理
+  // 1. 句読点の後の数字リスト：「。 2.」→「。\n2.」
   text = text.replace(/([。！？])\s*(\d+\.)\s+/g, '$1\n$2 ');
+  // 2. 連続する数字リスト：「...時。1.会員登録」→「...時。\n1.会員登録」
+  text = text.replace(/([。！？])(\d+\.[^\n])/g, '$1\n$2');
   
-  // 余分な改行を整理
+  // 数字リストのMarkdown形式化
+  // 行頭または改行後の「1.テキスト」を「1. テキスト」に変換（スペースを追加）
+  text = text.replace(/^(\d+\.)([^\s\n])/gm, '$1 $2');
+  text = text.replace(/\n(\d+\.)([^\s\n])/g, '\n$1 $2');
+  
+  // 数字リストの前に空行を追加（Markdown認識のため）
+  // ただし、既に空行がある場合や、リストが連続している場合は追加しない
+  text = text.replace(/([^\n])\n(\d+\.\s)/g, (match, before, listStart) => {
+    // 前の行が数字リストでない場合のみ空行を追加
+    if (!/^\d+\.\s/.test(before)) {
+      return before + '\n\n' + listStart;
+    }
+    return match;
+  });
+  
+  // 余分な改行を整理（3つ以上の連続改行を2つに）
   text = text.replace(/\n{3,}/g, '\n\n');
   
   return text;
