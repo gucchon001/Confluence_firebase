@@ -69,7 +69,7 @@ function fixMarkdownTables(markdown: string): string {
 function normalizeMarkdownSymbols(markdown: string): string {
   if (!markdown) return markdown;
   
-  // シンプルアプローチ：基本的な全角→半角変換のみ
+  // 基本的な全角→半角変換
   let text = markdown
     .replace(/｜/g, '|')       // U+FF5C FULLWIDTH VERTICAL LINE
     .replace(/：/g, ':')       // U+FF1A FULLWIDTH COLON
@@ -77,8 +77,12 @@ function normalizeMarkdownSymbols(markdown: string): string {
     .replace(/〜/g, '~')
     .replace(/　/g, ' ');      // U+3000 IDEOGRAPHIC SPACE
   
-  // シンプルアプローチ：基本的な全角→半角変換のみ
-  // その他の処理はReactMarkdownのプラグインに依存
+  // 箇条書きの改行処理（「。-」パターンを「。\n-」に変換）
+  text = text.replace(/([。！？])\s*-\s+/g, '$1\n- ');
+  
+  // 番号付きリストの改行処理（「。 2.」「。3.」のようなパターンを「。\n2.」に変換）
+  text = text.replace(/([。！？])\s*(\d+\.)\s+/g, '$1\n$2 ');
+  
   return text;
 }
 
