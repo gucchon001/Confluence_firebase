@@ -17,6 +17,17 @@ const nextConfig = {
   // パッケージの最適化
   transpilePackages: ['lunr'],
   webpack: (config, { isServer }) => {
+    // 永続キャッシュを有効化（コンパイル時間を大幅削減）
+    config.cache = {
+      type: 'filesystem',
+      compression: 'gzip',
+      buildDependencies: {
+        config: [__filename]
+      },
+      cacheDirectory: '.next/cache/webpack',
+      maxAge: 1000 * 60 * 60 * 24 * 7  // 7日間
+    };
+    
     // LanceDBのネイティブバイナリモジュールをWebpackから除外
     if (isServer) {
       config.externals.push({
