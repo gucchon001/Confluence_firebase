@@ -10,8 +10,7 @@ import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
 import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
 import { getFirebaseFirestore } from '@/lib/firebase-unified';
 import * as admin from 'firebase-admin';
-import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin-init';
 import { postLogService } from '@/lib/post-log-service';
 import type { PostLog, ProcessingStep } from '@/types';
 // screenTestLoggerのインポート（存在しない場合は無視）
@@ -35,29 +34,7 @@ try {
   };
 }
 
-// Firebase Admin SDKを初期化する関数
-function initializeFirebaseAdmin() {
-  if (admin.apps.length === 0) {
-    try {
-      // 環境変数からサービスアカウントキーを取得
-      const serviceAccount = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      if (serviceAccount) {
-        const serviceAccountData = require(serviceAccount);
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccountData)
-        });
-        console.log('✅ Firebase Admin SDK initialized');
-      } else {
-        console.warn('⚠️ GOOGLE_APPLICATION_CREDENTIALS not set, using default credentials');
-        admin.initializeApp();
-      }
-    } catch (error) {
-      console.error('❌ Firebase Admin SDK initialization failed:', error);
-      throw error;
-    }
-  }
-  return admin.app();
-}
+// Firebase Admin SDK初期化は @/lib/firebase-admin-init から共通化
 
 // サーバーサイド用の投稿ログ保存関数
 async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<string> {
@@ -142,36 +119,7 @@ function generateFallbackAnswer(question: string, context: any[]): string {
   return answer;
 }
 
-// Firebase Admin SDKの初期化（サービスアカウントキーを使用）
-let adminDb: FirebaseFirestore.Firestore | null = null;
-
-function getAdminFirestore() {
-  if (!adminDb) {
-    if (getApps().length === 0) {
-      // サービスアカウントキーを直接読み込み
-      const serviceAccount = {
-        type: "service_account",
-        project_id: "confluence-copilot-ppjye",
-        private_key_id: "010abed595f7d7e3ec998c3d945608e77734dc4e",
-        private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDVRHxOZim7cOGE\n0eX6+bTSaJXnI3jW8SrwpsSovJOe5av1bsmY2PzRMMIU6TOK5XkOAQ+ywsJB+3Bp\nm5tVhmH/Zw9BhoDs1GLJU8J2dTyCsJYpDtbtX/SdRW9O4xfqWLUPoKaMFBN6qQJD\nv7J/9o+g2gW2h0mOkzKshkCZf3RITU7xdNyXab0EFSNPb1w4tXzZKllzJl0TOKyv\ned9Ckjzy64ztN9gvYcswOFRpdRcNy5w0ijJXt92xbttHjO6U+cWo/Lmla9NLWrrK\npt1lFCc5T+L4XHiS3UW6P0AvqAtkFDeRZv7FsA04N+WVje6Q5LkD3vz5swonspBx\nzpvVu78nAgMBAAECggEAA4OgFSSiBGiTdr5Re7i4oSaMoP6yVr+QYkXFNzVgRoqC\nfyyG3hT/pkZkGrcbAwUAx4yYU+0Mov/mXGWH6J/EJp+Ha1N9jvZGKHFP/E0c2Ara\nQ2C767TPxMJ1Pceh+1ngP4EsrWGftPI3yzwx6a57TTG6gJIrHp8DUAxB4HJus2N2\n/+F1PtxOaaO018auI1BIPKDiUYUxs9Bg0GFfe6PGP2FYnD0cYOAL0qO7mCkNrDXu\nJLTZcsKFveqp4W0WUK3yaXexaYWuem2NP7dawkmXSCjl1ew1NXozZYRrcXYRW6qf\nUGx5GcVdHrPITNmHhOFFJafPiP94bQew4J1Dx1nn6QKBgQD9qCgWpR4SyPVx84cB\nSufY85l1GAMW5ClYzxhAuw8mJX08/EJzZrhqEqfQ5scu5uIOWKi71csdEul+Yamg\nfQ99Ezf6pNeoYNdTC94oaM4eseiBBBorxoTvtggs2PQtUscJSPdM4HZC7qwslQM+\nDRiWZXBAhcAkntHjcK3wgQWMbwKBgQDXPNEkB+EdAQoyHCIfhf2Jsv8Q3+la8sG1\nOQVRMpuOewfbjIL8JjkVwf/H+YeE52dNFfAr2v6sdb7ZsDOicmjZ8jhpd7/zzC+0\niUdrv3rVaDAgEhIZMalqlsLa2iAgsl0v1i1J9VSajTm/QLr2TYNyT+GX64szjPmK\noS4KgZ1EyQKBgARqihAi3cwr7YIHYGFYYYL4csKEIYGjhUjDikOOPixG2NBX//ws\nXKeUHZHYgr1BTcw8JOvoQ/oEm0YVAzQFGWDvFblqZ0rKLNWITlzbvkLwjAC7Bo2e\nji/yNmA5gr7LQyXZPFz9R3HQ3/SCv6Sz66qqp3KoIXlBvpu8GXsnc+ZHAoGBALOG\nZ47c/5fYkS+ApbmTYgjjgroJeTNBve4xFE1In9T0q3YlOe+k1gJe4MBkUfO5q0Dx\npnR94ePpBfm+bSL2uJvo28KkfjeUPMohoq+tc3/iuhlV2UCoWn2sJ/Sw8RE0lGNd\nCkNg3GNYniz2ibr8pkHHfQvhDCdAU7ecfrGGsK15AoGAbv0+RBAd4bqO5muZJVoP\nozjwDN1LKsIjcAaeVrNZox47dySmB88QQx9OhTnP4J6GV1CSzttKmhvID6gil5Mv\n/7kYNqrKQmjpkC2GnAmwhKM3VMTodpuN3U3PuWk1jd7vstoPsG8ftTyVM4I7/9AS\nYlB8/A8nz+O1CsifMPRkzDw=\n-----END PRIVATE KEY-----\n",
-        client_email: "firebase-adminsdk-fbsvc@confluence-copilot-ppjye.iam.gserviceaccount.com",
-        client_id: "114253370830371856382",
-        auth_uri: "https://accounts.google.com/o/oauth2/auth",
-        token_uri: "https://oauth2.googleapis.com/token",
-        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-        client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40confluence-copilot-ppjye.iam.gserviceaccount.com",
-        universe_domain: "googleapis.com"
-      };
-      
-      initializeApp({
-        credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
-        projectId: "confluence-copilot-ppjye"
-      });
-    }
-    adminDb = getFirestore();
-  }
-  return adminDb;
-}
+// この関数は削除（initializeFirebaseAdminと重複）
 
 
 // ステップ更新関数
@@ -373,7 +321,6 @@ export const POST = async (req: NextRequest) => {
             if (result.isComplete) {
               totalChunks = result.chunkIndex;
               fullAnswer = fullAnswer.trim();
-              aiGenerationTime = Date.now() - aiStartTime;
               
               // AI生成時間の記録
               aiGenerationTime = Date.now() - aiStartTime;
@@ -599,26 +546,7 @@ export const POST = async (req: NextRequest) => {
                 referencesCount: relevantDocs.length,
                 answerLength: fallbackAnswer.length,
                 timestamp: new Date(),
-                processingSteps: [
-                  {
-                    step: 'search',
-                    status: 'completed' as const,
-                    duration: searchTime,
-                    timestamp: new Date(startTime)
-                  },
-                  {
-                    step: 'processing',
-                    status: 'completed' as const,
-                    duration: 800,
-                    timestamp: new Date(startTime + searchTime)
-                  },
-                  {
-                    step: 'ai_generation',
-                    status: 'error' as const,
-                    duration: 0, // AI生成は失敗したため0
-                    timestamp: new Date(startTime + searchTime + 800)
-                  }
-                ],
+                processingSteps, // 既存のprocessingStepsを使用
                 errors: [
                   {
                     id: `error_${Date.now()}`,

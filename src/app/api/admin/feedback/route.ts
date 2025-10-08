@@ -4,26 +4,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
-import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin-init';
 import type { SatisfactionRating } from '@/types';
-
-// Firebase Admin SDKを初期化する関数
-function initializeFirebaseAdmin() {
-  if (getApps().length === 0) {
-    try {
-      const serviceAccount = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS || '{}');
-      initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId: process.env.FIREBASE_PROJECT_ID
-      });
-    } catch (error) {
-      console.error('Firebase Admin SDK初期化エラー:', error);
-      throw error;
-    }
-  }
-  return admin.app();
-}
 
 export const GET = async (req: NextRequest) => {
   try {
