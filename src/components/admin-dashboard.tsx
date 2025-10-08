@@ -12,8 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-
-// --- Markdown utilities (chat-page.tsxから移植) ------------------------------------------------------
+import { fixMarkdownTables, normalizeMarkdownSymbols, sharedMarkdownComponents } from '@/lib/markdown-utils';
 /**
  * Try to normalize malformed markdown tables produced by LLM so that remark-gfm
  * can render them. Heuristics:
@@ -240,28 +239,7 @@ const mockPostLogs: PostLog[] = [
   }
 ];
 
-// フロントエンドと同じマークダウンコンポーネント（テーブル対応版）
-const sharedMarkdownComponents = {
-  h1: ({children}: any) => <h1 className="text-lg font-bold mb-4 mt-4">{children}</h1>,
-  h2: ({children}: any) => <h2 className="text-lg font-bold mb-4 mt-6 text-gray-800">{children}</h2>,
-  h3: ({children}: any) => <h3 className="text-base font-bold mb-3 mt-4 text-gray-900">{children}</h3>,
-  h4: ({children}: any) => <h4 className="text-sm font-semibold mb-1">{children}</h4>,
-  p: ({children}: any) => <p className="mb-3 leading-relaxed">{children}</p>,
-  ul: ({children}: any) => <ul className="list-disc list-outside mb-3 ml-4">{children}</ul>,
-  ol: ({children}: any) => <ol className="list-decimal list-outside mb-3 ml-4">{children}</ol>,
-  li: ({children}: any) => <li className="mb-1 leading-relaxed">{children}</li>,
-  hr: ({children}: any) => <hr className="my-4 border-gray-300" />,
-  strong: ({children}: any) => <strong className="font-bold">{children}</strong>,
-  em: ({children}: any) => <em className="italic">{children}</em>,
-  code: ({children}: any) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
-  pre: ({children}: any) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
-  table: ({children}: any) => <div className="overflow-x-auto"><table className="border-collapse border border-gray-300 w-full mb-4 min-w-max">{children}</table></div>,
-  thead: ({children}: any) => <thead className="bg-gray-50">{children}</thead>,
-  tbody: ({children}: any) => <tbody>{children}</tbody>,
-  tr: ({children}: any) => <tr className="border-b border-gray-200">{children}</tr>,
-  th: ({children}: any) => <th className="border border-gray-300 px-3 py-2 text-left font-semibold align-top break-words whitespace-pre-wrap bg-gray-50">{children}</th>,
-  td: ({children}: any) => <td className="border border-gray-300 px-3 py-2 align-top break-words whitespace-pre-wrap">{children}</td>,
-};
+// Markdown components are now imported from @/lib/markdown-utils
 
 const AdminDashboard: React.FC = () => {
   const { isAdmin, isLoading: isAdminLoading } = useAdmin();

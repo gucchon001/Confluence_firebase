@@ -6,6 +6,8 @@
 import { app } from '@/lib/firebase';
 import { getFirestore, collection, addDoc, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { createQueryBuilder } from './firestore-query-builder';
+import { calculateDailyTrend, calculateAverage } from './statistics-utils';
 
 const db = getFirestore(app);
 import type { SatisfactionRating } from '@/types';
@@ -33,6 +35,8 @@ export interface SatisfactionStats {
 }
 
 export class SatisfactionRatingService {
+  private queryBuilder = createQueryBuilder<SatisfactionRating>('satisfactionRatings', db);
+  
   /**
    * モック満足度統計を生成
    */
@@ -147,16 +151,7 @@ export class SatisfactionRatingService {
         return this.getMockSatisfactionStats();
       }
 
-      const endDate = new Date();
-      const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
-      
-      const ratingsRef = collection(db, 'satisfactionRatings');
-      const q = query(
-        ratingsRef,
-        where('timestamp', '>=', Timestamp.fromDate(startDate)),
-        orderBy('timestamp', 'desc')
-      );
-      
+      const q = this.queryBuilder.byLastDays(days);
       const snapshot = await getDocs(q);
       const ratings: SatisfactionRating[] = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -164,10 +159,9 @@ export class SatisfactionRatingService {
         timestamp: doc.data().timestamp.toDate()
       })) as SatisfactionRating[];
 
-      // 統計計算
+      // 統計計算（統計ユーティリティを使用）
       const totalRatings = ratings.length;
-      const averageRating = totalRatings > 0 ? 
-        ratings.reduce((sum, rating) => sum + rating.rating, 0) / totalRatings : 0;
+      const averageRating = calculateAverage(ratings, r => r.rating);
 
       const ratingDistribution = {
         1: ratings.filter(r => r.rating === 1).length,
@@ -186,23 +180,15 @@ export class SatisfactionRatingService {
         }))
         .slice(0, 50); // 最新50件のコメント
 
-      // 日別トレンド
-      const dailyStats = new Map<string, { total: number; count: number }>();
-      ratings.forEach(rating => {
-        const date = rating.timestamp.toISOString().split('T')[0];
-        const existing = dailyStats.get(date) || { total: 0, count: 0 };
-        existing.total += rating.rating;
-        existing.count++;
-        dailyStats.set(date, existing);
-      });
-
-      const trends = Array.from(dailyStats.entries())
-        .map(([date, data]) => ({
-          date,
-          averageRating: data.total / data.count,
-          totalRatings: data.count
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+      // 日別トレンド（統計ユーティリティを使用）
+      const trends = calculateDailyTrend(
+        ratings,
+        r => r.rating
+      ).map(trend => ({
+        date: trend.date,
+        averageRating: trend.value,
+        totalRatings: trend.count
+      }));
 
       const stats: SatisfactionStats = {
         totalRatings,
@@ -281,15 +267,12 @@ export class SatisfactionRatingService {
    */
   async getLowRatingComments(days: number = 30): Promise<SatisfactionRating[]> {
     try {
-      const endDate = new Date();
-      const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
-      
-      const ratingsRef = collection(db, 'satisfactionRatings');
-      const q = query(
-        ratingsRef,
-        where('timestamp', '>=', Timestamp.fromDate(startDate)),
-        where('rating', '<=', 2),
-        orderBy('timestamp', 'desc')
+      const q = this.queryBuilder.whereMultiple(
+        [
+          { field: 'rating', operator: '<=', value: 2 }
+        ],
+        'timestamp',
+        'desc'
       );
       
       const snapshot = await getDocs(q);

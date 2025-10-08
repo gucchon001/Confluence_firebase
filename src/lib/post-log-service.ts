@@ -3,6 +3,7 @@
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, where, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { app } from './firebase';
 import { convertPostLogToFirestore, convertFirestoreToPostLog } from './firestore-data-mapper';
+import { createQueryBuilder } from './firestore-query-builder';
 import type { PostLog, ProcessingStep, ErrorLog } from '@/types';
 
 const db = getFirestore(app);
@@ -13,6 +14,7 @@ const db = getFirestore(app);
  */
 export class PostLogService {
   private static instance: PostLogService;
+  private queryBuilder = createQueryBuilder<PostLog>('postLogs', db);
 
   public static getInstance(): PostLogService {
     if (!PostLogService.instance) {
@@ -83,13 +85,7 @@ export class PostLogService {
     try {
       console.log('📝 PostLogService: 最近の投稿ログを取得開始', { count });
       
-      const postLogsRef = collection(db, 'postLogs');
-      const q = query(
-        postLogsRef,
-        orderBy('timestamp', 'desc'),
-        limit(count)
-      );
-      
+      const q = this.queryBuilder.recent(count);
       const querySnapshot = await getDocs(q);
       
       console.log('📝 PostLogService: 投稿ログ取得完了', { 
@@ -109,14 +105,7 @@ export class PostLogService {
    */
   async getPostLogsByDateRange(startDate: Date, endDate: Date): Promise<PostLog[]> {
     try {
-      const postLogsRef = collection(db, 'postLogs');
-      const q = query(
-        postLogsRef,
-        where('timestamp', '>=', Timestamp.fromDate(startDate)),
-        where('timestamp', '<=', Timestamp.fromDate(endDate)),
-        orderBy('timestamp', 'desc')
-      );
-      
+      const q = this.queryBuilder.byDateRange(startDate, endDate);
       const querySnapshot = await getDocs(q);
       
       return querySnapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
@@ -131,14 +120,7 @@ export class PostLogService {
    */
   async getPostLogsByUser(userId: string, count: number = 20): Promise<PostLog[]> {
     try {
-      const postLogsRef = collection(db, 'postLogs');
-      const q = query(
-        postLogsRef,
-        where('userId', '==', userId),
-        orderBy('timestamp', 'desc'),
-        limit(count)
-      );
-      
+      const q = this.queryBuilder.byUser(userId, count);
       const querySnapshot = await getDocs(q);
       
       return querySnapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));

@@ -7,6 +7,8 @@ import { getFirestore } from 'firebase/firestore';
 import { app } from '@/lib/firebase';
 import { collection, query, orderBy, limit, where, getDocs, Timestamp } from 'firebase/firestore';
 import { convertFirestoreToPostLog } from './firestore-data-mapper';
+import { createQueryBuilder } from './firestore-query-builder';
+import { calculateDailyTrend, calculateAverage } from './statistics-utils';
 
 const db = getFirestore(app);
 import type { PostLog } from '@/types';
@@ -64,22 +66,15 @@ export interface QuestionPattern {
 }
 
 export class QuestionAnalysisService {
+  private queryBuilder = createQueryBuilder<PostLog>('postLogs', db);
+  
   /**
    * 質問ログから分析データを取得
    */
   async getQuestionAnalysis(days: number = 30): Promise<QuestionAnalysis> {
     try {
-      const endDate = new Date();
-      const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
-      
       // 投稿ログを取得
-      const postLogsRef = collection(db, 'postLogs');
-      const q = query(
-        postLogsRef,
-        where('timestamp', '>=', Timestamp.fromDate(startDate)),
-        orderBy('timestamp', 'desc')
-      );
-      
+      const q = this.queryBuilder.byLastDays(days);
       const snapshot = await getDocs(q);
       const postLogs: PostLog[] = snapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
 
@@ -169,26 +164,18 @@ export class QuestionAnalysisService {
       low: qualityScores.filter(score => score <= 0.5).length
     };
 
-    // 日別品質トレンド
-    const dailyQuality = new Map<string, { total: number; count: number }>();
-    postLogs.forEach(log => {
-      const date = log.timestamp.toISOString().split('T')[0];
-      const existing = dailyQuality.get(date) || { total: 0, count: 0 };
-      existing.total += this.calculateQualityScore(log);
-      existing.count++;
-      dailyQuality.set(date, existing);
-    });
-
-    const qualityTrend = Array.from(dailyQuality.entries())
-      .map(([date, data]) => ({
-        date,
-        averageQuality: data.total / data.count
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    // 日別品質トレンド（統計ユーティリティを使用）
+    const qualityTrend = calculateDailyTrend(
+      postLogs,
+      log => this.calculateQualityScore(log)
+    ).map(trend => ({
+      date: trend.date,
+      averageQuality: trend.value
+    }));
 
     const qualityMetrics = {
-      averageAnswerLength: postLogs.reduce((sum, log) => sum + log.answerLength, 0) / postLogs.length,
-      averageReferencesCount: postLogs.reduce((sum, log) => sum + log.referencesCount, 0) / postLogs.length,
+      averageAnswerLength: calculateAverage(postLogs, log => log.answerLength),
+      averageReferencesCount: calculateAverage(postLogs, log => log.referencesCount),
       qualityDistribution,
       qualityTrend
     };
@@ -223,23 +210,14 @@ export class QuestionAnalysisService {
     const questionContinuityRate = sessions.filter(session => session.length > 1).length / sessions.length;
     const errorRate = postLogs.filter(log => log.errors && log.errors.length > 0).length / postLogs.length;
 
-    // 日別満足度トレンド
-    const dailySatisfaction = new Map<string, { total: number; count: number }>();
-    postLogs.forEach(log => {
-      const date = log.timestamp.toISOString().split('T')[0];
-      const satisfaction = this.calculateSatisfactionScore(log);
-      const existing = dailySatisfaction.get(date) || { total: 0, count: 0 };
-      existing.total += satisfaction;
-      existing.count++;
-      dailySatisfaction.set(date, existing);
-    });
-
-    const satisfactionTrend = Array.from(dailySatisfaction.entries())
-      .map(([date, data]) => ({
-        date,
-        satisfaction: data.total / data.count
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    // 日別満足度トレンド（統計ユーティリティを使用）
+    const satisfactionTrend = calculateDailyTrend(
+      postLogs,
+      log => this.calculateSatisfactionScore(log)
+    ).map(trend => ({
+      date: trend.date,
+      satisfaction: trend.value
+    }));
 
     const satisfactionMetrics = {
       averageSessionDuration,
@@ -364,16 +342,7 @@ export class QuestionAnalysisService {
    */
   async getQuestionPatterns(days: number = 30): Promise<QuestionPattern[]> {
     try {
-      const endDate = new Date();
-      const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
-      
-      const postLogsRef = collection(db, 'postLogs');
-      const q = query(
-        postLogsRef,
-        where('timestamp', '>=', Timestamp.fromDate(startDate)),
-        orderBy('timestamp', 'desc')
-      );
-      
+      const q = this.queryBuilder.byLastDays(days);
       const snapshot = await getDocs(q);
       const postLogs: PostLog[] = snapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
 

@@ -1,43 +1,115 @@
 /**
- * Markdown処理ユーティリティ関数
- * チャットページと管理ダッシュボードで共通使用
+ * Markdown処理ユーティリティ
+ * テーブル正規化、記号変換、共通コンポーネント設定を提供
  */
 
 /**
- * Markdownテーブルを修正する関数
- * - 全角記号を半角に変換
- * - テーブルの前に空行を追加（GFMプラグインの要件）
+ * Try to normalize malformed markdown tables produced by LLM so that remark-gfm
+ * can render them. Heuristics:
  * - Ensure table header lines start with a single '|'
  * - Collapse multiple leading pipes (e.g. "|| 項目 |...")
  * - Insert separator line like "|:---|:---|" if missing after header
  * - Ensure each table row starts/ends with a pipe and is on its own line
  */
 export function fixMarkdownTables(markdown: string): string {
-  // シンプルアプローチ：基本的な全角→半角変換とテーブル行の分離
-  // テーブル処理はReactMarkdownのremarkGfmプラグインに完全依存
-  
-  // 基本的な全角記号の変換
-  let result = markdown
-    .replace(/｜/g, '|')       // 全角パイプ
-    .replace(/：/g, ':')       // 全角コロン
-    .replace(/－/g, '-')       // 全角ハイフン
-    .replace(/　/g, ' ');      // 全角スペース
-  
-  // テーブルの前に空行を追加（GFMプラグインの要件）
-  // 「です。| ヘッダー |\n|:---|」のようなパターンを検出
-  // テーブルヘッダーの直後に区切り行がある場合のみマッチ
-  result = result.replace(/([。、！？])(\|\s*[^\n]+\s*\|\s*\n\s*\|:?-)/g, '$1\n\n$2');
-  
-  return result;
+  const lines = markdown.split(/\r?\n/);
+  const fixed: string[] = [];
+  let inTable = false;
+  let pendingHeaderColumns: number | null = null;
+  let currentColumns: number | null = null;
+
+  const isSeparatorLine = (s: string) => /^\s*\|?\s*(:?-{3,}\s*\|\s*)+(:?-{3,}\s*)?\|?\s*$/.test(s);
+  const normalizeRow = (s: string) => {
+    let row = s.trim();
+    // collapse multiple leading pipes
+    row = row.replace(/^\|{2,}/, '|');
+    // add leading pipe
+    if (!row.startsWith('|')) row = '|' + row;
+    // ensure single spaces around pipes for readability
+    row = row.replace(/\s*\|\s*/g, ' | ');
+    // add trailing pipe
+    if (!row.endsWith('|')) row = row + ' |';
+    return row;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const original = lines[i];
+    const trimmed = original.trim();
+    
+    // Skip empty lines but preserve them
+    if (trimmed === '') {
+      if (inTable) {
+        // End of table
+        inTable = false;
+        pendingHeaderColumns = null;
+        currentColumns = null;
+      }
+      fixed.push(original);
+      continue;
+    }
+
+    const looksLikeRow = /^\s*\|/.test(trimmed) && trimmed.includes('|');
+
+    if (looksLikeRow) {
+      const normalized = normalizeRow(trimmed);
+      if (!inTable) {
+        // Ensure blank line before table for GFM
+        if (fixed.length > 0 && fixed[fixed.length - 1].trim() !== '') fixed.push('');
+        inTable = true;
+        // compute column count from header
+        pendingHeaderColumns = normalized.split('|').filter(c => c.trim().length > 0).length - 1;
+        currentColumns = pendingHeaderColumns;
+      }
+      // 行を列数で分割して複数行に展開（1行に複数レコードが連結されている場合の対策）
+      const cells = normalized
+        .slice(1, normalized.length - 1) // 先頭/末尾のパイプを除去
+        .split('|')
+        .map(c => c.trim())
+        .filter(c => !(c === '' && currentColumns !== null));
+
+      if (currentColumns && cells.length > currentColumns) {
+        for (let off = 0; off < cells.length; off += currentColumns) {
+          const rowCells = cells.slice(off, off + currentColumns);
+          if (rowCells.length === currentColumns) {
+            fixed.push('| ' + rowCells.join(' | ') + ' |');
+          }
+        }
+      } else {
+        fixed.push(normalized);
+      }
+
+      // If it's the first line of the table (header) and next line isn't a separator, insert one
+      const next = lines[i + 1]?.trim() ?? '';
+      if (pendingHeaderColumns && !isSeparatorLine(next)) {
+        const sepCells = Array(pendingHeaderColumns).fill(':---');
+        fixed.push('| ' + sepCells.join(' | ') + ' |');
+        pendingHeaderColumns = null;
+        currentColumns = currentColumns || sepCells.length;
+      } else if (isSeparatorLine(next)) {
+        // We will let the next loop push the existing separator
+        pendingHeaderColumns = null;
+      }
+    } else {
+      // Not a table row
+      if (inTable) {
+        inTable = false;
+        pendingHeaderColumns = null;
+        currentColumns = null;
+      }
+      fixed.push(original);
+    }
+  }
+
+  return fixed.join('\n');
 }
 
 /**
- * 全角記号などを半角Markdown記号に正規化
+ * 全角記号を半角Markdown記号に正規化
  */
 export function normalizeMarkdownSymbols(markdown: string): string {
   if (!markdown) return markdown;
   
-  // シンプルアプローチ：基本的な全角→半角変換のみ
+  // 基本的な全角→半角変換
   let text = markdown
     .replace(/｜/g, '|')       // U+FF5C FULLWIDTH VERTICAL LINE
     .replace(/：/g, ':')       // U+FF1A FULLWIDTH COLON
@@ -45,14 +117,21 @@ export function normalizeMarkdownSymbols(markdown: string): string {
     .replace(/〜/g, '~')
     .replace(/　/g, ' ');      // U+3000 IDEOGRAPHIC SPACE
   
-  // シンプルアプローチ：基本的な全角→半角変換のみ
-  // その他の処理はReactMarkdownのプラグインに依存
+  // 箇条書きの改行処理（「。-」パターンを「。\n-」に変換）
+  text = text.replace(/([。！？])\s*-\s+/g, '$1\n- ');
+  
+  // 番号付きリストの改行処理（「。 2.」「。3.」のようなパターンを「。\n2.」に変換）
+  text = text.replace(/([。！？])\s*(\d+\.)\s+/g, '$1\n$2 ');
+  
+  // 余分な改行を整理
+  text = text.replace(/\n{3,}/g, '\n\n');
+  
   return text;
 }
 
 /**
- * 共通のMarkdownコンポーネント定義
- * ReactMarkdownで使用するカスタムコンポーネント
+ * 共通のMarkdownコンポーネント設定
+ * ReactMarkdownで使用
  */
 export const sharedMarkdownComponents = {
   h1: ({children}: any) => <h1 className="text-lg font-bold mb-4 mt-4">{children}</h1>,
@@ -63,7 +142,7 @@ export const sharedMarkdownComponents = {
   ul: ({children}: any) => <ul className="list-disc list-outside mb-3 ml-4">{children}</ul>,
   ol: ({children}: any) => <ol className="list-decimal list-outside mb-3 ml-4">{children}</ol>,
   li: ({children}: any) => <li className="mb-1 leading-relaxed">{children}</li>,
-  hr: ({children}: any) => <hr className="my-4 border-gray-300" />,
+  hr: () => <hr className="my-4 border-gray-300" />,
   strong: ({children}: any) => <strong className="font-bold">{children}</strong>,
   em: ({children}: any) => <em className="italic">{children}</em>,
   code: ({children}: any) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
