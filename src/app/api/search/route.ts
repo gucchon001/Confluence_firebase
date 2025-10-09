@@ -7,7 +7,7 @@ import { hybridSearchEngine } from '../../../lib/hybrid-search-engine';
 import { lunrInitializer } from '../../../lib/lunr-initializer';
 import { calculateSimilarityScore } from '../../../lib/score-utils';
 import { APIErrorHandler, withAPIErrorHandling } from '../../../lib/api-error-handler';
-import { screenTestLogger } from '../../../lib/screen-test-logger';
+import { screenTestLogger } from '@/lib/screen-test-logger';
 
 export const POST = withAPIErrorHandling(async (req: NextRequest) => {
   // 統一初期化サービスを使用
