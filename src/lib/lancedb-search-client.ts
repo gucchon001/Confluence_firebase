@@ -120,7 +120,15 @@ export interface LanceDBSearchResult {
  */
 export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceDBSearchResult[]> {
   try {
-    console.log(`[searchLanceDB] Starting search with query: "${params.query}"`);
+    console.log(`\n========================================`);
+    console.log(`🔍 [searchLanceDB] 検索開始`);
+    console.log(`Query: "${params.query}"`);
+    console.log(`========================================\n`);
+    
+    // キャッシュインスタンスの存在確認
+    console.log(`🔧 searchCache インスタンス: ${searchCache ? '存在' : '未初期化'}`);
+    console.log(`🔧 searchCache.size: ${searchCache?.size ?? 'N/A'}`);
+    console.log(`🔧 globalThis.__searchCache: ${globalThis.__searchCache ? '存在' : '未定義'}`);
     
     // キャッシュキーを生成
     const cacheKey = generateCacheKey(params.query, params);
@@ -133,6 +141,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     if (cachedResults) {
       console.log(`🚀 キャッシュから結果を返却: ${cachedResults.length}件`);
+      console.log(`========================================\n`);
       return cachedResults;
     }
     
@@ -737,6 +746,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // 結果をキャッシュに保存
     searchCache.set(cacheKey, processedResults);
     console.log(`💾 キャッシュ保存: "${cacheKey}" (${processedResults.length}件)`);
+    console.log(`📦 キャッシュ保存後のサイズ: ${searchCache.size}`);
+    console.log(`========================================\n`);
     
     return processedResults;
   } catch (error: any) {

@@ -36,14 +36,19 @@ class EmbeddingCache {
   }
 
   /**
-   * キャッシュからエンベディングを取得（embeddings.tsとの互換性のため）
+   * キャッシュからエンベディングを取得(embeddings.tsとの互換性のため）
    */
   async getCachedEmbedding(query: string): Promise<number[] | null> {
     const key = this.generateKey(query);
+    console.log(`🔍 エンベディングキャッシュチェック: "${query.substring(0, 50)}..."`);
+    console.log(`📦 エンベディングキャッシュサイズ: ${cache.size}`);
+    
     const result = cache.get(key);
     
     if (result) {
-      console.log(`🚀 エンベディングキャッシュヒット: "${query.substring(0, 50)}..."`);
+      console.log(`✅ エンベディングキャッシュヒット!`);
+    } else {
+      console.log(`❌ エンベディングキャッシュミス - 新規計算が必要`);
     }
     
     return result;
@@ -55,6 +60,8 @@ class EmbeddingCache {
   set(query: string, embedding: number[]): void {
     const key = this.generateKey(query);
     cache.set(key, embedding);
+    console.log(`💾 エンベディング保存: "${query.substring(0, 50)}..."`);
+    console.log(`📦 エンベディング保存後のサイズ: ${cache.size}`);
   }
 
   /**
