@@ -2,23 +2,62 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+  # インスタンス設定
+  minInstances: 0
+  maxInstances: 2
   
   # メモリ設定（埋め込みモデルのため増やす）
   memoryMiB: 2048
   
+  # CPU設定
+  cpu: 1
+  
   # 環境変数
   env:
-    # Google AI API
+    # Google AI API（ビルド時とランタイムの両方で必要）
     - variable: GEMINI_API_KEY
       secret: gemini_api_key
       availability:
         - BUILD
         - RUNTIME
     
-    # Confluence API
+    # Next.js Public環境変数（ビルド時に必要）
+    - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+      value: AIzaSyAgaGihnyshajIN2YC7CdJR_H0bJMg_hkI
+      availability:
+        - BUILD
+    
+    - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+      value: confluence-copilot-ppjye.firebaseapp.com
+      availability:
+        - BUILD
+    
+    - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+      value: confluence-copilot-ppjye
+      availability:
+        - BUILD
+    
+    - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+      value: confluence-copilot-ppjye.firebasestorage.app
+      availability:
+        - BUILD
+    
+    - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+      value: "122015916118"
+      availability:
+        - BUILD
+    
+    - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+      value: 1:122015916118:web:50d117434b1318f173dbf7
+      availability:
+        - BUILD
+    
+    - variable: NEXT_PUBLIC_USE_MOCK_DATA
+      value: "false"
+      availability:
+        - BUILD
+    
+    # Confluence API（ランタイムのみ）
     - variable: CONFLUENCE_BASE_URL
       value: https://giginc.atlassian.net
       availability:
@@ -39,14 +78,18 @@ runConfig:
       availability:
         - RUNTIME
     
-    # Google Cloud
+    # Google Cloud（ビルド時とランタイムの両方）
     - variable: GOOGLE_CLOUD_PROJECT
       value: confluence-copilot-ppjye
       availability:
         - BUILD
         - RUNTIME
     
-    # その他
+    # Firebase Admin SDK用（ランタイムのみ）
+    # Note: App HostingではGOOGLE_APPLICATION_CREDENTIALSは自動的に設定されます
+    # サービスアカウントキーはシークレットとして別途管理
+    
+    # その他（ランタイムのみ）
     - variable: EMBEDDINGS_PROVIDER
       value: local
       availability:
