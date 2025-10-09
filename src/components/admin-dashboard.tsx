@@ -1585,7 +1585,7 @@ const AdminDashboard: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">サーバー起動時間:</span>
                       <Badge variant="outline" className="text-purple-600">
-                        {((selectedLog as any).serverStartupTime ? (selectedLog as any).serverStartupTime / 1000 : 0).toFixed(1)}s
+                        {((selectedLog as any).serverStartupTime || 0)}ms
                       </Badge>
                     </div>
                     <div className="flex justify-between">
