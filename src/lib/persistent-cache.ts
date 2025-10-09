@@ -95,7 +95,7 @@ export function loadTokenizerState(): { isInitialized: boolean; initTime: number
 /**
  * 起動最適化状態をキャッシュに保存
  */
-export function saveStartupState(optimizations: Record<string, boolean>): void {
+export function saveStartupState(optimizations: Record<string, boolean | number>): void {
   try {
     ensureCacheDir();
     

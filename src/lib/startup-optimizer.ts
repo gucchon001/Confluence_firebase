@@ -3,7 +3,7 @@
  * パフォーマンス向上のための事前初期化を実行
  */
 
-import { preInitializeTokenizer } from './japanese-tokenizer';
+import { preInitializeTokenizer, preInitializeTokenizerLazy } from './japanese-tokenizer';
 import { saveStartupState, loadStartupState, getCacheStats } from './persistent-cache';
 
 let isInitialized = false;

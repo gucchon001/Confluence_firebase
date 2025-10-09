@@ -13,135 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { fixMarkdownTables, normalizeMarkdownSymbols, sharedMarkdownComponents } from '@/lib/markdown-utils';
-/**
- * Try to normalize malformed markdown tables produced by LLM so that remark-gfm
- * can render them. Heuristics:
- * - Ensure table header lines start with a single '|'
- * - Collapse multiple leading pipes (e.g. "|| 項目 |...")
- * - Insert separator line like "|:---|:---|" if missing after header
- * - Ensure each table row starts/ends with a pipe and is on its own line
- */
-function fixMarkdownTables(markdown: string): string {
-  const lines = markdown.split(/\r?\n/);
-  const fixed: string[] = [];
-  let inTable = false;
-  let pendingHeaderColumns: number | null = null;
-  let currentColumns: number | null = null; // 現在のテーブル列数を保持
-
-  const isSeparatorLine = (s: string) => /^\s*\|?\s*(:?-{3,}\s*\|\s*)+(:?-{3,}\s*)?\|?\s*$/.test(s);
-  const normalizeRow = (s: string) => {
-    let row = s.trim();
-    // collapse multiple leading pipes
-    row = row.replace(/^\|{2,}/, '|');
-    // add leading pipe
-    if (!row.startsWith('|')) row = '|' + row;
-    // ensure single spaces around pipes for readability
-    row = row.replace(/\s*\|\s*/g, ' | ');
-    // add trailing pipe
-    if (!row.endsWith('|')) row = row + ' |';
-    return row;
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const original = lines[i];
-    const trimmed = original.trim();
-    
-    // Skip empty lines but preserve them
-    if (trimmed === '') {
-      if (inTable) {
-        // End of table
-        inTable = false;
-        pendingHeaderColumns = null;
-        currentColumns = null;
-      }
-      fixed.push(original);
-      continue;
-    }
-
-    const looksLikeRow = /^\s*\|/.test(trimmed) && trimmed.includes('|');
-
-    if (looksLikeRow) {
-      const normalized = normalizeRow(trimmed);
-      if (!inTable) {
-        // Ensure blank line before table for GFM
-        if (fixed.length > 0 && fixed[fixed.length - 1].trim() !== '') fixed.push('');
-        inTable = true;
-        // compute column count from header
-        pendingHeaderColumns = normalized.split('|').filter(c => c.trim().length > 0).length - 1; // exclude leading/trailing
-        currentColumns = pendingHeaderColumns;
-      }
-      // 行を列数で分割して複数行に展開（1行に複数レコードが連結されている場合の対策）
-      const cells = normalized
-        .slice(1, normalized.length - 1) // 先頭/末尾のパイプを除去
-        .split('|')
-        .map(c => c.trim())
-        .filter(c => !(c === '' && currentColumns !== null));
-
-      if (currentColumns && cells.length > currentColumns) {
-        for (let off = 0; off < cells.length; off += currentColumns) {
-          const rowCells = cells.slice(off, off + currentColumns);
-          if (rowCells.length === currentColumns) {
-            fixed.push('| ' + rowCells.join(' | ') + ' |');
-          }
-        }
-      } else {
-        fixed.push(normalized);
-      }
-
-      // If it's the first line of the table (header) and next line isn't a separator, insert one
-      const next = lines[i + 1]?.trim() ?? '';
-      if (pendingHeaderColumns && !isSeparatorLine(next)) {
-        const sepCells = Array(pendingHeaderColumns).fill(':---');
-        fixed.push('| ' + sepCells.join(' | ') + ' |');
-        pendingHeaderColumns = null;
-        currentColumns = currentColumns || sepCells.length;
-      } else if (isSeparatorLine(next)) {
-        // We will let the next loop push the existing separator
-        pendingHeaderColumns = null;
-        currentColumns = currentColumns || (next.split('|').filter(c => c.includes('-')).length);
-      }
-      continue;
-    }
-
-    // If we encounter a separator that LLM emitted, pass it through normalized
-    if (isSeparatorLine(trimmed)) {
-      if (inTable) {
-        fixed.push(normalizeRow(trimmed));
-        pendingHeaderColumns = null;
-        currentColumns = currentColumns || (trimmed.split('|').filter(c => c.includes('-')).length);
-      } else {
-        fixed.push(original);
-      }
-      continue;
-    }
-
-    // Non-table line
-    if (inTable) {
-      // End of table
-      inTable = false;
-      pendingHeaderColumns = null;
-      currentColumns = null;
-    }
-    fixed.push(original);
-  }
-
-  return fixed.join('\n');
-}
-
-function normalizeMarkdownSymbols(markdown: string): string {
-  let text = markdown;
-  
-  // 特殊文字の正規化
-  text = text.replace(/【FIX】/g, '**FIX**');
-  text = text.replace(/【NEW】/g, '**NEW**');
-  text = text.replace(/【REVIEW】/g, '**REVIEW**');
-  text = text.replace(/【FIXME】/g, '**FIXME**');
-  
-  // 連続する改行を2つまでに制限
-  text = text.replace(/\n{3,}/g, '\n\n');
-  
-  return text;
-}
 import { 
   BarChart3, 
   Users, 
@@ -200,6 +71,7 @@ const mockPostLogs: PostLog[] = [
     userId: 'user1',
     question: '教室管理の詳細は？',
     answer: '教室管理機能について...',
+    serverStartupTime: 5,
     searchTime: 2300,
     aiGenerationTime: 15200,
     totalTime: 17500,
@@ -221,6 +93,7 @@ const mockPostLogs: PostLog[] = [
     userId: 'user2',
     question: 'ログイン認証の仕組みは？',
     answer: 'ログイン認証について...',
+    serverStartupTime: 5,
     searchTime: 1800,
     aiGenerationTime: 12800,
     totalTime: 14600,
