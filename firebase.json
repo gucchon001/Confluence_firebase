@@ -3,17 +3,12 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "hosting": {
-    "public": ".next",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
+  "apphosting": {
+    "backends": [
       {
-        "source": "**",
-        "destination": "/index.html"
+        "backendId": "confluence-chat",
+        "region": "us-central1",
+        "rootDirectory": "."
       }
     ]
   }
