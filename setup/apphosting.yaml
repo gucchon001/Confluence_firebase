@@ -11,91 +11,82 @@ runConfig:
   
   # CPU設定
   cpu: 1
+
+# 環境変数（runConfigと同じレベル）
+env:
+  # Next.js Public環境変数（ビルド時とランタイム時に必要）
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyAgaGihnyshajIN2YC7CdJR_H0bJMg_hkI
+    availability:
+      - BUILD
+      - RUNTIME
   
-  # 環境変数
-  env:
-    # Google AI API（ビルド時とランタイムの両方で必要）
-    - variable: GEMINI_API_KEY
-      secret: gemini_api_key
-      availability:
-        - BUILD
-        - RUNTIME
-    
-    # Next.js Public環境変数（ビルド時に必要）
-    - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-      value: AIzaSyAgaGihnyshajIN2YC7CdJR_H0bJMg_hkI
-      availability:
-        - BUILD
-    
-    - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-      value: confluence-copilot-ppjye.firebaseapp.com
-      availability:
-        - BUILD
-    
-    - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-      value: confluence-copilot-ppjye
-      availability:
-        - BUILD
-    
-    - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-      value: confluence-copilot-ppjye.firebasestorage.app
-      availability:
-        - BUILD
-    
-    - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-      value: "122015916118"
-      availability:
-        - BUILD
-    
-    - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-      value: 1:122015916118:web:50d117434b1318f173dbf7
-      availability:
-        - BUILD
-    
-    - variable: NEXT_PUBLIC_USE_MOCK_DATA
-      value: "false"
-      availability:
-        - BUILD
-    
-    # Confluence API（ランタイムのみ）
-    - variable: CONFLUENCE_BASE_URL
-      value: https://giginc.atlassian.net
-      availability:
-        - RUNTIME
-    
-    - variable: CONFLUENCE_USER_EMAIL
-      value: kanri@jukust.jp
-      availability:
-        - RUNTIME
-    
-    - variable: CONFLUENCE_API_TOKEN
-      secret: confluence_api_token
-      availability:
-        - RUNTIME
-    
-    - variable: CONFLUENCE_SPACE_KEY
-      value: CLIENTTOMO
-      availability:
-        - RUNTIME
-    
-    # Google Cloud（ビルド時とランタイムの両方）
-    - variable: GOOGLE_CLOUD_PROJECT
-      value: confluence-copilot-ppjye
-      availability:
-        - BUILD
-        - RUNTIME
-    
-    # Firebase Admin SDK用（ランタイムのみ）
-    # Note: App HostingではGOOGLE_APPLICATION_CREDENTIALSは自動的に設定されます
-    # サービスアカウントキーはシークレットとして別途管理
-    
-    # その他（ランタイムのみ）
-    - variable: EMBEDDINGS_PROVIDER
-      value: local
-      availability:
-        - RUNTIME
-    
-    - variable: USE_LLM_EXPANSION
-      value: "true"
-      availability:
-        - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: confluence-copilot-ppjye.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: confluence-copilot-ppjye
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: confluence-copilot-ppjye.firebasestorage.app
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "122015916118"
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:122015916118:web:50d117434b1318f173dbf7
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  - variable: NEXT_PUBLIC_USE_MOCK_DATA
+    value: "false"
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  # Confluence API（ランタイムのみ）
+  - variable: CONFLUENCE_BASE_URL
+    value: https://giginc.atlassian.net
+    availability:
+      - RUNTIME
+  
+  - variable: CONFLUENCE_USER_EMAIL
+    value: kanri@jukust.jp
+    availability:
+      - RUNTIME
+  
+  - variable: CONFLUENCE_SPACE_KEY
+    value: CLIENTTOMO
+    availability:
+      - RUNTIME
+  
+  # Google Cloud（ビルド時とランタイムの両方）
+  - variable: GOOGLE_CLOUD_PROJECT
+    value: confluence-copilot-ppjye
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  # その他（ランタイムのみ）
+  - variable: EMBEDDINGS_PROVIDER
+    value: local
+    availability:
+      - RUNTIME
+  
+  - variable: USE_LLM_EXPANSION
+    value: "true"
+    availability:
+      - RUNTIME
