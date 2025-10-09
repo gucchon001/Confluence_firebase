@@ -121,10 +121,22 @@ export function normalizeMarkdownSymbols(markdown: string): string {
   
   text = formattedLines.join('\n');
   
+  // 数字リストの余分なスペースを削除
+  // 1.  項目 → 1. 項目（スペース2つ以上を1つに）
+  text = text.replace(/^(\d+\.)\s{2,}/gm, '$1 ');
+  
+  // 行末のアスタリスク箇条書きを改行して分離
+  // 本文。*   項目 → 本文。\n- 項目
+  text = text.replace(/([^\n])\*\s{2,}/g, '$1\n- ');
+  
   // アスタリスク箇条書きをハイフンに統一
   // *   項目 → - 項目
   text = text.replace(/^\*\s+/gm, '- ');
   text = text.replace(/\n\*\s+/g, '\n- ');
+  
+  // 行末の見出しを分離
+  // 本文。#### 見出し → 本文。\n\n#### 見出し
+  text = text.replace(/([^\n])(#{1,6}\s)/g, '$1\n\n$2');
   
   // 見出しの後に空行を追加（Markdownの要件）
   // ### 見出し\n本文 → ### 見出し\n\n本文

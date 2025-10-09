@@ -6,12 +6,25 @@
 import crypto from 'crypto';
 import { GenericCache } from './generic-cache';
 
-// ジェネリックキャッシュを使用
-const cache = new GenericCache<number[]>({
-  ttl: 7200000, // 2時間（エンベディングは長期間有効）
-  maxSize: 500, // 最大500エントリ
-  evictionStrategy: 'lru'
-});
+// エンベディングキャッシュ（グローバルに保持してHMRの影響を回避）
+const getEmbeddingCacheInstance = () => {
+  if (!globalThis.__embeddingCache) {
+    globalThis.__embeddingCache = new GenericCache<number[]>({
+      ttl: 7200000, // 2時間（エンベディングは長期間有効）
+      maxSize: 500, // 最大500エントリ
+      evictionStrategy: 'lru'
+    });
+    console.log('🔧 エンベディングキャッシュを初期化しました');
+  }
+  return globalThis.__embeddingCache;
+};
+
+const cache = getEmbeddingCacheInstance();
+
+// TypeScript用のグローバル型定義
+declare global {
+  var __embeddingCache: GenericCache<number[]> | undefined;
+}
 
 class EmbeddingCache {
   /**

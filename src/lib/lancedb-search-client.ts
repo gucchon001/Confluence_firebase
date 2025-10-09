@@ -16,12 +16,25 @@ import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
 import { GenericCache } from './generic-cache';
 
-// 検索結果キャッシュ（ジェネリックキャッシュを使用）
-const searchCache = new GenericCache<any[]>({
-  ttl: 5 * 60 * 1000, // 5分間
-  maxSize: 1000,
-  evictionStrategy: 'lru'
-});
+// 検索結果キャッシュ（グローバルに保持してHMRの影響を回避）
+const getSearchCache = () => {
+  if (!globalThis.__searchCache) {
+    globalThis.__searchCache = new GenericCache<any[]>({
+      ttl: 5 * 60 * 1000, // 5分間
+      maxSize: 1000,
+      evictionStrategy: 'lru'
+    });
+    console.log('🔧 検索キャッシュを初期化しました');
+  }
+  return globalThis.__searchCache;
+};
+
+const searchCache = getSearchCache();
+
+// TypeScript用のグローバル型定義
+declare global {
+  var __searchCache: GenericCache<any[]> | undefined;
+}
 
 /**
  * キャッシュキーを生成
