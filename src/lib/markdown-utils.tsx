@@ -98,28 +98,37 @@ export function normalizeMarkdownSymbols(markdown: string): string {
   
   // 数字リストのMarkdown形式化
   // 「1.テキスト」を「1. テキスト」に変換（ピリオドの後にスペースを追加）
-  // ただし、見出し内は除外
   const finalLines = text.split('\n');
   const formattedLines: string[] = [];
   
   for (const line of finalLines) {
+    let formatted = line;
     const trimmed = line.trim();
     
-    // 見出し行は保護
-    if (/^#{1,6}\s/.test(trimmed)) {
-      formattedLines.push(line);
-      continue;
+    // 見出し内の数字にもスペースを追加
+    // ### 1.項目名 → ### 1. 項目名
+    if (/^#{1,6}\s+\d+\./.test(trimmed)) {
+      formatted = line.replace(/^(#{1,6}\s+)(\d+\.)([^\s])/gm, '$1$2 $3');
+    }
+    // 本文の数字リストのスペース追加
+    // 1.項目 → 1. 項目
+    else if (/^\d+\./.test(trimmed)) {
+      formatted = line.replace(/^(\d+\.)([^\s\n])/gm, '$1 $2');
     }
     
-    // 数字リストのスペース追加
-    let formatted = line.replace(/^(\d+\.)([^\s\n])/gm, '$1 $2');
     formattedLines.push(formatted);
   }
   
   text = formattedLines.join('\n');
   
-  // 見出し（##）の直後に数字リストがある場合、空行を確保
-  text = text.replace(/(#{1,4}\s+[^\n]+)\n(\d+\.\s)/g, '$1\n\n$2');
+  // アスタリスク箇条書きをハイフンに統一
+  // *   項目 → - 項目
+  text = text.replace(/^\*\s+/gm, '- ');
+  text = text.replace(/\n\*\s+/g, '\n- ');
+  
+  // 見出しの後に空行を追加（Markdownの要件）
+  // ### 見出し\n本文 → ### 見出し\n\n本文
+  text = text.replace(/(#{1,6}\s+[^\n]+)\n([^#\n])/g, '$1\n\n$2');
   
   // 段落と数字リストの間に空行を追加（Markdown認識のため）
   text = text.replace(/([^\n#])\n(\d+\.\s)/g, (match, before, listStart) => {

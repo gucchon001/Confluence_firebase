@@ -35,27 +35,7 @@ function generateCacheKey(query: string, params: any): string {
   return `${normalizedQuery}_${Buffer.from(paramString).toString('base64').slice(0, 20)}`;
 }
 
-/**
- * キャッシュから検索結果を取得
- */
-function getFromCache(cacheKey: string): any[] | null {
-  const entry = searchCache.get(cacheKey);
-  if (!entry) {
-    return null;
-  }
-
-  // TTLチェック
-  if (Date.now() - entry.timestamp > entry.ttl) {
-    searchCache.delete(cacheKey);
-    return null;
-  }
-
-  console.log(`🎯 キャッシュヒット: "${cacheKey}"`);
-  return entry.results;
-}
-
 // キャッシュ関数は削除（GenericCacheを直接使用）
-
 
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText } from './score-utils';
 import { unifiedSearchResultProcessor } from './unified-search-result-processor';
@@ -131,15 +111,19 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // キャッシュキーを生成
     const cacheKey = generateCacheKey(params.query, params);
+    console.log(`🔑 キャッシュキー生成: "${cacheKey}"`);
+    console.log(`📦 現在のキャッシュサイズ: ${searchCache.size}`);
     
     // キャッシュから取得を試行
     const cachedResults = searchCache.get(cacheKey);
+    console.log(`🔍 キャッシュチェック結果: ${cachedResults ? 'ヒット' : 'ミス'}`);
+    
     if (cachedResults) {
       console.log(`🚀 キャッシュから結果を返却: ${cachedResults.length}件`);
       return cachedResults;
     }
     
-    console.log(`🔍 キャッシュミス: "${params.query}"`);
+    console.log(`🔍 キャッシュミス: "${params.query}" - 検索を実行します`);
     
     // 最適化されたLunr初期化を使用（重複初期化を防止）
     try {
