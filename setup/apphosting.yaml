@@ -5,3 +5,54 @@ runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+  
+  # メモリ設定（埋め込みモデルのため増やす）
+  memoryMiB: 2048
+  
+  # 環境変数
+  env:
+    # Google AI API
+    - variable: GEMINI_API_KEY
+      value: AIzaSyA6YvXHeaXByWy64MMOMLSMzO1ctQCXcTs
+      availability:
+        - BUILD
+        - RUNTIME
+    
+    # Confluence API
+    - variable: CONFLUENCE_BASE_URL
+      value: https://giginc.atlassian.net
+      availability:
+        - RUNTIME
+    
+    - variable: CONFLUENCE_USER_EMAIL
+      value: kanri@jukust.jp
+      availability:
+        - RUNTIME
+    
+    - variable: CONFLUENCE_API_TOKEN
+      secret: confluence_api_token
+      availability:
+        - RUNTIME
+    
+    - variable: CONFLUENCE_SPACE_KEY
+      value: CLIENTTOMO
+      availability:
+        - RUNTIME
+    
+    # Google Cloud
+    - variable: GOOGLE_CLOUD_PROJECT
+      value: confluence-copilot-ppjye
+      availability:
+        - BUILD
+        - RUNTIME
+    
+    # その他
+    - variable: EMBEDDINGS_PROVIDER
+      value: local
+      availability:
+        - RUNTIME
+    
+    - variable: USE_LLM_EXPANSION
+      value: "true"
+      availability:
+        - RUNTIME

@@ -134,9 +134,9 @@ export function normalizeMarkdownSymbols(markdown: string): string {
   text = text.replace(/^\*\s+/gm, '- ');
   text = text.replace(/\n\*\s+/g, '\n- ');
   
-  // 行末の見出しを分離
+  // 行末の見出しを分離（句読点の直後に見出しが来る場合のみ）
   // 本文。#### 見出し → 本文。\n\n#### 見出し
-  text = text.replace(/([^\n])(#{1,6}\s)/g, '$1\n\n$2');
+  text = text.replace(/([。！？])(#{1,6}\s+)/g, '$1\n\n$2');
   
   // 見出しの後に空行を追加（Markdownの要件）
   // ### 見出し\n本文 → ### 見出し\n\n本文
