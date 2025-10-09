@@ -6,6 +6,9 @@ import { AuthProviderWrapper, useAuthWrapper } from '@/hooks/use-auth-wrapper';
 import ChatPage from '@/components/chat-page';
 import { Bot } from 'lucide-react';
 
+// Disable static generation for this page
+export const dynamic = 'force-dynamic';
+
 function HomeContent() {
   const { user, loading } = useAuthWrapper();
   const router = useRouter();
