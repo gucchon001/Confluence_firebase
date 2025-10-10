@@ -15,7 +15,15 @@ if (-not $env:CONFLUENCE_API_TOKEN) {
     exit 1
 }
 
+if (-not $env:GEMINI_API_KEY) {
+    Write-Host "⚠️  GEMINI_API_KEY environment variable not set!" -ForegroundColor Red
+    Write-Host "Please set it from .env.local or run:" -ForegroundColor Yellow
+    Write-Host '$env:GEMINI_API_KEY = "YOUR_KEY_HERE"' -ForegroundColor Yellow
+    exit 1
+}
+
 $CONFLUENCE_API_TOKEN = $env:CONFLUENCE_API_TOKEN
+$GEMINI_API_KEY = $env:GEMINI_API_KEY
 
 Write-Host "🔐 Setting up Firebase secrets for project: $PROJECT_ID" -ForegroundColor Cyan
 Write-Host ""
@@ -25,14 +33,14 @@ Write-Host "Setting up Confluence API Token..." -ForegroundColor Yellow
 
 try {
     # シークレットを作成（既存の場合はエラー）
-    echo $CONFLUENCE_API_TOKEN | gcloud secrets create confluence_api_token `
+    Write-Output $CONFLUENCE_API_TOKEN | gcloud secrets create confluence_api_token `
         --project=$PROJECT_ID `
         --data-file=- 2>$null
     Write-Host "✅ Confluence API Token created" -ForegroundColor Green
 } catch {
     # 既存の場合は新しいバージョンを追加
     Write-Host "Secret already exists, updating..." -ForegroundColor Yellow
-    echo $CONFLUENCE_API_TOKEN | gcloud secrets versions add confluence_api_token `
+    Write-Output $CONFLUENCE_API_TOKEN | gcloud secrets versions add confluence_api_token `
         --project=$PROJECT_ID `
         --data-file=-
     Write-Host "✅ Confluence API Token updated" -ForegroundColor Green
@@ -40,7 +48,27 @@ try {
 
 Write-Host ""
 
-# 2. Firebase Service Account Key
+# 2. Gemini API Key
+Write-Host "Setting up Gemini API Key..." -ForegroundColor Yellow
+
+try {
+    # シークレットを作成（既存の場合はエラー）
+    Write-Output $GEMINI_API_KEY | gcloud secrets create gemini_api_key `
+        --project=$PROJECT_ID `
+        --data-file=- 2>$null
+    Write-Host "✅ Gemini API Key created" -ForegroundColor Green
+} catch {
+    # 既存の場合は新しいバージョンを追加
+    Write-Host "Secret already exists, updating..." -ForegroundColor Yellow
+    Write-Output $GEMINI_API_KEY | gcloud secrets versions add gemini_api_key `
+        --project=$PROJECT_ID `
+        --data-file=-
+    Write-Host "✅ Gemini API Key updated" -ForegroundColor Green
+}
+
+Write-Host ""
+
+# 3. Firebase Service Account Key
 Write-Host "Setting up Firebase Service Account Key..." -ForegroundColor Yellow
 
 if (Test-Path "keys\firebase-adminsdk-key.json") {
