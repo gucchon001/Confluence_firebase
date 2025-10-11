@@ -42,7 +42,11 @@
     "backup:restore": "tsx src/scripts/backup-firestore-data.ts restore",
     "backup:schedule:start": "tsx src/scripts/schedule-backups.ts start",
     "backup:now": "tsx src/scripts/schedule-backups.ts backup-now",
-    "backup:emergency-now": "tsx src/scripts/schedule-backups.ts emergency"
+    "backup:emergency-now": "tsx src/scripts/schedule-backups.ts emergency",
+    "upload:production-data": "tsx scripts/upload-production-data.ts",
+    "download:production-data": "tsx scripts/download-production-data.ts",
+    "sync:and:upload": "npm run sync:confluence:differential && npm run upload:production-data",
+    "sync:full:and:upload": "npm run sync:confluence:batch && npm run upload:production-data"
   },
   "dependencies": {
     "@genkit-ai/google-cloud": "^1.19.2",

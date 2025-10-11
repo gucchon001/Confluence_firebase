@@ -7,6 +7,7 @@ Confluence Copilot の運用に関するドキュメントです。
 ### 構成・設定
 - [Firebase App Hosting 構成ガイド](./firebase-app-hosting-configuration.md) - App Hostingの正しい構成方法（**必読**）
 - [必須環境変数一覧](./required-environment-variables.md) - 環境変数の完全なリスト
+- [Confluence データの自動同期](./automated-data-sync.md) - 定期的なデータ更新フロー
 
 ### トラブルシューティング
 - [Firebase App Hosting トラブルシューティング](./firebase-app-hosting-troubleshooting.md) - よくあるエラーと解決方法
