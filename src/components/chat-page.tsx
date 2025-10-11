@@ -121,6 +121,20 @@ const MessageCard = ({ msg }: { msg: Message }) => {
 
 // SkeletonMessageコンポーネントは削除されました
 
+/**
+ * マークダウン記号を除去してプレーンテキストに変換
+ */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, '')           // 見出し記号を除去
+    .replace(/\*\*/g, '')                  // 太字を除去
+    .replace(/\*/g, '')                    // イタリックを除去
+    .replace(/`/g, '')                     // コードを除去
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')  // リンクを除去（テキストのみ残す）
+    .replace(/\n/g, ' ')                   // 改行をスペースに
+    .trim();
+}
+
 export default function ChatPage({ user }: ChatPageProps) {
   const { signOut } = useAuthWrapper();
   const { isAdmin, isLoading: isAdminLoading } = useAdmin();
@@ -156,7 +170,11 @@ export default function ChatPage({ user }: ChatPageProps) {
     
     // オブジェクトが混入していないかチェック
     if (safeContent && !safeContent.includes('[object Object]')) {
-      setStreamingAnswer(prev => prev + safeContent);
+      setStreamingAnswer(prev => {
+        const combined = prev + safeContent;
+        // テーブルの改行を確実に保持
+        return combined;
+      });
     } else {
       console.warn('Invalid content detected, skipping:', newContent);
     }
@@ -500,14 +518,20 @@ export default function ChatPage({ user }: ChatPageProps) {
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'
                       }}>
-                        {conv.title.length > 12 ? `${conv.title.substring(0, 12)}...` : conv.title}
+                        {(() => {
+                          const plainTitle = stripMarkdown(conv.title);
+                          return plainTitle.length > 12 ? `${plainTitle.substring(0, 12)}...` : plainTitle;
+                        })()}
                       </p>
                       <p className="text-xs text-gray-500 mt-1 leading-tight" style={{
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'
                       }}>
-                        {conv.lastMessage.length > 14 ? `${conv.lastMessage.substring(0, 14)}...` : conv.lastMessage}
+                        {(() => {
+                          const plainText = stripMarkdown(conv.lastMessage);
+                          return plainText.length > 14 ? `${plainText.substring(0, 14)}...` : plainText;
+                        })()}
                       </p>
                     </div>
                     <div className="flex-shrink-0 text-xs text-gray-400 ml-2">
