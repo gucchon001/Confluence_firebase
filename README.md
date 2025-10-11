@@ -152,7 +152,8 @@ firebase deploy
 ## 📚 ドキュメント
 
 ### 🚀 将来計画
-- [**Genkit移行と拡張ロードマップ**](./docs/architecture/genkit-migration-and-expansion-roadmap.md) ⭐ - 5ヶ月計画（Jira・マニュアル・BigQuery連携）
+- [**基盤強化優先戦略**](./docs/architecture/foundation-first-strategy.md) 🔥 **推奨** - ラベル拡張+Knowledge Graph構築（横断拡張の前に）
+- [**Genkit移行と拡張ロードマップ**](./docs/architecture/genkit-migration-and-expansion-roadmap.md) ⭐ - 6.5ヶ月計画（Jira・マニュアル・BigQuery連携）
 
 ### 運用ガイド
 - [データ同期戦略と定期実行スケジュール](./docs/operations/data-synchronization-strategy.md) - 自動同期の設定と更新戦略

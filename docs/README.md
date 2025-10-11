@@ -20,7 +20,8 @@
 - **[rag-performance-analysis.md](./architecture/rag-performance-analysis.md)** - RAGパフォーマンス分析
 
 #### 将来計画
-- **[genkit-migration-and-expansion-roadmap.md](./architecture/genkit-migration-and-expansion-roadmap.md)** ⭐ - Genkit移行と拡張ロードマップ（5ヶ月計画）
+- **[foundation-first-strategy.md](./architecture/foundation-first-strategy.md)** 🔥 **NEW** - 基盤強化優先戦略（ラベル+KG → 横断拡張）
+- **[genkit-migration-and-expansion-roadmap.md](./architecture/genkit-migration-and-expansion-roadmap.md)** ⭐ - Genkit移行と拡張ロードマップ（6.5ヶ月計画）
 - **[genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
 - **[graphrag-tuned-architecture.md](./architecture/graphrag-tuned-architecture.md)** - GraphRAG調整アーキテクチャ
 

@@ -214,9 +214,44 @@ export const ai = genkit({
 
 ## 4. 段階的な拡張・移行ロードマップ
 
-### フェーズ 0: 準備と現行機能のラップ
+### ⚠️ 重要な戦略的判断
 
-**期間**: 約0.5ヶ月（2週間）
+**推奨**: 横断拡張の前に **基盤強化（Phase 0A）** を優先実施すべき
+
+**理由**:
+1. 弱い基盤の上に拡張すると問題が増幅される
+2. ラベルとKnowledge Graphは横断検索の基盤技術
+3. 長期的には時間とコストを削減（ROI: +3週間、品質+20%）
+
+詳細は [**基盤強化優先戦略**](./foundation-first-strategy.md) ⭐ を参照してください。
+
+---
+
+### フェーズ 0A: 基盤強化（推奨：優先実施）
+
+**期間**: 約1.5〜2ヶ月
+
+#### Phase 0A-1: ラベルシステム拡張（2週間）
+- 機能ごと詳細ラベル設計
+- 自動ラベル付けFlow実装
+- 既存データへの適用
+
+#### Phase 0A-2: Knowledge Graph構築（3〜4週間）
+- グラフデータ生成
+- LanceDB拡張（グラフテーブル）
+- グラフ検索API実装
+
+#### Phase 0A-3: パフォーマンス最適化（2週間）
+- 質問タイプ別最適化
+- 階層的キャッシュ
+
+**期待効果**: 検索精度+15-20%、応答時間50%削減
+
+---
+
+### フェーズ 0B: Genkit準備と現行機能のラップ
+
+**期間**: 約2週間
 
 #### 目的
 既存システムに影響を与えずにGenkitの恩恵（特にトレース機能）を享受する
@@ -851,34 +886,41 @@ describe('confluenceSearchFlow', () => {
 
 ```mermaid
 gantt
-    title Genkit移行とデータソース拡張スケジュール
+    title 基盤強化優先ロードマップ（更新版）
     dateFormat YYYY-MM-DD
     
-    section Phase 0
-    Genkit環境構築           :p0-1, 2025-10-15, 1w
-    既存機能ラップ           :p0-2, after p0-1, 1w
+    section Phase 0A: 基盤強化
+    ラベルシステム拡張        :crit, p0a-1, 2025-10-15, 2w
+    Knowledge Graph構築       :crit, p0a-2, after p0a-1, 4w
+    パフォーマンス最適化      :crit, p0a-3, after p0a-2, 2w
     
-    section Phase 1
-    Jira API実装            :p1-1, after p0-2, 2w
+    section Phase 0B: Genkit準備
+    Genkit環境構築           :p0b-1, after p0a-3, 1w
+    既存機能ラップ           :p0b-2, after p0b-1, 1w
+    
+    section Phase 1: Jira
+    Jira API実装            :p1-1, after p0b-2, 2w
     Jira検索Flow            :p1-2, after p1-1, 1w
-    簡易ルーター実装         :p1-3, after p1-2, 1w
+    ルーター実装            :p1-3, after p1-2, 1w
     
-    section Phase 2
+    section Phase 2: マニュアル
     ファイルインデクサー      :p2-1, after p1-3, 2w
     高度ルーター実装         :p2-2, after p2-1, 2w
     統合テスト              :p2-3, after p2-2, 2w
     
-    section Phase 3
+    section Phase 3: BigQuery
     Text-to-SQL実装         :p3-1, after p2-3, 2w
     BigQuery統合            :p3-2, after p3-1, 1w
     統合回答生成            :p3-3, after p3-2, 1w
     
-    section Phase 4
+    section Phase 4: 最終最適化
     既存機能リファクタリング  :p4-1, after p3-3, 2w
     最適化・テスト          :p4-2, after p4-1, 2w
 ```
 
-**総期間**: 約5ヶ月（2025年10月〜2026年3月）
+**総期間**: 約6.5ヶ月（2025年10月〜2026年4月）
+- Phase 0A（基盤強化）追加により+1.5ヶ月
+- **長期的にはPhase 1-3が効率化され、トータルで時間削減**
 
 ---
 
