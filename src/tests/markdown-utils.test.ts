@@ -84,6 +84,22 @@ describe('markdown-utils', () => {
       const result = fixMarkdownTables(input);
       expect(result).toContain('です。\n\n|');
     });
+    
+    it('改行なしで連結されたテーブル行を修正', () => {
+      const input = '| 項目名 | 説明 | | :--- | :--- | | 教室の基本情報 | データ |';
+      const result = fixMarkdownTables(input);
+      // 区切り行の前後に改行が追加される
+      expect(result).toContain('| 項目名 | 説明 |\n');
+      expect(result).toContain('| :--- | :--- |\n');
+      expect(result).toContain('| 教室の基本情報 | データ |');
+    });
+    
+    it('複数のデータ行が改行なしで連結されている場合を修正', () => {
+      const input = '| 項目 | 説明 |\n| :--- | :--- | | データ1 | 説明1 | | データ2 | 説明2 |';
+      const result = fixMarkdownTables(input);
+      expect(result).toMatch(/\| データ1 \| 説明1 \|\n/);
+      expect(result).toMatch(/\| データ2 \| 説明2 \|/);
+    });
   });
 });
 
