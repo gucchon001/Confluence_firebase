@@ -21,6 +21,7 @@ export function fixMarkdownTables(markdown: string): string {
   // テーブル行が改行なしで連結されている場合を修正
   // 「| 項目 | 説明 | | :--- | :--- | | データ1 | データ2 |」
   // → 「| 項目 | 説明 |\n| :--- | :--- |\n| データ1 | データ2 |」
+  
   // パターン1: 区切り行の前に改行を追加
   result = result.replace(/\|\s+\|(\s*:?-+:?\s*\|)/g, '|\n|$1');
   
@@ -28,17 +29,12 @@ export function fixMarkdownTables(markdown: string): string {
   result = result.replace(/(\|\s*:?-+:?\s*\|)\s+\|/g, '$1\n|');
   
   // パターン3: データ行同士が改行なしで連結されている場合
-  // ただし、同じ行のセル区切りは保護する必要がある
   // 「| データ1 | データ2 | | データ3 | データ4 |」を検出
   result = result.replace(/\|\s+\|([^:\-\n][^\n]*?\|)/g, '|\n|$1');
   
   // テーブルの前に空行を追加（GFMプラグインの要件）
-  // パターン1: 「です。| ヘッダー |\n|:---|」
-  result = result.replace(/([。、！？])(\|\s*[^\n]+\s*\|\s*\n\s*\|:?-)/g, '$1\n\n$2');
-  
-  // パターン2: 改行なしでテーブルが開始される場合
-  // 「です。\n| ヘッダー |」→「です。\n\n| ヘッダー |」
-  result = result.replace(/([。、！？])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
+  // 最もシンプルなアプローチ：テーブル行の前に必ず空行を確保
+  result = result.replace(/([^\n])(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
   
   return result;
 }
@@ -166,6 +162,25 @@ export function normalizeMarkdownSymbols(markdown: string): string {
       return before + '\n\n' + listStart;
     }
     return match;
+  });
+  
+  // テーブルの前後に空行を確実に追加（GFMプラグインの要件）
+  // パターン1: 段落の後にテーブルが来る場合（既に空行がない場合のみ）
+  text = text.replace(/([^\n#])\n(\|\s*[^\n]+\s*\|)/g, (match, before, table) => {
+    // 既に空行がある場合はスキップ
+    if (before === '\n') {
+      return match;
+    }
+    return before + '\n\n' + table;
+  });
+  
+  // パターン2: テーブルの後に段落が来る場合（既に空行がない場合のみ）
+  text = text.replace(/(\|\s*[^\n]+\s*\|)\n([^\n#])/g, (match, table, after) => {
+    // 既に空行がある場合はスキップ
+    if (after === '\n') {
+      return match;
+    }
+    return table + '\n\n' + after;
   });
   
   // 余分な改行を整理（3つ以上の連続改行を2つに）

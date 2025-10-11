@@ -152,6 +152,7 @@ firebase deploy
 ## 📚 ドキュメント
 
 ### 🚀 将来計画
+- [**Phase 0A 実装計画書**](./docs/architecture/phase-0A-implementation-plan.md) ✅ **最優先** - 具体的な実装タスクリスト
 - [**基盤強化優先戦略**](./docs/architecture/foundation-first-strategy.md) 🔥 **推奨** - ラベル拡張+Knowledge Graph構築（横断拡張の前に）
 - [**Genkit移行と拡張ロードマップ**](./docs/architecture/genkit-migration-and-expansion-roadmap.md) ⭐ - 6.5ヶ月計画（Jira・マニュアル・BigQuery連携）
 
