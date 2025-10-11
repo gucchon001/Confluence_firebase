@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain, Shield, BarChart3 } from 'lucide-react';
+import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain, Shield, BarChart3, Menu } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -142,7 +142,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // モバイルでは初期状態は閉じる
   const [showSettings, setShowSettings] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [conversations, setConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string }>>([]);
@@ -205,6 +205,24 @@ export default function ChatPage({ user }: ChatPageProps) {
   });
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // 画面サイズに応じてサイドバーの初期状態を設定
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setIsSidebarOpen(true); // デスクトップでは常に表示
+      } else {
+        setIsSidebarOpen(false); // モバイルでは閉じる
+      }
+    };
+    
+    // 初回実行
+    handleResize();
+    
+    // リサイズイベントリスナー
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const fetchConversations = async () => {
@@ -456,13 +474,20 @@ export default function ChatPage({ user }: ChatPageProps) {
 
   return (
     <div className="flex h-screen">
-      {/* サイドバー */}
-      <div className="w-72 bg-gray-50 border-r overflow-hidden flex flex-col">
+      {/* サイドバー - デスクトップ: 常に表示、モバイル: 切り替え可能 */}
+      <div className={`w-72 bg-gray-50 border-r overflow-hidden flex flex-col transition-transform duration-200 ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      } md:translate-x-0 fixed md:static inset-y-0 left-0 z-40`}>
         <div className="p-4 border-b">
           <Button className="w-full" onClick={async () => {
             // 新しい会話を開始
             setMessages([]);
             setCurrentConversationId(null);
+            
+            // モバイルでサイドバーを閉じる
+            if (window.innerWidth < 768) {
+              setIsSidebarOpen(false);
+            }
             
             // 会話一覧を更新
             try {
@@ -495,6 +520,11 @@ export default function ChatPage({ user }: ChatPageProps) {
                     // 会話を読み込む処理
                     setCurrentConversationId(conv.id);
                     setIsLoadingHistory(true);
+                    
+                    // モバイルでサイドバーを閉じる
+                    if (window.innerWidth < 768) {
+                      setIsSidebarOpen(false);
+                    }
                     
                     try {
                       // 選択された会話のメッセージを取得
@@ -565,10 +595,27 @@ export default function ChatPage({ user }: ChatPageProps) {
         </ScrollArea>
       </div>
 
+      {/* オーバーレイ（モバイルでサイドバーが開いているとき） */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* メインコンテンツ */}
       <div className="flex-1 flex flex-col">
         <header className="flex h-16 items-center justify-between border-b bg-white/80 backdrop-blur-sm px-4 md:px-6 sticky top-0 z-10">
           <div className="flex items-center gap-2">
+            {/* ハンバーガーメニュー（モバイルのみ） */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
             <Bot className="h-6 w-6 text-primary" />
             <h1 className="text-lg font-semibold">
               {showAdminDashboard ? '管理ダッシュボード' : 'Confluence Spec Chat'}
