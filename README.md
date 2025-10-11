@@ -100,7 +100,27 @@ npm run build
 
 ## デプロイ
 
-### Firebase へのデプロイ
+### Firebase App Hosting
+
+**推奨**: Firebase App Hosting を使用した自動デプロイ
+
+詳細は以下のドキュメントを参照：
+- [Firebase App Hosting 構成ガイド](./docs/operations/firebase-app-hosting-configuration.md)
+- [トラブルシューティング](./docs/operations/firebase-app-hosting-troubleshooting.md)
+
+**クイックスタート:**
+```bash
+# 1. apphosting.yaml がプロジェクトルートにあることを確認
+ls apphosting.yaml
+
+# 2. シークレットの作成
+.\scripts\setup-firebase-secrets.ps1
+
+# 3. Git push で自動デプロイ
+git push
+```
+
+### Firebase Hosting（従来の方法）
 
 ```bash
 # プレビューチャネルへのデプロイ
@@ -128,6 +148,33 @@ firebase deploy
 4. LanceDB へのベクトル保存
 5. Firestore へのメタデータ保存
 6. クエリ時にLanceDBで近傍検索→Firestoreでメタデータ取得
+
+## 📚 ドキュメント
+
+### 運用ガイド
+- [Firebase App Hosting 構成ガイド](./docs/operations/firebase-app-hosting-configuration.md) - App Hostingの正しい構成方法
+- [必須環境変数一覧](./docs/operations/required-environment-variables.md) - 環境変数の完全なリスト
+- [トラブルシューティング](./docs/operations/firebase-app-hosting-troubleshooting.md) - よくあるエラーと解決方法
+
+### アーキテクチャ
+- [アーキテクチャドキュメント](./docs/architecture/) - システム設計とコンポーネント
+
+### 実装ガイド
+- [実装ドキュメント](./docs/implementation/) - 各機能の実装詳細
+
+### テスト
+- [テストドキュメント](./docs/testing/) - テスト戦略とテストケース
+
+## 🏷️ 安定版情報
+
+**現在の安定版**: v1.0.0-stable  
+**コミット**: a54662bf  
+**リリース日**: 2025-10-10
+
+問題が発生した場合は、この安定版に戻すことができます：
+```bash
+git checkout v1.0.0-stable
+```
 
 ## ライセンス
 
