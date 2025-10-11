@@ -33,8 +33,12 @@ export function fixMarkdownTables(markdown: string): string {
   result = result.replace(/\|\s+\|([^:\-\n][^\n]*?\|)/g, '|\n|$1');
   
   // テーブルの前に空行を追加（GFMプラグインの要件）
-  // 「です。| ヘッダー |\n|:---|」のようなパターンを検出
+  // パターン1: 「です。| ヘッダー |\n|:---|」
   result = result.replace(/([。、！？])(\|\s*[^\n]+\s*\|\s*\n\s*\|:?-)/g, '$1\n\n$2');
+  
+  // パターン2: 改行なしでテーブルが開始される場合
+  // 「です。\n| ヘッダー |」→「です。\n\n| ヘッダー |」
+  result = result.replace(/([。、！？])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
   
   return result;
 }

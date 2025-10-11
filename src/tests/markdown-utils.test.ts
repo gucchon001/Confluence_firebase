@@ -85,6 +85,12 @@ describe('markdown-utils', () => {
       expect(result).toContain('です。\n\n|');
     });
     
+    it('改行ありでテーブルが開始される場合に空行を追加', () => {
+      const input = 'です。\n| ヘッダー |\n| :--- |\n| データ |';
+      const result = fixMarkdownTables(input);
+      expect(result).toContain('です。\n\n| ヘッダー |');
+    });
+    
     it('改行なしで連結されたテーブル行を修正', () => {
       const input = '| 項目名 | 説明 | | :--- | :--- | | 教室の基本情報 | データ |';
       const result = fixMarkdownTables(input);
