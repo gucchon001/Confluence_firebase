@@ -7,16 +7,22 @@
 ### 🏗️ [architecture/](./architecture/) - アーキテクチャ・設計
 システムの全体的な設計とアーキテクチャに関するドキュメント
 
-- **[architecture-implementation-verification.md](./architecture/architecture-implementation-verification.md)** - アーキテクチャドキュメント実装検証レポート
+#### 現行システム
 - **[blueprint.md](./architecture/blueprint.md)** - プロジェクト概要と全体設計
 - **[data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - LanceDBデータフロー図
+- **[hybrid-search-contract.md](./architecture/hybrid-search-contract.md)** - ハイブリッド検索契約
+- **[search-system-comprehensive-guide.md](./architecture/search-system-comprehensive-guide.md)** - 検索システム総合ガイド
+- **[prompt-design.md](./architecture/prompt-design.md)** - プロンプト設計
+- **[ui-ux-performance-strategy.md](./architecture/ui-ux-performance-strategy.md)** - UI/UXパフォーマンス戦略
+
+#### 分析・検証
+- **[architecture-implementation-verification.md](./architecture/architecture-implementation-verification.md)** - アーキテクチャドキュメント実装検証レポート
+- **[rag-performance-analysis.md](./architecture/rag-performance-analysis.md)** - RAGパフォーマンス分析
+
+#### 将来計画
+- **[genkit-migration-and-expansion-roadmap.md](./architecture/genkit-migration-and-expansion-roadmap.md)** ⭐ - Genkit移行と拡張ロードマップ（5ヶ月計画）
 - **[genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
 - **[graphrag-tuned-architecture.md](./architecture/graphrag-tuned-architecture.md)** - GraphRAG調整アーキテクチャ
-- **[hybrid-search-contract.md](./architecture/hybrid-search-contract.md)** - ハイブリッド検索契約
-- **[prompt-design.md](./architecture/prompt-design.md)** - プロンプト設計
-- **[rag-performance-analysis.md](./architecture/rag-performance-analysis.md)** - RAGパフォーマンス分析
-- **[search-system-comprehensive-guide.md](./architecture/search-system-comprehensive-guide.md)** - 検索システム総合ガイド
-- **[ui-ux-performance-strategy.md](./architecture/ui-ux-performance-strategy.md)** - UI/UXパフォーマンス戦略
 
 ### 🛠️ [implementation/](./implementation/) - 実装・開発
 具体的な実装方法と開発に関するドキュメント

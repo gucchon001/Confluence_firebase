@@ -151,7 +151,11 @@ firebase deploy
 
 ## 📚 ドキュメント
 
+### 🚀 将来計画
+- [**Genkit移行と拡張ロードマップ**](./docs/architecture/genkit-migration-and-expansion-roadmap.md) ⭐ - 5ヶ月計画（Jira・マニュアル・BigQuery連携）
+
 ### 運用ガイド
+- [データ同期戦略と定期実行スケジュール](./docs/operations/data-synchronization-strategy.md) - 自動同期の設定と更新戦略
 - [Firebase App Hosting 構成ガイド](./docs/operations/firebase-app-hosting-configuration.md) - App Hostingの正しい構成方法
 - [必須環境変数一覧](./docs/operations/required-environment-variables.md) - 環境変数の完全なリスト
 - [トラブルシューティング](./docs/operations/firebase-app-hosting-troubleshooting.md) - よくあるエラーと解決方法
