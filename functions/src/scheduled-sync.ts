@@ -24,8 +24,8 @@ export const dailyDifferentialSync = onSchedule({
   memory: '2GiB',
   region: 'asia-northeast1',
   secrets: [
-    'CONFLUENCE_API_TOKEN',
-    'GEMINI_API_KEY'
+    'confluence_api_token',
+    'gemini_api_key'
   ]
 }, async (event) => {
   logger.info('🔄 Starting daily differential sync', {
@@ -61,8 +61,6 @@ export const dailyDifferentialSync = onSchedule({
       timestamp: new Date().toISOString()
     });
 
-    return { success: true, timestamp: new Date().toISOString() };
-
   } catch (error) {
     logger.error('❌ Daily differential sync failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -78,12 +76,12 @@ export const dailyDifferentialSync = onSchedule({
 export const weeklyFullSync = onSchedule({
   schedule: '0 3 * * 0',        // cron: 毎週日曜日午前3時（JST）
   timeZone: 'Asia/Tokyo',
-  timeoutSeconds: 7200,         // 2時間
+  timeoutSeconds: 3600,         // 1時間（最大値）
   memory: '4GiB',               // メモリを増やす
   region: 'asia-northeast1',
   secrets: [
-    'CONFLUENCE_API_TOKEN',
-    'GEMINI_API_KEY'
+    'confluence_api_token',
+    'gemini_api_key'
   ]
 }, async (event) => {
   logger.info('🔄 Starting weekly full sync', {
@@ -115,8 +113,6 @@ export const weeklyFullSync = onSchedule({
       timestamp: new Date().toISOString()
     });
 
-    return { success: true, timestamp: new Date().toISOString() };
-
   } catch (error) {
     logger.error('❌ Weekly full sync failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -135,9 +131,9 @@ export const manualSync = onRequest({
   memory: '2GiB',
   cors: true,
   secrets: [
-    'CONFLUENCE_API_TOKEN',
-    'GEMINI_API_KEY',
-    'SYNC_SECRET'
+    'confluence_api_token',
+    'gemini_api_key',
+    'sync_secret'
   ]
 }, async (req, res) => {
   // 認証チェック
