@@ -95,7 +95,7 @@ graph TD
         L --> N["ドメイン知識データベース"]
         N --> O["動的キーワード抽出器"]
 
-        H["Node.js Scheduler"] -- 1日1回実行 --> I["Node.js Scripts(データ同期バッチ)"]
+        H["Firebase Cloud Functions(Scheduler)"] -- 1日1回実行 --> I["Node.js Scripts(データ同期バッチ)"]
         I --> J["Atlassian API"]
         J -- Confluenceデータ --> I
         I --> K["@xenova/transformers(768次元)"]
@@ -185,7 +185,7 @@ graph TD
 1. **データ取得・処理フロー**
    - Confluenceからページデータを取得
    - HTMLからテキストを抽出
-   - テキストをチャンク分割（1000文字程度、100文字オーバーラップ）
+   - テキストをチャンク分割（1800文字、オーバーラップなし）
    - @xenova/transformersによる埋め込みベクトル生成（768次元、L2正規化）
    - LanceDBにベクトルとメタデータを保存
 

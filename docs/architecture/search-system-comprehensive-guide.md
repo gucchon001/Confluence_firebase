@@ -47,7 +47,8 @@
 
 ### 3.1 インデックス
 - エンジン: `lunr@2.x`
-- 対象フィールド: `tokenizedTitle`(boost 2.0), `tokenizedContent`(boost 1.0), `labels`(boost 1.5)
+- 対象フィールド: `tokenizedTitle`(boost 3.0), `tokenizedContent`(boost 1.0), `labels`(boost 2.0)
+  - 備考: boost値はPhase 2最適化で調整済み（タイトル重視を強化）
 - 追加メタ情報: `pageId:number`, `labels:string[]`, `url:string`, `space_key?:string`
 - 日本語対応: Kuromojiトークナイザーによる事前分かち書き
 - 正規化: 全角/半角・空白トリム、ひらがな/カタカナはそのまま

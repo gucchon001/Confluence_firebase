@@ -7,35 +7,60 @@
 ### 🏗️ [architecture/](./architecture/) - アーキテクチャ・設計
 システムの全体的な設計とアーキテクチャに関するドキュメント
 
+- **[architecture-implementation-verification.md](./architecture/architecture-implementation-verification.md)** - アーキテクチャドキュメント実装検証レポート
 - **[blueprint.md](./architecture/blueprint.md)** - プロジェクト概要と全体設計
 - **[data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - LanceDBデータフロー図
 - **[genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
 - **[graphrag-tuned-architecture.md](./architecture/graphrag-tuned-architecture.md)** - GraphRAG調整アーキテクチャ
 - **[hybrid-search-contract.md](./architecture/hybrid-search-contract.md)** - ハイブリッド検索契約
 - **[prompt-design.md](./architecture/prompt-design.md)** - プロンプト設計
+- **[rag-performance-analysis.md](./architecture/rag-performance-analysis.md)** - RAGパフォーマンス分析
 - **[search-system-comprehensive-guide.md](./architecture/search-system-comprehensive-guide.md)** - 検索システム総合ガイド
 - **[ui-ux-performance-strategy.md](./architecture/ui-ux-performance-strategy.md)** - UI/UXパフォーマンス戦略
 
 ### 🛠️ [implementation/](./implementation/) - 実装・開発
 具体的な実装方法と開発に関するドキュメント
 
-- **[api-design.md](./implementation/api-design.md)** - API設計
-- **[current-implementation-status.md](./implementation/current-implementation-status.md)** - 現在の実装状況
-- **[domain-knowledge-extraction-comprehensive-guide.md](./implementation/domain-knowledge-extraction-comprehensive-guide.md)** - ドメイン知識抽出総合ガイド
-- **[error-handling.md](./implementation/error-handling.md)** - エラーハンドリング
-- **[firestore-integration-guide.md](./implementation/firestore-integration-guide.md)** - Firestore統合ガイド
-- **[label-system-api.md](./implementation/label-system-api.md)** - ラベルシステムAPI
-- **[label-system-design.md](./implementation/label-system-design.md)** - ラベルシステム設計
-- **[label-system-overview.md](./implementation/label-system-overview.md)** - ラベルシステム概要
+#### システム設計・仕様
+- **[error-handling.md](./implementation/error-handling.md)** - エラーハンドリング仕様
+- **[ai-models-configuration.md](./implementation/ai-models-configuration.md)** - AIモデル設定ガイド
 - **[lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様
-- **[remaining-issues.md](./implementation/remaining-issues.md)** - 残課題・既知の問題
+- **[firestore-integration-guide.md](./implementation/firestore-integration-guide.md)** - Firestore統合ガイド
+
+#### ラベルシステム
+- **[label-system-overview.md](./implementation/label-system-overview.md)** - ラベルシステム概要
+- **[label-system-design.md](./implementation/label-system-design.md)** - ラベルシステム設計
+- **[label-system-api.md](./implementation/label-system-api.md)** - ラベルシステムAPI
+
+#### ドメイン知識
+- **[domain-knowledge-extraction-comprehensive-guide.md](./implementation/domain-knowledge-extraction-comprehensive-guide.md)** - ドメイン知識抽出総合ガイド
+
+#### 課題管理
+- **[remaining-issues.md](./implementation/remaining-issues.md)** - 継続的な課題管理
+
+#### 監査レポート
+- **[implementation-docs-audit-report.md](./implementation/implementation-docs-audit-report.md)** - ドキュメント監査レポート (2025-10-11)
 
 ### 🚀 [operations/](./operations/) - 運用・デプロイ
 システムの運用、デプロイ、移行に関するドキュメント
 
-- **[deployment-guide.md](./operations/deployment-guide.md)** - デプロイガイド
-- **[migration-guide.md](./operations/migration-guide.md)** - 移行ガイド
+#### 同期・データ管理
+- **[data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** ⭐ - データ同期戦略と定期実行スケジュール
+- **[firebase-scheduled-sync-setup.md](./operations/firebase-scheduled-sync-setup.md)** - Firebase Functions自動同期セットアップ
+
+#### デプロイ・設定
+- **[deployment-guide.md](./operations/deployment-guide.md)** - 包括的デプロイガイド
+- **[firebase-app-hosting-configuration.md](./operations/firebase-app-hosting-configuration.md)** ⭐ - App Hosting設定（動作確認済み）
+- **[firebase-app-hosting-troubleshooting.md](./operations/firebase-app-hosting-troubleshooting.md)** - トラブルシューティング
+- **[required-environment-variables.md](./operations/required-environment-variables.md)** - 必須環境変数一覧
+
+#### 運用・管理
+- **[backup-management-guide.md](./operations/backup-management-guide.md)** - バックアップ管理ガイド
+- **[migration-guide.md](./operations/migration-guide.md)** - リポジトリ移管ガイド
 - **[network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有ガイド
+
+#### 監査レポート
+- **[operations-docs-audit-report.md](./operations/operations-docs-audit-report.md)** - ドキュメント監査レポート (2025-10-11)
 
 ### 📊 [testing/](./testing/) - テスト・分析
 テスト計画、分析結果、品質評価に関するドキュメント
@@ -50,28 +75,44 @@
 ### 📋 [specifications/](./specifications/) - 仕様書
 システムの詳細仕様と技術仕様に関するドキュメント
 
-- **[lancedb-integration-guide.md](./specifications/lancedb-integration-guide.md)** - LanceDB統合ガイド
 - **[spec.md](./specifications/spec.md)** - システム仕様書
+- **[lancedb-integration-guide.md](./specifications/lancedb-integration-guide.md)** - LanceDB統合ガイド
+- **[implementation-gap-analysis.md](./specifications/implementation-gap-analysis.md)** - 仕様書と実装のギャップ分析
 
 ### 📁 [archive/](./archive/) - アーカイブ
-過去の分析レポート、テスト結果、最適化計画
+過去の分析レポート、テスト結果、最適化計画、非推奨ドキュメント
 
-- 過去のパフォーマンス分析レポート
-- 最適化計画書
-- 古いテスト結果
-- プロジェクトクリーンアップ計画
+#### 分析レポート
+- **[scoring-simplification-analysis.md](./archive/analysis-reports/scoring-simplification-analysis.md)** - スコアリング簡素化分析
+- **[scoring-quality-checklist.md](./archive/analysis-reports/scoring-quality-checklist.md)** - 品質チェックリスト
+
+#### バグ修正レポート
+- **[markdown-processing-fixes.md](./archive/bug-fix-reports/markdown-processing-fixes.md)** - Markdown処理修正 (2025-10-08)
+
+#### パフォーマンス分析
+- **[server-startup-analysis.md](./archive/performance-analysis/server-startup-analysis.md)** - サーバー起動分析
+- **[nextjs-compile-time-optimization.md](./archive/performance-analysis/nextjs-compile-time-optimization.md)** - コンパイル最適化
+
+#### 非推奨ドキュメント
+- **[current-implementation-status.md](./archive/deprecated/current-implementation-status.md)** - 古い実装状況 (2024-12)
+- **[api-design.md](./archive/deprecated/api-design.md)** - 古いAPI設計 (2025-09)
+
+その他、過去のLanceDB関連ドキュメント、パフォーマンス分析、プロジェクトクリーンアップ計画など
 
 ## 🚀 クイックスタート
 
 ### 新規開発者向け
 1. **[architecture/blueprint.md](./architecture/blueprint.md)** - プロジェクト概要を理解
-2. **[implementation/current-implementation-status.md](./implementation/current-implementation-status.md)** - 現在の実装状況を確認
-3. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイ手順を確認
+2. **[architecture/data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - システム全体のデータフローを確認
+3. **[specifications/spec.md](./specifications/spec.md)** - 機能要件と技術スタックを確認
+4. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイ手順を確認
 
 ### 運用担当者向け
-1. **[operations/migration-guide.md](./operations/migration-guide.md)** - 移行手順を確認
-2. **[operations/network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有設定
-3. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
+1. **[operations/data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** - データ同期戦略と定期実行スケジュール
+2. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイガイド
+3. **[operations/migration-guide.md](./operations/migration-guide.md)** - 移行手順を確認
+4. **[operations/network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有設定
+5. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
 
 ### 開発者向け
 1. **[architecture/genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針

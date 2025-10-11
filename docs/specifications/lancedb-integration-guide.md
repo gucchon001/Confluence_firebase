@@ -17,7 +17,7 @@ Confluence API → データ取得 → テキスト抽出 → チャンク分割
 ### 2.2 データフロー
 
 1. **データ同期**: Confluenceからページデータを取得
-2. **前処理**: HTMLからテキスト抽出、チャンク分割（1000文字、100文字オーバーラップ）
+2. **前処理**: HTMLからテキスト抽出、チャンク分割（1800文字、オーバーラップなし）
 3. **埋め込み生成**: @xenova/transformersで768次元ベクトル生成
 4. **保存**: LanceDBにベクトルとメタデータを保存
 5. **検索**: ユーザークエリをベクトル化してLanceDBで検索
@@ -98,9 +98,9 @@ private extractLabelsFromPage(page: ConfluencePage): string[] {
 
 ### 3.4 チャンク分割ロジック
 
-#### 3.4.1 本番仕様（動的分割）
+#### 3.4.1 現在の実装（動的分割）
 ```typescript
-// 1800文字での動的分割
+// 1800文字での動的分割（オーバーラップなし）
 const chunkSize = 1800;
 for (let i = 0; i < content.length; i += chunkSize) {
   const chunk = content.substring(i, i + chunkSize).trim();
@@ -108,16 +108,20 @@ for (let i = 0; i < content.length; i += chunkSize) {
 }
 ```
 
-#### 3.4.2 理想仕様（固定分割）
+**実装場所**: `src/lib/confluence-sync-service.ts` (行753-801)
+
+#### 3.4.2 将来の改善案（オーバーラップあり）
 ```typescript
-// 3チャンク固定分割
-const chunkSize = Math.ceil(content.length / 3);
-for (let i = 0; i < 3; i++) {
-  const start = i * chunkSize;
-  const end = Math.min(start + chunkSize, content.length);
+// 1800文字での動的分割 + 100文字オーバーラップ
+const chunkSize = 1800;
+const overlap = 100;
+for (let i = 0; i < content.length; i += (chunkSize - overlap)) {
+  const chunk = content.substring(i, Math.min(i + chunkSize, content.length)).trim();
   // チャンク処理
 }
 ```
+
+**メリット**: チャンク境界をまたぐ文脈の連続性が保持され、検索精度が向上します。
 
 ## 4. ハイブリッド検索
 
