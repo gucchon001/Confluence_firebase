@@ -2,15 +2,15 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # インスタンス設定
-  minInstances: 0
-  maxInstances: 2
+  # インスタンス設定（コールドスタート軽減のためminを1に）
+  minInstances: 1
+  maxInstances: 4
   
-  # メモリ設定（埋め込みモデルのため増やす）
-  memoryMiB: 2048
+  # メモリ設定（埋め込みモデル + 複数同時リクエスト対応）
+  memoryMiB: 4096
   
   # CPU設定
-  cpu: 1
+  cpu: 2
 
 # 環境変数（runConfigと同じレベル）
 env:
@@ -68,6 +68,11 @@ env:
     availability:
       - RUNTIME
   
+  - variable: CONFLUENCE_API_TOKEN
+    secret: confluence_api_token
+    availability:
+      - RUNTIME
+  
   - variable: CONFLUENCE_SPACE_KEY
     value: CLIENTTOMO
     availability:
@@ -76,6 +81,13 @@ env:
   # Google Cloud（ビルド時とランタイムの両方）
   - variable: GOOGLE_CLOUD_PROJECT
     value: confluence-copilot-ppjye
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  # Gemini API（ビルド時とランタイムの両方）
+  - variable: GEMINI_API_KEY
+    secret: gemini_api_key
     availability:
       - BUILD
       - RUNTIME
