@@ -34,6 +34,11 @@ jobs:
       - name: Install dependencies
         run: npm install
       
+      - name: Setup Google Cloud credentials
+        run: |
+          echo '${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}' > /tmp/gcp-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+      
       - name: Run differential sync
         if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_type == 'differential')
         run: npm run sync:confluence:differential
@@ -58,6 +63,7 @@ jobs:
         run: npm run upload:production-data
         env:
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
       
       - name: Notify completion
         if: success()

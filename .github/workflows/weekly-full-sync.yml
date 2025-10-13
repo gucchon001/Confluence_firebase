@@ -25,6 +25,11 @@ jobs:
       - name: Install dependencies
         run: npm install
       
+      - name: Setup Google Cloud credentials
+        run: |
+          echo '${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}' > /tmp/gcp-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+      
       - name: Run full sync
         run: npm run sync:confluence:batch
         env:
@@ -38,6 +43,7 @@ jobs:
         run: npm run upload:production-data
         env:
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
       
       - name: Notify completion
         if: success()
