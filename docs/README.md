@@ -58,6 +58,7 @@
 
 #### デプロイ・設定
 - **[deployment-guide.md](./operations/deployment-guide.md)** - 包括的デプロイガイド
+- **[build-optimization-guide.md](./operations/build-optimization-guide.md)** 🚀 **NEW** - ビルド最適化ガイド（75-90%高速化）
 - **[firebase-app-hosting-configuration.md](./operations/firebase-app-hosting-configuration.md)** ⭐ - App Hosting設定（動作確認済み）
 - **[firebase-app-hosting-troubleshooting.md](./operations/firebase-app-hosting-troubleshooting.md)** - トラブルシューティング
 - **[required-environment-variables.md](./operations/required-environment-variables.md)** - 必須環境変数一覧
@@ -116,11 +117,12 @@
 4. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイ手順を確認
 
 ### 運用担当者向け
-1. **[operations/data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** - データ同期戦略と定期実行スケジュール
-2. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイガイド
-3. **[operations/migration-guide.md](./operations/migration-guide.md)** - 移行手順を確認
-4. **[operations/network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有設定
-5. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
+1. **[operations/build-optimization-guide.md](./operations/build-optimization-guide.md)** 🚀 - ビルド最適化（75-90%高速化）
+2. **[operations/data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** - データ同期戦略と定期実行スケジュール
+3. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイガイド
+4. **[operations/migration-guide.md](./operations/migration-guide.md)** - 移行手順を確認
+5. **[operations/network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有設定
+6. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
 
 ### 開発者向け
 1. **[architecture/genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針

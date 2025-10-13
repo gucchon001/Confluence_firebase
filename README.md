@@ -95,8 +95,17 @@ npm run test:e2e
 ### ビルド
 
 ```bash
+# デフォルトビルド（ローカルキャッシュがあればデータDLスキップ）
 npm run build
+
+# 高速ビルド（データDLを必ずスキップ - 75-90%高速化）
+npm run build:fast
+
+# フルビルド（データDLを必ず実行）
+npm run build:full
 ```
+
+詳細: [docs/operations/build-optimization-guide.md](docs/operations/build-optimization-guide.md)
 
 ## デプロイ
 
