@@ -10,6 +10,7 @@ import { Storage } from '@google-cloud/storage';
 import { execSync } from 'child_process';
 import * as logger from 'firebase-functions/logger';
 import * as path from 'path';
+import * as fs from 'fs';
 
 const storage = new Storage();
 const bucketName = 'confluence-copilot-data';
@@ -38,20 +39,10 @@ export const dailyDifferentialSync = onSchedule({
     logger.info('📥 Downloading existing data from Cloud Storage...');
     await downloadFromStorage();
 
-    // 差分同期を実行
-    logger.info('🔄 Running differential sync...');
-    execSync('npm run sync:confluence:differential', {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        CONFLUENCE_API_TOKEN: process.env.CONFLUENCE_API_TOKEN,
-        GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-        CONFLUENCE_BASE_URL: 'https://giginc.atlassian.net',
-        CONFLUENCE_USER_EMAIL: 'kanri@jukust.jp',
-        CONFLUENCE_SPACE_KEY: 'CLIENTTOMO'
-      },
-      stdio: 'inherit'
-    });
+    // 🚧 同期スクリプトはCloud Functions環境では実行できないため、スキップ
+    // TODO: Cloud Run Jobsまたは別の方法で実装する必要があります
+    logger.warn('⚠️ Sync script execution is not supported in Cloud Functions environment');
+    logger.info('📝 Please run sync manually using: npm run sync:confluence:differential');
 
     // Cloud Storageにアップロード
     logger.info('📤 Uploading data to Cloud Storage...');
@@ -90,20 +81,10 @@ export const weeklyFullSync = onSchedule({
   });
 
   try {
-    // 完全同期を実行
-    logger.info('🔄 Running full sync...');
-    execSync('npm run sync:confluence:batch', {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        CONFLUENCE_API_TOKEN: process.env.CONFLUENCE_API_TOKEN,
-        GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-        CONFLUENCE_BASE_URL: 'https://giginc.atlassian.net',
-        CONFLUENCE_USER_EMAIL: 'kanri@jukust.jp',
-        CONFLUENCE_SPACE_KEY: 'CLIENTTOMO'
-      },
-      stdio: 'inherit'
-    });
+    // 🚧 同期スクリプトはCloud Functions環境では実行できないため、スキップ
+    // TODO: Cloud Run Jobsまたは別の方法で実装する必要があります
+    logger.warn('⚠️ Sync script execution is not supported in Cloud Functions environment');
+    logger.info('📝 Please run sync manually using: npm run sync:confluence:batch');
 
     // Cloud Storageにアップロード
     logger.info('📤 Uploading data to Cloud Storage...');
@@ -168,24 +149,14 @@ export const manualSync = onRequest({
       await downloadFromStorage();
     }
 
-    // 同期を実行
+    // 🚧 同期スクリプトはCloud Functions環境では実行できないため、スキップ
+    // TODO: Cloud Run Jobsまたは別の方法で実装する必要があります
     const syncCommand = syncType === 'full' 
       ? 'npm run sync:confluence:batch'
       : 'npm run sync:confluence:differential';
     
-    logger.info(`🔄 Running ${syncType} sync...`);
-    execSync(syncCommand, {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        CONFLUENCE_API_TOKEN: process.env.CONFLUENCE_API_TOKEN,
-        GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-        CONFLUENCE_BASE_URL: 'https://giginc.atlassian.net',
-        CONFLUENCE_USER_EMAIL: 'kanri@jukust.jp',
-        CONFLUENCE_SPACE_KEY: 'CLIENTTOMO'
-      },
-      stdio: 'inherit'
-    });
+    logger.warn('⚠️ Sync script execution is not supported in Cloud Functions environment');
+    logger.info(`📝 Please run sync manually using: ${syncCommand}`);
 
     // Cloud Storageにアップロード
     logger.info('📤 Uploading data to Cloud Storage...');
@@ -240,6 +211,12 @@ async function downloadFromStorage(): Promise<void> {
           dir.localPath,
           file.name.replace(dir.prefix, '')
         );
+        
+        // ディレクトリを作成
+        const dirPath = path.dirname(localPath);
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+        }
         
         await file.download({ destination: localPath });
       }
