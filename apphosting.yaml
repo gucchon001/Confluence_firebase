@@ -105,6 +105,7 @@ env:
   
   # ビルド最適化: データダウンロードをスキップ（実行時にCloud Storageから直接読み込む）
   - variable: SKIP_DATA_DOWNLOAD
-    value: "true"
+    value: "false"
     availability:
       - BUILD
+      - RUNTIME
