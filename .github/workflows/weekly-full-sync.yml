@@ -22,13 +22,17 @@ jobs:
           node-version: '22'
           cache: 'npm'
       
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          service_account_key: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
+          project_id: confluence-copilot-ppjye
+      
+      - name: Authenticate to Google Cloud
+        run: gcloud auth activate-service-account --key-file=${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
+      
       - name: Install dependencies
         run: npm install
-      
-      - name: Setup Google Cloud credentials
-        run: |
-          echo '${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}' > /tmp/gcp-key.json
-          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
       
       - name: Run full sync
         run: npm run sync:confluence:batch
@@ -43,7 +47,6 @@ jobs:
         run: npm run upload:production-data
         env:
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
       
       - name: Notify completion
         if: success()

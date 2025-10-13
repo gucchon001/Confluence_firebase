@@ -1,4 +1,4 @@
-name: Sync Confluence Data
+name: Sync Confluence Data (Simple)
 
 on:
   # 毎日午前2時（JST = UTC 17:00前日）に自動実行
@@ -31,15 +31,6 @@ jobs:
           node-version: '22'
           cache: 'npm'
       
-      - name: Setup Google Cloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          service_account_key: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
-          project_id: confluence-copilot-ppjye
-      
-      - name: Authenticate to Google Cloud
-        run: gcloud auth activate-service-account --key-file=${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
-      
       - name: Install dependencies
         run: npm install
       
@@ -63,16 +54,13 @@ jobs:
           CONFLUENCE_USER_EMAIL: kanri@jukust.jp
           CONFLUENCE_SPACE_KEY: CLIENTTOMO
       
-      - name: Upload data to Cloud Storage
-        run: npm run upload:production-data
-        env:
-          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
-      
       - name: Notify completion
         if: success()
         run: |
           echo "✅ Confluence data sync completed successfully"
           echo "📊 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "📝 Note: Data upload to Cloud Storage needs to be done manually"
+          echo "💡 Run: npm run upload:production-data"
       
       - name: Notify failure
         if: failure()
