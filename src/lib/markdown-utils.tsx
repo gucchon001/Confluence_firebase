@@ -8,35 +8,12 @@
  * 基本的な全角→半角変換のみ実行
  */
 export function fixMarkdownTables(markdown: string): string {
-  // シンプルアプローチ：基本的な全角→半角変換とテーブル行の分離
-  // テーブル処理はReactMarkdownのremarkGfmプラグインに完全依存
-  
-  // 基本的な全角記号の変換
-  let result = markdown
+  // 基本的な全角記号の変換のみ
+  return markdown
     .replace(/｜/g, '|')       // 全角パイプ
     .replace(/：/g, ':')       // 全角コロン
     .replace(/－/g, '-')       // 全角ハイフン
     .replace(/　/g, ' ');      // 全角スペース
-  
-  // テーブル行が改行なしで連結されている場合を修正
-  // 「| 項目 | 説明 | | :--- | :--- | | データ1 | データ2 |」
-  // → 「| 項目 | 説明 |\n| :--- | :--- |\n| データ1 | データ2 |」
-  
-  // パターン1: 区切り行の前に改行を追加
-  result = result.replace(/\|\s+\|(\s*:?-+:?\s*\|)/g, '|\n|$1');
-  
-  // パターン2: 区切り行の後に改行を追加
-  result = result.replace(/(\|\s*:?-+:?\s*\|)\s+\|/g, '$1\n|');
-  
-  // パターン3: データ行同士が改行なしで連結されている場合
-  // 「| データ1 | データ2 | | データ3 | データ4 |」を検出
-  result = result.replace(/\|\s+\|([^:\-\n][^\n]*?\|)/g, '|\n|$1');
-  
-  // テーブルの前に空行を追加（GFMプラグインの要件）
-  // 最もシンプルなアプローチ：テーブル行の前に必ず空行を確保
-  result = result.replace(/([^\n])(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
-  
-  return result;
 }
 
 /**
@@ -63,6 +40,7 @@ export function normalizeMarkdownSymbols(markdown: string): string {
   // 行ごとに処理して、見出しとテーブルを保護
   const lines = text.split('\n');
   const processedLines: string[] = [];
+  let inTable = false; // 表の中にいるかどうか
   
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
@@ -70,15 +48,34 @@ export function normalizeMarkdownSymbols(markdown: string): string {
     
     // 見出し行は保護（処理しない）
     if (/^#{1,6}\s/.test(trimmed)) {
+      inTable = false;
       processedLines.push(line);
       continue;
     }
     
-    // テーブル行は保護（処理しない）
-    if (/^\|/.test(trimmed) || /^:?-{3,}/.test(trimmed)) {
+    // 表の行を検出して処理
+    if (/^\|/.test(trimmed)) {
+      // 表の開始：前の行が空行でなければ空行を挿入
+      if (!inTable && processedLines.length > 0) {
+        const prevLine = processedLines[processedLines.length - 1];
+        if (prevLine.trim() !== '') {
+          processedLines.push(''); // 空行を挿入
+        }
+      }
+      inTable = true;
       processedLines.push(line);
       continue;
+    } else if (inTable && trimmed === '') {
+      // 表の終了（空行）
+      inTable = false;
+      processedLines.push(line);
+      continue;
+    } else if (inTable) {
+      // 表の途中で表以外の行が来たら表終了
+      inTable = false;
     }
+    
+    // 表の行でない場合は通常処理
     
     // 同じ行内に複数の数字リストがある場合、分離
     // 「1.項目A 2.項目B 3.項目C」→ 分離

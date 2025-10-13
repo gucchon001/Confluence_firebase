@@ -173,8 +173,25 @@ export default function ChatPage({ user }: ChatPageProps) {
       setStreamingAnswer(prev => {
         const combined = prev + safeContent;
         
-        // 最小ルール: 表直前に空行を1つ確保するのみ
-        const processedContent = combined.replace(/([。？！｡！？])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
+        // テーブル行の結合処理
+        // テーブル行が複数の段落に分割されている場合を修正
+        let processedContent = combined;
+        
+        // デバッグ情報
+        console.log('🔍 [DEBUG] Before table processing:', processedContent);
+        
+        // テーブル行の前の空行を確保（行頭の表行にのみ適用）
+        processedContent = processedContent.replace(/([^\n])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
+        
+        // 孤立した '|' 行を削除（ストリーミング分割の副作用）
+        processedContent = processedContent.replace(/^\|\s*$/gm, '');
+        
+        // 連続するテーブル行の間の余分な空行を1つに圧縮
+        processedContent = processedContent.replace(/(\|\s*[^\n]+\s*\|)\n{2,}(\|\s*[^\n]+\s*\|)/g, '$1\n$2');
+        
+        // デバッグ情報
+        console.log('🔍 [DEBUG] After table processing:', processedContent);
+        
         return processedContent;
       });
     } else {
@@ -194,8 +211,21 @@ export default function ChatPage({ user }: ChatPageProps) {
     
     // オブジェクトが混入していないかチェック
     if (safeContent && !safeContent.includes('[object Object]')) {
-      // 最小ルール: 表直前に空行を1つ確保（句読点直後のみ）
-      const processedContent = safeContent.replace(/([。？！｡！？])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
+      // 完了時のテーブル処理も追加
+      let processedContent = safeContent;
+      
+      console.log('🔍 [DEBUG] Completion - Before table processing:', processedContent);
+      
+      // テーブル行の前の空行を確保（行頭の表行にのみ適用）
+      processedContent = processedContent.replace(/([^\n])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
+      
+      // 孤立した '|' 行を削除
+      processedContent = processedContent.replace(/^\|\s*$/gm, '');
+      // 連続するテーブル行の間の余分な空行を1つに圧縮
+      processedContent = processedContent.replace(/(\|\s*[^\n]+\s*\|)\n{2,}(\|\s*[^\n]+\s*\|)/g, '$1\n$2');
+      
+      console.log('🔍 [DEBUG] Completion - After table processing:', processedContent);
+      
       setStreamingAnswer(processedContent);
     } else {
       console.warn('Invalid content detected, using fallback:', content);
@@ -350,7 +380,17 @@ export default function ChatPage({ user }: ChatPageProps) {
           // 最終的なメッセージを作成（テーブル処理を適用）
           let processedFullAnswer = fullAnswer;
           
-          console.log('🔍 [DEBUG] Final message (no table processing):', processedFullAnswer);
+          console.log('🔍 [DEBUG] Final message - Before table processing:', processedFullAnswer);
+          
+          // テーブル行の前の空行を確保（行頭の表行にのみ適用）
+          processedFullAnswer = processedFullAnswer.replace(/([^\n])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
+          
+          // 孤立した '|' 行を削除
+          processedFullAnswer = processedFullAnswer.replace(/^\|\s*$/gm, '');
+          // 連続するテーブル行の間の余分な空行を1つに圧縮
+          processedFullAnswer = processedFullAnswer.replace(/(\|\s*[^\n]+\s*\|)\n{2,}(\|\s*[^\n]+\s*\|)/g, '$1\n$2');
+          
+          console.log('🔍 [DEBUG] Final message - After table processing:', processedFullAnswer);
           
       const assistantMessage: Message = {
           id: `assistant-${Date.now()}`,
