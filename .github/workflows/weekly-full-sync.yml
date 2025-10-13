@@ -1,0 +1,54 @@
+name: Weekly Full Sync
+
+on:
+  # 毎週日曜日午前3時（JST = UTC 18:00土曜日）に完全同期
+  schedule:
+    - cron: '0 18 * * 6'  # UTC 18:00土曜日 = JST 3:00日曜日
+  
+  # 手動実行も可能
+  workflow_dispatch:
+
+jobs:
+  full-sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run full sync
+        run: npm run sync:confluence:batch
+        env:
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CONFLUENCE_BASE_URL: https://giginc.atlassian.net
+          CONFLUENCE_USER_EMAIL: kanri@jukust.jp
+          CONFLUENCE_SPACE_KEY: CLIENTTOMO
+      
+      - name: Upload data to Cloud Storage
+        run: npm run upload:production-data
+        env:
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+      
+      - name: Notify completion
+        if: success()
+        run: |
+          echo "✅ Weekly full sync completed successfully"
+          echo "📊 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "🔄 Next sync: Next Sunday at 3:00 AM JST"
+      
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "❌ Weekly full sync failed"
+          echo "Please check the logs and run manually if needed"
+
