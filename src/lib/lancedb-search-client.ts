@@ -46,9 +46,13 @@ function generateCacheKey(query: string, params: any): string {
   const paramString = JSON.stringify({
     topK: params.topK || 5,
     maxDistance: params.maxDistance || 2.0,  // 距離閾値を追加（デフォルト値と一致）
-    labelFilters: params.labelFilters || { includeMeetingNotes: false }
+    // labelFiltersがundefinedの場合は明示的にnullとして区別する
+    labelFilters: params.labelFilters !== undefined ? params.labelFilters : null
   });
-  return `${normalizedQuery}_${Buffer.from(paramString).toString('base64').slice(0, 20)}`;
+  // labelFiltersの違いを確実に識別するため、MD5ハッシュを使用
+  const crypto = require('crypto');
+  const hash = crypto.createHash('md5').update(paramString).digest('hex').slice(0, 16);
+  return `${normalizedQuery}_${hash}`;
 }
 
 // キャッシュ関数は削除（GenericCacheを直接使用）
@@ -200,7 +204,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     let bm25Results: any[] = [];
     
     // ラベルフィルタリングの準備（統一されたLabelManagerを使用）
-    const labelFilters = params.labelFilters || labelManager.getDefaultFilterOptions();
+    // params.labelFiltersがundefinedの場合はフィルタなし（全て許可）
+    const labelFilters = params.labelFilters !== undefined 
+      ? params.labelFilters 
+      : { includeMeetingNotes: true, excludeArchived: false, excludeTemplates: false, excludeGeneric: false };
     const excludeLabels = labelManager.buildExcludeLabels(labelFilters);
     
     console.log('[searchLanceDB] Using labelFilters:', labelFilters);
@@ -212,8 +219,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       if (params.filter) {
         vectorQuery = vectorQuery.where(params.filter);
       }
-      // ベクトル検索: 十分な結果を取得（topKの2倍）
-      vectorResults = await vectorQuery.limit(topK * 2).toArray();
+      // ベクトル検索: 十分な結果を取得（50件でテスト）
+      vectorResults = await vectorQuery.limit(50).toArray();
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
@@ -445,7 +452,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       try {
         const core = keywords[0];
         if (core) {
-          const kwCap = Math.min(50, Math.max(10, Math.floor(topK / 3)));
+          const kwCap = 50; // 50件でテスト
           
           // 複数のキーワードでBM25検索を実行
           const searchKeywords = keywords.slice(0, 5); // 上位5つのキーワードを使用（拡張）
@@ -567,17 +574,28 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             }
               }
 
-          // 簡素化されたブーストロジック（パフォーマンス最適化）
-          // フレーズブーストのみ（最も効果的）
+          // 改善されたブーストロジック
           const rawQuery = (params.query || '').trim();
+          const titleLower = title.toLowerCase();
+          
+          // 1. フレーズ完全マッチ（最高優先度）
           if (rawQuery) {
             const phrase = rawQuery.replace(/[\s　]+/g, '');
             const titlePlain = title.replace(/[\s　]+/g, '');
             const contentPlain = content.replace(/[\s　]+/g, '');
             const phraseInTitle = titlePlain.includes(phrase);
             const phraseInBody = contentPlain.includes(phrase);
-            if (phraseInTitle) totalScore += 2.0; // タイトル一致ボーナス
+            if (phraseInTitle) totalScore += 5.0; // タイトル完全一致ボーナス（2.0→5.0に強化）
             if (phraseInBody) totalScore += 0.5;  // 本文一致ボーナス
+          }
+          
+          // 2. 複数キーワードのタイトルマッチ（新規追加）
+          const keywordsInTitle = searchKeywords.filter(kw => 
+            titleLower.includes(kw.toLowerCase())
+          );
+          if (keywordsInTitle.length >= 2) {
+            // 2個以上のキーワードがタイトルに含まれる場合、追加ブースト
+            totalScore += keywordsInTitle.length * 2.0;
           }
               
               return { 
@@ -736,11 +754,47 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       console.log(`[searchLanceDB] Result ${idx+1}: title=${result.title}, _sourceType=${result._sourceType}`);
     });
     
+    // Phase 0A-1.5: ページ単位の重複排除
+    const deduplicated = deduplicateByPageId(finalResults);
+    
+    // Phase 0A-1.5: 空ページフィルター（コンテンツ長ベース、StructuredLabel不要）
+    const filtered = filterInvalidPagesByContent(deduplicated);
+    
+    // Phase 0A-2: StructuredLabelを取得してスコアリングに統合
+    const pageIds = filtered
+      .filter(r => r.pageId !== undefined && r.pageId !== null)
+      .map(r => String(r.pageId));
+    
+    let structuredLabels = new Map<string, any>();
+    if (pageIds.length > 0) {
+      try {
+        const { getStructuredLabels } = await import('./structured-label-service-admin');
+        structuredLabels = await getStructuredLabels(pageIds);
+        console.log(`[searchLanceDB] Loaded ${structuredLabels.size} StructuredLabels for scoring`);
+      } catch (error) {
+        console.warn('[searchLanceDB] Failed to load StructuredLabels for scoring:', error);
+      }
+    }
+    
+    // StructuredLabelスコアを各結果に追加
+    const { calculateStructuredLabelScore } = await import('./structured-label-scorer');
+    for (const result of filtered) {
+      const pageId = String(result.pageId || '');
+      const label = structuredLabels.get(pageId);
+      const labelScore = calculateStructuredLabelScore(params.query, label);
+      
+      // _labelScoreを上書き（既存のlabelMatchesではなく、StructuredLabelベースのスコア）
+      result._labelScore = labelScore;
+      result._structuredLabel = label; // デバッグ用
+    }
+    
+    console.log(`[searchLanceDB] Applied StructuredLabel scoring to ${filtered.length} results`);
+    
     // 統一検索結果処理サービスを使用して結果を処理（RRF無効化で高速化）
-    const processedResults = unifiedSearchResultProcessor.processSearchResults(finalResults, {
-      vectorWeight: 0.4,
-      keywordWeight: 0.4,
-      labelWeight: 0.2,
+    const processedResults = unifiedSearchResultProcessor.processSearchResults(filtered, {
+      vectorWeight: 0.3,      // ベクトルの重みを少し下げる
+      keywordWeight: 0.3,     // キーワードの重みを少し下げる
+      labelWeight: 0.4,       // StructuredLabelの重みを上げる
       enableRRF: false  // RRF無効化で高速化
     });
     
@@ -772,3 +826,73 @@ export function createLanceDBSearchClient() {
  * デフォルトのLanceDB検索クライアント
  */
 export const defaultLanceDBSearchClient = createLanceDBSearchClient();
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 0A-1.5: 検索品質改善関数
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * ページ単位の重複排除（Phase 0A-1.5）
+ * 同じpageIdの複数チャンクから、ベストスコアのチャンクのみを選択
+ */
+function deduplicateByPageId(results: any[]): any[] {
+  const pageMap = new Map<string, any>();
+  
+  results.forEach(result => {
+    const pageId = String(result.pageId || 'unknown');
+    const existing = pageMap.get(pageId);
+    
+    if (!existing) {
+      // 初出のページ
+      pageMap.set(pageId, result);
+    } else {
+      // 既に同じpageIdが存在する場合、ベストスコアを保持
+      const currentDistance = result._distance || 999;
+      const existingDistance = existing._distance || 999;
+      
+      if (currentDistance < existingDistance) {
+        // より良いチャンクで上書き
+        pageMap.set(pageId, result);
+        console.log(`[Deduplicator] Updated best chunk for ${result.title}: chunk ${result.chunkIndex || 0}`);
+      }
+    }
+  });
+  
+  const deduplicated = Array.from(pageMap.values());
+  
+  if (deduplicated.length < results.length) {
+    console.log(`[Deduplicator] Deduplicated: ${results.length} → ${deduplicated.length} results (removed ${results.length - deduplicated.length} duplicate chunks)`);
+  }
+  
+  return deduplicated;
+}
+
+/**
+ * 空ページフィルター（Phase 0A-1.5、コンテンツ長ベース）
+ * StructuredLabel不要で、コンテンツ長のみで判定
+ */
+function filterInvalidPagesByContent(results: any[]): any[] {
+  if (results.length === 0) {
+    return results;
+  }
+  
+  const validResults = [];
+  
+  for (const result of results) {
+    const contentLength = result.content?.length || 0;
+    
+    // 100文字未満のページを除外
+    if (contentLength < 100) {
+      console.log(`[EmptyPageFilter] Excluded: ${result.title} (content too short: ${contentLength}chars)`);
+      continue;
+    }
+    
+    validResults.push(result);
+  }
+  
+  if (validResults.length < results.length) {
+    console.log(`[EmptyPageFilter] Filtered: ${results.length} → ${validResults.length} results (removed ${results.length - validResults.length} invalid pages)`);
+  }
+  
+  return validResults;
+}
