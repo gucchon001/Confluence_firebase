@@ -19,7 +19,8 @@ const getEmbeddingCacheInstance = () => {
   return globalThis.__embeddingCache;
 };
 
-const cache = getEmbeddingCacheInstance();
+// 遅延初期化のため、モジュールレベルでの初期化を削除
+// const cache = getEmbeddingCacheInstance();
 
 // TypeScript用のグローバル型定義
 declare global {
@@ -32,7 +33,7 @@ class EmbeddingCache {
    */
   get(query: string): number[] | null {
     const key = this.generateKey(query);
-    return cache.get(key);
+    return getEmbeddingCacheInstance().get(key);
   }
 
   /**
@@ -40,10 +41,11 @@ class EmbeddingCache {
    */
   async getCachedEmbedding(query: string): Promise<number[] | null> {
     const key = this.generateKey(query);
+    const cacheInstance = getEmbeddingCacheInstance();
     console.log(`🔍 エンベディングキャッシュチェック: "${query.substring(0, 50)}..."`);
-    console.log(`📦 エンベディングキャッシュサイズ: ${cache.size}`);
+    console.log(`📦 エンベディングキャッシュサイズ: ${cacheInstance.size}`);
     
-    const result = cache.get(key);
+    const result = cacheInstance.get(key);
     
     if (result) {
       console.log(`✅ エンベディングキャッシュヒット!`);
@@ -59,9 +61,10 @@ class EmbeddingCache {
    */
   set(query: string, embedding: number[]): void {
     const key = this.generateKey(query);
-    cache.set(key, embedding);
+    const cacheInstance = getEmbeddingCacheInstance();
+    cacheInstance.set(key, embedding);
     console.log(`💾 エンベディング保存: "${query.substring(0, 50)}..."`);
-    console.log(`📦 エンベディング保存後のサイズ: ${cache.size}`);
+    console.log(`📦 エンベディング保存後のサイズ: ${cacheInstance.size}`);
   }
 
   /**
@@ -69,7 +72,8 @@ class EmbeddingCache {
    */
   async setCachedEmbedding(query: string, embedding: number[]): Promise<void> {
     const key = this.generateKey(query);
-    cache.set(key, embedding);
+    const cacheInstance = getEmbeddingCacheInstance();
+    cacheInstance.set(key, embedding);
     console.log(`💾 エンベディングをキャッシュに保存: "${query.substring(0, 50)}..."`);
   }
 
@@ -91,7 +95,7 @@ class EmbeddingCache {
    * キャッシュをクリア
    */
   clear(): void {
-    cache.clear();
+    getEmbeddingCacheInstance().clear();
     console.log('🗑️ エンベディングキャッシュをクリア');
   }
 
@@ -99,7 +103,7 @@ class EmbeddingCache {
    * キャッシュ統計を取得
    */
   getStats(): { size: number; avgHits: number; hitRate: number } {
-    return cache.getStats();
+    return getEmbeddingCacheInstance().getStats();
   }
 }
 

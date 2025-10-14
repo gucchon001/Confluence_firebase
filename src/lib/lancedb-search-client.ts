@@ -29,7 +29,8 @@ const getSearchCache = () => {
   return globalThis.__searchCache;
 };
 
-const searchCache = getSearchCache();
+// 遅延初期化のため、モジュールレベルでの初期化を削除
+// const searchCache = getSearchCache();
 
 // TypeScript用のグローバル型定義
 declare global {
@@ -126,17 +127,17 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     console.log(`========================================\n`);
     
     // キャッシュインスタンスの存在確認
-    console.log(`🔧 searchCache インスタンス: ${searchCache ? '存在' : '未初期化'}`);
-    console.log(`🔧 searchCache.size: ${searchCache?.size ?? 'N/A'}`);
+    const cacheInstance = getSearchCache();
+    console.log(`🔧 searchCache.size: ${cacheInstance?.size ?? 'N/A'}`);
     console.log(`🔧 globalThis.__searchCache: ${globalThis.__searchCache ? '存在' : '未定義'}`);
     
     // キャッシュキーを生成
     const cacheKey = generateCacheKey(params.query, params);
     console.log(`🔑 キャッシュキー生成: "${cacheKey}"`);
-    console.log(`📦 現在のキャッシュサイズ: ${searchCache.size}`);
+    console.log(`📦 現在のキャッシュサイズ: ${cacheInstance.size}`);
     
     // キャッシュから取得を試行
-    const cachedResults = searchCache.get(cacheKey);
+    const cachedResults = cacheInstance.get(cacheKey);
     console.log(`🔍 キャッシュチェック結果: ${cachedResults ? 'ヒット' : 'ミス'}`);
     
     if (cachedResults) {
@@ -744,9 +745,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     console.log(`[searchLanceDB] Processed ${processedResults.length} results using unified service`);
     
     // 結果をキャッシュに保存
-    searchCache.set(cacheKey, processedResults);
+    cacheInstance.set(cacheKey, processedResults);
     console.log(`💾 キャッシュ保存: "${cacheKey}" (${processedResults.length}件)`);
-    console.log(`📦 キャッシュ保存後のサイズ: ${searchCache.size}`);
+    console.log(`📦 キャッシュ保存後のサイズ: ${cacheInstance.size}`);
     console.log(`========================================\n`);
     
     return processedResults;
