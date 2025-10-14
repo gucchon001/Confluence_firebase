@@ -8,8 +8,6 @@
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "prebuild": "node scripts/conditional-download.js",
     "build": "next build",
-    "build:fast": "node scripts/build-fast.js",
-    "build:full": "node scripts/build-full.js",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
