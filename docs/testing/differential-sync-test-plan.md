@@ -2,7 +2,9 @@
 
 ## 1. 概要
 
-このドキュメントでは、Confluence同期バッチの差分更新機能に対するテスト計画を定義します。差分更新機能は、前回の同期以降に更新されたページのみを取得して処理することで、同期処理の効率化を図る重要な機能です。
+このドキュメントでは、GitHub ActionsによるConfluence同期バッチの差分更新機能に対するテスト計画を定義します。差分更新機能は、前回の同期以降に更新されたページのみを取得して処理することで、同期処理の効率化を図る重要な機能です。
+
+**更新履歴**: 2025年1月13日 - GitHub Actionsへの移行を反映
 
 ## 2. テスト環境
 
@@ -49,10 +51,13 @@
 
 - **テスト対象**:
   - 実際の差分更新処理の全体フロー
+  - GitHub Actionsワークフローでの実行
 
 - **テストケース**:
   1. 全同期を実行した後、差分更新を実行すると前回の同期以降に更新されたページのみを処理すること
   2. 差分更新のログに前回の同期時刻が含まれていること
+  3. GitHub Actionsワークフローでの実行が正常に完了すること
+  4. Cloud Storageへのアップロードが成功すること
 
 ## 4. テスト実行方法
 
@@ -74,7 +79,14 @@ npm run test:differential:integration
 npm run test:differential:e2e
 ```
 
-### 4.4 全てのテスト
+### 4.4 GitHub Actionsテスト
+
+```bash
+# GitHub Actionsでの手動実行テスト
+# GitHub リポジトリ → Actions → Sync Confluence Data → Run workflow
+```
+
+### 4.5 全てのテスト
 
 ```bash
 npm run test:differential:all
@@ -86,13 +98,16 @@ npm run test:differential:all
    - `.env`ファイルに有効なConfluence API認証情報が設定されていることを確認
    - `GOOGLE_APPLICATION_CREDENTIALS`環境変数が正しく設定されていることを確認
    - テスト用のConfluenceスペースに十分なテストデータがあることを確認
+   - GitHub Secretsが正しく設定されていることを確認（GitHub Actionsテスト用）
 
 2. **テスト実行時の注意**:
    - E2Eテストは実際のAPIとデータベースに対して実行されるため、テスト環境でのみ実行すること
    - E2Eテスト中に手動でConfluenceページを更新する必要がある場合があります
+   - GitHub Actionsテストは実際のワークフローを実行するため、Cloud Storageにデータがアップロードされます
 
 3. **テスト後のクリーンアップ**:
    - テスト実行後、不要なテストデータがある場合は削除すること
+   - GitHub Actionsテストでアップロードされたテストデータは手動で削除することを推奨
 
 ## 6. テスト結果の評価
 
@@ -106,6 +121,10 @@ npm run test:differential:all
 
 3. **E2Eテストが成功すること**:
    - 実際の環境で差分更新が正しく動作し、更新されたページのみを処理すること
+
+4. **GitHub Actionsテストが成功すること**:
+   - GitHub Actionsワークフローでの実行が正常に完了すること
+   - Cloud Storageへのアップロードが成功すること
 
 ## 7. 今後の改善点
 

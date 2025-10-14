@@ -1,7 +1,7 @@
 # データ同期戦略と定期実行スケジュール
 
-**最終更新日**: 2025年10月11日  
-**バージョン**: 1.1 (Firebase Functions対応)  
+**最終更新日**: 2025年1月13日  
+**バージョン**: 2.0 (GitHub Actions移行完了)  
 **対象システム**: Confluence Vector Search（ハイブリッド検索）
 
 ## 概要
@@ -12,7 +12,7 @@
 
 ```mermaid
 graph TB
-    A[Confluence API] -->|毎日2時<br/>差分同期| B[Cloud Functions<br/>dailyDifferentialSync]
+    A[Confluence API] -->|毎日2時<br/>差分同期| B[GitHub Actions<br/>sync-confluence.yml]
     B -->|変更ページ取得| C[Sync Script]
     C -->|ベクトル生成| D[LanceDB]
     C -->|インデックス構築| E[Lunr.js]
@@ -27,8 +27,8 @@ graph TB
     H -->|キーワード抽出| J
     J -->|検索結果| K[ユーザー]
     
-    L[HTTP Trigger<br/>手動同期] -.->|manualSync| B
-    M[ステータス確認] -.->|syncStatus| F
+    L[GitHub Actions<br/>手動実行] -.->|workflow_dispatch| B
+    M[GitHub Actions<br/>ログ確認] -.->|Actions UI| F
     
     style B fill:#e1f5ff
     style C fill:#e1f5ff
@@ -46,7 +46,7 @@ graph TB
 
 | データソース | 更新頻度 | 自動/手動 | 保存場所 | 備考 |
 |-------------|---------|----------|---------|------|
-| **Confluenceページデータ** | 毎日 午前2時（JST） | 自動 | `.lancedb/`, Cloud Storage | GitHub Actions自動実行 |
+| **Confluenceページデータ** | 毎日 午前2時（JST） | 自動 | `.lancedb/`, Cloud Storage | GitHub Actions自動実行（✅ 動作確認済み） |
 | **LanceDBベクトルDB** | Confluence同期後 | 自動 | `.lancedb/confluence.lance/` | 約2,500チャンク、768次元 |
 | **Lunr.js BM25インデックス** | LanceDB更新後 | 自動 | メモリ + ディスクキャッシュ | 日本語トークン化済み |
 
@@ -83,76 +83,81 @@ gantt
     次回推奨更新         :milestone, next, 2025-12-23, 0d
 ```
 
-### Firebase Functions自動同期
+### GitHub Actions自動同期
 
 #### 日次差分同期
 ```yaml
-関数名: dailyDifferentialSync
+ワークフロー: sync-confluence.yml
 スケジュール: 毎日 午前2時（JST）
 実行内容: 差分同期（変更されたページのみ）
-タイムアウト: 60分（1時間）
-メモリ: 2GiB
-リージョン: asia-northeast1
-実装: functions/src/scheduled-sync.ts
+タイムアウト: 6時間（GitHub Actions上限）
+メモリ: 7GB
+実装: .github/workflows/sync-confluence.yml
 ```
 
 **処理フロー**:
-1. Cloud Storageから既存データをダウンロード
-2. Confluence APIから変更ページを取得
-3. 差分同期実行（`npm run sync:confluence:differential`）
-4. Lunr.jsインデックス再構築
-5. LanceDBベクトルインデックス最適化
-6. Cloud Storageへアップロード
-7. 同期レポート生成
+1. プロジェクト全体をチェックアウト
+2. Node.js環境セットアップ（v22）
+3. 依存関係インストール
+4. Confluence APIから変更ページを取得
+5. 差分同期実行（`npm run sync:confluence:differential`）
+6. Lunr.jsインデックス再構築
+7. LanceDBベクトルインデックス最適化
+8. Cloud Storageへアップロード
+9. 同期完了ログ出力
 
 ```mermaid
 sequenceDiagram
-    participant CF as Cloud Functions
+    participant GA as GitHub Actions
+    participant GH as GitHub Repository
     participant CS as Cloud Storage
     participant Conf as Confluence API
     participant Sync as Sync Script
     participant LDB as LanceDB
     participant Lunr as Lunr.js
     
-    Note over CF: 毎日 午前2時（JST）<br/>dailyDifferentialSync
-    CF->>CS: 既存データダウンロード
-    CS-->>CF: .lancedb/ データ
-    CF->>Conf: 変更ページ取得
-    Conf-->>CF: 差分ページリスト
-    CF->>Sync: 差分同期実行
+    Note over GA: 毎日 午前2時（JST）<br/>sync-confluence.yml
+    GA->>GH: プロジェクトチェックアウト
+    GH-->>GA: 全ソースコード
+    GA->>GA: Node.js環境セットアップ
+    GA->>Conf: 変更ページ取得
+    Conf-->>GA: 差分ページリスト
+    GA->>Sync: 差分同期実行
     Sync->>LDB: ベクトル更新
     LDB-->>Sync: 更新完了
     Sync->>Lunr: インデックス再構築
     Lunr-->>Sync: 再構築完了
     Sync->>LDB: インデックス最適化
-    Sync-->>CF: 同期完了レポート
-    CF->>CS: 更新データアップロード
-    Note over CF: Cloud Loggingに記録
+    Sync-->>GA: 同期完了レポート
+    GA->>CS: 更新データアップロード
+    Note over GA: GitHub Actionsログに記録
     alt 成功
-        CF->>CF: ✅ ログ記録
+        GA->>GA: ✅ ログ記録
     else 失敗
-        CF->>CF: ❌ エラーログ記録
+        GA->>GA: ❌ エラーログ記録
     end
 ```
 
 #### 週次完全同期
 ```yaml
-関数名: weeklyFullSync
+ワークフロー: weekly-full-sync.yml
 スケジュール: 毎週日曜日 午前3時（JST）
 実行内容: 完全同期（全ページ再取得）
-タイムアウト: 60分（1時間）
-メモリ: 4GiB
-リージョン: asia-northeast1
-実装: functions/src/scheduled-sync.ts
+タイムアウト: 6時間（GitHub Actions上限）
+メモリ: 7GB
+実装: .github/workflows/weekly-full-sync.yml
 ```
 
 **処理フロー**:
-1. Confluence APIから全ページを取得
-2. 完全同期実行（`npm run sync:confluence:batch`）
-3. Lunr.jsインデックス完全再構築
-4. LanceDBベクトルインデックス最適化
-5. Cloud Storageへアップロード
-6. Cloud Loggingに結果を記録
+1. プロジェクト全体をチェックアウト
+2. Node.js環境セットアップ（v22）
+3. 依存関係インストール
+4. Confluence APIから全ページを取得
+5. 完全同期実行（`npm run sync:confluence:batch`）
+6. Lunr.jsインデックス完全再構築
+7. LanceDBベクトルインデックス最適化
+8. Cloud Storageへアップロード
+9. GitHub Actionsログに結果を記録
 
 ---
 
@@ -255,8 +260,8 @@ npm run download:production-data
 
 ```
 毎日 午前2時（JST）
-├─ Cloud Functions自動トリガー (dailyDifferentialSync)
-├─ 差分同期実行
+├─ GitHub Actions自動トリガー (sync-confluence.yml)
+├─ 差分同期実行（変更ページのみ）
 ├─ Lunr.jsインデックス再構築
 ├─ LanceDBインデックス最適化
 └─ Cloud Storageへバックアップ
@@ -266,13 +271,15 @@ npm run download:production-data
 - API使用量が最小限
 - 実行時間が短い（5〜15分）
 - 自動化されているため運用負荷ゼロ
+- プロジェクト全体にアクセス可能
+- 無料枠が充実（パブリックリポジトリ）
 
 ### 週次メンテナンス（自動）
 
 ```
 毎週日曜日 午前3時（JST）
-├─ Cloud Functions自動トリガー (weeklyFullSync)
-├─ 完全同期実行
+├─ GitHub Actions自動トリガー (weekly-full-sync.yml)
+├─ 完全同期実行（全ページ再取得）
 ├─ 全インデックス完全再構築
 ├─ データ整合性チェック
 └─ Cloud Storageへバックアップ
@@ -282,6 +289,8 @@ npm run download:production-data
 - データの不整合を週次で解消
 - 削除ページの適切な処理
 - インデックスの完全最適化
+- 最大6時間の実行時間制限
+- 詳細なログ出力
 
 ### 月次・四半期メンテナンス（手動）
 
@@ -310,32 +319,25 @@ npm run upload:production-data
 
 ### 同期失敗時の対応
 
-#### Cloud Functionsで同期失敗
+#### GitHub Actionsで同期失敗
 
-1. **ログ確認**: Cloud Loggingでエラーを確認
+1. **ログ確認**: GitHub Actionsでエラーを確認
    ```bash
-   # リアルタイムログ確認
-   firebase functions:log --only dailyDifferentialSync
-   
-   # Cloud Consoleでログ確認
-   # https://console.cloud.google.com/logs
+   # GitHub リポジトリページで確認
+   # https://github.com/gucchon001/Confluence_firebase/actions
    ```
 
 2. **確認事項**:
    - Confluence API トークンの有効期限
    - API レート制限（約1,000リクエスト/時間）
-   - ネットワーク接続状態
-   - Google Cloud Storage の認証情報
-   - Firebase Functionsのシークレット設定
+   - GitHub Secrets設定（CONFLUENCE_API_TOKEN, GEMINI_API_KEY）
+   - Google Cloud Storage の認証情報（GOOGLE_CLOUD_CREDENTIALS）
+   - ワークフローファイルの構文エラー
 
 3. **リカバリー手順**:
    ```bash
-   # オプション1: HTTP手動トリガーで再実行
-   curl -X POST \
-     -H "Authorization: Bearer YOUR_SYNC_SECRET" \
-     -H "Content-Type: application/json" \
-     -d '{"syncType": "differential"}' \
-     https://asia-northeast1-confluence-copilot-ppjye.cloudfunctions.net/manualSync
+   # オプション1: GitHub Actions手動実行
+   # GitHub リポジトリ → Actions → 該当ワークフロー → Run workflow
    
    # オプション2: ローカルで手動実行
    npm run sync:confluence:differential
@@ -344,8 +346,8 @@ npm run upload:production-data
 
 4. **ステータス確認**:
    ```bash
-   # 同期ステータスをHTTPで確認
-   curl https://asia-northeast1-confluence-copilot-ppjye.cloudfunctions.net/syncStatus
+   # GitHub Actionsの実行履歴で確認
+   # https://github.com/gucchon001/Confluence_firebase/actions
    ```
 
 #### Lunr.jsインデックス初期化失敗
@@ -406,20 +408,17 @@ npm run complete-pipeline
 
 ### 同期成功の確認項目
 
-#### Cloud Functions実行後
-1. **Cloud Loggingで確認**:
+#### GitHub Actions実行後
+1. **GitHub Actionsで確認**:
    ```bash
-   # 最新のログを確認
-   firebase functions:log --only dailyDifferentialSync --limit 10
+   # GitHub リポジトリページで確認
+   # https://github.com/gucchon001/Confluence_firebase/actions
    ```
 
-2. **HTTP ステータス確認**:
+2. **実行ログの確認**:
    ```bash
-   # 同期ステータスAPI
-   curl https://asia-northeast1-confluence-copilot-ppjye.cloudfunctions.net/syncStatus
-   
-   # レスポンス例:
-   # {"status":"ok","lastSync":"2025-10-11T02:00:00Z","size":5242880}
+   # ワークフロー実行ページで各ステップのログを確認
+   # 成功時: ✅ Confluence data sync completed successfully
    ```
 
 3. **確認ポイント**:
@@ -427,6 +426,7 @@ npm run complete-pipeline
    - 処理件数（added, updated, deleted）
    - エラー件数
    - 実行時間
+   - Cloud Storageアップロード成功
 
 #### ローカル実行後
 ```bash
@@ -443,12 +443,12 @@ ls -lh .lancedb/confluence.lance/
 
 | 指標 | 目標値 | 確認方法 |
 |-----|-------|---------|
-| **同期実行時間** | 差分: <15分, 完全: <60分 | Cloud Logging / Firebase Console |
+| **同期実行時間** | 差分: <15分, 完全: <60分 | GitHub Actions ログ |
 | **検索レスポンス** | <2秒 | アプリのパフォーマンスログ |
 | **Lunr初期化時間** | <10秒 | サーバー起動ログ |
 | **ベクトル検索精度** | 上位5件に関連結果 | 手動検証 |
 | **BM25検索カバレッジ** | 全ページインデックス済み | ドキュメントカウント確認 |
-| **Functions実行成功率** | >99% | Cloud Monitoring ダッシュボード |
+| **GitHub Actions実行成功率** | >99% | GitHub Actions ダッシュボード |
 
 ---
 
@@ -456,22 +456,17 @@ ls -lh .lancedb/confluence.lance/
 
 ### 必要な認証情報
 
-#### Firebase Functions Secrets（自動同期用）
+#### GitHub Secrets（自動同期用）
 ```bash
-# Firebase CLIでシークレットを設定
-firebase functions:secrets:set confluence_api_token
-firebase functions:secrets:set gemini_api_key
-firebase functions:secrets:set sync_secret
-
-# シークレット一覧確認
-firebase functions:secrets:list
+# GitHub リポジトリページで設定
+# Settings → Secrets and variables → Actions → New repository secret
 ```
 
-- `confluence_api_token`: Confluence API トークン
-- `gemini_api_key`: Google AI (Gemini) API キー
-- `sync_secret`: HTTP手動トリガー用認証トークン
+- `CONFLUENCE_API_TOKEN`: Confluence API トークン
+- `GEMINI_API_KEY`: Google AI (Gemini) API キー
+- `GOOGLE_CLOUD_CREDENTIALS`: Google Cloud Service Account JSON（Cloud Storageアップロード用）
 
-詳細は `docs/operations/firebase-scheduled-sync-setup.md` を参照してください。
+詳細は `docs/operations/github-actions-setup.md` を参照してください。
 
 #### ローカル環境変数
 ```bash
@@ -497,8 +492,8 @@ GOOGLE_CLOUD_PROJECT=confluence-copilot-ppjye
 
 ## 📚 関連ドキュメント
 
-- [Firebase Functions スケジュール同期セットアップ](./firebase-scheduled-sync-setup.md) - 詳細なセットアップ手順
-- [自動データ同期](./automated-data-sync.md) - 自動同期の概要
+- [GitHub Actions セットアップ](./github-actions-setup.md) - 詳細なセットアップ手順
+- [Firebase Functions スケジュール同期セットアップ](./firebase-scheduled-sync-setup.md) - 旧方式（参考）
 - [アーキテクチャ図](../architecture/data-flow-diagram-lancedb.md) - システム全体のデータフロー
 - [ハイブリッド検索仕様](../architecture/hybrid-search-contract.md) - 検索システムの契約
 - [環境変数一覧](./required-environment-variables.md) - 必要な環境変数
@@ -510,6 +505,7 @@ GOOGLE_CLOUD_PROJECT=confluence-copilot-ppjye
 
 | 日付 | バージョン | 変更内容 |
 |-----|----------|---------|
+| 2025-01-13 | 2.0 | GitHub Actionsへの完全移行、Firebase Functionsの制約を回避 |
 | 2025-10-11 | 1.1 | Firebase Functionsへの移行を反映、GitHub Actionsからの変更 |
 | 2025-10-11 | 1.0 | 初版作成：更新戦略と定期実行スケジュールを定義 |
 
@@ -519,27 +515,25 @@ GOOGLE_CLOUD_PROJECT=confluence-copilot-ppjye
 
 問題が発生した場合は、以下を確認してください：
 
-1. **Cloud Logging**: 
-   - Firebase Console: https://console.firebase.google.com/project/confluence-copilot-ppjye/functions
-   - Cloud Console: https://console.cloud.google.com/logs
+1. **GitHub Actions**: 
+   - Actions ページ: https://github.com/gucchon001/Confluence_firebase/actions
+   - 実行ログとエラーメッセージの確認
    
-2. **Firebase Functions ログ**:
+2. **GitHub Secrets**:
    ```bash
-   # リアルタイムログ
-   firebase functions:log --only dailyDifferentialSync
-   
-   # 特定期間のログ
-   firebase functions:log --since 1h
+   # GitHub リポジトリ → Settings → Secrets and variables → Actions
+   # CONFLUENCE_API_TOKEN, GEMINI_API_KEY, GOOGLE_CLOUD_CREDENTIALS が設定済みか確認
    ```
 
-3. **同期ステータスAPI**:
+3. **ローカル実行テスト**:
    ```bash
-   curl https://asia-northeast1-confluence-copilot-ppjye.cloudfunctions.net/syncStatus
+   npm run sync:confluence:differential
+   npm run upload:production-data
    ```
 
 4. **ローカルログ**: `build.log`, `server.log`
 5. **このドキュメント**: トラブルシューティングセクション
-6. **セットアップガイド**: `docs/operations/firebase-scheduled-sync-setup.md`
+6. **セットアップガイド**: `docs/operations/github-actions-setup.md`
 
 それでも解決しない場合は、開発チームにお問い合わせください。
 

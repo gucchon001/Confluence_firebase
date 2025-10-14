@@ -59,12 +59,17 @@ GitHubリポジトリの設定で、以下のシークレットを追加して�
 |------|-------|------|
 | `CONFLUENCE_API_TOKEN` | `***` | Confluence API トークン |
 | `GEMINI_API_KEY` | `***` | Gemini API キー |
+| `GOOGLE_CLOUD_CREDENTIALS` | `***` | Google Cloud Service Account JSON（Cloud Storageアップロード用） |
 
 **取得方法:**
 ```bash
 # ローカルの.env.localから取得
 cat .env.local | grep CONFLUENCE_API_TOKEN
 cat .env.local | grep GEMINI_API_KEY
+
+# Google Cloud Service Account JSON（新規作成が必要な場合）
+# Google Cloud Console → IAM & Admin → Service Accounts
+# 新しいサービスアカウントを作成し、JSONキーをダウンロード
 ```
 
 ### 2. Workflowファイルの確認
@@ -105,8 +110,13 @@ cat .env.local | grep GEMINI_API_KEY
 
 **成功時のログ例:**
 ```
+✅ Authenticate to Google Cloud
+✅ Setup Google Cloud CLI
+✅ Install dependencies
+✅ Run differential sync
+✅ Upload data to Cloud Storage
 ✅ Confluence data sync completed successfully
-📊 Timestamp: 2025-10-13 17:00:00 UTC
+📊 Timestamp: 2025-01-13 17:00:00 UTC
 ```
 
 **失敗時:**
@@ -160,9 +170,10 @@ Permission denied
 ```
 
 **解決策:**
-1. GitHubのサービスアカウントがCloud Storageへのアクセス権限を持っているか確認
-2. `GOOGLE_CLOUD_PROJECT`環境変数が正しく設定されているか確認
-3. 必要に応じて、Google Cloud IAMで権限を追加
+1. `GOOGLE_CLOUD_CREDENTIALS`シークレットが正しく設定されているか確認
+2. サービスアカウントJSONの内容が正しいか確認
+3. Google Cloud IAMでサービスアカウントに`Storage Object Admin`権限を付与
+4. プロジェクトIDが正しいか確認（`confluence-copilot-ppjye`）
 
 ## モニタリング
 
