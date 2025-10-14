@@ -4,6 +4,8 @@
 import * as z from 'zod';
 import { searchLanceDB } from '@/lib/lancedb-search-client';
 import * as admin from 'firebase-admin';
+import { getStructuredLabels } from '@/lib/structured-label-service-admin';
+import { optimizedLanceDBClient } from '@/lib/optimized-lancedb-client';
 
 /**
  * 検索クエリを拡張して、より具体的なキーワードを含める
@@ -164,6 +166,7 @@ async function lancedbRetrieverTool(
     // UIが期待する形へ最小変換（scoreText, source を保持）
     const mapped = unifiedResults.slice(0, 12).map(r => ({
       id: String(r.pageId ?? r.id ?? ''),
+      pageId: String(r.pageId ?? r.id ?? ''), // Phase 0A-1.5: チャンク統合用
       content: r.content || '',
       url: r.url || '',
       lastUpdated: (r as any).lastUpdated || null,
@@ -175,7 +178,16 @@ async function lancedbRetrieverTool(
       scoreText: r.scoreText,
     }));
 
-    return mapped;
+    // Phase 0A-1.5: 全チャンク統合（サーバー側で実装）
+    const enriched = await enrichWithAllChunks(mapped);
+    
+    // Phase 0A-2: Knowledge Graph拡張（新規）
+    const expanded = await expandWithKnowledgeGraph(enriched);
+    
+    // Phase 0A-1.5: 空ページフィルター（サーバー側で実装）
+    const filtered = await filterInvalidPagesServer(expanded);
+
+    return filtered;
   } catch (error: any) {
     console.error(`[lancedbRetrieverTool] Error retrieving documents: ${error.message}`);
     throw new Error(`Failed to retrieve documents: ${error.message}`);
@@ -228,5 +240,303 @@ export async function retrieveRelevantDocs({
   } catch (error: any) {
     console.error(`[retrieveRelevantDocs] Error: ${error.message}`);
     throw new Error(`Failed to retrieve relevant documents: ${error.message}`);
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 0A-1.5: 検索品質改善関数（サーバー側）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * 全チャンク統合（Phase 0A-1.5）
+ * 各ページの全チャンクを取得して、コンテンツを統合
+ */
+async function enrichWithAllChunks(results: any[]): Promise<any[]> {
+  if (results.length === 0) {
+    return results;
+  }
+
+  console.log(`[ChunkMerger] Starting chunk enrichment for ${results.length} results`);
+
+  const enriched = await Promise.all(
+    results.map(async (result) => {
+      try {
+        const pageId = result.pageId || result.id;
+        if (!pageId) {
+          console.warn(`[ChunkMerger] Skipping result without pageId`);
+          return result;
+        }
+
+        // このページの全チャンクを取得
+        const allChunks = await getAllChunksByPageId(String(pageId));
+
+        if (allChunks.length <= 1) {
+          // チャンクが1つ以下の場合は統合不要
+          return result;
+        }
+
+        // 全チャンクのコンテンツを統合
+        const mergedContent = allChunks
+          .map((chunk) => chunk.content || '')
+          .filter(Boolean)
+          .join('\n\n'); // セクション区切り
+
+        console.log(
+          `[ChunkMerger] Merged ${allChunks.length} chunks for "${result.title}" (${result.content?.length || 0} → ${mergedContent.length} chars)`
+        );
+
+        return {
+          ...result,
+          content: mergedContent,
+          chunkCount: allChunks.length,
+          originalContentLength: result.content?.length || 0,
+        };
+      } catch (error: any) {
+        console.error(`[ChunkMerger] Error enriching result "${result.title}":`, error.message);
+        return result; // エラー時は元の結果を返す
+      }
+    })
+  );
+
+  const totalChunks = enriched.reduce((sum, r) => sum + (r.chunkCount || 1), 0);
+  console.log(`[ChunkMerger] Enrichment complete. Total chunks merged: ${totalChunks}`);
+
+  return enriched;
+}
+
+/**
+ * pageIdで全チャンクを取得（Phase 0A-1.5）
+ */
+async function getAllChunksByPageId(pageId: string): Promise<any[]> {
+  try {
+    const connection = await optimizedLanceDBClient.getConnection();
+    const table = connection.table;
+
+    // LanceDBのデータ構造:
+    // - idフィールド: "{pageId}-{chunkIndex}" 形式（例: "640450787-0"）
+    // - pageIdだけのWHEREクエリは不可能なので、全件取得してフィルター
+
+    const allArrow = await table.query().limit(10000).toArrow();
+    
+    const chunks: any[] = [];
+    const idFieldIndex = allArrow.schema.fields.findIndex((f: any) => f.name === 'id');
+    
+    if (idFieldIndex === -1) {
+      console.error(`[getAllChunksByPageId] 'id' field not found in schema`);
+      return [];
+    }
+    
+    const idColumn = allArrow.getChildAt(idFieldIndex);
+    
+    for (let i = 0; i < allArrow.numRows; i++) {
+      const id = String(idColumn?.get(i) || '');
+      
+      // id が "{pageId}-{chunkIndex}" 形式なので、pageIdで前方一致
+      if (id.startsWith(`${pageId}-`)) {
+        const row: any = {};
+        for (let j = 0; j < allArrow.schema.fields.length; j++) {
+          const field = allArrow.schema.fields[j];
+          const column = allArrow.getChildAt(j);
+          row[field.name] = column?.get(i);
+        }
+        chunks.push(row);
+      }
+    }
+
+    // chunkIndexでソート（idの末尾の数値を使用）
+    chunks.sort((a, b) => {
+      const aIndex = parseInt(String(a.id).split('-').pop() || '0', 10);
+      const bIndex = parseInt(String(b.id).split('-').pop() || '0', 10);
+      return aIndex - bIndex;
+    });
+
+    return chunks;
+  } catch (error: any) {
+    console.error(`[getAllChunksByPageId] Error fetching chunks for pageId ${pageId}:`, error.message);
+    return [];
+  }
+}
+
+/**
+ * 空ページフィルター（Phase 0A-1.5、サーバー側）
+ * is_valid: false のページや、コンテンツが極端に短いページを除外
+ */
+async function filterInvalidPagesServer(results: any[]): Promise<any[]> {
+  if (results.length === 0) {
+    return results;
+  }
+
+  // StructuredLabelを一括取得（Admin SDK使用）
+  const pageIds = results.map((r) => String(r.pageId || r.id || 'unknown'));
+  const labels = await getStructuredLabels(pageIds);
+
+  const validResults = [];
+
+  for (const result of results) {
+    const pageId = String(result.pageId || result.id || 'unknown');
+    const label = labels.get(pageId);
+
+    // StructuredLabelがある場合: is_validで判定
+    if (label) {
+      if (label.is_valid === false) {
+        console.log(
+          `[EmptyPageFilter] Excluded: ${result.title} (is_valid: false, content_length: ${label.content_length || 0}chars)`
+        );
+        continue;
+      }
+    } else {
+      // StructuredLabelがない場合: コンテンツ長で直接判定
+      const contentLength = result.content?.length || 0;
+      if (contentLength < 100) {
+        console.log(
+          `[EmptyPageFilter] Excluded: ${result.title} (no label, content too short: ${contentLength}chars)`
+        );
+        continue;
+      }
+    }
+
+    validResults.push(result);
+  }
+
+  if (validResults.length < results.length) {
+    console.log(
+      `[EmptyPageFilter] Filtered: ${results.length} → ${validResults.length} results (removed ${results.length - validResults.length} invalid pages)`
+    );
+  }
+
+  return validResults;
+}
+
+/**
+ * Knowledge Graphで関連ページを拡張（Phase 0A-2）
+ */
+async function expandWithKnowledgeGraph(results: any[]): Promise<any[]> {
+  // Knowledge Graphが構築されていない場合はスキップ
+  try {
+    const { kgSearchService } = await import('@/lib/kg-search-service');
+    const { kgStorageService } = await import('@/lib/kg-storage-service');
+    
+    // KGの存在確認
+    const stats = await kgStorageService.getStats();
+    if (stats.nodeCount === 0) {
+      console.log('[KG Expansion] Knowledge Graph not built yet, skipping expansion');
+      return results;
+    }
+    
+    console.log(`[KG Expansion] Knowledge Graph available (${stats.nodeCount} nodes, ${stats.edgeCount} edges)`);
+  } catch (error) {
+    console.log('[KG Expansion] Knowledge Graph not available, skipping expansion');
+    return results;
+  }
+  
+  const { kgSearchService } = await import('@/lib/kg-search-service');
+  const expanded: any[] = [...results];
+  const addedPageIds = new Set(results.map(r => r.pageId));
+  
+  console.log(`[KG Expansion] Starting with ${results.length} initial results`);
+  
+  // 各検索結果について関連ページを取得
+  for (const result of results) {
+    try {
+      const pageId = String(result.pageId || '');
+      if (!pageId) continue;
+      
+      // 参照関係（高重み）を優先
+      const referenced = await kgSearchService.getReferencedPages(pageId, 2);
+      
+      for (const { node, edge } of referenced.relatedPages) {
+        if (!node.pageId) continue;
+        if (addedPageIds.has(node.pageId)) continue;
+        
+        // 関連ページのコンテンツを取得
+        const relatedContent = await getPageContent(node.pageId);
+        
+        if (!relatedContent) continue;
+        
+        expanded.push({
+          id: node.pageId,
+          pageId: node.pageId,
+          title: node.name,
+          content: relatedContent,
+          distance: 0.3,  // KG経由は距離を固定
+          source: 'knowledge-graph',
+          scoreText: `KG ${Math.round(edge.weight * 100)}%`,
+          url: `https://tomonokai.atlassian.net/wiki/spaces/CLIENTTOMO/pages/${node.pageId}`,
+          labels: [],
+          kgEdgeType: edge.type,
+          kgWeight: edge.weight
+        });
+        
+        addedPageIds.add(node.pageId);
+        
+        console.log(`[KG Expansion] Added: ${node.name} (via ${edge.type}, weight: ${edge.weight})`);
+      }
+      
+      // ドメイン関連（中重み）も追加（ただし最大1件、合計が12件未満の場合のみ）
+      if (expanded.length < 12) {
+        const domainRelated = await kgSearchService.getRelatedPagesInDomain(pageId, 1);
+        
+        for (const { node, edge } of domainRelated.relatedPages) {
+          if (!node.pageId) continue;
+          if (addedPageIds.has(node.pageId)) continue;
+          
+          const relatedContent = await getPageContent(node.pageId);
+          
+          if (!relatedContent) continue;
+          
+          expanded.push({
+            id: node.pageId,
+            pageId: node.pageId,
+            title: node.name,
+            content: relatedContent,
+            distance: 0.5,
+            source: 'knowledge-graph',
+            scoreText: `KG ${Math.round(edge.weight * 100)}%`,
+            url: `https://tomonokai.atlassian.net/wiki/spaces/CLIENTTOMO/pages/${node.pageId}`,
+            labels: [],
+            kgEdgeType: edge.type,
+            kgWeight: edge.weight * 0.8  // ドメイン関連は少し低めのスコア
+          });
+          
+          addedPageIds.add(node.pageId);
+          
+          console.log(`[KG Expansion] Added (domain): ${node.name} (weight: ${edge.weight})`);
+        }
+      }
+    } catch (error: any) {
+      console.error(`[KG Expansion] Error for ${result.pageId}:`, error.message);
+    }
+  }
+  
+  console.log(`[KG Expansion] Expanded: ${results.length} → ${expanded.length} results`);
+  
+  return expanded;
+}
+
+/**
+ * ページコンテンツを取得（LanceDBから、全チャンク統合版）
+ */
+async function getPageContent(pageId: string): Promise<string | null> {
+  try {
+    const chunks = await getAllChunksByPageId(pageId);
+    
+    if (chunks.length === 0) {
+      return null;
+    }
+    
+    // 全チャンクを結合
+    const fullContent = chunks
+      .sort((a, b) => {
+        const aIndex = parseInt(String(a.id).split('-').pop() || '0', 10);
+        const bIndex = parseInt(String(b.id).split('-').pop() || '0', 10);
+        return aIndex - bIndex;
+      })
+      .map(chunk => chunk.content || '')
+      .join('\n\n');
+    
+    return fullContent;
+  } catch (error: any) {
+    console.error(`[getPageContent] Error for ${pageId}:`, error.message);
+    return null;
   }
 }
