@@ -215,7 +215,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
-    const distanceThreshold = params.maxDistance || 2.0; // Recall向上: 1.5 -> 2.0 (より多くの関連文書を検出)
+    const distanceThreshold = params.maxDistance || 1.0; // 検索精度向上: 2.0 -> 1.0 (関連性の高い文書のみを検出)
     const qualityThreshold = params.qualityThreshold || 0.0; // 最適化: 0.1 -> 0.0 (品質閾値を無効化)
     
     console.log(`[searchLanceDB] Using distance threshold: ${distanceThreshold}, quality threshold: ${qualityThreshold}`);

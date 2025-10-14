@@ -288,6 +288,19 @@ export const POST = async (req: NextRequest) => {
             userAgent: userAgent.substring(0, 50) + '...',
             ipAddress
           });
+          // 検索ソース別の集計
+          const searchSourceStats = relevantDocs.reduce((acc: Record<string, number>, doc) => {
+            const source = doc.source || 'unknown';
+            acc[source] = (acc[source] || 0) + 1;
+            return acc;
+          }, {});
+          
+          console.log('🔍 [ハイブリッド検索] 検索結果の内訳:', searchSourceStats);
+          console.log('🔍 [ハイブリッド検索] Top 3 results:');
+          relevantDocs.slice(0, 3).forEach((doc, idx) => {
+            console.log(`  ${idx + 1}. [${doc.source}] ${doc.title?.substring(0, 60)} (score: ${doc.score?.toFixed(4)}, distance: ${doc.distance?.toFixed(4)})`);
+          });
+          
           processingSteps.push({
             step: 'search',
             status: 'completed',
@@ -295,6 +308,7 @@ export const POST = async (req: NextRequest) => {
             timestamp: new Date(),
             details: {
               searchSources: relevantDocs.map(doc => doc.source || 'unknown'),
+              searchSourceStats,
               detailedScores: relevantDocs.map(doc => ({
                 title: doc.title?.substring(0, 50) + '...',
                 source: doc.source,
@@ -304,9 +318,58 @@ export const POST = async (req: NextRequest) => {
               }))
             }
           });
+          
+          // クライアント側でも見えるように詳細情報を送信
+          const searchDetailMessage = {
+            type: 'step_update',
+            step: 0,
+            stepId: 'search',
+            title: '検索完了',
+            description: `ハイブリッド検索完了: ${Object.entries(searchSourceStats).map(([source, count]) => `${source}=${count}`).join(', ')}`,
+            totalSteps: 4,
+            icon: '🔍',
+            searchDetails: {
+              totalResults: relevantDocs.length,
+              sourceBreakdown: searchSourceStats,
+              topResults: relevantDocs.slice(0, 3).map(doc => ({
+                title: doc.title?.substring(0, 60),
+                source: doc.source,
+                score: doc.score,
+                distance: doc.distance
+              }))
+            }
+          };
+          
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(searchDetailMessage)}\n\n`)
+          );
 
           // ステップ2: ドキュメント処理中...
-          await updateStep(controller, encoder, 1, 'processing', `検索結果 ${relevantDocs.length} 件を分析・整理しています...`);
+          // ドキュメント処理ステップで参照情報を含める
+          const processingMessage = {
+            type: 'step_update',
+            step: 1,
+            stepId: 'processing',
+            title: 'ドキュメント処理中...',
+            description: `検索結果 ${relevantDocs.length} 件を分析・整理しています...`,
+            totalSteps: 4,
+            icon: '📊',
+            references: relevantDocs.map((doc, index) => ({
+              id: doc.id || `${doc.pageId}-${index}`,
+              title: doc.title || 'タイトル不明',
+              url: doc.url || '',
+              spaceName: doc.spaceName || 'Unknown',
+              labels: doc.labels || [],
+              distance: doc.distance,
+              source: doc.source,
+              scoreText: doc.scoreText
+            }))
+          };
+          
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(processingMessage)}\n\n`)
+          );
+          
           const processingStartTime = Date.now();
           await delay(100); // 視覚的効果のための最小限の遅延
           const processingTime = Date.now() - processingStartTime;
