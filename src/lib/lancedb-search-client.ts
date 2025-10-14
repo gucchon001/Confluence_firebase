@@ -39,11 +39,13 @@ declare global {
 
 /**
  * キャッシュキーを生成
+ * 距離閾値を含めることで、閾値変更時にキャッシュが無効化される
  */
 function generateCacheKey(query: string, params: any): string {
   const normalizedQuery = query.toLowerCase().trim();
   const paramString = JSON.stringify({
     topK: params.topK || 5,
+    maxDistance: params.maxDistance || 2.0,  // 距離閾値を追加（デフォルト値と一致）
     labelFilters: params.labelFilters || { includeMeetingNotes: false }
   });
   return `${normalizedQuery}_${Buffer.from(paramString).toString('base64').slice(0, 20)}`;
@@ -215,7 +217,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
-    const distanceThreshold = params.maxDistance || 1.0; // 検索精度向上: 2.0 -> 1.0 (関連性の高い文書のみを検出)
+    const distanceThreshold = params.maxDistance || 2.0; // 検索品質を元に戻す: 網羅性を重視
     const qualityThreshold = params.qualityThreshold || 0.0; // 最適化: 0.1 -> 0.0 (品質閾値を無効化)
     
     console.log(`[searchLanceDB] Using distance threshold: ${distanceThreshold}, quality threshold: ${qualityThreshold}`);
