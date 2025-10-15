@@ -155,6 +155,7 @@ async function lancedbRetrieverTool(
       query: optimizedQuery, // 最適化されたクエリを使用
       topK: 8,
       useLunrIndex: true, // BM25検索を有効化
+      titleWeight: 3.0, // Phase 0A-3 FIX: タイトルマッチングを有効化
       labelFilters: filters?.labelFilters || {
         includeMeetingNotes: false
       },
@@ -249,7 +250,7 @@ export async function retrieveRelevantDocs({
  * 各ページの全チャンクを取得して、コンテンツを統合
  * Phase 0A-3: isChunkedフラグによる条件分岐で66.3%のページでスキップ
  */
-async function enrichWithAllChunks(results: any[]): Promise<any[]> {
+export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
   if (results.length === 0) {
     return results;
   }
@@ -314,32 +315,43 @@ async function enrichWithAllChunks(results: any[]): Promise<any[]> {
 }
 
 /**
- * pageIdで全チャンクを取得（Phase 0A-1.5 + Phase 0A-3最適化）
- * Phase 0A-3: pageIdカラムを使ったWHERE句フィルタリング（全件スキャン回避）
+ * pageIdで全チャンクを取得（Phase 0A-1.5 + Phase 0A-3 FIX）
+ * 
+ * **Phase 0A-3 FIX**: WHERE句が機能しないため、Phase 0A-2の方法に戻す
+ * - LanceDBのWHERE句でpageId検索が0件を返すバグを確認
+ * - 代わりにidフィールドで前方一致検索を使用
  */
 async function getAllChunksByPageId(pageId: string): Promise<any[]> {
   try {
     const connection = await optimizedLanceDBClient.getConnection();
     const table = connection.table;
 
-    // Phase 0A-3最適化: pageIdカラムでWHERE句フィルタリング
-    // Before: 全10,000行スキャン → After: pageIdでインデックス検索
+    // 全レコード取得（パフォーマンス: 10,000行スキャン）
+    // Phase 0A-3のWHERE句最適化は機能しないため、この方法を使用
     const allArrow = await table
       .query()
-      .where(`pageId = '${pageId}'`)
-      .limit(100) // 1ページあたり最大100チャンク
+      .limit(10000) // 最大10,000件
       .toArrow();
     
     const chunks: any[] = [];
+    const idColumn = allArrow.getChildAt(allArrow.schema.fields.findIndex((f: any) => f.name === 'id'));
     
+    // idフィールドで前方一致フィルター
+    // isChunked=false: id = "640450787"
+    // isChunked=true: id = "640450787-0", "640450787-1", ...
     for (let i = 0; i < allArrow.numRows; i++) {
-      const row: any = {};
-      for (let j = 0; j < allArrow.schema.fields.length; j++) {
-        const field = allArrow.schema.fields[j];
-        const column = allArrow.getChildAt(j);
-        row[field.name] = column?.get(i);
+      const id = String(idColumn?.get(i) || '');
+      
+      // 前方一致 または 完全一致
+      if (id === pageId || id.startsWith(`${pageId}-`)) {
+        const row: any = {};
+        for (let j = 0; j < allArrow.schema.fields.length; j++) {
+          const field = allArrow.schema.fields[j];
+          const column = allArrow.getChildAt(j);
+          row[field.name] = column?.get(i);
+        }
+        chunks.push(row);
       }
-      chunks.push(row);
     }
 
     // chunkIndexでソート
@@ -360,7 +372,7 @@ async function getAllChunksByPageId(pageId: string): Promise<any[]> {
  * 空ページフィルター（Phase 0A-1.5、サーバー側）
  * is_valid: false のページや、コンテンツが極端に短いページを除外
  */
-async function filterInvalidPagesServer(results: any[]): Promise<any[]> {
+export async function filterInvalidPagesServer(results: any[]): Promise<any[]> {
   if (results.length === 0) {
     return results;
   }

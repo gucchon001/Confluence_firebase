@@ -20,8 +20,12 @@ const CONFLUENCE_API_TOKEN = process.env.CONFLUENCE_API_TOKEN || '';
 const CONFLUENCE_SPACE_KEY = process.env.CONFLUENCE_SPACE_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
-const TOKEN_LIMIT = 8192; // 実際の上限
-const CHUNK_SIZE = 1800; // チャンク分割時のサイズ
+// Phase 0A-4: チャンクサイズ最適化
+// 参考: https://docs.databricks.com/gcp/ja/generative-ai/vector-search-best-practices
+// RAG標準: 512-1,024トークン（2,000～4,000文字）
+const TOKEN_LIMIT = 1024; // 最適化: 8,192 → 1,024トークン（約4,000文字）
+const CHUNK_SIZE = 1600;  // 最適化: 1,800 → 1,600文字
+const CHUNK_OVERLAP = 200; // 新規追加: 10-15%オーバーラップ（文脈保持）
 
 interface ProcessingStats {
   totalPages: number;
@@ -56,14 +60,25 @@ function stripHtml(html: string): string {
 /**
  * テキストをチャンク分割
  */
-function splitIntoChunks(text: string, chunkSize: number): string[] {
+/**
+ * テキストをオーバーラップ付きでチャンク分割
+ * Phase 0A-4: オーバーラップ機能を追加（文脈保持のため）
+ */
+function splitIntoChunks(text: string, chunkSize: number, overlap: number = CHUNK_OVERLAP): string[] {
   const chunks: string[] = [];
   let start = 0;
   
   while (start < text.length) {
     const end = Math.min(start + chunkSize, text.length);
     chunks.push(text.substring(start, end));
-    start = end;
+    
+    // 次のチャンクはoverlapだけ前から開始（文脈を保持）
+    start = end - overlap;
+    
+    // 最後のチャンクに到達した場合は終了
+    if (start + chunkSize >= text.length && chunks.length > 0) {
+      break;
+    }
   }
   
   return chunks;
@@ -225,7 +240,10 @@ async function main() {
   
   // Step 1: Confluenceページ取得
   console.log('📥 Step 1: Confluenceページを取得中...');
-  const pages = await fetchAllPages();
+  const allPages = await fetchAllPages();
+  
+  // Phase 0A-4: 全ページを処理
+  const pages = allPages;
   
   stats.totalPages = pages.length;
   console.log(`✅ ${pages.length}ページ取得完了\n`);
@@ -287,6 +305,7 @@ async function main() {
   try {
     // 既存のテーブルをバックアップ
     console.log('   既存データをバックアップ中...');
+    const fs = await import('fs');
     const backupPath = `.lancedb.backup.${Date.now()}`;
     if (fs.existsSync('.lancedb')) {
       fs.cpSync('.lancedb', backupPath, { recursive: true });
@@ -318,6 +337,7 @@ async function main() {
     // 最適化されたスキーマ定義
     // パフォーマンス重視: pageId（WHERE句用）、isChunked（チャンク統合判定）
     // 型安全性: 厳格なnullable/non-nullable設定
+    const arrow = await import('apache-arrow');
     const schema = new arrow.Schema([
       // コアフィールド（すべてnon-nullable）
       new arrow.Field('id', new arrow.Utf8(), false),

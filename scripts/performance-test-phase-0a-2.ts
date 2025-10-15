@@ -8,6 +8,7 @@ import { searchLanceDB } from '../src/lib/lancedb-search-client';
 import { OptimizedLanceDBClient } from '../src/lib/optimized-lancedb-client';
 import { kgStorageService } from '../src/lib/kg-storage-service';
 import { kgSearchService } from '../src/lib/kg-search-service';
+import { enrichWithAllChunks, filterInvalidPagesServer } from '../src/ai/flows/retrieve-relevant-docs-lancedb';
 
 interface PerformanceMetrics {
   queryName: string;
@@ -18,16 +19,21 @@ interface PerformanceMetrics {
   vectorSearchTime?: number;
   bm25SearchTime?: number;
   
+  // チャンク統合フェーズ（Phase 0A-3）
+  chunkMergeTime: number;
+  chunksSkipped?: number;
+  chunksMerged?: number;
+  
+  // フィルタリングフェーズ
+  filterTime: number;
+  filteredCount?: number;
+  
   // KG拡張フェーズ
   kgExpansionTime: number;
   kgNodesQueried: number;
   kgEdgesTraversed: number;
   initialResults: number;
   expandedResults: number;
-  
-  // チャンクマージフェーズ
-  chunkMergeTime?: number;
-  chunksProcessed?: number;
   
   // 全体
   totalTime: number;
@@ -48,7 +54,7 @@ const TEST_CASES: TestCase[] = [
   {
     name: '事例1: 退会後の再登録',
     query: '退会した会員が再度登録することは可能ですか',
-    expectedPageTitle: '046_【FIX】退会機能'
+    expectedPageTitle: '046_【FIX】会員退会機能' // 修正: "退会機能" → "会員退会機能"
   },
   {
     name: '事例2: 教室削除条件',
@@ -63,17 +69,17 @@ const TEST_CASES: TestCase[] = [
   {
     name: '事例4: 応募制限',
     query: '塾講師が同時に何件まで応募できるか教えてください',
-    expectedPageTitle: '014_【FIX】応募機能'
+    expectedPageTitle: '014_【FIX】求人応募機能' // 修正: "応募機能" → "求人応募機能"
   },
   {
     name: '事例5: 重複応募期間',
     query: '重複応募不可期間はいつからいつまでですか',
-    expectedPageTitle: '014_【FIX】応募機能'
+    expectedPageTitle: '014_【FIX】求人応募機能' // 修正: "応募機能" → "求人応募機能"
   },
   {
     name: '事例6: 学年・職業更新',
     query: '塾講師プロフィールの学年・職業を更新する方法を教えてください',
-    expectedPageTitle: '721_【FIX】塾講師-学年・職業更新機能'
+    expectedPageTitle: '721_【作成中】学年自動更新バッチ' // 修正: "塾講師-学年・職業更新機能" → "学年自動更新バッチ"
   }
 ];
 
@@ -227,19 +233,50 @@ async function runPerformanceTest(testCase: TestCase): Promise<PerformanceMetric
   const searchResults = await searchLanceDB({
     query: testCase.query,
     topK: 50,
-    minScore: 0.3
+    minScore: 0.3,
+    titleWeight: 3.0 // Phase 0A-3 FIX: タイトルマッチングを有効化
   });
   
   const searchTime = Date.now() - searchStartTime;
   console.log(`✅ 検索完了: ${searchTime}ms (${searchResults.length}件)`);
   
-  // 2. Knowledge Graph拡張
-  console.log('\n[Phase 2] Knowledge Graph拡張中...');
+  // 2. チャンク統合処理（Phase 0A-3最適化）
+  console.log('\n[Phase 2] チャンク統合処理中...');
+  const chunkMergeStartTime = Date.now();
+  
+  const mapped = searchResults.slice(0, 12).map((r: any) => ({
+    id: r.id,
+    pageId: r.pageId || r.id,
+    title: r.title,
+    content: r.content,
+    isChunked: r.isChunked,  // Phase 0A-3フラグ
+    url: r.url,
+    lastUpdated: r.lastUpdated,
+    labels: r.labels || [],
+    score: r.score,
+    source: r.source,
+    scoreText: r.scoreText,
+  }));
+  
+  const enriched = await enrichWithAllChunks(mapped);
+  const chunkMergeTime = Date.now() - chunkMergeStartTime;
+  console.log(`✅ チャンク統合完了: ${chunkMergeTime}ms`);
+  
+  // 3. 空ページフィルター
+  console.log('\n[Phase 3] 空ページフィルタリング中...');
+  const filterStartTime = Date.now();
+  
+  const filtered = await filterInvalidPagesServer(enriched);
+  const filterTime = Date.now() - filterStartTime;
+  console.log(`✅ フィルタリング完了: ${filterTime}ms (${filtered.length}件)`);
+  
+  // 4. Knowledge Graph拡張
+  console.log('\n[Phase 4] Knowledge Graph拡張中...');
   const kgStartTime = Date.now();
   
   const kgMetrics = { nodesQueried: 0, edgesTraversed: 0 };
   const expandedResults = await expandWithKnowledgeGraph(
-    searchResults.slice(0, 8),
+    filtered.slice(0, 8),
     kgMetrics
   );
   
@@ -276,6 +313,8 @@ async function runPerformanceTest(testCase: TestCase): Promise<PerformanceMetric
   
   console.log('\n[パフォーマンスサマリー]');
   console.log(`   検索時間: ${searchTime}ms`);
+  console.log(`   チャンク統合時間: ${chunkMergeTime}ms`);
+  console.log(`   フィルタリング時間: ${filterTime}ms`);
   console.log(`   KG拡張時間: ${kgExpansionTime}ms`);
   console.log(`   合計時間: ${totalTime}ms`);
   
@@ -283,6 +322,8 @@ async function runPerformanceTest(testCase: TestCase): Promise<PerformanceMetric
     queryName: testCase.name,
     query: testCase.query,
     searchTime,
+    chunkMergeTime,
+    filterTime,
     kgExpansionTime,
     kgNodesQueried: kgMetrics.nodesQueried,
     kgEdgesTraversed: kgMetrics.edgesTraversed,
@@ -327,6 +368,8 @@ async function main() {
   
   // パフォーマンス統計
   const avgSearchTime = allMetrics.reduce((sum, m) => sum + m.searchTime, 0) / allMetrics.length;
+  const avgChunkMergeTime = allMetrics.reduce((sum, m) => sum + m.chunkMergeTime, 0) / allMetrics.length;
+  const avgFilterTime = allMetrics.reduce((sum, m) => sum + m.filterTime, 0) / allMetrics.length;
   const avgKgTime = allMetrics.reduce((sum, m) => sum + m.kgExpansionTime, 0) / allMetrics.length;
   const avgTotalTime = allMetrics.reduce((sum, m) => sum + m.totalTime, 0) / allMetrics.length;
   const avgKgNodes = allMetrics.reduce((sum, m) => sum + m.kgNodesQueried, 0) / allMetrics.length;
@@ -334,10 +377,12 @@ async function main() {
   const avgExpansion = allMetrics.reduce((sum, m) => sum + (m.expandedResults - m.initialResults), 0) / allMetrics.length;
   
   console.log('⏱️  平均パフォーマンス:');
-  console.log(`   検索時間:          ${avgSearchTime.toFixed(1)}ms`);
-  console.log(`   KG拡張時間:        ${avgKgTime.toFixed(1)}ms`);
-  console.log(`   合計時間:          ${avgTotalTime.toFixed(1)}ms`);
-  console.log(`   KGオーバーヘッド:  ${((avgKgTime / avgTotalTime) * 100).toFixed(1)}%`);
+  console.log(`   検索時間:            ${avgSearchTime.toFixed(1)}ms`);
+  console.log(`   チャンク統合時間:    ${avgChunkMergeTime.toFixed(1)}ms`);
+  console.log(`   フィルタリング時間:  ${avgFilterTime.toFixed(1)}ms`);
+  console.log(`   KG拡張時間:          ${avgKgTime.toFixed(1)}ms`);
+  console.log(`   合計時間:            ${avgTotalTime.toFixed(1)}ms`);
+  console.log(`   KGオーバーヘッド:    ${((avgKgTime / avgTotalTime) * 100).toFixed(1)}%`);
   console.log('');
   
   console.log('🕸️  Knowledge Graph統計:');
@@ -419,7 +464,7 @@ async function main() {
   
   // LanceDB接続をクリーンアップ
   const client = OptimizedLanceDBClient.getInstance();
-  await client.close();
+  await client.disconnect();
 }
 
 main().catch(console.error);

@@ -14,6 +14,7 @@ export interface RawSearchResult {
   pageId?: number;
   title: string;
   content: string;
+  isChunked?: boolean;  // Phase 0A-3: チャンク統合判定フラグ
   _distance?: number;
   _bm25Score?: number;
   _keywordScore?: number;
@@ -40,6 +41,7 @@ export interface ProcessedSearchResult {
   pageId?: number;
   title: string;
   content: string;
+  isChunked?: boolean;  // Phase 0A-3: チャンク統合判定フラグ
   distance: number;
   score: number;
   space_key?: string;
@@ -257,6 +259,7 @@ export class UnifiedSearchResultProcessor {
         pageId: result.pageId,
         title: result.title || 'No Title',
         content: result.content || '',
+        isChunked: result.isChunked,  // Phase 0A-3: チャンク統合判定フラグ
         distance: distance,
         score: finalScore,
         space_key: result.space_key,
