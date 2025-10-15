@@ -15,6 +15,7 @@ import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
 import { GenericCache } from './generic-cache';
+import { kgSearchService } from './kg-search-service';
 
 // 検索結果キャッシュ（グローバルに保持してHMRの影響を回避）
 const getSearchCache = () => {
@@ -324,8 +325,48 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       });
       console.log(`[searchLanceDB] Applied title boost to ${vectorResults.filter(r => r._titleBoosted).length} results (keyword-based matching)`);
       
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // Phase 4: タイトルマッチ結果からKG拡張
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      const titleMatchedResults = vectorResults.filter(r => r._titleBoosted);
+      
+      if (titleMatchedResults.length > 0) {
+        try {
+          console.log(`\n[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+          console.log(`[Phase 4] KG拡張開始: ${titleMatchedResults.length}件のタイトルマッチ結果`);
+          
+          const kgExpandedResults = await expandTitleResultsWithKG(
+            titleMatchedResults,
+            tbl,
+            {
+              maxReferences: 2,
+              minWeight: 0.7
+            }
+          );
+          
+          // KG拡張結果を既存の結果にマージ
+          const existingIds = new Set(vectorResults.map(r => r.id));
+          let kgAddedCount = 0;
+          
+          for (const kgResult of kgExpandedResults) {
+            if (!existingIds.has(kgResult.id)) {
+              vectorResults.push(kgResult);
+              kgAddedCount++;
+            }
+          }
+          
+          console.log(`[Phase 4] KG拡張完了: +${kgAddedCount}件追加（合計: ${vectorResults.length}件）`);
+          console.log(`[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+        } catch (error) {
+          console.error(`[Phase 4] KG拡張エラー:`, error);
+          // エラー時も検索は継続
+        }
+      } else {
+        console.log(`[Phase 4] タイトルマッチ結果なし - KG拡張をスキップ`);
+      }
+      
       // 結果数を制限
-      vectorResults = vectorResults.slice(0, topK);
+      vectorResults = vectorResults.slice(0, topK * 2); // KG拡張を考慮して少し多めに保持
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results after filtering`);
     } catch (err) {
       console.error(`[searchLanceDB] Vector search error: ${err}`);
@@ -955,4 +996,112 @@ function filterInvalidPagesByContent(results: any[]): any[] {
   }
   
   return validResults;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 4: Knowledge Graph統合
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * LanceDBからページIDでページを取得
+ */
+async function fetchPageFromLanceDB(tbl: any, pageId: string): Promise<any | null> {
+  try {
+    // pageIdでフィルタリング
+    const results = await tbl.query()
+      .where(`pageId = '${pageId}'`)
+      .limit(1)
+      .toArray();
+    
+    if (results.length > 0) {
+      return results[0];
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`[fetchPageFromLanceDB] Error fetching page ${pageId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * タイトル検索結果をKGで拡張（Phase 4）
+ * タイトルマッチしたページの参照先を自動的に候補に追加
+ */
+async function expandTitleResultsWithKG(
+  titleResults: any[],
+  tbl: any,
+  options: {
+    maxReferences?: number;
+    minWeight?: number;
+  } = {}
+): Promise<any[]> {
+  const { maxReferences = 2, minWeight = 0.7 } = options;
+  
+  if (titleResults.length === 0) {
+    return titleResults;
+  }
+  
+  console.log(`[Phase 4 KG] Expanding ${titleResults.length} title-matched results with KG`);
+  
+  const expandedResults = [...titleResults];
+  const addedPageIds = new Set(titleResults.map(r => r.pageId).filter(Boolean));
+  
+  try {
+    // 各タイトル結果の参照先を取得
+    for (const result of titleResults) {
+      if (!result.pageId) continue;
+      
+      try {
+        // KGから参照先ページを取得
+        const kgResult = await kgSearchService.getReferencedPages(
+          result.pageId,
+          maxReferences
+        );
+        
+        if (kgResult.relatedPages.length === 0) {
+          console.log(`[Phase 4 KG] No references found for page ${result.pageId}`);
+          continue;
+        }
+        
+        console.log(`[Phase 4 KG] Found ${kgResult.relatedPages.length} references for page ${result.pageId} (${result.title})`);
+        
+        // 参照先ページを候補に追加
+        for (const { node, edge } of kgResult.relatedPages) {
+          if (!node.pageId || addedPageIds.has(node.pageId)) {
+            continue;
+          }
+          
+          // LanceDBから実際のページデータを取得
+          const referencedPage = await fetchPageFromLanceDB(tbl, node.pageId);
+          
+          if (referencedPage) {
+            expandedResults.push({
+              ...referencedPage,
+              _sourceType: 'kg-reference',
+              _kgWeight: edge.weight,
+              _referencedFrom: result.pageId,
+              _distance: 0.4 // KG参照は高品質として扱う
+            });
+            addedPageIds.add(node.pageId);
+            
+            console.log(`[Phase 4 KG] Added KG reference: ${node.name} (weight: ${edge.weight.toFixed(2)})`);
+          }
+        }
+      } catch (error) {
+        console.warn(`[Phase 4 KG] Error expanding page ${result.pageId}:`, error);
+        // エラーが発生しても検索は継続
+      }
+    }
+    
+    const addedCount = expandedResults.length - titleResults.length;
+    console.log(`[Phase 4 KG] Expansion complete: ${titleResults.length} → ${expandedResults.length} results (+${addedCount} KG references)`);
+    
+  } catch (error) {
+    console.error(`[Phase 4 KG] Fatal error during KG expansion:`, error);
+    // エラー時は元の結果を返す
+    return titleResults;
+  }
+  
+  return expandedResults;
 }

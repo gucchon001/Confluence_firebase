@@ -12,6 +12,7 @@ export interface SearchSignals {
   bm25Score: number;            // BM25スコア（大きいほど良い）
   titleMatchRatio: number;      // タイトルマッチ率（0-1）
   labelScore: number;           // ラベルスコア（0-1）
+  kgBoost?: number;             // KGブーストスコア（0-1、Phase 4）
   pageRank?: number;            // ページランク（オプション）
 }
 
@@ -22,6 +23,7 @@ export interface CompositeScore {
     bm25Contribution: number;
     titleContribution: number;
     labelContribution: number;
+    kgContribution?: number;  // Phase 4: KGブースト
   };
 }
 
@@ -33,6 +35,7 @@ export interface CompositeScoreConfig {
   bm25Weight: number;       // デフォルト: 0.3
   titleWeight: number;      // デフォルト: 0.2
   labelWeight: number;      // デフォルト: 0.1
+  kgWeight: number;         // デフォルト: 0.05 (Phase 4)
   
   // 正規化パラメータ
   maxVectorDistance: number;  // デフォルト: 2.0
@@ -40,12 +43,13 @@ export interface CompositeScoreConfig {
 }
 
 const DEFAULT_CONFIG: CompositeScoreConfig = {
-  // Phase 3実装（実測ベスト）: BM25最優先 + タイトルブーストで発見率83%達成
-  // BM25（40%）+ ベクトル（30%）+ タイトル（20%）+ ラベル（10%）= 100%
-  vectorWeight: 0.3,    // ベクトル: 30%（セマンティック検索）
-  bm25Weight: 0.4,      // BM25: 40%（キーワード完全一致を最優先）
-  titleWeight: 0.2,     // タイトル: 20%（ブースト内で強化済み）
-  labelWeight: 0.1,     // ラベル: 10%（補助）
+  // Phase 4実装: KGブーストを追加
+  // BM25（38%）+ ベクトル（27%）+ タイトル（20%）+ ラベル（10%）+ KG（5%）= 100%
+  vectorWeight: 0.27,   // ベクトル: 27%（セマンティック検索）
+  bm25Weight: 0.38,     // BM25: 38%（キーワード完全一致を最優先）
+  titleWeight: 0.20,    // タイトル: 20%（ブースト内で強化済み）
+  labelWeight: 0.10,    // ラベル: 10%（補助）
+  kgWeight: 0.05,       // KG: 5%（Phase 4: 参照関係ブースト）
   maxVectorDistance: 2.0,
   maxBm25Score: 10.0,
 };
@@ -72,21 +76,23 @@ export class CompositeScoringService {
    * 複合スコアを計算
    */
   public calculateCompositeScore(signals: SearchSignals): CompositeScore {
-    const { vectorWeight, bm25Weight, titleWeight, labelWeight, maxVectorDistance, maxBm25Score } = this.config;
+    const { vectorWeight, bm25Weight, titleWeight, labelWeight, kgWeight, maxVectorDistance, maxBm25Score } = this.config;
     
     // 各信号を0-1に正規化
     const normalizedVector = 1.0 - Math.min(signals.vectorDistance / maxVectorDistance, 1.0);
     const normalizedBm25 = Math.min(signals.bm25Score / maxBm25Score, 1.0);
     const normalizedTitle = signals.titleMatchRatio;
     const normalizedLabel = signals.labelScore;
+    const normalizedKg = signals.kgBoost || 0;  // Phase 4: KGブースト
     
     // 重み付き合計
     const vectorContribution = normalizedVector * vectorWeight;
     const bm25Contribution = normalizedBm25 * bm25Weight;
     const titleContribution = normalizedTitle * titleWeight;
     const labelContribution = normalizedLabel * labelWeight;
+    const kgContribution = normalizedKg * kgWeight;  // Phase 4
     
-    const finalScore = vectorContribution + bm25Contribution + titleContribution + labelContribution;
+    const finalScore = vectorContribution + bm25Contribution + titleContribution + labelContribution + kgContribution;
     
     return {
       finalScore,
@@ -95,6 +101,7 @@ export class CompositeScoringService {
         bm25Contribution,
         titleContribution,
         labelContribution,
+        kgContribution,  // Phase 4
       },
     };
   }
@@ -117,11 +124,22 @@ export class CompositeScoringService {
       
       const labelScore = this.calculateLabelScore(labels, keywords, structuredLabel);
       
+      // Phase 4: KGブーストスコアを抽出
+      let kgBoost = 0;
+      if (result._sourceType === 'kg-reference') {
+        // KG参照からの結果は0.7-1.0のブースト
+        kgBoost = result._kgWeight || 0.7;
+      } else if (result._kgRelated) {
+        // ドメイン関連の場合は0.3-0.5のブースト
+        kgBoost = 0.3;
+      }
+      
       const signals: SearchSignals = {
         vectorDistance,
         bm25Score,
         titleMatchRatio,
         labelScore,
+        kgBoost,  // Phase 4
       };
       
       const compositeScore = this.calculateCompositeScore(signals);
