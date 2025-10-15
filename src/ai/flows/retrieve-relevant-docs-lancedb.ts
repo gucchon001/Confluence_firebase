@@ -245,8 +245,9 @@ export async function retrieveRelevantDocs({
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /**
- * 全チャンク統合（Phase 0A-1.5）
+ * 全チャンク統合（Phase 0A-1.5 + Phase 0A-3最適化）
  * 各ページの全チャンクを取得して、コンテンツを統合
+ * Phase 0A-3: isChunkedフラグによる条件分岐で66.3%のページでスキップ
  */
 async function enrichWithAllChunks(results: any[]): Promise<any[]> {
   if (results.length === 0) {
@@ -254,6 +255,9 @@ async function enrichWithAllChunks(results: any[]): Promise<any[]> {
   }
 
   console.log(`[ChunkMerger] Starting chunk enrichment for ${results.length} results`);
+  
+  let skippedCount = 0;
+  let mergedCount = 0;
 
   const enriched = await Promise.all(
     results.map(async (result) => {
@@ -264,7 +268,14 @@ async function enrichWithAllChunks(results: any[]): Promise<any[]> {
           return result;
         }
 
-        // このページの全チャンクを取得
+        // Phase 0A-3最適化: isChunkedフラグによる条件分岐
+        if (result.isChunked === false) {
+          // チャンク分割されていないページ → 統合不要（66.3%）
+          skippedCount++;
+          return result;
+        }
+
+        // このページの全チャンクを取得（isChunked === trueのみ）
         const allChunks = await getAllChunksByPageId(String(pageId));
 
         if (allChunks.length <= 1) {
@@ -278,6 +289,7 @@ async function enrichWithAllChunks(results: any[]): Promise<any[]> {
           .filter(Boolean)
           .join('\n\n'); // セクション区切り
 
+        mergedCount++;
         console.log(
           `[ChunkMerger] Merged ${allChunks.length} chunks for "${result.title}" (${result.content?.length || 0} → ${mergedContent.length} chars)`
         );
@@ -296,54 +308,44 @@ async function enrichWithAllChunks(results: any[]): Promise<any[]> {
   );
 
   const totalChunks = enriched.reduce((sum, r) => sum + (r.chunkCount || 1), 0);
-  console.log(`[ChunkMerger] Enrichment complete. Total chunks merged: ${totalChunks}`);
+  console.log(`[ChunkMerger] Enrichment complete. Skipped: ${skippedCount}, Merged: ${mergedCount}, Total chunks: ${totalChunks}`);
 
   return enriched;
 }
 
 /**
- * pageIdで全チャンクを取得（Phase 0A-1.5）
+ * pageIdで全チャンクを取得（Phase 0A-1.5 + Phase 0A-3最適化）
+ * Phase 0A-3: pageIdカラムを使ったWHERE句フィルタリング（全件スキャン回避）
  */
 async function getAllChunksByPageId(pageId: string): Promise<any[]> {
   try {
     const connection = await optimizedLanceDBClient.getConnection();
     const table = connection.table;
 
-    // LanceDBのデータ構造:
-    // - idフィールド: "{pageId}-{chunkIndex}" 形式（例: "640450787-0"）
-    // - pageIdだけのWHEREクエリは不可能なので、全件取得してフィルター
-
-    const allArrow = await table.query().limit(10000).toArrow();
+    // Phase 0A-3最適化: pageIdカラムでWHERE句フィルタリング
+    // Before: 全10,000行スキャン → After: pageIdでインデックス検索
+    const allArrow = await table
+      .query()
+      .where(`pageId = '${pageId}'`)
+      .limit(100) // 1ページあたり最大100チャンク
+      .toArrow();
     
     const chunks: any[] = [];
-    const idFieldIndex = allArrow.schema.fields.findIndex((f: any) => f.name === 'id');
-    
-    if (idFieldIndex === -1) {
-      console.error(`[getAllChunksByPageId] 'id' field not found in schema`);
-      return [];
-    }
-    
-    const idColumn = allArrow.getChildAt(idFieldIndex);
     
     for (let i = 0; i < allArrow.numRows; i++) {
-      const id = String(idColumn?.get(i) || '');
-      
-      // id が "{pageId}-{chunkIndex}" 形式なので、pageIdで前方一致
-      if (id.startsWith(`${pageId}-`)) {
-        const row: any = {};
-        for (let j = 0; j < allArrow.schema.fields.length; j++) {
-          const field = allArrow.schema.fields[j];
-          const column = allArrow.getChildAt(j);
-          row[field.name] = column?.get(i);
-        }
-        chunks.push(row);
+      const row: any = {};
+      for (let j = 0; j < allArrow.schema.fields.length; j++) {
+        const field = allArrow.schema.fields[j];
+        const column = allArrow.getChildAt(j);
+        row[field.name] = column?.get(i);
       }
+      chunks.push(row);
     }
 
-    // chunkIndexでソート（idの末尾の数値を使用）
+    // chunkIndexでソート
     chunks.sort((a, b) => {
-      const aIndex = parseInt(String(a.id).split('-').pop() || '0', 10);
-      const bIndex = parseInt(String(b.id).split('-').pop() || '0', 10);
+      const aIndex = a.chunkIndex || 0;
+      const bIndex = b.chunkIndex || 0;
       return aIndex - bIndex;
     });
 
