@@ -10,24 +10,33 @@
 #### 現行システム
 - **[blueprint.md](./architecture/blueprint.md)** - プロジェクト概要と全体設計
 - **[data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - LanceDBデータフロー図
+- **[current-hybrid-search-flow.md](./architecture/current-hybrid-search-flow.md)** ✅ **最新** - 現在のハイブリッド検索フロー分析
 - **[hybrid-search-contract.md](./architecture/hybrid-search-contract.md)** - ハイブリッド検索契約
+- **[hybrid-search-flow-and-parallelization-analysis.md](./architecture/hybrid-search-flow-and-parallelization-analysis.md)** - ハイブリッド検索並行実行分析
+- **[enhanced-hybrid-search-design.md](./architecture/enhanced-hybrid-search-design.md)** - 強化版ハイブリッド検索設計
 - **[search-system-comprehensive-guide.md](./architecture/search-system-comprehensive-guide.md)** - 検索システム総合ガイド
+- **[lancedb-firestore-integration-design.md](./architecture/lancedb-firestore-integration-design.md)** - LanceDB-Firestore統合設計
 - **[prompt-design.md](./architecture/prompt-design.md)** - プロンプト設計
 - **[ui-ux-performance-strategy.md](./architecture/ui-ux-performance-strategy.md)** - UI/UXパフォーマンス戦略
 
-#### 分析・検証
-- **[architecture-implementation-verification.md](./architecture/architecture-implementation-verification.md)** - アーキテクチャドキュメント実装検証レポート
-- **[rag-performance-analysis.md](./architecture/rag-performance-analysis.md)** - RAGパフォーマンス分析
+#### ラベル・ドメイン知識
+- **[structured-label-design.md](./architecture/structured-label-design.md)** - 構造化ラベル設計
+- **[label-domain-kg-integration.md](./architecture/label-domain-kg-integration.md)** - ラベル・ドメイン知識・KG統合
 
 #### 将来計画
-- **[phase-0A-implementation-plan.md](./architecture/phase-0A-implementation-plan.md)** ✅ **NEW** - Phase 0A 基盤強化実装計画書
 - **[foundation-first-strategy.md](./architecture/foundation-first-strategy.md)** 🔥 - 基盤強化優先戦略（ラベル+KG → 横断拡張）
 - **[genkit-migration-and-expansion-roadmap.md](./architecture/genkit-migration-and-expansion-roadmap.md)** ⭐ - Genkit移行と拡張ロードマップ（6.5ヶ月計画）
 - **[genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
-- **[graphrag-tuned-architecture.md](./architecture/graphrag-tuned-architecture.md)** - GraphRAG調整アーキテクチャ
 
 ### 🛠️ [implementation/](./implementation/) - 実装・開発
 具体的な実装方法と開発に関するドキュメント
+
+#### Phase 0A-4 完了状況
+- **[phase-0a-4-completion-report.md](./implementation/phase-0a-4-completion-report.md)** ✅ **最新** - Phase 0A-4完了レポート
+- **[current-search-quality-report.md](./implementation/current-search-quality-report.md)** ✅ **最新** - 現在の検索品質レポート
+- **[kg-contribution-analysis-report.md](./implementation/kg-contribution-analysis-report.md)** - ナレッジグラフ貢献度分析
+- **[phase-1-4-implementation-status.md](./implementation/phase-1-4-implementation-status.md)** - Phase 1-4実装状況
+- **[phase-1-3-spec-compliance.md](./implementation/phase-1-3-spec-compliance.md)** - Phase 1-3仕様準拠状況
 
 #### システム設計・仕様
 - **[error-handling.md](./implementation/error-handling.md)** - エラーハンドリング仕様
@@ -45,9 +54,6 @@
 
 #### 課題管理
 - **[remaining-issues.md](./implementation/remaining-issues.md)** - 継続的な課題管理
-
-#### 監査レポート
-- **[implementation-docs-audit-report.md](./implementation/implementation-docs-audit-report.md)** - ドキュメント監査レポート (2025-10-11)
 
 ### 🚀 [operations/](./operations/) - 運用・デプロイ
 システムの運用、デプロイ、移行に関するドキュメント
@@ -79,9 +85,7 @@
 
 - **[case_classroom-management-search-quality-test.md](./testing/case_classroom-management-search-quality-test.md)** - 教室管理検索品質テスト
 - **[chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - チャットボットパフォーマンス改善計画
-- **[confluence-fetch-analysis.md](./testing/confluence-fetch-analysis.md)** - Confluence取得分析
-- **[confluence-sync-duplicate-analysis.md](./testing/confluence-sync-duplicate-analysis.md)** - Confluence同期重複分析
-- **[differential-sync-test-plan.md](./testing/differential-sync-test-plan.md)** - 差分同期テスト計画
+- **[phase-0a-4-test-criteria.md](./testing/phase-0a-4-test-criteria.md)** - Phase 0A-4テスト基準
 - **[real-vector-search-testing-guide.md](./testing/real-vector-search-testing-guide.md)** - リアルベクトル検索テストガイド
 
 ### 📋 [specifications/](./specifications/) - 仕様書
@@ -128,9 +132,11 @@
 6. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
 
 ### 開発者向け
-1. **[architecture/genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
-2. **[implementation/api-design.md](./implementation/api-design.md)** - API設計
+1. **[architecture/current-hybrid-search-flow.md](./architecture/current-hybrid-search-flow.md)** - 現在のハイブリッド検索フロー
+2. **[architecture/genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
 3. **[implementation/error-handling.md](./implementation/error-handling.md)** - エラーハンドリング
+4. **[implementation/label-system-api.md](./implementation/label-system-api.md)** - ラベルシステムAPI
+5. **[implementation/lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様
 
 ## 📝 ドキュメント更新
 
