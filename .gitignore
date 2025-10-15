@@ -58,6 +58,7 @@ debug.log
 # LanceDB data
 /.lancedb/.cache/
 /.lancedb/
+.lancedb.backup.*/
 .cache/
 
 # Sync logs (may contain sensitive data)

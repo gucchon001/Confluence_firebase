@@ -82,6 +82,16 @@ export interface StructuredLabel {
   status: DocumentStatus;
   
   /**
+   * コンテンツ長: ページの実質的な情報量（Phase 0A-1.5追加）
+   */
+  content_length?: number;
+  
+  /**
+   * 有効ページフラグ: 空ページ・リダイレクトページを除外（Phase 0A-1.5追加）
+   */
+  is_valid?: boolean;
+  
+  /**
    * バージョン番号（任意）: 仕様書のバージョン（例: "168", "515"）
    */
   version?: string;

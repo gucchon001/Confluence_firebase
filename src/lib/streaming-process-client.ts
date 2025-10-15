@@ -28,6 +28,16 @@ export interface StreamingMessage {
   error?: string;
   message?: string;
   postLogId?: string;
+  searchDetails?: {
+    totalResults: number;
+    sourceBreakdown: Record<string, number>;
+    topResults: Array<{
+      title: string;
+      source: string;
+      score: number;
+      distance: number;
+    }>;
+  };
 }
 
 export class StreamingProcessClient {
@@ -159,7 +169,7 @@ export class StreamingProcessClient {
   ): void {
     switch (message.type) {
       case 'step_update':
-        if (message.step && message.stepId && message.title && message.description && message.totalSteps && message.icon) {
+        if (message.step !== undefined && message.stepId && message.title && message.description && message.totalSteps && message.icon) {
           const step: ProcessingStep = {
             step: message.step,
             stepId: message.stepId,
@@ -169,6 +179,20 @@ export class StreamingProcessClient {
             icon: message.icon
           };
           onStepUpdate(step);
+          
+          // ハイブリッド検索の詳細情報をログ出力
+          if (message.searchDetails) {
+            console.log('🔍 [ハイブリッド検索] 詳細情報:', message.searchDetails);
+            console.log('📊 検索ソース別の内訳:');
+            Object.entries(message.searchDetails.sourceBreakdown).forEach(([source, count]) => {
+              console.log(`  - ${source}: ${count}件`);
+            });
+            console.log('🏆 Top 3検索結果:');
+            message.searchDetails.topResults.forEach((result, idx) => {
+              console.log(`  ${idx + 1}. [${result.source}] ${result.title}`);
+              console.log(`     スコア: ${result.score?.toFixed(4)}, 距離: ${result.distance?.toFixed(4)}`);
+            });
+          }
         }
         break;
 

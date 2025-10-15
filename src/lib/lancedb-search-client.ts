@@ -46,13 +46,9 @@ function generateCacheKey(query: string, params: any): string {
   const paramString = JSON.stringify({
     topK: params.topK || 5,
     maxDistance: params.maxDistance || 2.0,  // 距離閾値を追加（デフォルト値と一致）
-    // labelFiltersがundefinedの場合は明示的にnullとして区別する
-    labelFilters: params.labelFilters !== undefined ? params.labelFilters : null
+    labelFilters: params.labelFilters || { includeMeetingNotes: false }
   });
-  // labelFiltersの違いを確実に識別するため、MD5ハッシュを使用
-  const crypto = require('crypto');
-  const hash = crypto.createHash('md5').update(paramString).digest('hex').slice(0, 16);
-  return `${normalizedQuery}_${hash}`;
+  return `${normalizedQuery}_${Buffer.from(paramString).toString('base64').slice(0, 20)}`;
 }
 
 // キャッシュ関数は削除（GenericCacheを直接使用）
@@ -204,10 +200,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     let bm25Results: any[] = [];
     
     // ラベルフィルタリングの準備（統一されたLabelManagerを使用）
-    // params.labelFiltersがundefinedの場合はフィルタなし（全て許可）
-    const labelFilters = params.labelFilters !== undefined 
-      ? params.labelFilters 
-      : { includeMeetingNotes: true, excludeArchived: false, excludeTemplates: false, excludeGeneric: false };
+    const labelFilters = params.labelFilters || labelManager.getDefaultFilterOptions();
     const excludeLabels = labelManager.buildExcludeLabels(labelFilters);
     
     console.log('[searchLanceDB] Using labelFilters:', labelFilters);
@@ -219,8 +212,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       if (params.filter) {
         vectorQuery = vectorQuery.where(params.filter);
       }
-      // ベクトル検索: 十分な結果を取得（50件でテスト）
-      vectorResults = await vectorQuery.limit(50).toArray();
+      // ベクトル検索: 十分な結果を取得（topKの2倍）
+      vectorResults = await vectorQuery.limit(topK * 2).toArray();
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
@@ -452,7 +445,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       try {
         const core = keywords[0];
         if (core) {
-          const kwCap = 50; // 50件でテスト
+          const kwCap = Math.min(50, Math.max(10, Math.floor(topK / 3)));
           
           // 複数のキーワードでBM25検索を実行
           const searchKeywords = keywords.slice(0, 5); // 上位5つのキーワードを使用（拡張）
@@ -574,28 +567,17 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             }
               }
 
-          // 改善されたブーストロジック
+          // 簡素化されたブーストロジック（パフォーマンス最適化）
+          // フレーズブーストのみ（最も効果的）
           const rawQuery = (params.query || '').trim();
-          const titleLower = title.toLowerCase();
-          
-          // 1. フレーズ完全マッチ（最高優先度）
           if (rawQuery) {
             const phrase = rawQuery.replace(/[\s　]+/g, '');
             const titlePlain = title.replace(/[\s　]+/g, '');
             const contentPlain = content.replace(/[\s　]+/g, '');
             const phraseInTitle = titlePlain.includes(phrase);
             const phraseInBody = contentPlain.includes(phrase);
-            if (phraseInTitle) totalScore += 5.0; // タイトル完全一致ボーナス（2.0→5.0に強化）
+            if (phraseInTitle) totalScore += 2.0; // タイトル一致ボーナス
             if (phraseInBody) totalScore += 0.5;  // 本文一致ボーナス
-          }
-          
-          // 2. 複数キーワードのタイトルマッチ（新規追加）
-          const keywordsInTitle = searchKeywords.filter(kw => 
-            titleLower.includes(kw.toLowerCase())
-          );
-          if (keywordsInTitle.length >= 2) {
-            // 2個以上のキーワードがタイトルに含まれる場合、追加ブースト
-            totalScore += keywordsInTitle.length * 2.0;
           }
               
               return { 
@@ -760,41 +742,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // Phase 0A-1.5: 空ページフィルター（コンテンツ長ベース、StructuredLabel不要）
     const filtered = filterInvalidPagesByContent(deduplicated);
     
-    // Phase 0A-2: StructuredLabelを取得してスコアリングに統合
-    const pageIds = filtered
-      .filter(r => r.pageId !== undefined && r.pageId !== null)
-      .map(r => String(r.pageId));
-    
-    let structuredLabels = new Map<string, any>();
-    if (pageIds.length > 0) {
-      try {
-        const { getStructuredLabels } = await import('./structured-label-service-admin');
-        structuredLabels = await getStructuredLabels(pageIds);
-        console.log(`[searchLanceDB] Loaded ${structuredLabels.size} StructuredLabels for scoring`);
-      } catch (error) {
-        console.warn('[searchLanceDB] Failed to load StructuredLabels for scoring:', error);
-      }
-    }
-    
-    // StructuredLabelスコアを各結果に追加
-    const { calculateStructuredLabelScore } = await import('./structured-label-scorer');
-    for (const result of filtered) {
-      const pageId = String(result.pageId || '');
-      const label = structuredLabels.get(pageId);
-      const labelScore = calculateStructuredLabelScore(params.query, label);
-      
-      // _labelScoreを上書き（既存のlabelMatchesではなく、StructuredLabelベースのスコア）
-      result._labelScore = labelScore;
-      result._structuredLabel = label; // デバッグ用
-    }
-    
-    console.log(`[searchLanceDB] Applied StructuredLabel scoring to ${filtered.length} results`);
-    
     // 統一検索結果処理サービスを使用して結果を処理（RRF無効化で高速化）
     const processedResults = unifiedSearchResultProcessor.processSearchResults(filtered, {
-      vectorWeight: 0.3,      // ベクトルの重みを少し下げる
-      keywordWeight: 0.3,     // キーワードの重みを少し下げる
-      labelWeight: 0.4,       // StructuredLabelの重みを上げる
+      vectorWeight: 0.4,
+      keywordWeight: 0.4,
+      labelWeight: 0.2,
       enableRRF: false  // RRF無効化で高速化
     });
     

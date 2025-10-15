@@ -52,6 +52,9 @@
 ### 🚀 [operations/](./operations/) - 運用・デプロイ
 システムの運用、デプロイ、移行に関するドキュメント
 
+#### AI開発・協働
+- **[cursor-ai-collaboration-guide.md](./operations/cursor-ai-collaboration-guide.md)** 🤖 **NEW** - Cursor AI協働マニュアル
+
 #### 同期・データ管理
 - **[data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** ⭐ - データ同期戦略と定期実行スケジュール
 - **[firebase-scheduled-sync-setup.md](./operations/firebase-scheduled-sync-setup.md)** - Firebase Functions自動同期セットアップ

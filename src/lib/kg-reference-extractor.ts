@@ -18,43 +18,54 @@ export class KGReferenceExtractor {
   ): KGEdge[] {
     const edges: KGEdge[] = [];
     
-    // パターン1: "177_【FIX】求人削除機能を実施"
-    const pattern1 = /(\d{3})_【[^\]]+】([^を。、\s]+)を(実施|参照|使用)/g;
-    let match: RegExpExecArray | null;
+    // パターン0: Confluence内部リンク（最優先）
+    const urlPattern = /\/pages\/(\d+)/g;
+    let urlMatch: RegExpExecArray | null;
     
-    while ((match = pattern1.exec(content)) !== null) {
-      const targetPageNumber = match[1];
-      const targetFeature = match[2];
-      const relationType = match[3];
+    while ((urlMatch = urlPattern.exec(content)) !== null) {
+      const targetPageId = urlMatch[1];
+      
+      // 自己参照は除外
+      if (targetPageId === pageId) continue;
       
       edges.push({
-        id: `${pageId}-ref-${targetPageNumber}`,
+        id: `${pageId}-ref-url-${targetPageId}`,
         from: `page-${pageId}`,
-        to: `page-${targetPageNumber}`,
-        type: relationType === '実施' ? 'implements' : 'reference',
-        weight: 0.9,
+        to: `page-${targetPageId}`,
+        type: 'reference',
+        weight: 1.0, // URLリンクは高信頼度
         extractedFrom: 'content',
         metadata: {
-          matchPattern: match[0]
+          matchPattern: `URL link to page ${targetPageId}`
         }
       });
     }
     
-    // パターン2: "【FIX】教室コピー機能を参照"
-    const pattern2 = /【[^\]]+】([^を。、\s]+)/g;
+    // パターン1: ページ番号参照（「177_【FIX】...」のパターン）
+    // 全ての「NNN_」を参照として抽出
+    const pageNumberPattern = /(\d{3})_/g;
+    let pageNumMatch: RegExpExecArray | null;
+    const extractedPageNumbers = new Set<string>();
     
-    while ((match = pattern2.exec(content)) !== null) {
-      const targetTitle = match[1];
+    while ((pageNumMatch = pageNumberPattern.exec(content)) !== null) {
+      const targetPageNumber = pageNumMatch[1];
+      
+      // 自己参照は除外（pageIdは3桁または9桁）
+      if (targetPageNumber === pageId || targetPageNumber === pageId.slice(-3)) continue;
+      
+      // 重複除外
+      if (extractedPageNumbers.has(targetPageNumber)) continue;
+      extractedPageNumbers.add(targetPageNumber);
       
       edges.push({
-        id: `${pageId}-ref-title-${this.hashString(targetTitle)}`,
+        id: `${pageId}-ref-page-${targetPageNumber}`,
         from: `page-${pageId}`,
-        to: `page-title-${targetTitle}`,  // 後でpageIdに解決
+        to: `page-${targetPageNumber}`,
         type: 'reference',
         weight: 0.7,
         extractedFrom: 'content',
         metadata: {
-          matchPattern: match[0]
+          matchPattern: `${targetPageNumber}_`
         }
       });
     }
