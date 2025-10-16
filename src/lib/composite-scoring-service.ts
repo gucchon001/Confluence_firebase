@@ -114,7 +114,12 @@ export class CompositeScoringService {
       // 各信号を抽出
       const vectorDistance = result._distance || result._hybridScore || 2.0;
       const bm25Score = result._bm25Score || 0;
-      const titleMatchRatio = result._titleMatchRatio || 0;
+      let titleMatchRatio = result._titleMatchRatio || 0;
+      
+      // Phase 4: タイトル救済検索の結果は超強力ブースト
+      if (result._sourceType === 'title-exact') {
+        titleMatchRatio = Math.max(titleMatchRatio, 0.9); // タイトル救済は最低90%扱い
+      }
       
       // ラベルスコアを計算（キーワードとラベルの一致度）
       const labels: string[] = Array.isArray(result.labels) ? result.labels : [];

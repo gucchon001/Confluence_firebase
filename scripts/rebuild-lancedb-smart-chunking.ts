@@ -28,6 +28,9 @@ const TOKEN_LIMIT = 1024; // 最適化: 8,192 → 1,024トークン（約4,000�
 const CHUNK_SIZE = 1600;  // 最適化: 1,800 → 1,600文字
 const CHUNK_OVERLAP = 200; // 新規追加: 10-15%オーバーラップ（文脈保持）
 
+// Phase 4: タイトル重複埋め込み（ベクトル検索での発見率向上）
+const TITLE_WEIGHT = 3; // タイトルを3回繰り返してベクトル化（重み付け）
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Phase 0A-2: ページ除外フィルタリング定義
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -188,6 +191,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
 
 /**
  * ページを処理（スマート・チャンキング）
+ * Phase 4強化: タイトル重複埋め込みでベクトル検索の精度向上
  */
 async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
   const pageId = page.id;
@@ -208,7 +212,9 @@ async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
       // チャンク分割不要（98%のケース）
       console.log(`   [一括処理] ${title}: ${estimatedTokens}トークン (${plainText.length}文字)`);
       
-      const embedding = await generateEmbedding(plainText);
+      // Phase 4: タイトル重複埋め込み（タイトルを3回繰り返してベクトル検索でヒットしやすくする）
+      const weightedText = `${title}\n\n`.repeat(TITLE_WEIGHT) + plainText;
+      const embedding = await generateEmbedding(weightedText);
       
       records.push({
         id: pageId,
@@ -248,7 +254,9 @@ async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
       
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        const embedding = await generateEmbedding(chunk);
+        // Phase 4: 各チャンクにもタイトルを重複して埋め込む
+        const weightedChunk = `${title}\n\n`.repeat(TITLE_WEIGHT) + chunk;
+        const embedding = await generateEmbedding(weightedChunk);
         
         records.push({
           id: `${pageId}-${i}`,
