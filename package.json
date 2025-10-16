@@ -44,6 +44,7 @@
     "kg:visualize:dot": "tsx scripts/visualize-kg.ts 164 dot",
     "perf:test": "tsx scripts/performance-test-phase-0a-2.ts",
     "lancedb:rebuild": "tsx scripts/rebuild-lancedb-smart-chunking.ts",
+    "lancedb:verify": "tsx scripts/verify-label-filtering.ts",
     "lancedb:analyze": "tsx scripts/analyze-page-sizes.ts",
     "embedding:test": "tsx scripts/test-gemini-embedding-limits.ts",
     "complete-pipeline": "tsx src/scripts/run-complete-pipeline.ts",

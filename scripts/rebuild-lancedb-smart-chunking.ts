@@ -6,6 +6,7 @@
  */
 
 import { OptimizedLanceDBClient } from '../src/lib/optimized-lancedb-client';
+import { EXTENDED_LANCEDB_SCHEMA } from '../src/lib/lancedb-schema-extended';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
@@ -26,6 +27,21 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const TOKEN_LIMIT = 1024; // 最適化: 8,192 → 1,024トークン（約4,000文字）
 const CHUNK_SIZE = 1600;  // 最適化: 1,800 → 1,600文字
 const CHUNK_OVERLAP = 200; // 新規追加: 10-15%オーバーラップ（文脈保持）
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 0A-2: ページ除外フィルタリング定義
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const EXCLUDED_LABELS = ['アーカイブ', 'archive', 'フォルダ', 'スコープ外'];
+const EXCLUDED_TITLE_PATTERNS = [
+  '■要件定義', 
+  'xxx_', 
+  '【削除】', 
+  '【不要】', 
+  '【統合により削除】', 
+  '【機能廃止のため作成停止】', 
+  '【他ツールへ機能切り出しのため作成停止】'
+];
+const MIN_CONTENT_LENGTH = 100;
 
 interface ProcessingStats {
   totalPages: number;
@@ -55,6 +71,42 @@ function stripHtml(html: string): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * ページが除外対象かどうかをチェック
+ * Phase 0A-2: オリジナル設計の除外ロジックを実装
+ */
+function shouldExcludePage(page: any): boolean {
+  // 1. ラベルによる除外
+  const labels = page.metadata?.labels?.results?.map((l: any) => l.name) || [];
+  const hasExcludedLabel = labels.some((label: string) => 
+    EXCLUDED_LABELS.includes(label)
+  );
+  
+  if (hasExcludedLabel) {
+    console.log(`   [除外] ラベル: ${page.title} - ${labels.join(', ')}`);
+    return true;
+  }
+  
+  // 2. タイトルパターンによる除外
+  const hasExcludedTitlePattern = EXCLUDED_TITLE_PATTERNS.some(pattern => 
+    page.title.includes(pattern)
+  );
+  
+  if (hasExcludedTitlePattern) {
+    console.log(`   [除外] タイトル: ${page.title}`);
+    return true;
+  }
+  
+  // 3. コンテンツ長による除外
+  const content = stripHtml(page.body?.storage?.value || '');
+  if (content.length < MIN_CONTENT_LENGTH) {
+    console.log(`   [除外] 短いコンテンツ: ${page.title} (${content.length}文字)`);
+    return true;
+  }
+  
+  return false;
 }
 
 /**
@@ -169,9 +221,20 @@ async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
         charCount: plainText.length,
         chunkIndex: 0,
         totalChunks: 1,
+        labels: (page.metadata?.labels?.results || []).map((l: any) => l.name),
         spaceKey: page.space?.key || CONFLUENCE_SPACE_KEY,
         lastUpdated: page.version?.when || new Date().toISOString(),
-        labels: (page.metadata?.labels?.results || []).map((l: any) => l.name),
+        // Phase 0A-2: StructuredLabelフィールド（Firestore同期前はundefined）
+        structured_category: undefined,
+        structured_domain: undefined,
+        structured_feature: undefined,
+        structured_priority: undefined,
+        structured_status: undefined,
+        structured_version: undefined,
+        structured_tags: undefined,
+        structured_confidence: undefined,
+        structured_content_length: undefined,
+        structured_is_valid: undefined,
       });
       
       stats.noChunkingPages++;
@@ -198,9 +261,20 @@ async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
           charCount: chunk.length,
           chunkIndex: i,
           totalChunks: chunks.length,
+          labels: (page.metadata?.labels?.results || []).map((l: any) => l.name),
           spaceKey: page.space?.key || CONFLUENCE_SPACE_KEY,
           lastUpdated: page.version?.when || new Date().toISOString(),
-          labels: (page.metadata?.labels?.results || []).map((l: any) => l.name),
+          // Phase 0A-2: StructuredLabelフィールド（Firestore同期前はundefined）
+          structured_category: undefined,
+          structured_domain: undefined,
+          structured_feature: undefined,
+          structured_priority: undefined,
+          structured_status: undefined,
+          structured_version: undefined,
+          structured_tags: undefined,
+          structured_confidence: undefined,
+          structured_content_length: undefined,
+          structured_is_valid: undefined,
         });
         
         stats.totalVectors++;
@@ -241,12 +315,20 @@ async function main() {
   // Step 1: Confluenceページ取得
   console.log('📥 Step 1: Confluenceページを取得中...');
   const allPages = await fetchAllPages();
+  console.log(`✅ ${allPages.length}ページ取得完了\n`);
   
-  // Phase 0A-4: 全ページを処理
-  const pages = allPages;
+  // Phase 0A-2: 除外ページのフィルタリング
+  console.log('🚫 Step 1.5: 除外ページのフィルタリング中...\n');
+  const beforeFiltering = allPages.length;
+  const pages = allPages.filter(page => !shouldExcludePage(page));
+  const excludedCount = beforeFiltering - pages.length;
+  
+  console.log(`\n📊 フィルタリング結果:`);
+  console.log(`   取得前: ${beforeFiltering}ページ`);
+  console.log(`   除外: ${excludedCount}ページ (${(excludedCount / beforeFiltering * 100).toFixed(1)}%)`);
+  console.log(`   処理対象: ${pages.length}ページ\n`);
   
   stats.totalPages = pages.length;
-  console.log(`✅ ${pages.length}ページ取得完了\n`);
   
   // Step 2: ページを処理
   console.log('🔄 Step 2: ページを処理中（スマート・チャンキング）...\n');
@@ -334,36 +416,13 @@ async function main() {
     const lancedb = await import('@lancedb/lancedb');
     const db = await lancedb.connect('.lancedb');
     
-    // 最適化されたスキーマ定義
-    // パフォーマンス重視: pageId（WHERE句用）、isChunked（チャンク統合判定）
-    // 型安全性: 厳格なnullable/non-nullable設定
-    const arrow = await import('apache-arrow');
-    const schema = new arrow.Schema([
-      // コアフィールド（すべてnon-nullable）
-      new arrow.Field('id', new arrow.Utf8(), false),
-      new arrow.Field('pageId', new arrow.Utf8(), false),        // WHERE句フィルタリング用
-      new arrow.Field('title', new arrow.Utf8(), false),
-      new arrow.Field('content', new arrow.Utf8(), false),
-      new arrow.Field('vector', new arrow.FixedSizeList(768, new arrow.Field('item', new arrow.Float32())), false),  // Gemini Embedding: 768次元
-      
-      // パフォーマンスフラグ（non-nullable）
-      new arrow.Field('isChunked', new arrow.Bool(), false),     // チャンク統合判定フラグ
-      
-      // チャンク情報（non-nullable: 0/1でデフォルト値）
-      new arrow.Field('chunkIndex', new arrow.Int32(), false),
-      new arrow.Field('totalChunks', new arrow.Int32(), false),
-      
-      // メタデータ（nullable: 空の可能性あり）
-      new arrow.Field('labels', new arrow.List(new arrow.Field('item', new arrow.Utf8())), true),
-      
-      // スペース・更新日時（non-nullable）
-      new arrow.Field('spaceKey', new arrow.Utf8(), false),
-      new arrow.Field('lastUpdated', new arrow.Utf8(), false),
-    ]);
+    // Phase 0A-2: 拡張スキーマを使用（StructuredLabel統合版）
+    // - 基本フィールド + StructuredLabelフィールド
+    // - Firestore統合による高度なフィルタリング・スコアリング対応
     
-    // 最初のバッチでテーブルを作成（スキーマ指定）
+    // 最初のバッチでテーブルを作成（拡張スキーマ指定）
     const firstBatch = validRecords.slice(0, Math.min(100, validRecords.length));
-    const table = await db.createTable('confluence', firstBatch, { schema });
+    const table = await db.createTable('confluence', firstBatch, { schema: EXTENDED_LANCEDB_SCHEMA });
     
     console.log(`   ✅ テーブル作成完了（${firstBatch.length}レコード）`);
     

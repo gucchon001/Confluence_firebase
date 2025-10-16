@@ -247,10 +247,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       if (params.filter) {
         vectorQuery = vectorQuery.where(params.filter);
       }
-      // Phase 0A-2 Performance Optimization: ベクトル検索候補数を最適化（topKの4倍）
-      // パフォーマンス改善: 500件 → 200件（-60%）で検索時間を大幅削減
-      // RRF融合とBM25検索があるため、十分な精度を維持可能
-      vectorResults = await vectorQuery.limit(topK * 4).toArray();
+      // Phase 0A-2 Performance Optimization: ベクトル検索候補数を最適化
+      // Phase 4調整: 検索品質を優先（4倍 → 10倍）
+      // 理由: 期待されるページがベクトル検索で低順位の場合を考慮
+      vectorResults = await vectorQuery.limit(topK * 10).toArray();
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
@@ -296,11 +296,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       // Phase 0A-4: キーワード単位でタイトルマッチング（強化版 + ネガティブワード除去）
       console.log(`[searchLanceDB] Applying enhanced title matching with core keywords: [${finalKeywords.join(', ')}]`);
       vectorResults = vectorResults.map(result => {
-        const title = String(result.title || '').toLowerCase();
-        
-        // 核心キーワードでタイトルマッチング（ネガティブワード除去済み）
-        const matchedKeywords = finalKeywords.filter(kw => title.includes(kw.toLowerCase()));
-        const titleMatchRatio = finalKeywords.length > 0 ? matchedKeywords.length / finalKeywords.length : 0;
+        // 共通関数を使用（重複コード排除）
+        const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(result.title, finalKeywords);
         
         if (matchedKeywords.length > 0) {
           // Phase 0A-4: タイトルマッチ率に応じて超強力なブースト
@@ -365,8 +362,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         console.log(`[Phase 4] タイトルマッチ結果なし - KG拡張をスキップ`);
       }
       
-      // 結果数を制限
-      vectorResults = vectorResults.slice(0, topK * 2); // KG拡張を考慮して少し多めに保持
+      // 結果数を制限（Phase 4調整: BM25結果とマージするため多めに保持）
+      vectorResults = vectorResults.slice(0, topK * 5); // 10倍 → 50件（BM25マージ前）
       console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results after filtering`);
     } catch (err) {
       console.error(`[searchLanceDB] Vector search error: ${err}`);
@@ -577,10 +574,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
               
               // Use Lunr's native BM25 scores (no manual calculation needed)
               bm25Results = lunrResults.map((r: any) => {
-                // Phase 0A-4: タイトルキーワードマッチングスコアを追加（核心キーワード使用）
-                const title = String(r.title || '').toLowerCase();
-                const matchedKeywords = finalKeywords.filter(kw => title.includes(kw.toLowerCase()));
-                const titleMatchRatio = finalKeywords.length > 0 ? matchedKeywords.length / finalKeywords.length : 0;
+                // 共通関数を使用（重複コード排除）
+                const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(r.title, finalKeywords);
                 
                 // タイトルマッチに応じてBM25スコアを超強力ブースト（Phase 4強化）
                 let boostedScore = r.score || 1.0;
@@ -864,18 +859,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     console.log(`[searchLanceDB] Combined results: ${vectorResults.length} total`);
     
     // 複合スコアでソート済みなので、上位を取得
-    let finalResults = combinedResults.slice(0, topK);
+    // Phase 4最適化: 結果数制限を緩和（topK * 3）
+    // 理由: 重複排除とフィルタリング後に十分な結果を確保
+    let finalResults = combinedResults.slice(0, topK * 3);
     
-    // 最終的なラベルフィルタリングを適用
-    if (excludeLabels.length > 0) {
-      const beforeFinal = finalResults.length;
-      finalResults = finalResults.filter((result: any) => {
-        return !labelManager.isExcluded(result.labels, excludeLabels);
-      });
-      if (beforeFinal !== finalResults.length) {
-        console.log(`[searchLanceDB] Excluded ${beforeFinal - finalResults.length} results due to final label filtering`);
-      }
-    }
+    // ラベルフィルタリングは既にベクトル・BM25で実行済みのため削除（重複処理の排除）
+    // 最終的なフィルタリングは不要（パフォーマンス最適化）
     
     console.log(`[searchLanceDB] Returning top ${finalResults.length} results based on hybrid score`);
     
@@ -999,6 +988,25 @@ function filterInvalidPagesByContent(results: any[]): any[] {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 共通ヘルパー関数（重複コード排除）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * タイトルキーワードマッチングを計算（共通関数）
+ * ベクトル・BM25両方で使用
+ */
+function calculateTitleMatch(title: string, keywords: string[]): {
+  matchedKeywords: string[];
+  titleMatchRatio: number;
+} {
+  const titleLower = String(title || '').toLowerCase();
+  const matchedKeywords = keywords.filter(kw => titleLower.includes(kw.toLowerCase()));
+  const titleMatchRatio = keywords.length > 0 ? matchedKeywords.length / keywords.length : 0;
+  
+  return { matchedKeywords, titleMatchRatio };
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Phase 4: Knowledge Graph統合
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1007,16 +1015,26 @@ function filterInvalidPagesByContent(results: any[]): any[] {
  */
 async function fetchPageFromLanceDB(tbl: any, pageId: string): Promise<any | null> {
   try {
-    // pageIdでフィルタリング
+    // pageIdは数値型なのでクォート不要
+    const pageIdNum = parseInt(pageId);
+    
+    if (isNaN(pageIdNum)) {
+      console.error(`[fetchPageFromLanceDB] Invalid pageId: ${pageId}`);
+      return null;
+    }
+    
+    // pageIdでフィルタリング（数値型、フィールド名を引用符で囲む）
     const results = await tbl.query()
-      .where(`pageId = '${pageId}'`)
+      .where(`"pageId" = ${pageIdNum}`)
       .limit(1)
       .toArray();
     
     if (results.length > 0) {
+      console.log(`[fetchPageFromLanceDB] Found page ${pageId}: ${results[0].title}`);
       return results[0];
     }
     
+    console.log(`[fetchPageFromLanceDB] Page ${pageId} not found in LanceDB`);
     return null;
   } catch (error) {
     console.error(`[fetchPageFromLanceDB] Error fetching page ${pageId}:`, error);
