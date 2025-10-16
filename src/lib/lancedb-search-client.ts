@@ -542,7 +542,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         // Phase 0A-4: 核心キーワードでBM25検索（ネガティブワード除去済み）
         const core = finalKeywords[0];
         if (core) {
-          const kwCap = Math.min(50, Math.max(10, Math.floor(topK / 3)));
+          // Phase 0A-2改善: kwCapを50→100に増加（検索品質向上）
+          // デフォルトで100件、最小20件を保証
+          const kwCap = Math.max(100, Math.floor(topK * 2));
           
           // 核心キーワードでBM25検索を実行
           const searchKeywords = finalKeywords.slice(0, 5); // 上位5つの核心キーワードを使用

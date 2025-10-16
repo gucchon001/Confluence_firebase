@@ -39,7 +39,7 @@ export interface RawSearchResult {
 export interface ProcessedSearchResult {
   id: string;
   pageId?: number;
-  title: string;
+  title: string;  // Required to match LanceDBSearchResult
   content: string;
   isChunked?: boolean;  // Phase 0A-3: チャンク統合判定フラグ
   distance: number;
@@ -66,6 +66,25 @@ export interface ProcessedSearchResult {
     titleContribution?: number;
     labelContribution?: number;
   };
+  // StructuredLabelフィールド
+  structured_category?: string;
+  structured_domain?: string;
+  structured_feature?: string;
+  structured_status?: string;
+  structured_priority?: string;
+  structured_confidence?: number;
+  structured_tags?: string[];
+  structured_version?: string;
+  structured_content_length?: number;
+  structured_is_valid?: boolean;
+  // 検索メタデータフィールド（デバッグ用）
+  keyword?: number;
+  titleScore?: number;  // Renamed from 'title' to avoid conflict
+  labelScore?: number;  // Renamed from 'label' to avoid conflict
+  _titleMatchRatio?: number;
+  _distance?: number;
+  _hybridScore?: number;
+  _sourceType?: string;
 }
 
 /**
@@ -283,6 +302,25 @@ export class UnifiedSearchResultProcessor {
         // Phase 0A-4: Composite Scoringフィールドを保持
         _compositeScore: (result as any)._compositeScore,
         _scoreBreakdown: (result as any)._scoreBreakdown,
+        // StructuredLabelフィールドを保持
+        structured_category: (result as any).structured_category,
+        structured_domain: (result as any).structured_domain,
+        structured_feature: (result as any).structured_feature,
+        structured_status: (result as any).structured_status,
+        structured_priority: (result as any).structured_priority,
+        structured_confidence: (result as any).structured_confidence,
+        structured_tags: (result as any).structured_tags,
+        structured_version: (result as any).structured_version,
+        structured_content_length: (result as any).structured_content_length,
+        structured_is_valid: (result as any).structured_is_valid,
+        // 検索メタデータフィールドを保持（デバッグ用）
+        keyword: (result as any).keyword,
+        titleScore: (result as any).title,  // Renamed to avoid conflict with title property
+        labelScore: (result as any).label,  // Renamed to avoid conflict
+        _titleMatchRatio: (result as any)._titleMatchRatio,
+        _distance: result._distance,
+        _hybridScore: result._hybridScore,
+        _sourceType: result._sourceType,
       };
     });
   }

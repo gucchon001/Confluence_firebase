@@ -43,15 +43,16 @@ export interface CompositeScoreConfig {
 }
 
 const DEFAULT_CONFIG: CompositeScoreConfig = {
-  // Phase 4実装: KGブーストを追加
-  // BM25（38%）+ ベクトル（27%）+ タイトル（20%）+ ラベル（10%）+ KG（5%）= 100%
-  vectorWeight: 0.27,   // ベクトル: 27%（セマンティック検索）
-  bm25Weight: 0.38,     // BM25: 38%（キーワード完全一致を最優先）
-  titleWeight: 0.20,    // タイトル: 20%（ブースト内で強化済み）
-  labelWeight: 0.10,    // ラベル: 10%（補助）
+  // Phase 0A-2改善: ベクトル空間変化対策
+  // BM25（50%）+ タイトル（25%）+ ラベル（15%）+ ベクトル（5%）+ KG（5%）= 100%
+  // 理由: 70ページ除外によりベクトル空間が変化したため、BM25とタイトルを最優先
+  vectorWeight: 0.05,   // ベクトル: 5%（最小化：空間変化の影響を軽減）
+  bm25Weight: 0.50,     // BM25: 50%（最優先：キーワード完全一致）
+  titleWeight: 0.25,    // タイトル: 25%（強化：タイトルマッチを重視）
+  labelWeight: 0.15,    // ラベル: 15%（強化：StructuredLabel活用）
   kgWeight: 0.05,       // KG: 5%（Phase 4: 参照関係ブースト）
   maxVectorDistance: 2.0,
-  maxBm25Score: 10.0,
+  maxBm25Score: 30.0,   // 10.0→30.0: BM25高スコア（keyword=22など）を適切に評価
 };
 
 /**
@@ -113,7 +114,9 @@ export class CompositeScoringService {
     const scoredResults = results.map(result => {
       // 各信号を抽出
       const vectorDistance = result._distance || result._hybridScore || 2.0;
-      const bm25Score = result._bm25Score || 0;
+      // BUG FIX: BM25スコアは複数のフィールドに保存されている可能性がある
+      // keyword (Lunr), _bm25Score (BM25), _keywordScore (hybrid)
+      const bm25Score = result.keyword || result._bm25Score || result._keywordScore || 0;
       let titleMatchRatio = result._titleMatchRatio || 0;
       
       // Phase 4: タイトル救済検索の結果は超強力ブースト
