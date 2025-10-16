@@ -58,6 +58,14 @@ export interface ProcessedSearchResult {
   scoreKind?: 'vector' | 'bm25' | 'keyword' | 'hybrid';
   scoreRaw?: number;
   scoreText?: string;
+  // Phase 0A-4: Composite Scoringフィールドを保持
+  _compositeScore?: number;
+  _scoreBreakdown?: {
+    vectorContribution?: number;
+    bm25Contribution?: number;
+    titleContribution?: number;
+    labelContribution?: number;
+  };
 }
 
 /**
@@ -271,7 +279,10 @@ export class UnifiedSearchResultProcessor {
         rrfScore: result._rrfScore || 0,
         scoreKind,
         scoreRaw,
-        scoreText
+        scoreText,
+        // Phase 0A-4: Composite Scoringフィールドを保持
+        _compositeScore: (result as any)._compositeScore,
+        _scoreBreakdown: (result as any)._scoreBreakdown,
       };
     });
   }
