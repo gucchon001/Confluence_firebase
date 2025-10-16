@@ -15,7 +15,7 @@
 - **[hybrid-search-flow-and-parallelization-analysis.md](./architecture/hybrid-search-flow-and-parallelization-analysis.md)** - ハイブリッド検索並行実行分析
 - **[enhanced-hybrid-search-design.md](./architecture/enhanced-hybrid-search-design.md)** - 強化版ハイブリッド検索設計
 - **[search-system-comprehensive-guide.md](./architecture/search-system-comprehensive-guide.md)** - 検索システム総合ガイド
-- **[lancedb-firestore-integration-design.md](./architecture/lancedb-firestore-integration-design.md)** - LanceDB-Firestore統合設計
+- **[lancedb-firestore-integration-design.md](./architecture/lancedb-firestore-integration-design.md)** 🔧 **更新** - LanceDB-Firestore統合設計（ページ除外フィルタリング追加）
 - **[prompt-design.md](./architecture/prompt-design.md)** - プロンプト設計
 - **[ui-ux-performance-strategy.md](./architecture/ui-ux-performance-strategy.md)** - UI/UXパフォーマンス戦略
 
@@ -37,6 +37,10 @@
 - **[kg-contribution-analysis-report.md](./implementation/kg-contribution-analysis-report.md)** - ナレッジグラフ貢献度分析
 - **[phase-1-4-implementation-status.md](./implementation/phase-1-4-implementation-status.md)** - Phase 1-4実装状況
 - **[phase-1-3-spec-compliance.md](./implementation/phase-1-3-spec-compliance.md)** - Phase 1-3仕様準拠状況
+
+#### Phase 0A-2 データ品質管理
+- **[lancedb-label-filtering-specification.md](./implementation/lancedb-label-filtering-specification.md)** 🔧 **NEW** - ラベルフィルタリング仕様
+- **[lancedb-label-filtering-fix-report.md](./implementation/lancedb-label-filtering-fix-report.md)** ✅ **NEW** - フィルタリング修正完了報告
 
 #### システム設計・仕様
 - **[error-handling.md](./implementation/error-handling.md)** - エラーハンドリング仕様

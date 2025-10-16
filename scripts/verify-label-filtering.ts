@@ -39,7 +39,7 @@ async function main() {
     console.log('🚫 除外ラベルチェック中...\n');
     
     const excludedLabelRecords = allRecords.filter((r: any) => {
-      const labels = r.labels || [];
+      const labels = Array.isArray(r.labels) ? r.labels : [];
       return labels.some((label: string) => 
         EXCLUDED_LABELS.includes(label)
       );
@@ -116,7 +116,7 @@ async function main() {
     let noLabelCount = 0;
     
     allRecords.forEach((r: any) => {
-      const labels = r.labels || [];
+      const labels = Array.isArray(r.labels) ? r.labels : [];
       if (labels.length === 0) {
         noLabelCount++;
       } else {
