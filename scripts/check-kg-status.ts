@@ -1,79 +1,104 @@
 /**
- * Knowledge Graph構築状況の確認
+ * KGの全体的な状態を確認
  */
 
-import { kgStorageService } from '../src/lib/kg-storage-service';
-import * as admin from 'firebase-admin';
+import { KGStorageService } from '../src/lib/kg-storage-service';
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(
-      require('../keys/firebase-adminsdk-key.json')
-    )
-  });
-}
-
-async function main() {
-  console.log('='.repeat(100));
-  console.log('Knowledge Graph 構築状況確認');
-  console.log('='.repeat(100));
-  console.log();
+async function checkKGStatus() {
+  console.log('\n🔍 KGの全体状態を確認\n');
   
-  // KG統計情報
-  const stats = await kgStorageService.getStats();
+  const kgStorage = new KGStorageService();
   
-  console.log('📊 Knowledge Graph統計:');
-  console.log(`   総ノード数: ${stats.nodeCount.toLocaleString()}件`);
-  console.log(`   総エッジ数: ${stats.edgeCount.toLocaleString()}件`);
+  // 全ノード取得
+  const stats = await kgStorage.getStats();
+  console.log('📊 KG統計情報:');
+  console.log(`  ノード数: ${stats.nodeCount}`);
+  console.log(`  エッジ数: ${stats.edgeCount}\n`);
   
-  if (stats.nodeCount > 0) {
-    console.log(`   平均次数: ${(stats.edgeCount / stats.nodeCount).toFixed(2)}本/ノード`);
+  // サンプルノードを取得
+  console.log('📋 サンプルノード（最初の10件）:\n');
+  
+  // Firestoreから直接ノードを取得
+  const { getApp, getApps } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  
+  // 既存のアプリを使用
+  const app = getApps().length > 0 ? getApp() : (() => {
+    throw new Error('Firebase app not initialized');
+  })();
+  
+  const db = getFirestore(app);
+  
+  // ノードコレクション確認
+  const nodesSnapshot = await db.collection('knowledge_graph_nodes').limit(10).get();
+  
+  if (nodesSnapshot.empty) {
+    console.log('❌ ノードが存在しません！\n');
+  } else {
+    nodesSnapshot.forEach((doc, idx) => {
+      const data = doc.data();
+      console.log(`${idx + 1}. ID: ${doc.id}`);
+      console.log(`   タイトル: ${data.title || 'N/A'}`);
+      console.log(`   pageId: ${data.pageId || 'N/A'}`);
+      console.log(`   タイプ: ${data.type || 'N/A'}\n`);
+    });
   }
   
-  console.log();
+  // エッジコレクション確認
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  console.log('📋 サンプルエッジ（最初の10件）:\n');
   
-  if (stats.nodeCount === 0) {
-    console.log('❌ Knowledge Graphが構築されていません！');
-    console.log();
-    console.log('原因:');
-    console.log('   1. KGビルドスクリプトが未実行');
-    console.log('   2. Firestoreの kg_nodes / kg_edges コレクションが空');
-    console.log();
-    console.log('対処:');
-    console.log('   1. npm run kg:build を実行してKGを構築');
-    console.log('   2. または、KG拡張機能を無効化してパフォーマンス改善');
-    return;
+  const edgesSnapshot = await db.collection('knowledge_graph_edges').limit(10).get();
+  
+  if (edgesSnapshot.empty) {
+    console.log('❌ エッジが存在しません！\n');
+  } else {
+    edgesSnapshot.forEach((doc, idx) => {
+      const data = doc.data();
+      console.log(`${idx + 1}. ${data.source || 'N/A'} → ${data.target || 'N/A'}`);
+      console.log(`   タイプ: ${data.type || 'N/A'}, 重み: ${data.weight || 'N/A'}\n`);
+    });
   }
   
-  // サンプルノード表示
-  console.log('📄 サンプルKGノード（最初の5件）:');
-  const db = admin.firestore();
-  const nodesSnapshot = await db.collection('kg_nodes').limit(5).get();
+  // 特定のページID（164, 177）を検索
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  console.log('🔍 164と177を含むノードを検索:\n');
   
-  nodesSnapshot.docs.forEach((doc, i) => {
-    const data = doc.data();
-    console.log(`\n${i + 1}. pageId: ${doc.id}`);
-    console.log(`   title: ${data.title || 'N/A'}`);
-    console.log(`   domain: ${data.domain || 'N/A'}`);
-    console.log(`   tags: ${data.tags?.join(', ') || 'N/A'}`);
-  });
+  const searchIds = ['164', '168', '177', '718373062', '704053518', '804094117'];
   
-  console.log();
+  for (const id of searchIds) {
+    const nodeDoc = await db.collection('knowledge_graph_nodes').doc(id).get();
+    if (nodeDoc.exists) {
+      const data = nodeDoc.data();
+      console.log(`✅ ノード "${id}" が見つかりました`);
+      console.log(`   タイトル: ${data?.title || 'N/A'}`);
+      console.log(`   pageId: ${data?.pageId || 'N/A'}\n`);
+    }
+  }
   
-  // サンプルエッジ表示
-  console.log('🔗 サンプルKGエッジ（最初の5件）:');
-  const edgesSnapshot = await db.collection('kg_edges').limit(5).get();
+  // タイトルで検索
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  console.log('🔍 タイトルに "164" または "教室削除" を含むノードを検索:\n');
   
-  edgesSnapshot.docs.forEach((doc, i) => {
-    const data = doc.data();
-    console.log(`\n${i + 1}. ${data.sourcePageId} → ${data.targetPageId}`);
-    console.log(`   edgeType: ${data.edgeType}`);
-    console.log(`   confidence: ${data.confidence?.toFixed(2) || 'N/A'}`);
-  });
+  const titleQuery = await db.collection('knowledge_graph_nodes')
+    .where('title', '>=', '164')
+    .where('title', '<=', '164\uf8ff')
+    .limit(5)
+    .get();
   
-  console.log();
-  console.log('='.repeat(100));
+  if (titleQuery.empty) {
+    console.log('❌ タイトルに "164" を含むノードが見つかりません\n');
+  } else {
+    titleQuery.forEach((doc, idx) => {
+      const data = doc.data();
+      console.log(`${idx + 1}. ID: ${doc.id}, タイトル: ${data.title}\n`);
+    });
+  }
+  
+  process.exit(0);
 }
 
-main().catch(console.error);
-
+checkKGStatus().catch(error => {
+  console.error('\n❌ エラー:', error);
+  process.exit(1);
+});
