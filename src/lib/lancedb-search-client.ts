@@ -490,19 +490,19 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       // BM25結果の後処理（ラベルフィルタリング）
       try {
         if (bm25Results.length > 0 && excludeLabels.length > 0) {
-          const beforeBm25 = bm25Results.length;
-          bm25Results = bm25Results.filter((result: any) => {
-            return !labelManager.isExcluded(result.labels, excludeLabels);
-          });
-          console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
-        }
-        
+            const beforeBm25 = bm25Results.length;
+            bm25Results = bm25Results.filter((result: any) => {
+              return !labelManager.isExcluded(result.labels, excludeLabels);
+            });
+            console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
+          }
+          
         // Phase 5: BM25結果を候補にマージ（既に並列実行済み）
         console.log(`[searchLanceDB] Merging ${bm25Results.length} BM25 results into candidates`);
-        
-        let added = 0;
-        for (const row of bm25Results) {
-          if (!resultsWithHybridScore.some(r => r.id === row.id)) {
+          
+          let added = 0;
+          for (const row of bm25Results) {
+            if (!resultsWithHybridScore.some(r => r.id === row.id)) {
             // BM25結果にも calculateKeywordScore を適用
               // labelsを配列として正規化
               const normalizedLabels = Array.isArray(row.labels) 
