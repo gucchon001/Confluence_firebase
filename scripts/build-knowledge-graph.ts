@@ -91,14 +91,20 @@ async function main() {
     const pageNodes: KGNode[] = pages.map(page => {
       const label = labelsMap.get(page.pageId);
       
-      return {
+      const node: KGNode = {
         id: `page-${page.pageId}`,
         type: 'page' as const,
         name: page.title,
         pageId: page.pageId,
-        structuredLabel: label,
         importance: 1.0  // 初期値（PageRankは後で計算）
       };
+      
+      // structuredLabelがある場合のみ追加（Firestoreはundefinedを許可しない）
+      if (label) {
+        node.structuredLabel = label;
+      }
+      
+      return node;
     });
     
     console.log(`✅ ${pageNodes.length}件のページノード構築完了\n`);
