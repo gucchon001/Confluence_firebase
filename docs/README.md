@@ -10,7 +10,7 @@
 #### 現行システム
 - **[blueprint.md](./architecture/blueprint.md)** - プロジェクト概要と全体設計
 - **[data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - LanceDBデータフロー図
-- **[current-hybrid-search-flow.md](./architecture/current-hybrid-search-flow.md)** ✅ **最新** - 現在のハイブリッド検索フロー分析
+- **[hybrid-search-logic-current.md](./architecture/hybrid-search-logic-current.md)** ✅ **最新** - ハイブリッド検索ロジック（Phase 0A-4 + BM25修正版）
 - **[hybrid-search-contract.md](./architecture/hybrid-search-contract.md)** - ハイブリッド検索契約
 - **[hybrid-search-flow-and-parallelization-analysis.md](./architecture/hybrid-search-flow-and-parallelization-analysis.md)** - ハイブリッド検索並行実行分析
 - **[enhanced-hybrid-search-design.md](./architecture/enhanced-hybrid-search-design.md)** - 強化版ハイブリッド検索設計
@@ -31,9 +31,11 @@
 ### 🛠️ [implementation/](./implementation/) - 実装・開発
 具体的な実装方法と開発に関するドキュメント
 
-#### Phase 0A-4 完了状況
-- **[phase-0a-4-completion-report.md](./implementation/phase-0a-4-completion-report.md)** ✅ **最新** - Phase 0A-4完了レポート
-- **[current-search-quality-report.md](./implementation/current-search-quality-report.md)** ✅ **最新** - 現在の検索品質レポート
+#### Phase 完了状況
+- **[phase-0a-4-completion-report.md](./implementation/phase-0a-4-completion-report.md)** ✅ - Phase 0A-4完了レポート
+- **[phase-4-kg-integration-completion-report.md](./implementation/phase-4-kg-integration-completion-report.md)** ✅ **最新** - Phase 4: KG統合完了レポート（タイトル重複埋め込み含む）
+- **[phase-4-kg-integration-plan.md](./implementation/phase-4-kg-integration-plan.md)** - Phase 4: KG統合計画
+- **[current-search-quality-report.md](./implementation/current-search-quality-report.md)** ✅ - 現在の検索品質レポート
 - **[kg-contribution-analysis-report.md](./implementation/kg-contribution-analysis-report.md)** - ナレッジグラフ貢献度分析
 - **[phase-1-4-implementation-status.md](./implementation/phase-1-4-implementation-status.md)** - Phase 1-4実装状況
 - **[phase-1-3-spec-compliance.md](./implementation/phase-1-3-spec-compliance.md)** - Phase 1-3仕様準拠状況
@@ -136,11 +138,12 @@
 6. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
 
 ### 開発者向け
-1. **[architecture/current-hybrid-search-flow.md](./architecture/current-hybrid-search-flow.md)** - 現在のハイブリッド検索フロー
-2. **[architecture/genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
-3. **[implementation/error-handling.md](./implementation/error-handling.md)** - エラーハンドリング
-4. **[implementation/label-system-api.md](./implementation/label-system-api.md)** - ラベルシステムAPI
-5. **[implementation/lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様
+1. **[architecture/hybrid-search-logic-current.md](./architecture/hybrid-search-logic-current.md)** ✅ - 現在のハイブリッド検索ロジック（最新版）
+2. **[implementation/phase-4-kg-integration-completion-report.md](./implementation/phase-4-kg-integration-completion-report.md)** - Phase 4: KG統合完了レポート
+3. **[architecture/genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
+4. **[implementation/error-handling.md](./implementation/error-handling.md)** - エラーハンドリング
+5. **[implementation/label-system-api.md](./implementation/label-system-api.md)** - ラベルシステムAPI
+6. **[implementation/lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様
 
 ## 📝 ドキュメント更新
 
