@@ -26,6 +26,7 @@
 - **[label-domain-kg-integration.md](./architecture/label-domain-kg-integration.md)** - ラベル・ドメイン知識・KG統合
 
 #### 将来計画
+- **[phase-5-improvement-plan.md](./architecture/phase-5-improvement-plan.md)** 🚀 **NEW** - Phase 5: パフォーマンス最適化計画（レスポンス速度85%削減）
 - **[foundation-first-strategy.md](./architecture/foundation-first-strategy.md)** 🔥 - 基盤強化優先戦略（ラベル+KG → 横断拡張）
 - **[genkit-migration-and-expansion-roadmap.md](./architecture/genkit-migration-and-expansion-roadmap.md)** ⭐ - Genkit移行と拡張ロードマップ（6.5ヶ月計画）
 - **[genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
