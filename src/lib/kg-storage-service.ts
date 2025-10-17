@@ -16,11 +16,17 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // Phase 5最適化: Firestoreタイムアウト設定を調整（品質影響なし）
-db.settings({
-  ignoreUndefinedProperties: true,
-  // タイムアウトを30秒に延長（デフォルト10秒から）
-  // KG拡張の大量クエリに対応
-});
+// Note: settings()は既に初期化済みの場合はエラーになるため、try-catchで保護
+try {
+  db.settings({
+    ignoreUndefinedProperties: true,
+    // タイムアウトを30秒に延長（デフォルト10秒から）
+    // KG拡張の大量クエリに対応
+  });
+} catch (error) {
+  // 既に初期化済みの場合はスキップ（正常動作）
+  console.log('[KGStorage] Firestore settings already configured');
+}
 
 const NODES_COLLECTION = 'knowledge_graph_nodes';
 const EDGES_COLLECTION = 'knowledge_graph_edges';
