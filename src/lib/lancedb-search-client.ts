@@ -239,136 +239,81 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     console.log('[searchLanceDB] Using labelFilters:', labelFilters);
     console.log('[searchLanceDB] Excluding labels:', excludeLabels);
 
-    // Phase 0A-4: タイトル検索を最優先化
-    // 最適化: BM25結果に対してタイトルブーストを強化（全レコード取得を避ける）
-
-    // 1. ベクトル検索の実行
-        try {
-          let vectorQuery = tbl.search(vector);
-          if (params.filter) {
-            vectorQuery = vectorQuery.where(params.filter);
-          }
-      // Phase 0A-2 Performance Optimization: ベクトル検索候補数を最適化
-      // Phase 4調整: 検索品質を優先（4倍 → 10倍）
-      // 理由: 期待されるページがベクトル検索で低順位の場合を考慮
-      vectorResults = await vectorQuery.limit(topK * 10).toArray();
-    console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
-      
-    // 距離閾値でフィルタリング（ベクトル検索の有効化）
-    const distanceThreshold = params.maxDistance || 2.0; // 検索品質を元に戻す: 網羅性を重視
-    const qualityThreshold = params.qualityThreshold || 0.0; // 最適化: 0.1 -> 0.0 (品質閾値を無効化)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Phase 5: ベクトル検索とBM25検索の並列実行（品質影響なし）
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
-    console.log(`[searchLanceDB] Using distance threshold: ${distanceThreshold}, quality threshold: ${qualityThreshold}`);
-      
-      if (distanceThreshold < 2.0) {
-        const beforeCount = vectorResults.length;
-        vectorResults = vectorResults.filter(result => {
-          const distance = result._distance || 0;
-          return distance <= distanceThreshold;
-        });
-        console.log(`[searchLanceDB] Applied distance threshold ${distanceThreshold}: ${beforeCount} -> ${vectorResults.length} results`);
-      }
-      
-      // 品質閾値でフィルタリング（高品質結果のみ）
-      if (qualityThreshold < distanceThreshold) {
-        const beforeCount = vectorResults.length;
-        vectorResults = vectorResults.filter(result => {
-          const distance = result._distance || 0;
-          return distance >= qualityThreshold;
-        });
-        console.log(`[searchLanceDB] Applied quality threshold ${qualityThreshold}: ${beforeCount} -> ${vectorResults.length} results`);
-      }
-      
-      // ラベルフィルタリングを適用（処理速度向上）
-      if (excludeLabels.length > 0) {
-        const beforeCount = vectorResults.length;
-        vectorResults = vectorResults.filter(result => {
-          if (labelManager.isExcluded(result.labels, excludeLabels)) {
-            console.log(`[searchLanceDB] Excluded result due to label filter: ${result.title}`);
-            return false;
-          }
-          return true;
-        });
-        console.log(`[searchLanceDB] Excluded ${beforeCount - vectorResults.length} results due to label filtering`);
-      }
-      
-      
-      // タイトル重みを適用（ベクトル検索結果の調整）
-      // Phase 0A-4: キーワード単位でタイトルマッチング（強化版 + ネガティブワード除去）
-      console.log(`[searchLanceDB] Applying enhanced title matching with core keywords: [${finalKeywords.join(', ')}]`);
-      vectorResults = vectorResults.map(result => {
-        // 共通関数を使用（重複コード排除）
-        const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(result.title, finalKeywords);
-        
-        if (matchedKeywords.length > 0) {
-          // Phase 0A-4: タイトルマッチ率に応じて超強力なブースト
-          let boostFactor = 1.0;
-          if (titleMatchRatio >= 0.66) {
-            boostFactor = 10.0; // 2/3以上マッチ → 10倍ブースト（Phase 4強化）
-          } else if (titleMatchRatio >= 0.33) {
-            boostFactor = 5.0;  // 1/3以上マッチ → 5倍ブースト（Phase 4強化）
-          }
-          
-          const adjustedDistance = result._distance * (1 / boostFactor);
-          
-          return { 
-            ...result, 
-            _distance: adjustedDistance, 
-            _titleBoosted: true,
-            _titleMatchedKeywords: matchedKeywords.length,
-            _titleMatchRatio: titleMatchRatio
-          };
-        }
-        return result;
-      });
-      console.log(`[searchLanceDB] Applied title boost to ${vectorResults.filter(r => r._titleBoosted).length} results (keyword-based matching)`);
-      
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      // Phase 4: タイトルマッチ結果からKG拡張
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    console.log('[Phase 5] 🚀 並列検索開始: ベクトル検索 + BM25検索\n');
+    const parallelSearchStart = Date.now();
+    
+    // Promise.allSettledで並列実行（一方が失敗しても継続）
+    const [vectorSearchResult, bm25SearchResult] = await Promise.allSettled([
+      executeVectorSearch(tbl, vector, params, finalKeywords, excludeLabels, topK),
+      executeBM25Search(tbl, params, finalKeywords, topK)
+    ]);
+    
+    // 結果を取得（失敗時は空配列）
+    vectorResults = vectorSearchResult.status === 'fulfilled' ? vectorSearchResult.value : [];
+    bm25Results = bm25SearchResult.status === 'fulfilled' ? bm25SearchResult.value : [];
+    
+    const parallelSearchTime = Date.now() - parallelSearchStart;
+    console.log(`[Phase 5] ✅ 並列検索完了: ${parallelSearchTime}ms`);
+    console.log(`[Phase 5]    - Vector: ${vectorResults.length}件 (${vectorSearchResult.status})`);
+    console.log(`[Phase 5]    - BM25: ${bm25Results.length}件 (${bm25SearchResult.status})\n`);
+    
+    // フォールバック: 両方失敗した場合は警告
+    if (vectorSearchResult.status === 'rejected' && bm25SearchResult.status === 'rejected') {
+      console.error('[Phase 5] ❌ 並列検索が全て失敗しました');
+      console.error('[Phase 5] Vector error:', vectorSearchResult.reason);
+      console.error('[Phase 5] BM25 error:', bm25SearchResult.reason);
+      // 空の結果で継続（エラーを投げない）
+    }
+    
+    // Phase 5: ベクトル検索の後処理
+    // フィルタリング・ブーストは既にexecuteVectorSearch内で実行済み
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Phase 4: タイトルマッチ結果からKG拡張
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    try {
       const titleMatchedResults = vectorResults.filter(r => r._titleBoosted);
       
       if (titleMatchedResults.length > 0) {
-        try {
-          console.log(`\n[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-          console.log(`[Phase 4] KG拡張開始: ${titleMatchedResults.length}件のタイトルマッチ結果`);
-          
-          const kgExpandedResults = await expandTitleResultsWithKG(
-            titleMatchedResults,
-            tbl,
-            {
-              maxReferences: 2,
-              minWeight: 0.7
-            }
-          );
-          
-          // KG拡張結果を既存の結果にマージ
-          const existingIds = new Set(vectorResults.map(r => r.id));
-          let kgAddedCount = 0;
-          
-          for (const kgResult of kgExpandedResults) {
-            if (!existingIds.has(kgResult.id)) {
-              vectorResults.push(kgResult);
-              kgAddedCount++;
-            }
+        console.log(`\n[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`[Phase 4] KG拡張開始: ${titleMatchedResults.length}件のタイトルマッチ結果`);
+        
+        const kgExpandedResults = await expandTitleResultsWithKG(
+          titleMatchedResults,
+          tbl,
+          {
+            maxReferences: 2,
+            minWeight: 0.7
           }
-          
-          console.log(`[Phase 4] KG拡張完了: +${kgAddedCount}件追加（合計: ${vectorResults.length}件）`);
-          console.log(`[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-        } catch (error) {
-          console.error(`[Phase 4] KG拡張エラー:`, error);
-          // エラー時も検索は継続
+        );
+        
+        // KG拡張結果を既存の結果にマージ
+        const existingIds = new Set(vectorResults.map(r => r.id));
+        let kgAddedCount = 0;
+        
+        for (const kgResult of kgExpandedResults) {
+          if (!existingIds.has(kgResult.id)) {
+            vectorResults.push(kgResult);
+            kgAddedCount++;
+          }
         }
+        
+        console.log(`[Phase 4] KG拡張完了: +${kgAddedCount}件追加（合計: ${vectorResults.length}件）`);
+        console.log(`[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
       } else {
         console.log(`[Phase 4] タイトルマッチ結果なし - KG拡張をスキップ`);
       }
       
       // 結果数を制限（Phase 4調整: BM25結果とマージするため多めに保持）
       vectorResults = vectorResults.slice(0, topK * 5); // 10倍 → 50件（BM25マージ前）
-      console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results after filtering`);
+      console.log(`[searchLanceDB] Vector search results after KG: ${vectorResults.length}`);
     } catch (err) {
-      console.error(`[searchLanceDB] Vector search error: ${err}`);
-      vectorResults = [];
+      console.error(`[searchLanceDB] KG expansion error: ${err}`);
+      // エラー時もベクトル検索結果は保持
     }
 
     // 1.5 フォールバック: ベクトル検索が0件でフィルタがある場合、フィルタのみで取得
@@ -538,208 +483,27 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           r._hybridScore = (r._hybridScore ?? r._distance) - 0.05;
         }
       }
-      // 簡易BM25: タイトルに対してBM25風スコアを計算し、候補に合流
+      
+      // Phase 5: BM25検索は既にexecuteBM25Search関数で並列実行済み
+      // bm25Resultsは既に設定済みのため、古いBM25検索コードは削除
+      
+      // BM25結果の後処理（ラベルフィルタリング）
       try {
-        // Phase 0A-4: 核心キーワードでBM25検索（ネガティブワード除去済み）
-        const core = finalKeywords[0];
-        if (core) {
-          // Phase 0A-2改善: kwCapを50→100に増加（検索品質向上）
-          // デフォルトで100件、最小20件を保証
-          const kwCap = Math.max(100, Math.floor(topK * 2));
-          
-          // 核心キーワードでBM25検索を実行
-          const searchKeywords = finalKeywords.slice(0, 5); // 上位5つの核心キーワードを使用
-          
-          // クエリ依存のキーワード注入は行わない（汎用ルールに統一）
-          
-          console.log(`[searchLanceDB] BM25 search keywords (core only): ${searchKeywords.join(', ')}`);
-          
-          // Use Lunr inverted index if available, otherwise fall back to LIKE search
-          if (params.useLunrIndex && lunrInitializer.isReady()) {
-            try {
-              // Phase 0A-4改善: 複数キーワードでBM25検索（複合語対策）
-              // 各キーワードを個別に検索し、結果を統合
-              const allLunrResults: any[] = [];
-              const processedIds = new Set<string>();
-              
-              for (const keyword of searchKeywords) {
-                const tokenizedQuery = await tokenizeJapaneseText(keyword);
-                console.log(`[searchLanceDB] Lunr search for '${keyword}' -> '${tokenizedQuery}'`);
-                
-                const keywordResults = await lunrSearchClient.searchCandidates(tokenizedQuery, kwCap);
-                console.log(`  Found ${keywordResults.length} results`);
-                
-                // 重複を除いて追加
-                for (const result of keywordResults) {
-                  if (!processedIds.has(result.id)) {
-                    allLunrResults.push(result);
-                    processedIds.add(result.id);
-                  }
-                }
-              }
-              
-              console.log(`[searchLanceDB] Total unique BM25 results: ${allLunrResults.length}`);
-              const lunrResults = allLunrResults;
-              
-              // Use Lunr's native BM25 scores (no manual calculation needed)
-              bm25Results = lunrResults.map((r: any) => {
-                // 共通関数を使用（重複コード排除）
-                const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(r.title, finalKeywords);
-                
-                // タイトルマッチに応じてBM25スコアを超強力ブースト（Phase 4強化）
-            let boostedScore = r.score || 1.0;
-            if (titleMatchRatio >= 0.66) {
-                  boostedScore *= 5.0; // 2/3以上マッチ → 5倍ブースト（Phase 4強化）
-            } else if (titleMatchRatio >= 0.33) {
-                  boostedScore *= 3.0; // 1/3以上マッチ → 3倍ブースト（Phase 4強化）
-            }
-            
-            return {
-                  id: r.id,
-                  title: r.title,
-                  content: r.content,
-                  labels: r.labels,
-                  pageId: r.pageId,
-                  isChunked: r.isChunked,  // Phase 0A-3: チャンク統合判定フラグ
-                  url: r.url,
-                  space_key: r.space_key,
-                  lastUpdated: r.lastUpdated,
-              _bm25Score: boostedScore,
-              _titleMatchRatio: titleMatchRatio,
-              _titleMatchedKeywords: matchedKeywords.length
-            };
+        if (bm25Results.length > 0 && excludeLabels.length > 0) {
+          const beforeBm25 = bm25Results.length;
+          bm25Results = bm25Results.filter((result: any) => {
+            return !labelManager.isExcluded(result.labels, excludeLabels);
           });
-              console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows via Lunr for core='${core}' (using native scores)`);
-            } catch (error) {
-              console.warn(`[searchLanceDB] Lunr search failed, falling back to LIKE search:`, error);
-              // Fall back to LIKE search
-              const esc = core.replace(/'/g, "''");
-              const rows = await tbl.query().where(`title LIKE '%${esc}%'`).limit(kwCap).toArray();
-              const totalDocs = 100000; // Fallback constant
-              const df = Math.max(1, rows.length);
-              const idf = Math.log(1 + (totalDocs - df + 0.5) / (df + 0.5));
-              const k1 = 1.2;
-              const b = 0.75;
-              const avgdl = 12;
-              bm25Results = rows.map((r: any) => {
-                const title = String(r.title || '');
-                const dl = Math.max(1, Array.from(title).length / 2);
-                const tf = (title.match(new RegExp(esc, 'g')) || []).length || 1;
-                const score = idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (dl / avgdl))));
-                return { 
-                  ...r, 
-                  url: r.url,
-                  space_key: r.space_key,
-                  lastUpdated: r.lastUpdated,
-                  _bm25Score: score 
-                };
-              });
-              console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows via LIKE fallback for core='${core}' (idf=${idf.toFixed(3)})`);
-            }
-          } else {
-        // 複数キーワードでLIKE検索を実行（タイトル+本文）
-        const allRows = new Map<string, any>();
-        const collect = async (whereExpr: string) => {
-          const rows = await tbl.query().where(whereExpr).limit(kwCap).toArray();
-          for (const row of rows) {
-            const key = row.id;
-            if (!allRows.has(key)) {
-              allRows.set(key, row);
-            }
-          }
-        };
-
-        for (const keyword of searchKeywords) {
-          const esc = keyword.replace(/'/g, "''");
-          // タイトル
-          await collect(`title LIKE '%${esc}%'`);
-          // 本文
-          await collect(`content LIKE '%${esc}%'`);
+          console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
         }
-            
-            const rows = Array.from(allRows.values());
-            const totalDocs = 100000; // LanceDB Tableにcount APIがないため近似定数
-            
-        // 各キーワードのIDFを計算（単純化したdf推定）
-            const keywordScores = new Map<string, number>();
-            for (const keyword of searchKeywords) {
-          const esc = keyword;
-          const matchingRows = rows.filter(r =>
-            String(r.title || '').includes(esc) || String(r.content || '').includes(esc)
-          );
-              const df = Math.max(1, matchingRows.length);
-              const idf = Math.log(1 + (totalDocs - df + 0.5) / (df + 0.5));
-              keywordScores.set(keyword, idf);
-            }
-            
-            const k1 = 1.2;
-            const b = 0.75;
-        const avgTitleLen = 12; // タイトルの平均語長の近似
-        const avgBodyLen = 800; // 本文の平均語長の近似（ざっくり）
-        const TITLE_WEIGHT = 1.0;
-        const BODY_WEIGHT = 0.6;
-            
-        bm25Results = rows.map((r: any) => {
-              const title = String(r.title || '');
-          const content = String(r.content || '');
-          const titleLen = Math.max(1, Array.from(title).length / 2);
-          const bodyLen = Math.max(1, Math.min(5000, Array.from(content).length) / 2);
-          let totalScore = 0;
-              
-              for (const keyword of searchKeywords) {
-            const safe = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const tfTitle = (title.match(new RegExp(safe, 'g')) || []).length;
-            const tfBody = (content.match(new RegExp(safe, 'g')) || []).length;
-            const idf = keywordScores.get(keyword) || 1;
-
-            if (tfTitle > 0) {
-              const scoreT = idf * ((tfTitle * (k1 + 1)) / (tfTitle + k1 * (1 - b + b * (titleLen / avgTitleLen))));
-              totalScore += TITLE_WEIGHT * scoreT;
-            }
-            if (tfBody > 0) {
-              const scoreB = idf * ((tfBody * (k1 + 1)) / (tfBody + k1 * (1 - b + b * (bodyLen / avgBodyLen))));
-              totalScore += BODY_WEIGHT * scoreB;
-            }
-              }
-
-          // 簡素化されたブーストロジック（パフォーマンス最適化）
-          // フレーズブーストのみ（最も効果的）
-          const rawQuery = (params.query || '').trim();
-          if (rawQuery) {
-            const phrase = rawQuery.replace(/[\s　]+/g, '');
-            const titlePlain = title.replace(/[\s　]+/g, '');
-            const contentPlain = content.replace(/[\s　]+/g, '');
-            const phraseInTitle = titlePlain.includes(phrase);
-            const phraseInBody = contentPlain.includes(phrase);
-            if (phraseInTitle) totalScore += 2.0; // タイトル一致ボーナス
-            if (phraseInBody) totalScore += 0.5;  // 本文一致ボーナス
-          }
-              
-              return { 
-                ...r, 
-                url: r.url,
-                space_key: r.space_key,
-                lastUpdated: r.lastUpdated,
-                _bm25Score: totalScore 
-              };
-            });
-
-        // ラベルフィルタリングをBM25結果にも適用
-          if (excludeLabels.length > 0) {
-            const beforeBm25 = bm25Results.length;
-            bm25Results = bm25Results.filter((result: any) => {
-              return !labelManager.isExcluded(result.labels, excludeLabels);
-            });
-            console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
-          }
-          
-          
-            console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows to candidates for keywords=[${searchKeywords.join(', ')}]`);
-          }
-          let added = 0;
-          for (const row of bm25Results) {
-            if (!resultsWithHybridScore.some(r => r.id === row.id)) {
-              // BM25結果にも calculateKeywordScore を適用
+        
+        // Phase 5: BM25結果を候補にマージ（既に並列実行済み）
+        console.log(`[searchLanceDB] Merging ${bm25Results.length} BM25 results into candidates`);
+        
+        let added = 0;
+        for (const row of bm25Results) {
+          if (!resultsWithHybridScore.some(r => r.id === row.id)) {
+            // BM25結果にも calculateKeywordScore を適用
               // labelsを配列として正規化
               const normalizedLabels = Array.isArray(row.labels) 
                 ? row.labels 
@@ -768,8 +532,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
               added++;
             }
           }
-          console.log(`[searchLanceDB] Added ${added} BM25 rows to candidates for core='${core}'`);
-        }
+          console.log(`[searchLanceDB] Added ${added} BM25 rows to hybrid candidates`);
       } catch (e) {
         console.warn('[searchLanceDB] BM25 merge failed', e);
       }
@@ -1033,6 +796,164 @@ function filterInvalidPagesByContent(results: any[]): any[] {
   }
   
   return validResults;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 5: 並列検索のための関数分離（品質影響なし）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * ベクトル検索を実行（Phase 5: 並列化対応）
+ */
+async function executeVectorSearch(
+  tbl: any,
+  vector: number[],
+  params: LanceDBSearchParams,
+  finalKeywords: string[],
+  excludeLabels: string[],
+  topK: number
+): Promise<any[]> {
+  try {
+    let vectorQuery = tbl.search(vector);
+    if (params.filter) {
+      vectorQuery = vectorQuery.where(params.filter);
+    }
+    
+    let vectorResults = await vectorQuery.limit(topK * 10).toArray();
+    console.log(`[Vector Search] Found ${vectorResults.length} results`);
+    
+    // 距離閾値でフィルタリング
+    const distanceThreshold = params.maxDistance || 2.0;
+    const qualityThreshold = params.qualityThreshold || 0.0;
+    
+    if (distanceThreshold < 2.0) {
+      const beforeCount = vectorResults.length;
+      vectorResults = vectorResults.filter(result => result._distance <= distanceThreshold);
+      console.log(`[Vector Search] Distance filter: ${beforeCount} -> ${vectorResults.length}`);
+    }
+    
+    if (qualityThreshold < distanceThreshold) {
+      const beforeCount = vectorResults.length;
+      vectorResults = vectorResults.filter(result => result._distance >= qualityThreshold);
+      console.log(`[Vector Search] Quality filter: ${beforeCount} -> ${vectorResults.length}`);
+    }
+    
+    // ラベルフィルタリング
+    if (excludeLabels.length > 0) {
+      const beforeCount = vectorResults.length;
+      vectorResults = vectorResults.filter(result => {
+        return !labelManager.isExcluded(result.labels, excludeLabels);
+      });
+      console.log(`[Vector Search] Label filter: ${beforeCount} -> ${vectorResults.length}`);
+    }
+    
+    // タイトルブースト適用
+    vectorResults = vectorResults.map(result => {
+      const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(result.title, finalKeywords);
+      
+      if (matchedKeywords.length > 0) {
+        let boostFactor = 1.0;
+        if (titleMatchRatio >= 0.66) {
+          boostFactor = 10.0;
+        } else if (titleMatchRatio >= 0.33) {
+          boostFactor = 5.0;
+        }
+        
+        return { 
+          ...result, 
+          _distance: result._distance * (1 / boostFactor), 
+          _titleBoosted: true,
+          _titleMatchedKeywords: matchedKeywords.length,
+          _titleMatchRatio: titleMatchRatio
+        };
+      }
+      return result;
+    });
+    
+    console.log(`[Vector Search] Title boost applied: ${vectorResults.filter(r => r._titleBoosted).length} results`);
+    
+    return vectorResults;
+    
+  } catch (error) {
+    console.error(`[Vector Search] Error:`, error);
+    return [];
+  }
+}
+
+/**
+ * BM25検索を実行（Phase 5: 並列化対応）
+ */
+async function executeBM25Search(
+  tbl: any,
+  params: LanceDBSearchParams,
+  finalKeywords: string[],
+  topK: number
+): Promise<any[]> {
+  try {
+    if (!params.useLunrIndex || !lunrInitializer.isReady()) {
+      console.log(`[BM25 Search] Lunr not ready, skipping`);
+      return [];
+    }
+    
+    const kwCap = Math.max(100, Math.floor(topK * 2));
+    const searchKeywords = finalKeywords.slice(0, 5);
+    
+    console.log(`[BM25 Search] Keywords: ${searchKeywords.join(', ')}`);
+    
+    const allLunrResults: any[] = [];
+    const processedIds = new Set<string>();
+    
+    for (const keyword of searchKeywords) {
+      const tokenizedQuery = await tokenizeJapaneseText(keyword);
+      console.log(`[BM25 Search] Searching '${keyword}' -> '${tokenizedQuery}'`);
+      
+      const keywordResults = await lunrSearchClient.searchCandidates(tokenizedQuery, kwCap);
+      console.log(`[BM25 Search] Found ${keywordResults.length} results`);
+      
+      for (const result of keywordResults) {
+        if (!processedIds.has(result.id)) {
+          allLunrResults.push(result);
+          processedIds.add(result.id);
+        }
+      }
+    }
+    
+    console.log(`[BM25 Search] Total unique results: ${allLunrResults.length}`);
+    
+    // タイトルブースト適用
+    const bm25Results = allLunrResults.map((r: any) => {
+      const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(r.title, finalKeywords);
+      
+      let boostedScore = r.score || 1.0;
+      if (titleMatchRatio >= 0.66) {
+        boostedScore *= 5.0;
+      } else if (titleMatchRatio >= 0.33) {
+        boostedScore *= 3.0;
+      }
+      
+      return {
+        id: r.id,
+        title: r.title,
+        content: r.content,
+        labels: r.labels,
+        pageId: r.pageId,
+        isChunked: r.isChunked,
+        url: r.url,
+        space_key: r.space_key,
+        lastUpdated: r.lastUpdated,
+        _bm25Score: boostedScore,
+        _titleMatchRatio: titleMatchRatio,
+        _titleMatchedKeywords: matchedKeywords.length
+      };
+    });
+    
+    console.log(`[BM25 Search] Completed with ${bm25Results.length} results`);
+    return bm25Results;
+    
+  } catch (error) {
+    console.error(`[BM25 Search] Error:`, error);
+    return [];
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
