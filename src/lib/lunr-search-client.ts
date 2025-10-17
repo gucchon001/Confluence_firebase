@@ -1,6 +1,11 @@
 /**
  * Lunr.js-based inverted index for BM25 candidate retrieval
  * Lightweight full-text search engine with good Japanese support
+ * 
+ * Phase 5 Week 2: メモリ最適化
+ * - シングルトンパターンで索引を永続的にメモリ保持
+ * - 一度構築した索引は再構築不要（0ms）
+ * - アプリケーション全体で共有インスタンスを使用
  */
 
 import lunr from 'lunr';
@@ -42,22 +47,30 @@ export interface LunrSearchResult {
 }
 
 export class LunrSearchClient {
+  // Phase 5 Week 2: シングルトンでメモリに永続的に保持
   private static instance: LunrSearchClient | null = null;
+  
+  // Phase 5 Week 2: 一度構築した索引をメモリに保持（再構築不要）
   private index: lunr.Index | null = null;
   private documents: Map<string, LunrDocument> = new Map();
   private initialized = false;
   private defaultCachePath = path.join('.cache', 'lunr-index.json');
 
-  // シングルトンパターン
+  /**
+   * Phase 5 Week 2: シングルトンパターンでメモリ最適化
+   * - アプリケーション全体で1つのインスタンスを共有
+   * - 索引の再構築オーバーヘッドをゼロに削減
+   */
   public static getInstance(): LunrSearchClient {
     if (!LunrSearchClient.instance) {
       LunrSearchClient.instance = new LunrSearchClient();
+      console.log('[Phase 5 LunrCache] シングルトンインスタンス作成 - メモリに永続保持');
     }
     return LunrSearchClient.instance;
   }
 
   private constructor() {
-    // プライベートコンストラクタ
+    // プライベートコンストラクタ（シングルトン保証）
   }
 
   public isInitialized(): boolean {
@@ -146,6 +159,7 @@ export class LunrSearchClient {
       this.initialized = true;
       console.log(`[LunrSearchClient] Initialization complete with ${documents.length} documents`);
       console.log(`[LunrSearchClient] Index ready: ${this.index !== null}`);
+      console.log(`[Phase 5 LunrCache] ✅ 索引をメモリに永続保持 - 次回以降は再構築不要`);
     } catch (error) {
       console.error('[LunrSearchClient] Initialization failed:', error);
       throw error;
@@ -167,6 +181,7 @@ export class LunrSearchClient {
       }
       this.initialized = true;
       console.log(`[LunrSearchClient] Loaded index from cache: ${filePath} (docs=${this.documents.size})`);
+      console.log(`[Phase 5 LunrCache] ✅ キャッシュから索引をメモリに読み込み - 構築時間0ms`);
       return true;
     } catch (error) {
       console.log('[LunrSearchClient] No cache found or failed to load. Will rebuild.');

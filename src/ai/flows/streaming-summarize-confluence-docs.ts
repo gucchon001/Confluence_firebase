@@ -1,5 +1,6 @@
 /**
  * Confluence文書要約（ストリーミング版）
+ * Phase 5 Week 2: TTFB最適化 + 回答キャッシュ統合
  * リアルタイムで回答を生成・配信
  */
 
@@ -7,6 +8,7 @@ import * as z from 'zod';
 import Handlebars from 'handlebars';
 import { ai } from '../genkit';
 import { GeminiConfig } from '@/config/ai-models-config';
+import { getAnswerCache } from '@/lib/answer-cache';
 
 // フォールバック回答生成関数
 function generateFallbackAnswer(question: string, context: any[]): string {
@@ -231,6 +233,41 @@ export async function* streamingSummarizeConfluenceDocs(
   
   console.log('🌊 ストリーミング要約開始:', question);
   
+  // Phase 5 Week 2: 回答キャッシュチェック（品質影響なし）
+  const answerCache = getAnswerCache();
+  const cachedAnswer = answerCache.get(question, context);
+  
+  if (cachedAnswer) {
+    console.log('[Phase 5 Streaming Cache] ⚡ キャッシュヒット - 即座に配信');
+    
+    // キャッシュされた回答を高速にストリーム配信
+    const chunks = splitIntoChunks(cachedAnswer.answer, 100);
+    
+    for (let i = 0; i < chunks.length; i++) {
+      yield {
+        chunk: chunks[i],
+        isComplete: false,
+        chunkIndex: i,
+        references: cachedAnswer.references
+      };
+      // Phase 5最適化: チャンク間の遅延を削除（人為的な遅延は不要）
+    }
+    
+    // 完了チャンク
+    yield {
+      chunk: '',
+      isComplete: true,
+      chunkIndex: chunks.length,
+      totalChunks: chunks.length,
+      references: cachedAnswer.references
+    };
+    
+    console.log(`✅ [Phase 5 Streaming Cache] キャッシュから配信完了: ${chunks.length}チャンク`);
+    return;
+  }
+  
+  console.log('[Phase 5 Streaming Cache] キャッシュミス - Gemini生成開始');
+  
   try {
     // コンテキストの準備（パフォーマンス最適化: 品質を維持しつつ削減）
     const contextText = context
@@ -360,9 +397,13 @@ ${truncatedContent}`;
         references: references
       };
       
-      // チャンク間の遅延をシミュレート
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Phase 5最適化: チャンク間の遅延を削除（人為的な遅延は不要）
+      // 旧: await new Promise(resolve => setTimeout(resolve, 50));
     }
+
+    // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
+    answerCache.set(question, context, answer, references);
+    console.log('[Phase 5 Streaming Cache] 💾 回答をキャッシュに保存');
 
     // 完了チャンク
     yield {

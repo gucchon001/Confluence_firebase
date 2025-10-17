@@ -1,11 +1,13 @@
 /**
  * Confluence文書要約（プレーン関数版）
+ * Phase 5 Week 2: 回答キャッシュ統合
  */
 // import { gemini15Flash } from '@genkit-ai/googleai';
 import * as z from 'zod';
 import Handlebars from 'handlebars';
 import { ai } from '../genkit';
 import { GeminiConfig } from '@/config/ai-models-config';
+import { getAnswerCache } from '@/lib/answer-cache';
 
 // プロンプトテンプレート (変更なし)
 const PROMPT_TEMPLATE = `
@@ -244,6 +246,20 @@ export async function summarizeConfluenceDocs({
       };
     }
 
+    // Phase 5 Week 2: 回答キャッシュチェック（品質影響なし）
+    const answerCache = getAnswerCache();
+    const cachedAnswer = answerCache.get(question, documents);
+    
+    if (cachedAnswer) {
+      console.log('[Phase 5 Cache] ⚡ 回答キャッシュヒット - 即座に返却');
+      return {
+        answer: cachedAnswer.answer,
+        references: cachedAnswer.references,
+      };
+    }
+    
+    console.log('[Phase 5 Cache] キャッシュミス - Gemini生成開始');
+
     const formattedChatHistory = chatHistory
       .map((msg) => `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`)
       .join('\n\n');
@@ -415,6 +431,10 @@ ${doc.content}`
     source: (doc as any).source, // vector / keyword / bm25 / hybrid
     scoreText: (doc as any).scoreText,
   }));
+
+    // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
+    answerCache.set(question, documents, answer, references);
+    console.log('[Phase 5 Cache] 💾 回答をキャッシュに保存');
 
     return { answer, references, prompt };
   } catch (error: any) {

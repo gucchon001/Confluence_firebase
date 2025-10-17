@@ -8,6 +8,7 @@ dotenv.config();
 
 /**
  * Gemini (LLM) モデル設定
+ * Phase 5 Week 2: レイテンシ最適化パラメータ追加
  */
 export const GeminiConfig = {
   /** モデル名 */
@@ -38,6 +39,18 @@ export const GeminiConfig = {
      * 上位K個のトークンから選択
      */
     topK: 50,
+    
+    /** Phase 5 Week 2: 候補数を1に明示（レイテンシ最適化）
+     * デフォルトは1だが、明示することで意図を明確化
+     * 品質への影響: なし（元々1候補のみ）
+     */
+    candidateCount: 1,
+    
+    /** Phase 5 Week 2: レスポンス形式をプレーンテキストに指定
+     * JSON等の構造化データ生成のオーバーヘッドを削減
+     * 品質への影響: なし（元々テキストのみ）
+     */
+    responseMimeType: 'text/plain' as const,
   },
   
   /** タイムアウト設定（ミリ秒） */
