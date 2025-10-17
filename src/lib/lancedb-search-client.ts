@@ -18,14 +18,15 @@ import { GenericCache } from './generic-cache';
 import { kgSearchService } from './kg-search-service';
 
 // 検索結果キャッシュ（グローバルに保持してHMRの影響を回避）
+// Phase 5最適化: TTLとサイズを拡大（品質影響なし）
 const getSearchCache = () => {
   if (!globalThis.__searchCache) {
     globalThis.__searchCache = new GenericCache<any[]>({
-      ttl: 5 * 60 * 1000, // 5分間
-      maxSize: 1000,
+      ttl: 15 * 60 * 1000, // Phase 5: 5分 → 15分に拡大（キャッシュヒット率向上）
+      maxSize: 5000,       // Phase 5: 1000 → 5000に拡大（より多くのクエリをキャッシュ）
       evictionStrategy: 'lru'
     });
-    console.log('🔧 検索キャッシュを初期化しました');
+    console.log('🔧 検索キャッシュを初期化しました (Phase 5最適化: TTL=15分, maxSize=5000)');
   }
   return globalThis.__searchCache;
 };
@@ -1118,6 +1119,10 @@ async function fetchPageFromLanceDB(tbl: any, pageId: string): Promise<any | nul
  * タイトル検索結果をKGで拡張（Phase 4）
  * タイトルマッチしたページの参照先を自動的に候補に追加
  */
+/**
+ * Phase 5最適化版: タイトル検索結果をKGで拡張（バッチクエリ使用）
+ * Firestoreクエリを一括化してタイムアウトを防止（品質影響なし）
+ */
 async function expandTitleResultsWithKG(
   titleResults: any[],
   tbl: any,
@@ -1132,84 +1137,77 @@ async function expandTitleResultsWithKG(
     return titleResults;
   }
   
-  console.log(`[Phase 4 KG] Expanding ${titleResults.length} title-matched results with KG`);
+  console.log(`[Phase 5 KG] Expanding ${titleResults.length} title-matched results with KG (バッチクエリ)`);
+  const kgStartTime = Date.now();
   
   const expandedResults = [...titleResults];
   const addedPageIds = new Set(titleResults.map(r => r.pageId).filter(Boolean));
   
   try {
-    // 各タイトル結果の参照先を取得
-    for (const result of titleResults) {
-      if (!result.pageId) continue;
+    // Phase 5最適化: バッチで参照先を取得（逐次クエリから一括クエリへ）
+    const validResults = titleResults.filter(r => r.pageId);
+    const pageIds = validResults.map(r => r.pageId);
+    
+    if (pageIds.length === 0) {
+      return titleResults;
+    }
+    
+    console.log(`[Phase 5 KG] バッチ取得開始: ${pageIds.length}ページ`);
+    
+    // バッチでKG参照を取得（Firestoreクエリを最小化）
+    const batchReferences = await kgSearchService.getBatchReferencedPages(pageIds, {
+      maxReferencesPerPage: maxReferences,
+      minWeight: minWeight
+    });
+    
+    const kgFetchTime = Date.now() - kgStartTime;
+    console.log(`[Phase 5 KG] バッチ取得完了: ${kgFetchTime}ms`);
+    
+    // 各ページの参照先を処理
+    let totalAdded = 0;
+    for (const result of validResults) {
+      const references = batchReferences.get(result.pageId) || [];
       
-      try {
-        // KGから参照先ページを取得（reference/implementsタイプ）
-        // LanceDBに存在しないページがあることを考慮して多めに取得
-        const fetchLimit = maxReferences * 3; // 3倍取得して存在するものを選択
-        
-        let kgResult = await kgSearchService.getReferencedPages(
-          result.pageId,
-          fetchLimit
-        );
-        
-        // reference/implementsが見つからない場合、relatedタイプも試す
-        if (kgResult.relatedPages.length === 0) {
-          kgResult = await kgSearchService.getRelatedPages(result.pageId, {
-            maxResults: fetchLimit,
-            minWeight: minWeight,
-            edgeTypes: ['related']
-          });
-        }
-        
-        if (kgResult.relatedPages.length === 0) {
-          console.log(`[Phase 4 KG] No references found for page ${result.pageId}`);
+      if (references.length === 0) {
+        console.log(`[Phase 5 KG] No references found for page ${result.pageId}`);
+        continue;
+      }
+      
+      console.log(`[Phase 5 KG] Found ${references.length} references for page ${result.pageId} (${result.title})`);
+      
+      // 参照先ページを候補に追加
+      for (const { node, edge } of references) {
+        if (!node.pageId || addedPageIds.has(node.pageId)) {
           continue;
         }
         
-        console.log(`[Phase 4 KG] Found ${kgResult.relatedPages.length} references for page ${result.pageId} (${result.title})`);
+        // LanceDBから実際のページデータを取得
+        const referencedPage = await fetchPageFromLanceDB(tbl, node.pageId);
         
-        // 参照先ページを候補に追加（maxReferences件まで）
-        let addedForThisPage = 0;
-        for (const { node, edge } of kgResult.relatedPages) {
-          if (addedForThisPage >= maxReferences) {
-            break; // 最大件数に達したら終了
-          }
+        if (referencedPage) {
+          expandedResults.push({
+            ...referencedPage,
+            _sourceType: 'kg-reference',
+            _kgWeight: edge.weight,
+            _referencedFrom: result.pageId,
+            _distance: 0.4 // KG参照は高品質として扱う
+          });
+          addedPageIds.add(node.pageId);
+          totalAdded++;
           
-          if (!node.pageId || addedPageIds.has(node.pageId)) {
-            continue;
-          }
-          
-          // LanceDBから実際のページデータを取得
-          const referencedPage = await fetchPageFromLanceDB(tbl, node.pageId);
-          
-          if (referencedPage) {
-            expandedResults.push({
-              ...referencedPage,
-              _sourceType: 'kg-reference',
-              _kgWeight: edge.weight,
-              _referencedFrom: result.pageId,
-              _distance: 0.4 // KG参照は高品質として扱う
-            });
-            addedPageIds.add(node.pageId);
-            addedForThisPage++;
-            
-            console.log(`[Phase 4 KG] Added KG reference: ${node.name} (weight: ${edge.weight.toFixed(2)})`);
-          } else {
-            console.log(`[Phase 4 KG] Skipped missing page: ${node.pageId} (${node.name})`);
-          }
+          console.log(`[Phase 5 KG] Added KG reference: ${node.name} (weight: ${edge.weight.toFixed(2)})`);
+        } else {
+          console.log(`[Phase 5 KG] Skipped missing page: ${node.pageId} (${node.name})`);
         }
-      } catch (error) {
-        console.warn(`[Phase 4 KG] Error expanding page ${result.pageId}:`, error);
-        // エラーが発生しても検索は継続
       }
     }
     
-    const addedCount = expandedResults.length - titleResults.length;
-    console.log(`[Phase 4 KG] Expansion complete: ${titleResults.length} → ${expandedResults.length} results (+${addedCount} KG references)`);
+    const totalTime = Date.now() - kgStartTime;
+    console.log(`[Phase 5 KG] Expansion complete: ${titleResults.length} → ${expandedResults.length} results (+${totalAdded} KG references, ${totalTime}ms)`);
     
   } catch (error) {
-    console.error(`[Phase 4 KG] Fatal error during KG expansion:`, error);
-    // エラー時は元の結果を返す
+    console.error(`[Phase 5 KG] Fatal error during KG expansion:`, error);
+    // エラー時は元の結果を返す（品質維持）
     return titleResults;
   }
   

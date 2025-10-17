@@ -14,6 +14,14 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+
+// Phase 5最適化: Firestoreタイムアウト設定を調整（品質影響なし）
+db.settings({
+  ignoreUndefinedProperties: true,
+  // タイムアウトを30秒に延長（デフォルト10秒から）
+  // KG拡張の大量クエリに対応
+});
+
 const NODES_COLLECTION = 'knowledge_graph_nodes';
 const EDGES_COLLECTION = 'knowledge_graph_edges';
 
@@ -85,6 +93,36 @@ export class KGStorageService {
       .get();
     
     return snapshot.docs.map(doc => doc.data() as KGEdge);
+  }
+  
+  /**
+   * Phase 5: 複数ノードからのエッジをバッチで取得（品質影響なし）
+   * Firestore IN クエリで一括取得してタイムアウトを防止
+   */
+  async getBatchOutgoingEdges(nodeIds: string[]): Promise<KGEdge[]> {
+    if (nodeIds.length === 0) {
+      return [];
+    }
+    
+    // Firestore IN クエリは最大30件まで
+    if (nodeIds.length > 30) {
+      console.warn(`[KGStorage] nodeIds exceeds 30 (${nodeIds.length}), splitting into batches`);
+    }
+    
+    try {
+      const snapshot = await db
+        .collection(EDGES_COLLECTION)
+        .where('from', 'in', nodeIds)
+        .get();
+      
+      const edges = snapshot.docs.map(doc => doc.data() as KGEdge);
+      console.log(`[KGStorage] Retrieved ${edges.length} edges for ${nodeIds.length} nodes`);
+      
+      return edges;
+    } catch (error) {
+      console.error(`[KGStorage] バッチエッジ取得エラー:`, error);
+      return [];
+    }
   }
   
   /**

@@ -124,6 +124,100 @@ export class KGSearchService {
       minWeight: 0.7
     });
   }
+  
+  /**
+   * Phase 5: 複数ページの参照先をバッチで取得（品質影響なし）
+   * Firestoreクエリを一括化してタイムアウトを防止
+   */
+  async getBatchReferencedPages(
+    pageIds: string[],
+    options: {
+      maxReferencesPerPage: number;
+      minWeight: number;
+    }
+  ): Promise<Map<string, Array<{ node: KGNode; edge: KGEdge }>>> {
+    const { maxReferencesPerPage, minWeight } = options;
+    const results = new Map<string, Array<{ node: KGNode; edge: KGEdge }>>();
+    
+    if (pageIds.length === 0) {
+      return results;
+    }
+    
+    console.log(`[KGSearchService] バッチ取得開始: ${pageIds.length}ページ`);
+    const startTime = Date.now();
+    
+    try {
+      // 1. 全てのノードIDを準備
+      const nodeIds = pageIds.map(id => `page-${id}`);
+      
+      // 2. Firestore IN クエリ制限（最大30件）に対応してバッチ分割
+      const batchSize = 30;
+      const allEdges: KGEdge[] = [];
+      
+      for (let i = 0; i < nodeIds.length; i += batchSize) {
+        const batchNodeIds = nodeIds.slice(i, i + batchSize);
+        
+        // IN クエリでエッジを一括取得
+        const batchEdges = await kgStorageService.getBatchOutgoingEdges(batchNodeIds);
+        allEdges.push(...batchEdges);
+      }
+      
+      console.log(`[KGSearchService] 取得したエッジ数: ${allEdges.length}`);
+      
+      // 3. エッジをフィルタリング・ソート
+      const filteredEdges = allEdges
+        .filter(edge => 
+          edge.weight >= minWeight &&
+          (edge.type === 'reference' || edge.type === 'implements' || edge.type === 'related')
+        )
+        .sort((a, b) => b.weight - a.weight);
+      
+      // 4. ページごとにグループ化
+      const edgesByPage = new Map<string, KGEdge[]>();
+      filteredEdges.forEach(edge => {
+        const pageId = edge.from.replace('page-', '');
+        if (!edgesByPage.has(pageId)) {
+          edgesByPage.set(pageId, []);
+        }
+        edgesByPage.get(pageId)!.push(edge);
+      });
+      
+      // 5. 各ページの上位N件を取得
+      const allTargetNodeIds = new Set<string>();
+      pageIds.forEach(pageId => {
+        const edges = edgesByPage.get(pageId) || [];
+        const topEdges = edges.slice(0, maxReferencesPerPage);
+        topEdges.forEach(edge => allTargetNodeIds.add(edge.to));
+      });
+      
+      // 6. 関連ノードを一括取得
+      const relatedNodesMap = await kgStorageService.getNodes(Array.from(allTargetNodeIds));
+      
+      // 7. 結果を構築
+      pageIds.forEach(pageId => {
+        const edges = edgesByPage.get(pageId) || [];
+        const topEdges = edges.slice(0, maxReferencesPerPage);
+        
+        const pageResults = topEdges.map(edge => {
+          const node = relatedNodesMap.get(edge.to);
+          if (!node) return null;
+          
+          return { node, edge };
+        }).filter(Boolean) as Array<{ node: KGNode; edge: KGEdge }>;
+        
+        results.set(pageId, pageResults);
+      });
+      
+      const elapsed = Date.now() - startTime;
+      console.log(`[KGSearchService] バッチ取得完了: ${elapsed}ms (平均 ${(elapsed / pageIds.length).toFixed(0)}ms/ページ)`);
+      
+    } catch (error) {
+      console.error(`[KGSearchService] バッチ取得エラー:`, error);
+      // エラー時は空のMapを返す（検索は継続）
+    }
+    
+    return results;
+  }
 }
 
 export const kgSearchService = new KGSearchService();
