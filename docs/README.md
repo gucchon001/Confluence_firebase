@@ -10,7 +10,9 @@
 #### 現行システム
 - **[blueprint.md](./architecture/blueprint.md)** - プロジェクト概要と全体設計
 - **[data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - LanceDBデータフロー図
-- **[hybrid-search-logic-current.md](./architecture/hybrid-search-logic-current.md)** ✅ **最新** - ハイブリッド検索ロジック（Phase 0A-4 + BM25修正版）
+- **[hybrid-search-specification-latest.md](./architecture/hybrid-search-specification-latest.md)** 🌟 **最新** - ハイブリッド検索システム完全仕様書（Phase 4完了版）
+- **[hybrid-search-quick-reference.md](./architecture/hybrid-search-quick-reference.md)** ⚡ **NEW** - ハイブリッド検索クイックリファレンス
+- **[hybrid-search-logic-current.md](./architecture/hybrid-search-logic-current.md)** - ハイブリッド検索ロジック（Phase 0A-4 + BM25修正版）
 - **[hybrid-search-contract.md](./architecture/hybrid-search-contract.md)** - ハイブリッド検索契約
 - **[hybrid-search-flow-and-parallelization-analysis.md](./architecture/hybrid-search-flow-and-parallelization-analysis.md)** - ハイブリッド検索並行実行分析
 - **[enhanced-hybrid-search-design.md](./architecture/enhanced-hybrid-search-design.md)** - 強化版ハイブリッド検索設計

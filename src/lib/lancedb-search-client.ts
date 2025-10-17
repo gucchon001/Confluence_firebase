@@ -242,16 +242,16 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // 最適化: BM25結果に対してタイトルブーストを強化（全レコード取得を避ける）
 
     // 1. ベクトル検索の実行
-    try {
-      let vectorQuery = tbl.search(vector);
-      if (params.filter) {
-        vectorQuery = vectorQuery.where(params.filter);
-      }
+        try {
+          let vectorQuery = tbl.search(vector);
+          if (params.filter) {
+            vectorQuery = vectorQuery.where(params.filter);
+          }
       // Phase 0A-2 Performance Optimization: ベクトル検索候補数を最適化
       // Phase 4調整: 検索品質を優先（4倍 → 10倍）
       // 理由: 期待されるページがベクトル検索で低順位の場合を考慮
       vectorResults = await vectorQuery.limit(topK * 10).toArray();
-      console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
+    console.log(`[searchLanceDB] Vector search found ${vectorResults.length} results before filtering`);
       
     // 距離閾値でフィルタリング（ベクトル検索の有効化）
     const distanceThreshold = params.maxDistance || 2.0; // 検索品質を元に戻す: 網羅性を重視
@@ -586,14 +586,14 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
                 const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(r.title, finalKeywords);
                 
                 // タイトルマッチに応じてBM25スコアを超強力ブースト（Phase 4強化）
-                let boostedScore = r.score || 1.0;
-                if (titleMatchRatio >= 0.66) {
+            let boostedScore = r.score || 1.0;
+            if (titleMatchRatio >= 0.66) {
                   boostedScore *= 5.0; // 2/3以上マッチ → 5倍ブースト（Phase 4強化）
-                } else if (titleMatchRatio >= 0.33) {
+            } else if (titleMatchRatio >= 0.33) {
                   boostedScore *= 3.0; // 1/3以上マッチ → 3倍ブースト（Phase 4強化）
-                }
-                
-                return {
+            }
+            
+            return {
                   id: r.id,
                   title: r.title,
                   content: r.content,
@@ -603,11 +603,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
                   url: r.url,
                   space_key: r.space_key,
                   lastUpdated: r.lastUpdated,
-                  _bm25Score: boostedScore,
-                  _titleMatchRatio: titleMatchRatio,
-                  _titleMatchedKeywords: matchedKeywords.length
-                };
-              });
+              _bm25Score: boostedScore,
+              _titleMatchRatio: titleMatchRatio,
+              _titleMatchedKeywords: matchedKeywords.length
+            };
+          });
               console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows via Lunr for core='${core}' (using native scores)`);
             } catch (error) {
               console.warn(`[searchLanceDB] Lunr search failed, falling back to LIKE search:`, error);
@@ -724,15 +724,15 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             });
 
         // ラベルフィルタリングをBM25結果にも適用
-        if (excludeLabels.length > 0) {
-          const beforeBm25 = bm25Results.length;
-          bm25Results = bm25Results.filter((result: any) => {
-            return !labelManager.isExcluded(result.labels, excludeLabels);
-          });
-          console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
-        }
-        
-            
+          if (excludeLabels.length > 0) {
+            const beforeBm25 = bm25Results.length;
+            bm25Results = bm25Results.filter((result: any) => {
+              return !labelManager.isExcluded(result.labels, excludeLabels);
+            });
+            console.log(`[searchLanceDB] Excluded ${beforeBm25 - bm25Results.length} BM25 results due to label filtering`);
+          }
+          
+          
             console.log(`[searchLanceDB] Added ${bm25Results.length} BM25 rows to candidates for keywords=[${searchKeywords.join(', ')}]`);
           }
           let added = 0;
@@ -836,6 +836,45 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       console.log(`[searchLanceDB] Top 3 results after RRF:`);
       for (let i = 0; i < Math.min(3, vectorResults.length); i++) {
         console.log(`  ${i+1}. ${vectorResults[i].title} (rrf: ${(vectorResults[i]._rrfScore ?? 0).toFixed(4)})`);
+      }
+      
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // Phase 4: RRF上位結果からもKG拡張（タイトルブースト漏れ対策）
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      try {
+        const topRrfResults = vectorResults.slice(0, 10); // RRF上位10件
+        const rrfResultsWithPageId = topRrfResults.filter(r => r.pageId);
+        
+        if (rrfResultsWithPageId.length > 0) {
+          console.log(`\n[Phase 4 RRF-KG] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+          console.log(`[Phase 4 RRF-KG] RRF上位${rrfResultsWithPageId.length}件からKG拡張開始`);
+          
+          const kgExpandedResults = await expandTitleResultsWithKG(
+            rrfResultsWithPageId,
+            tbl,
+            {
+              maxReferences: 3,  // 各ページから3件まで参照を追加（Case 2対応）
+              minWeight: 0.7
+            }
+          );
+          
+          // KG拡張結果を既存の結果にマージ
+          const existingIds = new Set(vectorResults.map(r => r.id));
+          let kgAddedCount = 0;
+          
+          for (const kgResult of kgExpandedResults) {
+            if (!existingIds.has(kgResult.id)) {
+              vectorResults.push(kgResult);
+              kgAddedCount++;
+            }
+          }
+          
+          console.log(`[Phase 4 RRF-KG] KG拡張完了: +${kgAddedCount}件追加（合計: ${vectorResults.length}件）`);
+          console.log(`[Phase 4 RRF-KG] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+        }
+      } catch (error) {
+        console.error(`[Phase 4 RRF-KG] KG拡張エラー:`, error);
+        // エラー時も検索は継続
       }
       
       // Phase 0A-4: 複合スコアリングを適用（核心キーワード使用）
@@ -1040,21 +1079,25 @@ function generateTitleCandidates(keywords: string[]): string[] {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /**
- * LanceDBからページIDでページを取得
+ * LanceDBからpageIdでページを取得
+ * 
+ * 注意: LanceDBのSQL方言ではフィールド名をバッククォート（`）で囲む必要があります
+ * ダブルクォート（"）では動作しません
+ * 
+ * @param tbl LanceDBテーブル
+ * @param pageId ページID（string型: "718373062"）
+ * @returns ページデータまたはnull
  */
 async function fetchPageFromLanceDB(tbl: any, pageId: string): Promise<any | null> {
   try {
-    // pageIdは数値型なのでクォート不要
-    const pageIdNum = parseInt(pageId);
-    
-    if (isNaN(pageIdNum)) {
+    if (!pageId || pageId === 'undefined') {
       console.error(`[fetchPageFromLanceDB] Invalid pageId: ${pageId}`);
       return null;
     }
     
-    // pageIdでフィルタリング（数値型、フィールド名を引用符で囲む）
+    // バッククォートを使用してフィールド名を囲む（LanceDB SQL方言）
     const results = await tbl.query()
-      .where(`"pageId" = ${pageIdNum}`)
+      .where(`\`pageId\` = '${pageId}'`)
       .limit(1)
       .toArray();
     
@@ -1100,11 +1143,23 @@ async function expandTitleResultsWithKG(
       if (!result.pageId) continue;
       
       try {
-        // KGから参照先ページを取得
-        const kgResult = await kgSearchService.getReferencedPages(
+        // KGから参照先ページを取得（reference/implementsタイプ）
+        // LanceDBに存在しないページがあることを考慮して多めに取得
+        const fetchLimit = maxReferences * 3; // 3倍取得して存在するものを選択
+        
+        let kgResult = await kgSearchService.getReferencedPages(
           result.pageId,
-          maxReferences
+          fetchLimit
         );
+        
+        // reference/implementsが見つからない場合、relatedタイプも試す
+        if (kgResult.relatedPages.length === 0) {
+          kgResult = await kgSearchService.getRelatedPages(result.pageId, {
+            maxResults: fetchLimit,
+            minWeight: minWeight,
+            edgeTypes: ['related']
+          });
+        }
         
         if (kgResult.relatedPages.length === 0) {
           console.log(`[Phase 4 KG] No references found for page ${result.pageId}`);
@@ -1113,8 +1168,13 @@ async function expandTitleResultsWithKG(
         
         console.log(`[Phase 4 KG] Found ${kgResult.relatedPages.length} references for page ${result.pageId} (${result.title})`);
         
-        // 参照先ページを候補に追加
+        // 参照先ページを候補に追加（maxReferences件まで）
+        let addedForThisPage = 0;
         for (const { node, edge } of kgResult.relatedPages) {
+          if (addedForThisPage >= maxReferences) {
+            break; // 最大件数に達したら終了
+          }
+          
           if (!node.pageId || addedPageIds.has(node.pageId)) {
             continue;
           }
@@ -1131,8 +1191,11 @@ async function expandTitleResultsWithKG(
               _distance: 0.4 // KG参照は高品質として扱う
             });
             addedPageIds.add(node.pageId);
+            addedForThisPage++;
             
             console.log(`[Phase 4 KG] Added KG reference: ${node.name} (weight: ${edge.weight.toFixed(2)})`);
+          } else {
+            console.log(`[Phase 4 KG] Skipped missing page: ${node.pageId} (${node.name})`);
           }
         }
       } catch (error) {

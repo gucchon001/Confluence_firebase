@@ -43,7 +43,7 @@ export interface ConfluenceSchema {
   title: string;
   labels: string[];
   content: string;
-  pageId: number;
+  pageId: string;  // LanceDBのint64型はJavaScript SDKでstringとして返される
   chunkIndex: number;
   url: string;
   lastUpdated: string;
@@ -61,7 +61,7 @@ export function createConfluenceSampleData(): ConfluenceSchema {
     title: 'Sample Title',
     labels: ['sample'],
     content: 'Sample content',
-    pageId: 1000000000,
+    pageId: '1000000000',  // string型
     chunkIndex: 0,
     url: 'https://example.com',
     lastUpdated: new Date().toISOString()
@@ -88,7 +88,7 @@ export function createConfluenceRecord(
   spaceKey: string,
   title: string,
   content: string,
-  pageId: number,
+  pageId: string,  // string型に統一
   chunkIndex: number,
   url: string,
   lastUpdated: string,
