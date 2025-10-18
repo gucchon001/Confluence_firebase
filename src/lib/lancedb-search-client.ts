@@ -14,6 +14,7 @@ import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
+import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
 import { GenericCache } from './generic-cache';
 import { kgSearchService } from './kg-search-service';
 
@@ -156,7 +157,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     try {
       const { optimizedLunrInitializer } = await import('./optimized-lunr-initializer');
       await optimizedLunrInitializer.initializeOnce();
+      
+      // Phase 6修正: 初期化完了を確実に待つ（並列検索前）
+      // 少し待機してLunrSearchClientのインスタンスが完全に初期化されることを保証
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       console.log('✅ Optimized Lunr initialization completed in searchLanceDB');
+      console.log(`✅ lunrInitializer.isReady(): ${lunrInitializer.isReady()}`);
     } catch (error) {
       console.warn('⚠️ Optimized Lunr initialization failed in searchLanceDB:', error);
       // 初期化に失敗しても検索は継続（フォールバック検索を使用）
@@ -282,8 +289,17 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         console.log(`\n[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         console.log(`[Phase 4] KG拡張開始: ${titleMatchedResults.length}件のタイトルマッチ結果`);
         
+        // Phase 6最適化: 上位30件のみKG拡張（242件→30件で-85%削減）
+        // ベクトルスコアでソートして上位を選択
+        const MAX_KG_EXPANSION = 30;
+        const sortedTitleResults = titleMatchedResults
+          .sort((a, b) => (a._distance || 2.0) - (b._distance || 2.0))
+          .slice(0, MAX_KG_EXPANSION);
+        
+        console.log(`[Phase 6 KG Optimization] Limiting KG expansion: ${titleMatchedResults.length} → ${sortedTitleResults.length} results`);
+        
         const kgExpandedResults = await expandTitleResultsWithKG(
-          titleMatchedResults,
+          sortedTitleResults,
           tbl,
           {
             maxReferences: 2,
@@ -421,11 +437,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const content = originalResult.content || '';
         const labels = getLabelsAsArray(originalResult.labels);
         
-        // デバッグ情報を出力
-        console.log(`[searchLanceDB] Processing result ${i+1}:`);
-        console.log(`  Title: ${title}`);
-        console.log(`  Labels: ${JSON.stringify(labels)}`);
-        console.log(`  Content snippet: ${content.substring(0, 50)}...`);
+        // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
+        // 大量のログ出力がI/Oボトルネックになるため、詳細ログは無効化
+        // console.log(`[searchLanceDB] Processing result ${i+1}:`);
+        // console.log(`  Title: ${title}`);
+        // console.log(`  Labels: ${JSON.stringify(labels)}`);
+        // console.log(`  Content snippet: ${content.substring(0, 50)}...`);
         
         // アプリ層の包含フィルタ（任意）
         if (includeLabelsNormalized.length > 0) {
@@ -446,7 +463,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const labelMatches = scoreResult.labelMatches;
         const contentMatches = scoreResult.contentMatches;
         
-        console.log(`  Score details: keyword=${keywordScore}, title=${titleMatches}, label=${labelMatches}, content=${contentMatches}, labelScore=0`);
+        // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
+        // console.log(`  Score details: keyword=${keywordScore}, title=${titleMatches}, label=${labelMatches}, content=${contentMatches}, labelScore=0`);
         
         // キーワードマッチがある場合はカウント
         if (keywordScore > 0) {
@@ -455,7 +473,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         
         // ベクトル距離、キーワードスコア、ラベルスコアを組み合わせた複合スコア
         const hybridScore = calculateHybridScore(resultWithScore._distance, keywordScore, labelMatches);
-        console.log(`  Hybrid score: ${hybridScore} (vector: ${resultWithScore._distance}, keyword: ${keywordScore}, label: ${labelMatches})`);
+        // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
+        // console.log(`  Hybrid score: ${hybridScore} (vector: ${resultWithScore._distance}, keyword: ${keywordScore}, label: ${labelMatches})`);
         
         // スコア情報を追加
         resultWithScore._keywordScore = keywordScore;
@@ -559,19 +578,30 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const br = bm25Rank.get(r.id);
         // 重み: vector=1.0, keyword=0.8, title-exact=1.2, bm25=0.6（キーワードマッチングを重視）
         let rrf = (1.0 / (kRrf + vr)) + 0.8 * (1 / (kRrf + kr)) + (tr ? 1.2 * (1 / (kRrf + tr)) : 0) + (br ? 0.6 * (1 / (kRrf + br)) : 0);
-        // ドメイン減衰（議事録）：順位の最後で軽く抑制
+        // Phase 5改善: ドメイン減衰・ブースト適用（クエリ関連のみ）
         try {
           const titleStr = String(r.title || '').toLowerCase();
           const labelsArr: string[] = getLabelsAsArray(r.labels);
           const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
           const penaltyTerms = labelManager.getPenaltyTerms();
-          const genericTitleTerms = ['共通要件','非機能要件','用語','ワード','ディフィニション','definition','ガイドライン','一覧','フロー','要件'];
           const hasPenalty = penaltyTerms.some(t => titleStr.includes(t)) || lowerLabels.some(l => penaltyTerms.some(t => l.includes(t)));
-          const isGenericDoc = genericTitleTerms.some(t => titleStr.includes(t));
-          if (hasPenalty) rrf *= 0.9; // 既存より強め
-          if (isGenericDoc) rrf *= 0.8; // 辞書・総論系をより減衰
-          // 「本システム外」を含むタイトルは追加減衰
+          const isGenericDoc = GENERIC_DOCUMENT_TERMS.some(t => titleStr.includes(t.toLowerCase()));
+          
+          // 減衰適用（強化版）
+          if (hasPenalty) rrf *= 0.9; // 議事録など
+          if (isGenericDoc) rrf *= 0.5; // 0.8 → 0.5に強化（汎用文書を大幅減衰）
           if (String(r.title || '').includes('本システム外')) rrf *= 0.8;
+          
+          // Phase 5改善: クエリとタイトルの両方に含まれるドメイン固有キーワードのみをブースト
+          if (!isGenericDoc) {
+            const matchingKeywordCount = CommonTermsHelper.countMatchingDomainKeywords(params.query, String(r.title || ''));
+            
+            if (matchingKeywordCount > 0) {
+              // マッチしたキーワード数に応じてブースト（最大2倍）
+              const boostFactor = 1.0 + (matchingKeywordCount * 0.5);
+              rrf *= Math.min(boostFactor, 2.0);
+            }
+          }
         } catch {}
 
         r._rrfScore = rrf;
@@ -642,16 +672,52 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       }
       
       // Phase 0A-4: 複合スコアリングを適用（核心キーワード使用）
+      // Phase 6最適化: 段階的Composite Scoring（上位50件のみ精密計算）
       try {
-        const { compositeScoringService } = await import('./composite-scoring-service');
+        // 動的importではなく静的importに変更（依存関係の問題を回避）
+        const { CompositeScoringService } = await import('./composite-scoring-service');
+        const compositeScoringService = CompositeScoringService.getInstance();
         
-        vectorResults = compositeScoringService.scoreAndRankResults(vectorResults, finalKeywords);
+        const compositeScoringStart = Date.now();
         
-        console.log(`[searchLanceDB] Applied composite scoring`);
+        // Phase 6最適化: RRFスコアでソート（早期絞り込み）
+        const rrfSorted = vectorResults.sort((a, b) => (b._rrfScore || 0) - (a._rrfScore || 0));
+        
+        console.log(`[Phase 6 Optimization] Total candidates: ${rrfSorted.length}`);
+        
+        // 上位50件のみComposite Scoringを実行（-67%計算量削減）
+        const TOP_N_FOR_COMPOSITE = 50;
+        const top50 = rrfSorted.slice(0, TOP_N_FOR_COMPOSITE);
+        const remaining = rrfSorted.slice(TOP_N_FOR_COMPOSITE);
+        
+        console.log(`[Phase 6 Optimization] Applying composite scoring to top ${top50.length} results only`);
+        
+        // Phase 5改善: クエリを渡してクエリ関連ブーストを有効化
+        const scored50 = compositeScoringService.scoreAndRankResults(top50, finalKeywords, params.query);
+        
+        // 残りは簡易スコア（RRFスコアを50%に減衰して維持）
+        const remainingWithSimpleScore = remaining.map(r => ({
+          ...r,
+          _compositeScore: (r._rrfScore || 0) * 0.5,  // 簡易スコア
+          _scoreBreakdown: null,  // 簡易版のため詳細なし
+          _scoringType: 'simple-rrf'  // デバッグ用
+        }));
+        
+        // マージして最終ソート
+        vectorResults = [...scored50, ...remainingWithSimpleScore]
+          .sort((a, b) => (b._compositeScore || 0) - (a._compositeScore || 0));
+        
+        const compositeScoringTime = Date.now() - compositeScoringStart;
+        
+        console.log(`[Phase 6 Optimization] Composite scoring completed in ${compositeScoringTime}ms`);
+        console.log(`[Phase 6 Optimization]   - Detailed scoring: ${scored50.length} results`);
+        console.log(`[Phase 6 Optimization]   - Simple scoring: ${remainingWithSimpleScore.length} results`);
+        console.log(`[searchLanceDB] Applied composite scoring (optimized)`);
         console.log(`[searchLanceDB] Top 3 results after composite scoring:`);
         for (let i = 0; i < Math.min(3, vectorResults.length); i++) {
           const r = vectorResults[i];
-          console.log(`  ${i+1}. ${r.title}`);
+          const scoringType = r._scoringType || 'detailed';
+          console.log(`  ${i+1}. ${r.title} [${scoringType}]`);
           console.log(`     Composite: ${(r._compositeScore ?? 0).toFixed(4)} (V:${(r._scoreBreakdown?.vectorContribution ?? 0).toFixed(2)} B:${(r._scoreBreakdown?.bm25Contribution ?? 0).toFixed(2)} T:${(r._scoreBreakdown?.titleContribution ?? 0).toFixed(2)} L:${(r._scoreBreakdown?.labelContribution ?? 0).toFixed(2)})`);
         }
       } catch (err) {
@@ -890,8 +956,9 @@ async function executeBM25Search(
   topK: number
 ): Promise<any[]> {
   try {
-    if (!params.useLunrIndex || !lunrInitializer.isReady()) {
-      console.log(`[BM25 Search] Lunr not ready, skipping`);
+    // Phase 6修正: lunrSearchClientの状態を直接チェック（lunrInitializerの間接チェックは信頼性が低い）
+    if (!params.useLunrIndex || !lunrSearchClient.isReady()) {
+      console.log(`[BM25 Search] Lunr not ready (lunrSearchClient.isReady()=${lunrSearchClient.isReady()}), skipping`);
       return [];
     }
     
@@ -1084,44 +1151,56 @@ async function expandTitleResultsWithKG(
     const kgFetchTime = Date.now() - kgStartTime;
     console.log(`[Phase 5 KG] バッチ取得完了: ${kgFetchTime}ms`);
     
-    // 各ページの参照先を処理
-    let totalAdded = 0;
-    for (const result of validResults) {
-      const references = batchReferences.get(result.pageId) || [];
-      
-      if (references.length === 0) {
-        console.log(`[Phase 5 KG] No references found for page ${result.pageId}`);
-        continue;
-      }
-      
-      console.log(`[Phase 5 KG] Found ${references.length} references for page ${result.pageId} (${result.title})`);
-      
-      // 参照先ページを候補に追加
-      for (const { node, edge } of references) {
-        if (!node.pageId || addedPageIds.has(node.pageId)) {
-          continue;
-        }
+        // Phase 5緊急修正: KG拡張の並列化（品質維持）
+        let totalAdded = 0;
         
-        // LanceDBから実際のページデータを取得
-        const referencedPage = await fetchPageFromLanceDB(tbl, node.pageId);
-        
-        if (referencedPage) {
-          expandedResults.push({
-            ...referencedPage,
-            _sourceType: 'kg-reference',
-            _kgWeight: edge.weight,
-            _referencedFrom: result.pageId,
-            _distance: 0.4 // KG参照は高品質として扱う
-          });
-          addedPageIds.add(node.pageId);
-          totalAdded++;
+        for (const result of validResults) {
+          const references = batchReferences.get(result.pageId) || [];
           
-          console.log(`[Phase 5 KG] Added KG reference: ${node.name} (weight: ${edge.weight.toFixed(2)})`);
-        } else {
-          console.log(`[Phase 5 KG] Skipped missing page: ${node.pageId} (${node.name})`);
+          if (references.length === 0) {
+            console.log(`[Phase 5 KG] No references found for page ${result.pageId}`);
+            continue;
+          }
+          
+          console.log(`[Phase 5 KG] Found ${references.length} references for page ${result.pageId} (${result.title})`);
+          
+          // Phase 5緊急修正: 並列でページデータを取得（品質維持）
+          const pagePromises = references.map(async ({ node, edge }) => {
+            if (!node.pageId || addedPageIds.has(node.pageId)) {
+              return null;
+            }
+            
+            try {
+              const referencedPage = await fetchPageFromLanceDB(tbl, node.pageId);
+              if (referencedPage) {
+                return {
+                  ...referencedPage,
+                  _sourceType: 'kg-reference',
+                  _kgWeight: edge.weight,
+                  _referencedFrom: result.pageId,
+                  _distance: 0.4
+                };
+              }
+            } catch (error) {
+              console.warn(`[Phase 5 KG] Failed to fetch page ${node.pageId}:`, error);
+            }
+            return null;
+          });
+          
+          // 並列実行でページデータを取得
+          const pageResults = await Promise.allSettled(pagePromises);
+          
+          for (const pageResult of pageResults) {
+            if (pageResult.status === 'fulfilled' && pageResult.value) {
+              const referencedPage = pageResult.value;
+              expandedResults.push(referencedPage);
+              addedPageIds.add(referencedPage.pageId);
+              totalAdded++;
+              
+              console.log(`[Phase 5 KG] Added KG reference: ${referencedPage.title} (weight: ${referencedPage._kgWeight?.toFixed(2)})`);
+            }
+          }
         }
-      }
-    }
     
     const totalTime = Date.now() - kgStartTime;
     console.log(`[Phase 5 KG] Expansion complete: ${titleResults.length} → ${expandedResults.length} results (+${totalAdded} KG references, ${totalTime}ms)`);

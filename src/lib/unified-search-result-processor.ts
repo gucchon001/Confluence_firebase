@@ -5,6 +5,7 @@
 
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText, calculateHybridScore } from './score-utils';
 import { labelManager } from './label-manager';
+import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
 
 /**
  * 検索結果の生データ
@@ -233,24 +234,36 @@ export class UnifiedSearchResultProcessor {
   }
 
   /**
-   * ドメイン減衰適用
+   * ドメイン減衰・ブースト適用（RRF段階）
+   * Phase 5改善: クエリに関連するドメイン固有キーワードのみをブースト
    */
-  private applyDomainPenalty(rrf: number, result: RawSearchResult): number {
+  private applyDomainPenalty(rrf: number, result: RawSearchResult, query?: string): number {
     try {
       const titleStr = String(result.title || '').toLowerCase();
       const labelsArr = this.getLabelsAsArray(result.labels);
       const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
       
       const penaltyTerms = labelManager.getPenaltyTerms();
-      const genericTitleTerms = ['共通要件','非機能要件','用語','ワード','ディフィニション','definition','ガイドライン','一覧','フロー','要件'];
       
       const hasPenalty = penaltyTerms.some(t => titleStr.includes(t)) || 
                         lowerLabels.some(l => penaltyTerms.some(t => l.includes(t)));
-      const isGenericDoc = genericTitleTerms.some(t => titleStr.includes(t));
+      const isGenericDoc = GENERIC_DOCUMENT_TERMS.some(t => titleStr.includes(t.toLowerCase()));
       
+      // 減衰適用（強化版）
       if (hasPenalty) rrf *= 0.9;
-      if (isGenericDoc) rrf *= 0.8;
+      if (isGenericDoc) rrf *= 0.5;  // 0.8 → 0.5に強化（50%減衰）
       if (String(result.title || '').includes('本システム外')) rrf *= 0.8;
+      
+      // Phase 5改善: クエリとタイトルの両方に含まれるドメイン固有キーワードのみをブースト
+      if (query && !isGenericDoc) {
+        const matchingKeywordCount = CommonTermsHelper.countMatchingDomainKeywords(query, String(result.title || ''));
+        
+        if (matchingKeywordCount > 0) {
+          // マッチしたキーワード数に応じてブースト（最大2倍）
+          const boostFactor = 1.0 + (matchingKeywordCount * 0.5);
+          rrf *= Math.min(boostFactor, 2.0);
+        }
+      }
       
     } catch (error) {
       console.warn('[UnifiedSearchResultProcessor] Domain penalty calculation failed:', error);

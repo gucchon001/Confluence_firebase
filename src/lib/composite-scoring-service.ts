@@ -7,6 +7,9 @@
  * - https://actionbridge.io/ja-JP/llmtutorial/p/llm-rag-chapter7-2-hybrid-multivector-search
  */
 
+import { calculateLabelMatchScore } from './structured-label-scorer';
+import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
+
 export interface SearchSignals {
   vectorDistance: number;      // ベクトル距離（小さいほど良い）
   bm25Score: number;            // BM25スコア（大きいほど良い）
@@ -110,7 +113,9 @@ export class CompositeScoringService {
   /**
    * 複数の結果に対してスコアを計算し、ソート（StructuredLabel対応）
    */
-  public scoreAndRankResults(results: any[], keywords: string[]): any[] {
+  public scoreAndRankResults(results: any[], keywords: string[], query?: string): any[] {
+    // クエリを再構築（キーワードから）
+    const searchQuery = query || keywords.join(' ');
     const scoredResults = results.map(result => {
       // 各信号を抽出
       const vectorDistance = result._distance || result._hybridScore || 2.0;
@@ -150,7 +155,14 @@ export class CompositeScoringService {
         kgBoost,  // Phase 4
       };
       
-      const compositeScore = this.calculateCompositeScore(signals);
+      let compositeScore = this.calculateCompositeScore(signals);
+      
+      // Phase 5改善: Composite Scoring段階でも減衰・ブーストを適用
+      compositeScore.finalScore = this.applyDomainPenaltyAndBoost(
+        compositeScore.finalScore, 
+        result,
+        searchQuery  // クエリを渡す
+      );
       
       return {
         ...result,
@@ -188,6 +200,46 @@ export class CompositeScoringService {
       content_length: record.structured_content_length,
       is_valid: record.structured_is_valid,
     };
+  }
+  
+  /**
+   * ドメイン減衰・ブースト適用（Composite Scoring段階）
+   * Phase 5改善: クエリに関連するドメイン固有キーワードのみをブースト
+   */
+  private applyDomainPenaltyAndBoost(score: number, result: any, query: string): number {
+    const originalScore = score;
+    const title = String(result.title || '');
+    
+    try {
+      const titleStr = title.toLowerCase();
+      const isGenericDoc = GENERIC_DOCUMENT_TERMS.some(t => titleStr.includes(t.toLowerCase()));
+      
+      // 減衰適用（汎用文書を大幅に減衰）
+      if (isGenericDoc) {
+        score *= 0.5;  // 50%減衰
+        // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
+        // console.log(`[Composite] 🔽 汎用文書減衰: "${title.substring(0, 40)}" ${originalScore.toFixed(4)} → ${score.toFixed(4)} (×0.5)`);
+      }
+      
+      // Phase 5改善: クエリとタイトルの両方に含まれるドメイン固有キーワードのみをブースト
+      const matchingKeywordCount = CommonTermsHelper.countMatchingDomainKeywords(query, title);
+      
+      // ブースト適用（クエリと関連するドメイン固有キーワードのみ）
+      if (matchingKeywordCount > 0 && !isGenericDoc) {
+        // マッチしたキーワード数に応じてブースト（最大2倍）
+        // 係数を0.3 → 0.5に強化（より強力にブースト）
+        const boostFactor = 1.0 + (matchingKeywordCount * 0.5);
+        const actualBoost = Math.min(boostFactor, 2.0);
+        score *= actualBoost;
+        // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
+        // console.log(`[Composite] 🔼 クエリ関連ブースト: "${title.substring(0, 40)}" ${originalScore.toFixed(4)} → ${score.toFixed(4)} (×${actualBoost.toFixed(2)}, matched: ${matchingKeywordCount})`);
+      }
+      
+    } catch (error) {
+      console.warn('[CompositeScoringService] Domain penalty/boost calculation failed:', error);
+    }
+    
+    return score;
   }
   
   /**

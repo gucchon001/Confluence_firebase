@@ -265,9 +265,15 @@ export async function summarizeConfluenceDocs({
       .join('\n\n');
 
     const contextText = documents
+      .slice(0, 10)  // Phase 5修正: 最大10件に制限（品質維持とトークン制限のバランス）
       .map(
-        (doc) =>
-          `## ドキュメント: ${doc.title}
+        (doc) => {
+          // Phase 5修正: 各文書の内容を800文字に削減（MAX_TOKENS対策）
+          const truncatedContent = doc.content && doc.content.length > 800 
+            ? doc.content.substring(0, 800) + '...' 
+            : doc.content || '内容なし';
+          
+          return `## ドキュメント: ${doc.title}
 **URL**: ${doc.url}
 **スペース**: ${doc.spaceName || 'Unknown'}
 **最終更新**: ${doc.lastUpdated || 'Unknown'}
@@ -275,7 +281,8 @@ export async function summarizeConfluenceDocs({
         **関連度スコア**: ${(doc as any).scoreText || 'N/A'}
 
 ### 内容
-${doc.content}`
+${truncatedContent}`;
+        }
       )
       .join('\n\n---\n\n');
 

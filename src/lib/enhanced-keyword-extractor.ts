@@ -4,51 +4,14 @@
  * ネガティブワードを除去し、核心キーワードを優先化
  */
 
-/**
- * ネガティブワード（検索ノイズとなる単語）
- */
-const NEGATIVE_WORDS = new Set([
-  // 疑問詞
-  '何', '何が', 'なに', 'いつ', 'どこ', 'だれ', 'どの', 'どう', 'どのように',
-  '何で', 'なぜ', 'どうして',
-  
-  // 可否表現
-  'できる', 'できない', 'できますか', 'できませんか',
-  '可能', '不可能', '可能ですか', '不可能ですか',
-  
-  // 原因・理由
-  '原因', '理由', 'なぜ', 'どうして',
-  
-  // 方法
-  '方法', 'やり方', '手順', '仕方',
-  
-  // 丁寧語
-  'ください', 'ます', 'です', 'でしょうか',
-  
-  // 接続詞・助詞
-  'は', 'が', 'を', 'に', 'へ', 'と', 'から', 'まで', 'より',
-  'の', 'や', 'など', 'か',
-  
-  // 一般的な動詞
-  '教える', '教えて', '知る', '知りたい', '確認', '見る',
-]);
-
-/**
- * 核心キーワードのパターン（優先的に抽出）
- */
-const CORE_KEYWORD_PATTERNS = [
-  // 番号_機能名パターン
-  /(\d+_[^、。！？\s]+)/g,
-  
-  // 機能名パターン
-  /(会員|教室|求人|応募|契約|請求|オファー|記事|口コミ|採用|退会|登録|削除|編集|検索|一覧|詳細|管理|設定|更新)/g,
-  
-  // 属性パターン
-  /(学年|職業|プロフィール|メール|パスワード|アカウント|情報|データ|期間|日時|番号)/g,
-];
+import { NEGATIVE_WORDS_SET } from './common-terms-config';
 
 /**
  * 強化版キーワード抽出
+ * 
+ * Phase 5改善: ハードコードパターンを完全削除
+ * ドメイン知識ファイル (keyword-lists-v2.json) がメインのキーワードソース
+ * 保守性を向上させるため、手動管理が必要なパターンマッチングは使用しない
  */
 export class EnhancedKeywordExtractor {
   /**
@@ -60,26 +23,17 @@ export class EnhancedKeywordExtractor {
     priorityKeywords: string[];
   } {
     // ネガティブワードを除去
-    const coreKeywords = originalKeywords.filter(kw => !NEGATIVE_WORDS.has(kw));
-    const removedWords = originalKeywords.filter(kw => NEGATIVE_WORDS.has(kw));
+    const coreKeywords = originalKeywords.filter(kw => !NEGATIVE_WORDS_SET.has(kw));
+    const removedWords = originalKeywords.filter(kw => NEGATIVE_WORDS_SET.has(kw));
     
-    // 核心キーワードを抽出
-    const priorityKeywords: string[] = [];
-    
-    for (const pattern of CORE_KEYWORD_PATTERNS) {
-      const matches = query.matchAll(pattern);
-      for (const match of matches) {
-        const keyword = match[1];
-        if (keyword && !priorityKeywords.includes(keyword)) {
-          priorityKeywords.push(keyword);
-        }
-      }
-    }
+    // Phase 5改善: ハードコードパターンを削除
+    // 優先キーワードはドメイン知識から抽出されたキーワードの上位3つを使用
+    const priorityKeywords = coreKeywords.slice(0, 3);
     
     return {
       coreKeywords,
       removedWords,
-      priorityKeywords: priorityKeywords.length > 0 ? priorityKeywords : coreKeywords.slice(0, 3)
+      priorityKeywords
     };
   }
   
@@ -90,7 +44,7 @@ export class EnhancedKeywordExtractor {
     // ネガティブワードを除去
     let simplified = query;
     
-    for (const word of NEGATIVE_WORDS) {
+    for (const word of NEGATIVE_WORDS_SET) {
       simplified = simplified.replace(new RegExp(word, 'g'), '');
     }
     

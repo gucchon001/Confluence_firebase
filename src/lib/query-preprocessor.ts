@@ -3,6 +3,8 @@
  * 検索品質向上のためのクエリ拡張と正規化
  */
 
+import { QUERY_STOP_WORDS_SET } from './common-terms-config';
+
 export interface ProcessedQuery {
   originalQuery: string;
   processedQuery: string;
@@ -62,16 +64,10 @@ function extractKeywords(query: string): string[] {
 }
 
 /**
- * ストップワード判定
+ * ストップワード判定（統一設定から）
  */
 function isStopWord(word: string): boolean {
-  const stopWords = [
-    'は', 'が', 'を', 'に', 'で', 'と', 'の', 'も', 'から', 'まで',
-    'について', 'に関して', 'について', 'の詳細', 'の使い方',
-    '機能', '方法', 'やり方', 'について', 'とは', 'です', 'である'
-  ];
-  
-  return stopWords.includes(word.toLowerCase());
+  return QUERY_STOP_WORDS_SET.has(word.toLowerCase());
 }
 
 /**

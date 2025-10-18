@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 import { streamingSummarizeConfluenceDocs } from '@/ai/flows/streaming-summarize-confluence-docs';
 import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
-import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
+import { waitForInitialization, isStartupInitialized } from '@/lib/startup-optimizer';
 import { getFirebaseFirestore } from '@/lib/firebase-unified';
 import * as admin from 'firebase-admin';
 import { initializeFirebaseAdmin } from '@/lib/firebase-admin-init';
@@ -15,6 +15,7 @@ import { convertPostLogToAdminFirestore } from '@/lib/firestore-data-mapper-admi
 import { postLogService } from '@/lib/post-log-service';
 import type { PostLog, ProcessingStep } from '@/types';
 import { GeminiConfig } from '@/config/ai-models-config';
+// 重複コード修正をロールバック
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
 try {
@@ -171,25 +172,27 @@ const PROCESSING_STEPS = [
   }
 ];
 
-// サーバー起動時に1回だけ初期化を実行（モジュールレベル）
-let isServerInitialized = false;
-let serverInitTime = 0;
-
+// Phase 6最適化: バックグラウンド初期化の状態を確認
 async function ensureServerInitialized() {
-  if (isServerInitialized) {
-    return serverInitTime;
+  const startTime = Date.now();
+  
+  // バックグラウンド初期化が完了済みか確認
+  if (isStartupInitialized()) {
+    console.log('✅ [API] バックグラウンド初期化完了済み - 即座に処理開始');
+    return 0; // 待ち時間なし
   }
   
-  const startTime = Date.now();
-  await initializeStartupOptimizations();
-  serverInitTime = Date.now() - startTime;
-  isServerInitialized = true;
-  console.log(`🚀 サーバー初回起動完了: ${serverInitTime}ms`);
-  return serverInitTime;
+  // まだ初期化中の場合は完了を待つ
+  console.log('⏳ [API] バックグラウンド初期化中 - 完了を待機...');
+  await waitForInitialization();
+  const waitTime = Date.now() - startTime;
+  console.log(`✅ [API] 初期化完了 (待機時間: ${waitTime}ms)`);
+  return waitTime;
 }
 
 export const POST = async (req: NextRequest) => {
   console.log('🚀 [API] streaming-process route called');
+  console.error('🔍 [FORCE API LOG] API呼び出し開始');
   
   try {
     // サーバー起動時に1回だけ初期化（2回目以降は即座にreturn）
@@ -322,7 +325,7 @@ export const POST = async (req: NextRequest) => {
           // クライアント側でも見えるように詳細情報を送信
           const searchDetailMessage = {
             type: 'step_update',
-            step: 0,
+            step: 0,  // Phase 5修正: 検索完了はステップ0（0ベース）
             stepId: 'search',
             title: '検索完了',
             description: `ハイブリッド検索完了: ${Object.entries(searchSourceStats).map(([source, count]) => `${source}=${count}`).join(', ')}`,
@@ -348,7 +351,7 @@ export const POST = async (req: NextRequest) => {
           // ドキュメント処理ステップで参照情報を含める
           const processingMessage = {
             type: 'step_update',
-            step: 1,
+            step: 1,  // Phase 5修正: ドキュメント処理はステップ1（0ベース）
             stepId: 'processing',
             title: 'ドキュメント処理中...',
             description: `検索結果 ${relevantDocs.length} 件を分析・整理しています...`,
@@ -544,7 +547,7 @@ export const POST = async (req: NextRequest) => {
               // 完了メッセージ（保存されたpostLogIdを含める）
               const completionMessage = {
                 type: 'completion',
-                step: 4,
+                step: 3,  // Phase 5修正: 完了はステップ3（0ベース）
                 stepId: 'completed',
                 title: '完了',
                 description: '回答が生成されました',
@@ -622,13 +625,15 @@ export const POST = async (req: NextRequest) => {
               chunkIndex: 1,
               isComplete: true,
               references: relevantDocs.map((doc, index) => ({
-                id: doc.id || `${doc.pageId}-${index}`,
-                title: doc.title || 'タイトル不明',
-                url: doc.url || '',
-                distance: doc.distance || 0.5,
-                score: doc.score || 0,
-                source: doc.source || 'vector'
-              })),
+              id: doc.id || `${doc.pageId}-${index}`,
+              title: doc.title || 'タイトル不明',
+              url: doc.url || '',
+              spaceName: doc.spaceName || 'Unknown',
+              labels: doc.labels || [],
+              distance: doc.distance,
+              source: doc.source,
+              scoreText: doc.scoreText
+            })),
               step: 2,
               stepId: 'ai_generation',
               title: 'フォールバック回答を生成中...',
@@ -697,13 +702,15 @@ export const POST = async (req: NextRequest) => {
               chunkIndex: 1,
               totalChunks: 1,
               references: relevantDocs.map((doc, index) => ({
-                id: doc.id || `${doc.pageId}-${index}`,
-                title: doc.title || 'タイトル不明',
-                url: doc.url || '',
-                distance: doc.distance || 0.5,
-                score: doc.score || 0,
-                source: doc.source || 'vector'
-              })),
+              id: doc.id || `${doc.pageId}-${index}`,
+              title: doc.title || 'タイトル不明',
+              url: doc.url || '',
+              spaceName: doc.spaceName || 'Unknown',
+              labels: doc.labels || [],
+              distance: doc.distance,
+              source: doc.source,
+              scoreText: doc.scoreText
+            })),
               fullAnswer: fallbackAnswer,
               postLogId: fallbackPostLogId
             };

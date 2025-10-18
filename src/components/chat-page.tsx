@@ -36,6 +36,7 @@ import { streamingProcessClient, ProcessingStep } from '@/lib/streaming-process-
 import AdminDashboard from '@/components/admin-dashboard';
 import { FeedbackRating } from '@/components/feedback-rating';
 import { fixMarkdownTables, normalizeMarkdownSymbols, sharedMarkdownComponents } from '@/lib/markdown-utils';
+// 重複コード修正をロールバック
 // import MigrationButton from '@/components/migration-button';
 
 interface ChatPageProps {
@@ -160,18 +161,10 @@ export default function ChatPage({ user }: ChatPageProps) {
 
   // ストリーミング回答の安全な更新関数
   const updateStreamingAnswer = (newContent: any) => {
-    let safeContent = '';
-    
-    if (typeof newContent === 'string') {
-      safeContent = newContent;
-    } else if (newContent !== null && newContent !== undefined) {
-      safeContent = String(newContent);
-    }
-    
-    // オブジェクトが混入していないかチェック
-    if (safeContent && !safeContent.includes('[object Object]')) {
+    // 元のコードに戻す
+    if (typeof newContent === 'string' && newContent) {
       setStreamingAnswer(prev => {
-        const combined = prev + safeContent;
+        const combined = prev + newContent;
         
         // 最小ルール: 表直前に空行を1つ確保するのみ
         const processedContent = combined.replace(/([。？！｡！？])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
@@ -184,18 +177,10 @@ export default function ChatPage({ user }: ChatPageProps) {
 
   // ストリーミング回答の安全な設定関数
   const setStreamingAnswerSafe = (content: any) => {
-    let safeContent = '';
-    
-    if (typeof content === 'string') {
-      safeContent = content;
-    } else if (content !== null && content !== undefined) {
-      safeContent = String(content);
-    }
-    
-    // オブジェクトが混入していないかチェック
-    if (safeContent && !safeContent.includes('[object Object]')) {
+    // 元のコードに戻す
+    if (typeof content === 'string' && content) {
       // 最小ルール: 表直前に空行を1つ確保（句読点直後のみ）
-      const processedContent = safeContent.replace(/([。？！｡！？])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
+      const processedContent = content.replace(/([。？！｡！？])\n(\|\s*[^\n]+\s*\|)/g, '$1\n\n$2');
       setStreamingAnswer(processedContent);
     } else {
       console.warn('Invalid content detected, using fallback:', content);
@@ -314,7 +299,7 @@ export default function ChatPage({ user }: ChatPageProps) {
     setIsStreaming(true);
     setIsStreamingComplete(false);
     setCurrentStep({
-      step: 1,
+      step: 0,  // Phase 5修正: 0ベースに統一
       stepId: 'initializing',
       title: '処理を開始しています...',
       description: 'サーバーに接続しています...',

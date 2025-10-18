@@ -4,6 +4,7 @@
  */
 
 import { StructuredLabel } from '@/types/structured-label';
+import { GENERIC_FUNCTION_TERMS_SET } from './common-terms-config';
 
 /**
  * クエリとStructuredLabelのマッチングスコアを計算
@@ -50,17 +51,14 @@ export function calculateLabelMatchScore(
       // シンプルに：機能名の主要な2文字以上の部分文字列がクエリに含まれているかチェック
       let partialMatchScore = 0;
       
-      // 汎用語を特定
-      const genericTerms = ['機能', '仕様', '帳票', 'フロー', '管理', '一覧', '登録', '編集', '削除', '閲覧', '詳細', '情報', '画面', 'ページ'];
-      
       // 機能名から2文字以上の部分文字列を抽出してマッチング
       for (let i = 0; i < featureLower.length; i++) {
         for (let len = 2; len <= Math.min(featureLower.length - i, 6); len++) {
           const substring = featureLower.substring(i, i + len);
           
           if (queryLower.includes(substring)) {
-            // 汎用語かチェック
-            const isGeneric = genericTerms.includes(substring);
+            // 汎用語かチェック（統一設定から）
+            const isGeneric = GENERIC_FUNCTION_TERMS_SET.has(substring);
             const weight = isGeneric ? 0.2 : 0.8;
             partialMatchScore += len * weight; // 長いマッチほど高スコア
           }

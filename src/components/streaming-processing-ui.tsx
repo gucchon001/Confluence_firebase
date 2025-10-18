@@ -66,16 +66,16 @@ export const StreamingProcessingUI: React.FC<StreamingProcessingUIProps> = ({
             <div className="space-y-2">
               <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-100 border border-blue-300">
                 <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white">
-                  {currentStep.step === 1 && (
+                  {currentStep.step === 0 && (
                     <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   )}
-                  {currentStep.step === 2 && (
+                  {currentStep.step === 1 && (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   )}
-                  {currentStep.step === 3 && (
+                  {currentStep.step === 2 && (
                     <Brain className="h-3 w-3" />
                   )}
-                  {currentStep.step === 4 && (
+                  {currentStep.step === 3 && (
                     <CheckCircle className="h-3 w-3" />
                   )}
                 </div>

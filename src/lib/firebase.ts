@@ -1,7 +1,7 @@
 'use client';
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
 import { firebaseConfig } from './firebase-config';
@@ -10,17 +10,14 @@ import { firebaseConfig } from './firebase-config';
 // クライアントサイドとサーバーサイドの両方でFirebaseアプリを安全に初期化します。
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Firestoreの設定を最適化（リスナーエラー対策）
-if (!getApps().length || getApps().length === 1) {
+// デフォルトのFirestore初期化（より安全）
+// persistentLocalCacheは一部の環境で400エラーを引き起こすため、デフォルト設定を使用
+if (typeof window !== 'undefined') {
   try {
-    initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-      })
-    });
+    getFirestore(app);
+    console.log('✅ Firestore initialized successfully with default settings');
   } catch (error) {
-    // 既に初期化されている場合はエラーを無視
-    console.log('Firestore already initialized');
+    console.error('❌ Firestore initialization error:', error);
   }
 }
 

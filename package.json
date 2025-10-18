@@ -106,6 +106,7 @@
     "kuromoji": "^0.1.2",
     "lucide-react": "^0.475.0",
     "lunr": "^2.3.9",
+    "msgpackr": "^1.11.5",
     "next": "15.3.3",
     "node-fetch": "^3.3.2",
     "patch-package": "^8.0.0",

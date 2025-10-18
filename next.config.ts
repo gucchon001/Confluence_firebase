@@ -13,6 +13,7 @@ const nextConfig = {
   // 開発環境での最適化
   experimental: {
     // optimizeCss: true, // crittersモジュールの問題で一時的に無効化
+    // Phase 6最適化: instrumentation.tsは自動で有効（Next.js 15+）
   },
   // パッケージの最適化
   transpilePackages: ['lunr'],

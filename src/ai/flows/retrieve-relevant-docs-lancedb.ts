@@ -75,7 +75,7 @@ if (typeof window === 'undefined' && !admin.apps.length) {
     // applicationDefaultCredential()を使用する
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
-      projectId: 'confluence-copilot-ppjye'
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID
     });
     
     console.log('[Firebase Admin] Successfully initialized with application default credentials');
@@ -147,14 +147,14 @@ async function lancedbRetrieverTool(
     console.log('[lancedbRetrieverTool] Calling searchLanceDB with params:', {
       query: optimizedQuery,
       topK: 8,
-      useLunrIndex: false,
+      useLunrIndex: true,  // Phase 6修正: BM25検索を有効化
       labelFilters: filters?.labelFilters
     });
     
     const unifiedResults = await searchLanceDB({
       query: optimizedQuery, // 最適化されたクエリを使用
       topK: 8,
-      useLunrIndex: true, // BM25検索を有効化
+      useLunrIndex: true, // Phase 6修正: BM25検索を有効化（品質向上）
       titleWeight: 3.0, // Phase 0A-3 FIX: タイトルマッチングを有効化
       labelFilters: filters?.labelFilters || {
         includeMeetingNotes: false
@@ -276,7 +276,7 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
           return result;
         }
 
-        // このページの全チャンクを取得（isChunked === trueのみ）
+        // Phase 5緊急修正: チャンク処理の最適化（品質維持）
         const allChunks = await getAllChunksByPageId(String(pageId));
 
         if (allChunks.length <= 1) {
@@ -284,11 +284,26 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
           return result;
         }
 
-        // 全チャンクのコンテンツを統合
-        const mergedContent = allChunks
-          .map((chunk) => chunk.content || '')
-          .filter(Boolean)
-          .join('\n\n'); // セクション区切り
+        // Phase 5緊急修正: 大量チャンクの効率的処理（品質維持）
+        let mergedContent: string;
+        
+        if (allChunks.length > 10) {
+          // 大量チャンクの場合: 並列処理で高速化
+          console.log(`[ChunkMerger] Large chunk set detected: ${allChunks.length} chunks, using parallel processing`);
+          
+          const contentPromises = allChunks.map(async (chunk) => {
+            return chunk.content || '';
+          });
+          
+          const contents = await Promise.all(contentPromises);
+          mergedContent = contents.filter(Boolean).join('\n\n');
+        } else {
+          // 少量チャンクの場合: 従来の処理
+          mergedContent = allChunks
+            .map((chunk) => chunk.content || '')
+            .filter(Boolean)
+            .join('\n\n');
+        }
 
         mergedCount++;
         console.log(

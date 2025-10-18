@@ -171,7 +171,20 @@ export class AnswerCache {
    */
   clear(): void {
     this.cache.clear();
-    console.log('[AnswerCache] Cache cleared');
+    console.log('[AnswerCache] 🗑️ Cache cleared');
+  }
+
+  // 緊急: 特定の質問のキャッシュをクリア
+  clearForQuestion(questionPattern: string): void {
+    const keysToDelete: string[] = [];
+    for (const key of this.cache.keys()) {
+      if (key.includes(questionPattern)) {
+        keysToDelete.push(key);
+      }
+    }
+    
+    keysToDelete.forEach(key => this.cache.delete(key));
+    console.log(`[AnswerCache] 🗑️ Cleared ${keysToDelete.length} entries for pattern: "${questionPattern}"`);
   }
 
   /**
@@ -199,6 +212,9 @@ let answerCacheInstance: AnswerCache | null = null;
 export function getAnswerCache(options?: AnswerCacheOptions): AnswerCache {
   if (!answerCacheInstance) {
     answerCacheInstance = new AnswerCache(options);
+    // 緊急: 起動時にキャッシュを完全クリア（デグレード対策）
+    answerCacheInstance.clear();
+    console.log('[AnswerCache] 🔄 起動時にキャッシュを完全クリアしました（デグレード対策）');
   }
   return answerCacheInstance;
 }

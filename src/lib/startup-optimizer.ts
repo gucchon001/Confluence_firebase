@@ -10,6 +10,26 @@ let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
 /**
+ * 初期化が完了しているかチェック
+ */
+export function isStartupInitialized(): boolean {
+  return isInitialized;
+}
+
+/**
+ * 初期化完了を待つ
+ * すでに完了していれば即座にreturn
+ */
+export async function waitForInitialization(): Promise<void> {
+  if (isInitialized) {
+    return;
+  }
+  if (initializationPromise) {
+    await initializationPromise;
+  }
+}
+
+/**
  * 起動時の最適化処理を実行
  * 複数回呼び出されても一度だけ実行される
  * 
@@ -107,9 +127,8 @@ async function performInitializationAsync(): Promise<void> {
         console.log('[StartupOptimizer] Pre-initializing Japanese tokenizer...');
         const startTime = Date.now();
         
-        // ⚡ 最適化: トークナイザーを遅延初期化に変更
-        // 実際に必要になった時に初期化する
-        await preInitializeTokenizerLazy();
+        // Phase 6修正: 実際にkuromojiを初期化する（品質維持のため）
+        await preInitializeTokenizer();
         
         const endTime = Date.now();
         console.log(`[StartupOptimizer] Japanese tokenizer initialized in ${endTime - startTime}ms`);
