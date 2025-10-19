@@ -84,10 +84,17 @@
 
 #### デプロイ・設定
 - **[deployment-guide.md](./operations/deployment-guide.md)** - 包括的デプロイガイド
+- **[production-deployment-checklist.md](./operations/production-deployment-checklist.md)** ✅ - 本番デプロイチェックリスト
 - **[build-optimization-guide.md](./operations/build-optimization-guide.md)** 🚀 **NEW** - ビルド最適化ガイド（75-90%高速化）
 - **[firebase-app-hosting-configuration.md](./operations/firebase-app-hosting-configuration.md)** ⭐ - App Hosting設定（動作確認済み）
 - **[firebase-app-hosting-troubleshooting.md](./operations/firebase-app-hosting-troubleshooting.md)** - トラブルシューティング
 - **[required-environment-variables.md](./operations/required-environment-variables.md)** - 必須環境変数一覧
+
+#### パフォーマンス分析（Phase 0A-4）
+- **[phase-0a-4-cloud-logging-analysis.md](./operations/phase-0a-4-cloud-logging-analysis.md)** 🔍 **最新** - Cloud Logging詳細分析（145秒遅延問題）
+- **[phase-0a-4-production-issue-analysis.md](./operations/phase-0a-4-production-issue-analysis.md)** - 本番環境問題分析
+- **[phase-0a-4-production-deployment-fixes.md](./operations/phase-0a-4-production-deployment-fixes.md)** - 本番デプロイ修正
+- **[phase-0a-4-performance-regression-analysis.md](./operations/phase-0a-4-performance-regression-analysis.md)** - パフォーマンス低下分析
 
 #### 運用・管理
 - **[backup-management-guide.md](./operations/backup-management-guide.md)** - バックアップ管理ガイド

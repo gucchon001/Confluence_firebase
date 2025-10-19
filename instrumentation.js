@@ -11,6 +11,36 @@ export async function register() {
     
     const startTime = Date.now();
     
+    // Phase 0A-4 FIX: データ存在確認
+    const fs = require('fs');
+    const path = require('path');
+    
+    console.log('📦 [Instrumentation] データ存在確認中...');
+    const lancedbPath = path.resolve(process.cwd(), '.lancedb');
+    const dataPath = path.resolve(process.cwd(), 'data');
+    const kuromojiDictPath = path.resolve(process.cwd(), 'node_modules/kuromoji/dict');
+    const kuromojiStandalonePath = path.resolve(process.cwd(), '.next/standalone/node_modules/kuromoji/dict');
+    
+    const lancedbExists = fs.existsSync(lancedbPath);
+    const dataExists = fs.existsSync(dataPath);
+    const kuromojiDictExists = fs.existsSync(kuromojiDictPath);
+    const kuromojiStandaloneExists = fs.existsSync(kuromojiStandalonePath);
+    
+    console.log(`📊 [Instrumentation] データチェック結果:`);
+    console.log(`   - LanceDB (.lancedb): ${lancedbExists ? '✅' : '❌'}`);
+    console.log(`   - Domain Knowledge (data/): ${dataExists ? '✅' : '❌'}`);
+    console.log(`   - Kuromoji Dict (node_modules): ${kuromojiDictExists ? '✅' : '❌'}`);
+    console.log(`   - Kuromoji Dict (standalone): ${kuromojiStandaloneExists ? '✅' : '❌'}`);
+    
+    if (!lancedbExists || !dataExists) {
+      console.warn('⚠️  [Instrumentation] データが見つかりません！実行時にCloud Storageからダウンロードします...');
+    }
+    
+    if (!kuromojiDictExists && !kuromojiStandaloneExists) {
+      console.error('❌ [Instrumentation] Kuromoji辞書ファイルが見つかりません！');
+      console.error('   BM25検索が機能しない可能性があります。');
+    }
+    
     try {
       // Phase 6最適化: サーバー起動時にバックグラウンドで事前ロード
       const { initializeStartupOptimizations } = await import('./src/lib/startup-optimizer.ts');

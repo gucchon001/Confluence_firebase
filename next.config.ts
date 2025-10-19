@@ -27,12 +27,20 @@ const nextConfig = {
     
     // Kuromoji辞書ファイルをビルドに含める（Phase 0A-4: 本番環境対応）
     if (isServer) {
+      const CopyPlugin = require('copy-webpack-plugin');
       config.plugins.push(
-        new (require('copy-webpack-plugin'))({
+        new CopyPlugin({
           patterns: [
+            // Standalone ビルド用
             {
               from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
               to: path.resolve(__dirname, '.next/standalone/node_modules/kuromoji/dict'),
+              noErrorOnMissing: true,
+            },
+            // Server ビルド用（開発・本番両対応）
+            {
+              from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
+              to: path.resolve(__dirname, '.next/server/node_modules/kuromoji/dict'),
               noErrorOnMissing: true,
             },
           ],
