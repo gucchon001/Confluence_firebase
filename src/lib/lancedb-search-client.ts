@@ -715,7 +715,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const deduplicated = deduplicateByPageId(finalResults);
     
     // Phase 0A-1.5: 空ページフィルター（コンテンツ長ベース、StructuredLabel不要）
-    const filtered = filterInvalidPagesByContent(deduplicated);
+    const contentFiltered = filterInvalidPagesByContent(deduplicated);
+    
+    // Phase 0A-4: 議事録フィルター（StructuredLabelベース）
+    // structured_category = 'meeting' のページを除外
+    const includeMeetingNotes = labelFilters?.includeMeetingNotes ?? false;
+    const filtered = filterMeetingNotesByCategory(contentFiltered, includeMeetingNotes);
     
     // 統一検索結果処理サービスを使用して結果を処理（RRF無効化で高速化）
     const processedResults = unifiedSearchResultProcessor.processSearchResults(filtered, {
@@ -819,6 +824,66 @@ function filterInvalidPagesByContent(results: any[]): any[] {
   
   if (validResults.length < results.length) {
     console.log(`[EmptyPageFilter] Filtered: ${results.length} → ${validResults.length} results (removed ${results.length - validResults.length} invalid pages)`);
+  }
+  
+  return validResults;
+}
+
+/**
+ * Phase 0A-4: 議事録フィルター（ハイブリッド方式）
+ * 1. structured_category = 'meeting' で除外
+ * 2. structured_categoryがnullの場合、タイトルパターンで除外
+ */
+function filterMeetingNotesByCategory(results: any[], includeMeetingNotes: boolean): any[] {
+  if (includeMeetingNotes || results.length === 0) {
+    return results; // 議事録を含める設定の場合はフィルタリングしない
+  }
+  
+  // 議事録を示すタイトルパターン（structured_categoryがnullの場合のフォールバック）
+  const meetingPatterns = [
+    /ミーティング議事録/i,
+    /会議議事録/i,
+    /^\d{4}-\d{2}-\d{2}\s+(ミーティング|会議|打ち合わせ)/i, // "2023-01-18 ミーティング"
+    /MTG議事録/i,
+    /meeting\s*notes?/i,
+  ];
+  
+  const validResults = [];
+  let filteredByCategory = 0;
+  let filteredByTitle = 0;
+  
+  for (const result of results) {
+    const title = result.title || '';
+    const category = result.structured_category || (result as any).category;
+    
+    // 方法1: structured_categoryで判定
+    if (category === 'meeting') {
+      filteredByCategory++;
+      if (filteredByCategory + filteredByTitle <= 5) { // 最初の5件のみログ出力
+        console.log(`[MeetingNoteFilter] Excluded: ${title} (category: meeting)`);
+      }
+      continue;
+    }
+    
+    // 方法2: structured_categoryがnullの場合、タイトルパターンで判定
+    if (!category || category === 'null') {
+      const isMeetingNote = meetingPatterns.some(pattern => pattern.test(title));
+      
+      if (isMeetingNote) {
+        filteredByTitle++;
+        if (filteredByCategory + filteredByTitle <= 5) { // 最初の5件のみログ出力
+          console.log(`[MeetingNoteFilter] Excluded: ${title} (title pattern match)`);
+        }
+        continue;
+      }
+    }
+    
+    validResults.push(result);
+  }
+  
+  const totalFiltered = filteredByCategory + filteredByTitle;
+  if (totalFiltered > 0) {
+    console.log(`[MeetingNoteFilter] Filtered: ${results.length} → ${validResults.length} results (removed ${totalFiltered} meeting notes: ${filteredByCategory} by category, ${filteredByTitle} by title)`);
   }
   
   return validResults;
