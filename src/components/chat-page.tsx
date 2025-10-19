@@ -295,17 +295,10 @@ export default function ChatPage({ user }: ChatPageProps) {
     // 処理開始時刻を記録（ユーザー体感時間を正確に測定）
     const clientStartTime = Date.now();
     
-    // ストリーミング処理の初期化（即座に進捗表示を開始）
+    // ストリーミング処理の初期化
     setIsStreaming(true);
     setIsStreamingComplete(false);
-    setCurrentStep({
-      step: 0,  // Phase 5修正: 0ベースに統一
-      stepId: 'initializing',
-      title: '処理を開始しています...',
-      description: 'サーバーに接続しています...',
-      totalSteps: 4,
-      icon: 'clock'
-    });
+    setCurrentStep(null); // サーバーからのステップ更新を待つ
     setStreamingError(null);
     setStreamingAnswer('');
     setStreamingReferences([]);
