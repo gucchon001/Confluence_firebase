@@ -248,7 +248,12 @@ export async function summarizeConfluenceDocs({
 
     // Phase 5 Week 2: 回答キャッシュチェック（品質影響なし）
     const answerCache = getAnswerCache();
-    const cachedAnswer = answerCache.get(question, documents);
+    // ドキュメントをキャッシュ用の形式に変換（urlをIDとして使用）
+    const cacheDocuments = documents.map(doc => ({
+      id: doc.url || doc.title || '', // urlまたはtitleをIDとして使用
+      pageId: doc.url || doc.title || ''
+    }));
+    const cachedAnswer = answerCache.get(question, cacheDocuments);
     
     if (cachedAnswer) {
       console.log('[Phase 5 Cache] ⚡ 回答キャッシュヒット - 即座に返却');

@@ -47,34 +47,39 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
     const db = admin.firestore();
     const postLogsRef = db.collection('postLogs');
     
-    console.log('🚀 [DEBUG] savePostLogToAdminDB関数が呼ばれました');
-    console.log('🚀 [DEBUG] logData.serverStartupTime:', logData.serverStartupTime);
-    console.log('🔍 サーバーサイド投稿ログデータの詳細:', {
-      userId: logData.userId,
-      question: logData.question?.substring(0, 50) + '...',
-      answer: logData.answer?.substring(0, 50) + '...',
-      serverStartupTime: logData.serverStartupTime, // サーバー起動時間を追加
-      searchTime: logData.searchTime,
-      aiGenerationTime: logData.aiGenerationTime,
-      totalTime: logData.totalTime,
-      referencesCount: logData.referencesCount,
-      answerLength: logData.answerLength,
-      timestamp: logData.timestamp,
-      metadata: logData.metadata // metadataも確認
-    });
+        // savePostLogToAdminDB関数が呼ばれました
+    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
+      console.log('🔍 サーバーサイド投稿ログデータの詳細:', {
+        userId: logData.userId,
+        question: logData.question?.substring(0, 50) + '...',
+        answer: logData.answer?.substring(0, 50) + '...',
+        serverStartupTime: logData.serverStartupTime, // サーバー起動時間を追加
+        searchTime: logData.searchTime,
+        aiGenerationTime: logData.aiGenerationTime,
+        totalTime: logData.totalTime,
+        referencesCount: logData.referencesCount,
+        answerLength: logData.answerLength,
+        timestamp: logData.timestamp,
+        metadata: logData.metadata // metadataも確認
+      });
+    }
     
     // Timestamp変換ロジックを共通化
     const firestoreData = convertPostLogToAdminFirestore(logData);
     
-    console.log('🔍 Firestore保存データ確認:', {
-      serverStartupTime: firestoreData.serverStartupTime,
-      searchTime: firestoreData.searchTime,
-      aiGenerationTime: firestoreData.aiGenerationTime,
-      totalTime: firestoreData.totalTime
-    });
+    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
+      console.log('🔍 Firestore保存データ確認:', {
+        serverStartupTime: firestoreData.serverStartupTime,
+        searchTime: firestoreData.searchTime,
+        aiGenerationTime: firestoreData.aiGenerationTime,
+        totalTime: firestoreData.totalTime
+      });
+    }
     
     const docRef = await postLogsRef.add(firestoreData);
-    console.log('📝 サーバーサイド投稿ログを保存しました:', docRef.id);
+    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
+      console.log('📝 サーバーサイド投稿ログを保存しました:', docRef.id);
+    }
     return docRef.id;
   } catch (error) {
     console.error('❌ サーバーサイド投稿ログ保存に失敗しました:', error);
@@ -191,6 +196,9 @@ async function ensureServerInitialized() {
 }
 
 export const POST = async (req: NextRequest) => {
+  // API呼び出し開始時刻を記録（TTFB計測用）
+  const apiStartTime = Date.now();
+  
   console.log('🚀 [API] streaming-process route called');
   console.error('🔍 [FORCE API LOG] API呼び出し開始');
   
@@ -219,9 +227,26 @@ export const POST = async (req: NextRequest) => {
 
     // ストリーミング応答の設定
     const encoder = new TextEncoder();
+    // ReadableStream作成開始
     const stream = new ReadableStream({
-      async start(controller) {
-        try {
+        async start(controller) {
+          try {
+            // 【最優先】即座に最初のステップを送信してユーザーに応答を見せる
+            await updateStep(controller, encoder, 0, 'search', '処理を開始しています...');
+          
+          // TTFB（Time To First Byte）を計測: API呼び出しから最初のストリーミングチャンクまでの時間
+          const ttfbTime = Date.now() - apiStartTime;
+          if (ttfbTime > 100) { // 100ms以上の場合のみログ出力
+            console.log('⚡ [TTFB] 最初のチャンク送信まで:', {
+              ttfbTime: `${ttfbTime}ms`,
+              serverStartupTime: `${serverStartupTime}ms`,
+              initWaitTime: `${ttfbTime - serverStartupTime}ms`
+            });
+          }
+          
+          // 総処理時間の開始時刻を記録（TTFB後から）
+          const processingStartTime = Date.now();
+          
           let currentStep = 0;
           let fullAnswer = '';
           let relevantDocs: any[] = [];
@@ -230,13 +255,15 @@ export const POST = async (req: NextRequest) => {
           // クライアント側の開始時刻を取得（存在しない場合は現在時刻）
           const clientStartTimeStr = req.headers.get('x-client-start-time');
           const clientStartTime = clientStartTimeStr ? parseInt(clientStartTimeStr) : Date.now();
-          const startTime = clientStartTime;
           
-          console.log('⏱️ 処理時間計測開始:', {
-            clientStartTime: new Date(clientStartTime).toISOString(),
-            serverReceiveTime: new Date().toISOString(),
-            latency: Date.now() - clientStartTime
-          });
+          const latency = Date.now() - clientStartTime;
+          if (latency > 100) { // 100ms以上の場合のみログ出力
+            console.log('⏱️ 処理時間計測開始:', {
+              clientStartTime: new Date(clientStartTime).toISOString(),
+              serverReceiveTime: new Date().toISOString(),
+              latency: latency
+            });
+          }
           
           let searchTime = 0;
           let aiGenerationTime = 0;
@@ -250,11 +277,12 @@ export const POST = async (req: NextRequest) => {
           const userAgent = req.headers.get('user-agent') || 'unknown';
           const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
           
-          // ステップ1: 検索中...
+          // ステップ更新: 検索開始
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
 
           // 検索処理とユーザー情報取得を並行実行（パフォーマンス最適化）
-          const searchStartTime = Date.now();
+          // Phase 0A-4 FIX: 検索時間は処理開始時刻から計測（TTFB後の処理時間）
+          const searchStartTime = processingStartTime;
           let userDisplayName = 'anonymous';
           
           const [searchResults, userInfo] = await Promise.all([
@@ -282,7 +310,9 @@ export const POST = async (req: NextRequest) => {
           
           relevantDocs = searchResults;
           userDisplayName = userInfo;
-          searchTime = Date.now() - searchStartTime;
+          // Phase 0A-4 FIX: 検索時間は検索開始から検索完了まで
+          const searchEndTime = Date.now();
+          searchTime = searchEndTime - searchStartTime;
           
           console.log('🔍 投稿ログ用データ:', {
             userId,
@@ -373,9 +403,9 @@ export const POST = async (req: NextRequest) => {
             encoder.encode(`data: ${JSON.stringify(processingMessage)}\n\n`)
           );
           
-          const processingStartTime = Date.now();
+          const documentProcessingStartTime = Date.now();
           await delay(100); // 視覚的効果のための最小限の遅延
-          const processingTime = Date.now() - processingStartTime;
+          const processingTime = Date.now() - documentProcessingStartTime;
 
           // ドキュメント処理の詳細分析
           const processingAnalysis = {
@@ -406,7 +436,8 @@ export const POST = async (req: NextRequest) => {
           // ストリーミング要約の実行
           let chunkIndex = 0;
           let totalChunks = 0;
-          const aiStartTime = Date.now();
+          // Phase 0A-4 FIX: AI生成時間は検索完了時刻から計測
+          const aiStartTime = searchEndTime;
 
           try {
             for await (const result of streamingSummarizeConfluenceDocs({
@@ -486,12 +517,14 @@ export const POST = async (req: NextRequest) => {
               });
 
               // 投稿ログの保存（completionMessageの前に実行）
-              totalTime = Date.now() - startTime;
-              console.log('🎯 ストリーミング処理完了 - postLogs保存処理を開始します');
+              // Phase 0A-4 FIX: 総処理時間はAPI開始時刻から計測（TTFBとの整合性を保つ）
+              totalTime = Date.now() - apiStartTime;
+              // ストリーミング処理完了
               
               let savedPostLogId: string | null = null;
               
               try {
+              if (totalTime > 1000) { // 1秒以上の場合のみログ出力
                 console.log('📊 postLogs保存データを準備中:', {
                   userId,
                   question: question.substring(0, 50) + '...',
@@ -501,14 +534,16 @@ export const POST = async (req: NextRequest) => {
                   totalTime,
                   referencesCount: result.references.length
                 });
+              }
                 
-                console.log('🔍 PostLog保存処理開始 - isComplete:', result.isComplete);
+                // PostLog保存処理開始
                 
                 const logData = {
                   userId,
                   question,
                   answer: fullAnswer,
                   serverStartupTime, // サーバー起動処理時間を追加
+                  ttfbTime, // 最初のチャンクまでの時間（TTFB）を追加
                   searchTime,
                   aiGenerationTime,
                   totalTime,
@@ -525,21 +560,26 @@ export const POST = async (req: NextRequest) => {
                   }
                 };
                 
-                console.log('🔍 PostLog保存データ確認:', {
-                  serverStartupTime,
-                  searchTime,
-                  aiGenerationTime,
-                  totalTime
-                });
+                if (totalTime > 1000) { // 1秒以上の場合のみログ出力
+                  console.log('🔍 PostLog保存データ確認:', {
+                    serverStartupTime,
+                    ttfbTime,
+                    searchTime,
+                    aiGenerationTime,
+                    totalTime
+                  });
+                }
                 
                 savedPostLogId = await savePostLogToAdminDB(logData);
-                console.log('✅ 投稿ログを保存しました:', {
-                  postLogId: savedPostLogId,
-                  userId: logData.userId,
-                  userDisplayName: logData.metadata.userDisplayName,
-                  question: logData.question.substring(0, 50) + '...',
-                  timestamp: logData.timestamp.toISOString()
-                });
+                if (totalTime > 1000) { // 1秒以上の場合のみログ出力
+                  console.log('✅ 投稿ログを保存しました:', {
+                    postLogId: savedPostLogId,
+                    userId: logData.userId,
+                    userDisplayName: logData.metadata.userDisplayName,
+                    question: logData.question.substring(0, 50) + '...',
+                    timestamp: logData.timestamp.toISOString()
+                  });
+                }
               } catch (logError) {
                 console.error('❌ 投稿ログの保存に失敗しました:', logError);
               }
@@ -647,7 +687,7 @@ export const POST = async (req: NextRequest) => {
             fullAnswer = fallbackAnswer;
             
             // エラー時の投稿ログの保存（completionMessageの前に実行）
-            totalTime = Date.now() - startTime;
+            totalTime = Date.now() - apiStartTime;
             let fallbackPostLogId: string | null = null;
             
             try {

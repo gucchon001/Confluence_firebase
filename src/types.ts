@@ -80,6 +80,7 @@ export type PostLog = {
   question: string;
   answer: string;
   serverStartupTime: number; // ミリ秒 - サーバー起動処理時間
+  ttfbTime?: number; // ミリ秒 - Time To First Byte（最初のストリーミングチャンクまでの時間）
   searchTime: number; // ミリ秒
   aiGenerationTime: number; // ミリ秒
   totalTime: number; // ミリ秒

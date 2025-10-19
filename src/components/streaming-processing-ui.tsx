@@ -34,8 +34,38 @@ export const StreamingProcessingUI: React.FC<StreamingProcessingUIProps> = ({
     }
   }, [currentStep]);
 
-  if (!isVisible || !currentStep) {
+  if (!isVisible) {
     return null;
+  }
+
+  // currentStepがnullの場合は初期ローディング状態を表示
+  if (!currentStep) {
+    return (
+      <div className="flex items-start gap-4 max-w-full">
+        <div className="h-8 w-8 border shrink-0 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+          <Loader2 className="h-4 w-4 text-white animate-spin" />
+        </div>
+        <div className="flex flex-col gap-2 items-start max-w-[85%] sm:max-w-[75%]">
+          <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 w-full min-w-[200px]">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-100 border border-blue-300">
+                <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                  <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-blue-900">
+                    接続中...
+                  </div>
+                  <div className="text-xs text-blue-700">
+                    サーバーに接続しています...
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   const IconComponent = STEP_ICONS[currentStep.icon as keyof typeof STEP_ICONS] || STEP_ICONS.default;

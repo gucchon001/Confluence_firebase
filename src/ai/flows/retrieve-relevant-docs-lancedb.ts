@@ -255,6 +255,7 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
     return results;
   }
 
+  const enrichStartTime = Date.now();
   console.log(`[ChunkMerger] Starting chunk enrichment for ${results.length} results`);
   
   let skippedCount = 0;
@@ -306,9 +307,11 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
         }
 
         mergedCount++;
-        console.log(
-          `[ChunkMerger] Merged ${allChunks.length} chunks for "${result.title}" (${result.content?.length || 0} → ${mergedContent.length} chars)`
-        );
+        if (allChunks.length > 1) { // 複数チャンクの場合のみログ出力
+          console.log(
+            `[ChunkMerger] Merged ${allChunks.length} chunks for "${result.title}" (${result.content?.length || 0} → ${mergedContent.length} chars)`
+          );
+        }
 
         return {
           ...result,
@@ -324,29 +327,101 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
   );
 
   const totalChunks = enriched.reduce((sum, r) => sum + (r.chunkCount || 1), 0);
-  console.log(`[ChunkMerger] Enrichment complete. Skipped: ${skippedCount}, Merged: ${mergedCount}, Total chunks: ${totalChunks}`);
+  const enrichDuration = Date.now() - enrichStartTime;
+  if (enrichDuration > 200 || mergedCount > 0) { // 200ms以上またはマージがあった場合のみログ出力
+    console.log(`[ChunkMerger] ⚡ Enrichment complete in ${enrichDuration}ms. Skipped: ${skippedCount}, Merged: ${mergedCount}, Total chunks: ${totalChunks}`);
+  }
 
   return enriched;
 }
 
 /**
- * pageIdで全チャンクを取得（Phase 0A-1.5 + Phase 0A-3 FIX）
+ * pageIdで全チャンクを取得（Phase 0A-4 緊急パフォーマンス修正）
  * 
- * **Phase 0A-3 FIX**: WHERE句が機能しないため、Phase 0A-2の方法に戻す
- * - LanceDBのWHERE句でpageId検索が0件を返すバグを確認
- * - 代わりにidフィールドで前方一致検索を使用
+ * **Phase 0A-4 FIX**: 10,000行スキャンを避けて、効率的な検索を実装
+ * - まず完全一致で検索を試行
+ * - 見つからない場合は前方一致で検索（制限付き）
  */
 async function getAllChunksByPageId(pageId: string): Promise<any[]> {
   try {
+    const scanStartTime = Date.now();
     const connection = await optimizedLanceDBClient.getConnection();
     const table = connection.table;
 
-    // 全レコード取得（パフォーマンス: 10,000行スキャン）
-    // Phase 0A-3のWHERE句最適化は機能しないため、この方法を使用
+    // Phase 0A-4: まず完全一致で検索を試行（高速）
+    try {
+      const exactMatch = await table
+        .query()
+        .where(`id = '${pageId}'`)
+        .toArrow();
+      
+      if (exactMatch.numRows > 0) {
+        // 完全一致が見つかった場合
+        const chunks: any[] = [];
+        for (let i = 0; i < exactMatch.numRows; i++) {
+          const row: any = {};
+          for (let j = 0; j < exactMatch.schema.fields.length; j++) {
+            const field = exactMatch.schema.fields[j];
+            const column = exactMatch.getChildAt(j);
+            row[field.name] = column?.get(i);
+          }
+          chunks.push(row);
+        }
+        
+        const scanDuration = Date.now() - scanStartTime;
+        if (scanDuration > 100) { // 100ms以上の場合のみログ出力
+          console.log(`[getAllChunksByPageId] ⚡ Exact match found in ${scanDuration}ms for pageId: ${pageId} (${chunks.length} chunks)`);
+        }
+        return chunks;
+      }
+    } catch (exactError) {
+      console.warn(`[getAllChunksByPageId] Exact match failed for pageId ${pageId}:`, exactError.message);
+    }
+
+    // Phase 0A-4: 完全一致が見つからない場合のみ、前方一致クエリを試行
+    console.log(`[getAllChunksByPageId] No exact match found for pageId: ${pageId}, trying prefix match`);
+    
+    try {
+      // 前方一致クエリを試行（より効率的）
+      const prefixMatch = await table
+        .query()
+        .where(`id LIKE '${pageId}%'`)
+        .toArrow();
+      
+      if (prefixMatch.numRows > 0) {
+        const chunks: any[] = [];
+        for (let i = 0; i < prefixMatch.numRows; i++) {
+          const row: any = {};
+          for (let j = 0; j < prefixMatch.schema.fields.length; j++) {
+            const field = prefixMatch.schema.fields[j];
+            const column = prefixMatch.getChildAt(j);
+            row[field.name] = column?.get(i);
+          }
+          chunks.push(row);
+        }
+        
+        const scanDuration = Date.now() - scanStartTime;
+        if (scanDuration > 100) { // 100ms以上の場合のみログ出力
+          console.log(`[getAllChunksByPageId] ⚡ Prefix match found in ${scanDuration}ms for pageId: ${pageId} (${chunks.length} chunks)`);
+        }
+        return chunks;
+      }
+    } catch (prefixError) {
+      console.warn(`[getAllChunksByPageId] Prefix match failed for pageId ${pageId}:`, prefixError.message);
+    }
+
+    // 最後の手段: 制限付きスキャン（100行まで削減）
+    console.log(`[getAllChunksByPageId] No prefix match found for pageId: ${pageId}, trying minimal scan`);
+    
     const allArrow = await table
       .query()
-      .limit(10000) // 最大10,000件
+      .limit(100) // Phase 0A-4: 1,000 → 100に削減
       .toArrow();
+    
+    const scanDuration = Date.now() - scanStartTime;
+    if (scanDuration > 100) { // 100ms以上の場合のみログ出力
+      console.log(`[getAllChunksByPageId] ⚡ Minimal DB scan completed in ${scanDuration}ms for pageId: ${pageId}`);
+    }
     
     const chunks: any[] = [];
     const idColumn = allArrow.getChildAt(allArrow.schema.fields.findIndex((f: any) => f.name === 'id'));
@@ -375,6 +450,11 @@ async function getAllChunksByPageId(pageId: string): Promise<any[]> {
       const bIndex = b.chunkIndex || 0;
       return aIndex - bIndex;
     });
+
+    const totalDuration = Date.now() - scanStartTime;
+    if (totalDuration > 100) { // 100ms以上の場合のみログ出力
+      console.log(`[getAllChunksByPageId] ⚡ Total processing completed in ${totalDuration}ms for pageId: ${pageId} (${chunks.length} chunks)`);
+    }
 
     return chunks;
   } catch (error: any) {
