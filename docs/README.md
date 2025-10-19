@@ -43,8 +43,8 @@
 具体的な実装方法と開発に関するドキュメント
 
 #### Phase 完了状況
-- **[phase-0a-4-completion-report.md](./implementation/phase-0a-4-completion-report.md)** ✅ - Phase 0A-4完了レポート
-- **[phase-4-kg-integration-completion-report.md](./implementation/phase-4-kg-integration-completion-report.md)** ✅ **最新** - Phase 4: KG統合完了レポート（タイトル重複埋め込み含む）
+- **[phase-0a-4-completion-report.md](./implementation/phase-0a-4-completion-report.md)** ✅ **最新** - Phase 0A-4完了レポート（Fast Refresh問題解決、本番ビルド対応完了 - 2025-10-19更新）
+- **[phase-4-kg-integration-completion-report.md](./implementation/phase-4-kg-integration-completion-report.md)** ✅ - Phase 4: KG統合完了レポート（タイトル重複埋め込み含む）
 - **[phase-4-kg-integration-plan.md](./implementation/phase-4-kg-integration-plan.md)** - Phase 4: KG統合計画
 - **[current-search-quality-report.md](./implementation/current-search-quality-report.md)** ✅ - 現在の検索品質レポート
 - **[kg-contribution-analysis-report.md](./implementation/kg-contribution-analysis-report.md)** - ナレッジグラフ貢献度分析
@@ -133,6 +133,16 @@
 ### 📁 [archive/](./archive/) - アーカイブ
 過去の分析レポート、テスト結果、最適化計画、非推奨ドキュメント
 
+#### Phase 0A-4関連（解決済み）
+- **[phase-0a-4-rollback-failure-analysis.md](./archive/phase-0a-4-rollback-failure-analysis.md)** - ロールバック失敗分析
+- **[rollback-impact-analysis.md](./archive/rollback-impact-analysis.md)** - ロールバック影響分析
+- **[phase-0a-4-vs-current-comparison.md](./archive/phase-0a-4-vs-current-comparison.md)** - Phase 0A-4比較
+- **[phase-0a-4-vs-current-logic-diff.md](./archive/phase-0a-4-vs-current-logic-diff.md)** - ロジック差分
+
+#### パフォーマンス分析
+- **[server-startup-analysis-phase-0a-4.md](./archive/performance-analysis/server-startup-analysis-phase-0a-4.md)** - サーバー起動分析（Phase 0A-4で解決）
+- **[nextjs-compile-time-optimization.md](./archive/performance-analysis/nextjs-compile-time-optimization.md)** - コンパイル最適化
+
 #### 分析レポート
 - **[scoring-simplification-analysis.md](./archive/analysis-reports/scoring-simplification-analysis.md)** - スコアリング簡素化分析
 - **[scoring-quality-checklist.md](./archive/analysis-reports/scoring-quality-checklist.md)** - 品質チェックリスト
@@ -140,15 +150,11 @@
 #### バグ修正レポート
 - **[markdown-processing-fixes.md](./archive/bug-fix-reports/markdown-processing-fixes.md)** - Markdown処理修正 (2025-10-08)
 
-#### パフォーマンス分析
-- **[server-startup-analysis.md](./archive/performance-analysis/server-startup-analysis.md)** - サーバー起動分析
-- **[nextjs-compile-time-optimization.md](./archive/performance-analysis/nextjs-compile-time-optimization.md)** - コンパイル最適化
-
 #### 非推奨ドキュメント
 - **[current-implementation-status.md](./archive/deprecated/current-implementation-status.md)** - 古い実装状況 (2024-12)
 - **[api-design.md](./archive/deprecated/api-design.md)** - 古いAPI設計 (2025-09)
 
-その他、過去のLanceDB関連ドキュメント、パフォーマンス分析、プロジェクトクリーンアップ計画など
+その他、過去のLanceDB関連ドキュメント、Phase 0A履歴、プロジェクトクリーンアップ計画など
 
 ## 🚀 クイックスタート
 
