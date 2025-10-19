@@ -29,17 +29,6 @@ export function convertPostLogToFirestore(logData: Omit<PostLog, 'id'>): any {
  * Firestore → PostLog (クライアント側)
  */
 export function convertFirestoreToPostLog(docId: string, data: any): PostLog {
-  // 🔍 デバッグ: Firestoreから取得したデータを確認
-  console.log('🔍 [convertFirestoreToPostLog] Firestoreデータ確認:', {
-    docId,
-    serverStartupTime: data.serverStartupTime,
-    ttfbTime: data.ttfbTime,
-    searchTime: data.searchTime,
-    aiGenerationTime: data.aiGenerationTime,
-    totalTime: data.totalTime,
-    referencesCount: data.referencesCount
-  });
-  
   const postLog = {
     id: docId,
     userId: data.userId,
@@ -70,17 +59,6 @@ export function convertFirestoreToPostLog(docId: string, data: any): PostLog {
       ipAddress: 'unknown'
     }
   };
-  
-  // 🔍 デバッグ: 変換後のPostLogを確認
-  console.log('🔍 [convertFirestoreToPostLog] 変換後PostLog確認:', {
-    docId,
-    serverStartupTime: postLog.serverStartupTime,
-    ttfbTime: postLog.ttfbTime,
-    searchTime: postLog.searchTime,
-    aiGenerationTime: postLog.aiGenerationTime,
-    totalTime: postLog.totalTime,
-    referencesCount: postLog.referencesCount
-  });
   
   return postLog;
 }

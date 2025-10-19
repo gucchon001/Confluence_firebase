@@ -175,16 +175,42 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const titleWeight = params.titleWeight || 1.0; // デフォルトのタイトル重み
     
     // 並列実行でパフォーマンス最適化（最適化されたLanceDB接続を使用）
+    // Phase 0A-4: 各処理の詳細なタイミングを計測
     const parallelStartTime = Date.now();
+    const embeddingStartTime = Date.now();
+    const vectorPromise = getEmbeddings(params.query).then(v => {
+      const embeddingDuration = Date.now() - embeddingStartTime;
+      if (embeddingDuration > 5000) {
+        console.warn(`⚠️ [searchLanceDB] Slow embedding generation: ${embeddingDuration}ms (${(embeddingDuration / 1000).toFixed(2)}s)`);
+      }
+      return v;
+    });
+    
+    const keywordStartTime = Date.now();
+    const keywordsPromise = (async () => {
+      const kw = await unifiedKeywordExtractionService.extractKeywordsConfigured(params.query);
+      const keywordDuration = Date.now() - keywordStartTime;
+      if (keywordDuration > 2000) {
+        console.warn(`⚠️ [searchLanceDB] Slow keyword extraction: ${keywordDuration}ms (${(keywordDuration / 1000).toFixed(2)}s)`);
+      }
+      return kw;
+    })();
+    
+    const connectionStartTime = Date.now();
+    const connectionPromise = (async () => {
+      const { optimizedLanceDBClient } = await import('./optimized-lancedb-client');
+      const conn = await optimizedLanceDBClient.getConnection();
+      const connectionDuration = Date.now() - connectionStartTime;
+      if (connectionDuration > 2000) {
+        console.warn(`⚠️ [searchLanceDB] Slow LanceDB connection: ${connectionDuration}ms (${(connectionDuration / 1000).toFixed(2)}s)`);
+      }
+      return conn;
+    })();
+    
     const [vector, keywords, connection] = await Promise.all([
-      getEmbeddings(params.query),
-      (async () => {
-        return await unifiedKeywordExtractionService.extractKeywordsConfigured(params.query);
-      })(),
-      (async () => {
-        const { optimizedLanceDBClient } = await import('./optimized-lancedb-client');
-        return await optimizedLanceDBClient.getConnection();
-      })()
+      vectorPromise,
+      keywordsPromise,
+      connectionPromise
     ]);
     const parallelDuration = Date.now() - parallelStartTime;
     
