@@ -99,9 +99,10 @@ async function lancedbRetrieverTool(
 ): Promise<any[]> {
   const searchStartTime = Date.now();
   try {
-    // 検索開始ログ（本番環境でも出力）
-    console.log(`[lancedbRetrieverTool] 🔍 Search started for query: "${query}"`);
-    console.log(`[lancedbRetrieverTool] ⏱️ Start time: ${new Date().toISOString()}`);
+    // 開発環境のみログ
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[lancedbRetrieverTool] 🔍 Search started for query: "${query}"`);
+    }
 
     // モックデータの使用を無効化（本番データを使用）
     if (false) {
@@ -151,16 +152,7 @@ async function lancedbRetrieverTool(
     if (base.includes('会員ログイン')) strictTitleCandidates.push('会員ログイン');
     if (base.toLowerCase().includes('login')) strictTitleCandidates.push('login');
 
-    // スクリプトと同一のパイプラインで検索（最適化されたクエリを使用）
-    console.log('[lancedbRetrieverTool] Calling searchLanceDB with params:', {
-      query: optimizedQuery,
-      topK: 8,
-      useLunrIndex: true,  // Phase 6修正: BM25検索を有効化
-      labelFilters: filters?.labelFilters
-    });
-    
     // Phase 0A-4: 詳細な検索パフォーマンス計測
-    console.log(`[lancedbRetrieverTool] ⏱️ Starting searchLanceDB at ${new Date().toISOString()}`);
     const searchLanceDBStartTime = Date.now();
     const unifiedResults = await searchLanceDB({
       query: optimizedQuery, // 最適化されたクエリを使用
@@ -173,9 +165,10 @@ async function lancedbRetrieverTool(
     });
     const searchLanceDBDuration = Date.now() - searchLanceDBStartTime;
     
-    // 本番環境でも常にログ出力
-    console.log(`[lancedbRetrieverTool] 📊 searchLanceDB completed in ${searchLanceDBDuration}ms (${(searchLanceDBDuration / 1000).toFixed(2)}s) for query: "${optimizedQuery}"`);
-    console.log(`[lancedbRetrieverTool] ⏱️ Completed searchLanceDB at ${new Date().toISOString()}`);
+    // 10秒以上かかった場合のみログ（パフォーマンス問題の検知）
+    if (searchLanceDBDuration > 10000) {
+      console.warn(`⚠️ [lancedbRetrieverTool] Slow searchLanceDB: ${searchLanceDBDuration}ms (${(searchLanceDBDuration / 1000).toFixed(2)}s) for query: "${optimizedQuery}"`);
+    }
     
     // 検索結果ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
@@ -185,8 +178,8 @@ async function lancedbRetrieverTool(
     
     // 検索処理時間の計測
     const searchDuration = Date.now() - searchStartTime;
-    if (searchDuration > 1000) { // 1秒以上の場合のみログ出力
-      console.log(`[lancedbRetrieverTool] ⚠️ Slow search completed: ${searchDuration}ms for query: "${query}"`);
+    if (searchDuration > 10000) { // 10秒以上の場合のみログ出力
+      console.warn(`⚠️ [lancedbRetrieverTool] Slow total search: ${searchDuration}ms for query: "${query}"`);
     }
 
     // UIが期待する形へ最小変換（scoreText, source を保持）
@@ -205,24 +198,24 @@ async function lancedbRetrieverTool(
     }));
 
     // Phase 0A-1.5: 全チャンク統合（サーバー側で実装）
-    console.log(`[lancedbRetrieverTool] ⏱️ Starting enrichWithAllChunks at ${new Date().toISOString()} for ${mapped.length} results`);
     const enrichStartTime = Date.now();
     const enriched = await enrichWithAllChunks(mapped);
     const enrichDuration = Date.now() - enrichStartTime;
     
-    // 本番環境でも常にログ出力
-    console.log(`[lancedbRetrieverTool] 📊 enrichWithAllChunks completed in ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s) for ${mapped.length} results`);
-    console.log(`[lancedbRetrieverTool] ⏱️ Completed enrichWithAllChunks at ${new Date().toISOString()}`);
+    // 5秒以上かかった場合のみログ（パフォーマンス問題の検知）
+    if (enrichDuration > 5000) {
+      console.warn(`⚠️ [lancedbRetrieverTool] Slow enrichWithAllChunks: ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s) for ${mapped.length} results`);
+    }
     
     // Phase 0A-1.5: 空ページフィルター（サーバー側で実装）
-    console.log(`[lancedbRetrieverTool] ⏱️ Starting filterInvalidPagesServer at ${new Date().toISOString()}`);
     const filterStartTime = Date.now();
     const filtered = await filterInvalidPagesServer(enriched);
     const filterDuration = Date.now() - filterStartTime;
     
-    // 本番環境でも常にログ出力
-    console.log(`[lancedbRetrieverTool] 📊 filterInvalidPagesServer completed in ${filterDuration}ms (${(filterDuration / 1000).toFixed(2)}s) for ${enriched.length} results`);
-    console.log(`[lancedbRetrieverTool] ⏱️ Completed filterInvalidPagesServer at ${new Date().toISOString()}`);
+    // 2秒以上かかった場合のみログ（パフォーマンス問題の検知）
+    if (filterDuration > 2000) {
+      console.warn(`⚠️ [lancedbRetrieverTool] Slow filterInvalidPagesServer: ${filterDuration}ms (${(filterDuration / 1000).toFixed(2)}s) for ${enriched.length} results`);
+    }
 
     return filtered;
   } catch (error: any) {

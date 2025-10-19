@@ -127,33 +127,30 @@ export interface LanceDBSearchResult {
 export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceDBSearchResult[]> {
   const searchFunctionStartTime = Date.now();
   try {
-    console.log(`\n========================================`);
-    console.log(`🔍 [searchLanceDB] 検索開始`);
-    console.log(`Query: "${params.query}"`);
-    console.log(`⏱️ Start time: ${new Date().toISOString()}`);
-    console.log(`========================================\n`);
+    // 開発環境のみ詳細ログ
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`\n========================================`);
+      console.log(`🔍 [searchLanceDB] 検索開始`);
+      console.log(`Query: "${params.query}"`);
+      console.log(`========================================\n`);
+    }
     
     // キャッシュインスタンスの存在確認
     const cacheInstance = getSearchCache();
-    console.log(`🔧 searchCache.size: ${cacheInstance?.size ?? 'N/A'}`);
-    console.log(`🔧 globalThis.__searchCache: ${globalThis.__searchCache ? '存在' : '未定義'}`);
     
     // キャッシュキーを生成
     const cacheKey = generateCacheKey(params.query, params);
-    console.log(`🔑 キャッシュキー生成: "${cacheKey}"`);
-    console.log(`📦 現在のキャッシュサイズ: ${cacheInstance.size}`);
     
     // キャッシュから取得を試行
     const cachedResults = cacheInstance.get(cacheKey);
-    console.log(`🔍 キャッシュチェック結果: ${cachedResults ? 'ヒット' : 'ミス'}`);
     
     if (cachedResults) {
-      console.log(`🚀 キャッシュから結果を返却: ${cachedResults.length}件`);
-      console.log(`========================================\n`);
+      // 開発環境のみログ
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🚀 キャッシュヒット: ${cachedResults.length}件`);
+      }
       return cachedResults;
     }
-    
-    console.log(`🔍 キャッシュミス: "${params.query}" - 検索を実行します`);
     
     // 最適化されたLunr初期化を使用（重複初期化を防止）
     try {
@@ -161,14 +158,15 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       await optimizedLunrInitializer.initializeOnce();
       
       // Phase 6修正: 初期化完了を確実に待つ（並列検索前）
-      // 少し待機してLunrSearchClientのインスタンスが完全に初期化されることを保証
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      console.log('✅ Optimized Lunr initialization completed in searchLanceDB');
-      console.log(`✅ lunrInitializer.isReady(): ${lunrInitializer.isReady()}`);
+      // 開発環境のみログ
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Optimized Lunr initialization completed in searchLanceDB');
+      }
     } catch (error) {
-      console.warn('⚠️ Optimized Lunr initialization failed in searchLanceDB:', error);
-      // 初期化に失敗しても検索は継続（フォールバック検索を使用）
+      // エラー時のみログ（本番環境でも出力）
+      console.error('⚠️ Optimized Lunr initialization failed in searchLanceDB:', error);
     }
     
     // デフォルト値の設定
@@ -177,7 +175,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const titleWeight = params.titleWeight || 1.0; // デフォルトのタイトル重み
     
     // 並列実行でパフォーマンス最適化（最適化されたLanceDB接続を使用）
-    console.log(`⏱️ [searchLanceDB] Starting parallel initialization at ${new Date().toISOString()}`);
     const parallelStartTime = Date.now();
     const [vector, keywords, connection] = await Promise.all([
       getEmbeddings(params.query),
@@ -190,11 +187,17 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       })()
     ]);
     const parallelDuration = Date.now() - parallelStartTime;
-    console.log(`📊 [searchLanceDB] Parallel initialization completed in ${parallelDuration}ms (${(parallelDuration / 1000).toFixed(2)}s)`);
-    console.log(`⏱️ [searchLanceDB] Completed parallel initialization at ${new Date().toISOString()}`);
     
-    console.log(`[searchLanceDB] Generated embedding vector with ${vector.length} dimensions`);
-    console.log(`[searchLanceDB] Extracted ${keywords.length} keywords: ${keywords.join(', ')}`);
+    // 5秒以上かかった場合のみログ（パフォーマンス問題の検知）
+    if (parallelDuration > 5000) {
+      console.warn(`⚠️ [searchLanceDB] Slow parallel initialization: ${parallelDuration}ms (${(parallelDuration / 1000).toFixed(2)}s)`);
+    }
+    
+    // 開発環境のみ詳細ログ
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[searchLanceDB] Generated embedding vector with ${vector.length} dimensions`);
+      console.log(`[searchLanceDB] Extracted ${keywords.length} keywords: ${keywords.join(', ')}`);
+    }
     
     // Phase 0A-4: 強化版キーワード抽出（ネガティブワード除去）
     const { enhancedKeywordExtractor } = await import('./enhanced-keyword-extractor');
@@ -203,11 +206,14 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const coreKeywords = keywordAnalysis.coreKeywords;
     const priorityKeywords = keywordAnalysis.priorityKeywords;
     
-    console.log(`[searchLanceDB] Core keywords (negative words removed): ${coreKeywords.join(', ')}`);
-    if (keywordAnalysis.removedWords.length > 0) {
-      console.log(`[searchLanceDB] Removed negative words: ${keywordAnalysis.removedWords.join(', ')}`);
+    // 開発環境のみ詳細ログ
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[searchLanceDB] Core keywords (negative words removed): ${coreKeywords.join(', ')}`);
+      if (keywordAnalysis.removedWords.length > 0) {
+        console.log(`[searchLanceDB] Removed negative words: ${keywordAnalysis.removedWords.join(', ')}`);
+      }
+      console.log(`[searchLanceDB] Priority keywords: ${priorityKeywords.join(', ')}`);
     }
-    console.log(`[searchLanceDB] Priority keywords: ${priorityKeywords.join(', ')}`);
     
     // 核心キーワードを使用（ネガティブワード除去済み）
     const finalKeywords = coreKeywords.length > 0 ? coreKeywords : keywords;
@@ -218,7 +224,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // テーブルを取得
     const tbl = connection.table;
-    console.log(`[searchLanceDB] Using table '${connection.tableName}'`);
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Phase 1: タイトル検索最優先化（Early Exit）
@@ -737,21 +742,25 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       enableRRF: false  // RRF無効化で高速化
     });
     
-    console.log(`[searchLanceDB] Processed ${processedResults.length} results using unified service`);
-    
     // 結果をキャッシュに保存
     cacheInstance.set(cacheKey, processedResults);
-    console.log(`💾 キャッシュ保存: "${cacheKey}" (${processedResults.length}件)`);
-    console.log(`📦 キャッシュ保存後のサイズ: ${cacheInstance.size}`);
     
-    // 本番環境でも総計時間を出力
+    // 総計時間の計測
     const searchFunctionDuration = Date.now() - searchFunctionStartTime;
-    console.log(`\n========================================`);
-    console.log(`📊 [searchLanceDB] Total search completed`);
-    console.log(`⏱️ Total duration: ${searchFunctionDuration}ms (${(searchFunctionDuration / 1000).toFixed(2)}s)`);
-    console.log(`📌 End time: ${new Date().toISOString()}`);
-    console.log(`✅ Returned ${processedResults.length} results`);
-    console.log(`========================================\n`);
+    
+    // 10秒以上かかった場合のみログ（パフォーマンス問題の検知）
+    if (searchFunctionDuration > 10000) {
+      console.warn(`⚠️ [searchLanceDB] Slow search: ${searchFunctionDuration}ms (${(searchFunctionDuration / 1000).toFixed(2)}s) for query: "${params.query}"`);
+    }
+    
+    // 開発環境のみ詳細ログ
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`\n========================================`);
+      console.log(`📊 [searchLanceDB] Total search completed`);
+      console.log(`⏱️ Total duration: ${searchFunctionDuration}ms (${(searchFunctionDuration / 1000).toFixed(2)}s)`);
+      console.log(`✅ Returned ${processedResults.length} results`);
+      console.log(`========================================\n`);
+    }
     
     return processedResults;
   } catch (error: any) {

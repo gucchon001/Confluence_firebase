@@ -47,39 +47,20 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
     const db = admin.firestore();
     const postLogsRef = db.collection('postLogs');
     
-        // savePostLogToAdminDB関数が呼ばれました
-    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
-      console.log('🔍 サーバーサイド投稿ログデータの詳細:', {
-        userId: logData.userId,
-        question: logData.question?.substring(0, 50) + '...',
-        answer: logData.answer?.substring(0, 50) + '...',
-        serverStartupTime: logData.serverStartupTime, // サーバー起動時間を追加
-        searchTime: logData.searchTime,
-        aiGenerationTime: logData.aiGenerationTime,
-        totalTime: logData.totalTime,
-        referencesCount: logData.referencesCount,
-        answerLength: logData.answerLength,
-        timestamp: logData.timestamp,
-        metadata: logData.metadata // metadataも確認
-      });
-    }
-    
     // Timestamp変換ロジックを共通化
     const firestoreData = convertPostLogToAdminFirestore(logData);
     
-    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
-      console.log('🔍 Firestore保存データ確認:', {
-        serverStartupTime: firestoreData.serverStartupTime,
-        searchTime: firestoreData.searchTime,
-        aiGenerationTime: firestoreData.aiGenerationTime,
-        totalTime: firestoreData.totalTime
+    // 開発環境のみログ出力
+    if (process.env.NODE_ENV === 'development' && logData.totalTime > 1000) {
+      console.log('🔍 サーバーサイド投稿ログ保存:', {
+        userId: logData.userId,
+        totalTime: logData.totalTime,
+        searchTime: logData.searchTime,
+        aiGenerationTime: logData.aiGenerationTime
       });
     }
     
     const docRef = await postLogsRef.add(firestoreData);
-    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
-      console.log('📝 サーバーサイド投稿ログを保存しました:', docRef.id);
-    }
     return docRef.id;
   } catch (error) {
     console.error('❌ サーバーサイド投稿ログ保存に失敗しました:', error);
@@ -254,8 +235,8 @@ export const POST = async (req: NextRequest) => {
           
           // TTFB（Time To First Byte）を計測: API呼び出しから最初のストリーミングチャンク送信完了までの時間
           const ttfbTime = Date.now() - apiStartTime;
-          if (ttfbTime > 100) { // 100ms以上の場合のみログ出力
-            console.log('⚡ [TTFB] 最初のチャンク送信まで:', {
+          if (ttfbTime > 1000) { // 1秒以上の場合のみログ出力（パフォーマンス問題の検知）
+            console.warn('⚠️ [TTFB] Slow initial response:', {
               ttfbTime: `${ttfbTime}ms`,
               serverStartupTime: `${serverStartupTime}ms`,
               initWaitTime: `${ttfbTime - serverStartupTime}ms`
@@ -275,7 +256,8 @@ export const POST = async (req: NextRequest) => {
           const clientStartTime = clientStartTimeStr ? parseInt(clientStartTimeStr) : Date.now();
           
           const latency = Date.now() - clientStartTime;
-          if (latency > 100) { // 100ms以上の場合のみログ出力
+          // 開発環境のみログ出力
+          if (process.env.NODE_ENV === 'development' && latency > 100) {
             console.log('⏱️ 処理時間計測開始:', {
               clientStartTime: new Date(clientStartTime).toISOString(),
               serverReceiveTime: new Date().toISOString(),
@@ -587,7 +569,8 @@ export const POST = async (req: NextRequest) => {
                   }
                 };
                 
-                if (totalTime > 1000) { // 1秒以上の場合のみログ出力
+                // 開発環境のみログ出力
+                if (process.env.NODE_ENV === 'development' && totalTime > 1000) {
                   console.log('🔍 PostLog保存データ確認:', {
                     serverStartupTime,
                     ttfbTime,
@@ -598,13 +581,14 @@ export const POST = async (req: NextRequest) => {
                 }
                 
                 savedPostLogId = await savePostLogToAdminDB(logData);
-                if (totalTime > 1000) { // 1秒以上の場合のみログ出力
+                
+                // 開発環境のみログ出力
+                if (process.env.NODE_ENV === 'development' && totalTime > 1000) {
                   console.log('✅ 投稿ログを保存しました:', {
                     postLogId: savedPostLogId,
                     userId: logData.userId,
                     userDisplayName: logData.metadata.userDisplayName,
-                    question: logData.question.substring(0, 50) + '...',
-                    timestamp: logData.timestamp.toISOString()
+                    question: logData.question.substring(0, 50) + '...'
                   });
                 }
               } catch (logError) {
