@@ -110,44 +110,7 @@ export class UnifiedKeywordExtractionService {
         systemTerms: 30,
         relatedKeywords: 20
       },
-      rules: [
-        {
-          pattern: /教室管理|教室コピー|教室機能/,
-          priorityAdjustments: {
-            domainNames: 20,
-            functionNames: 15,
-            operationNames: 10,
-            systemFields: 5,
-            systemTerms: 5,
-            relatedKeywords: 10
-          },
-          description: '教室管理関連クエリの優先度調整'
-        },
-        {
-          pattern: /ログイン|認証|アクセス/,
-          priorityAdjustments: {
-            domainNames: 15,
-            functionNames: 20,
-            operationNames: 15,
-            systemFields: 10,
-            systemTerms: 5,
-            relatedKeywords: 10
-          },
-          description: 'ログイン関連クエリの優先度調整'
-        },
-        {
-          pattern: /オファー|求人|応募/,
-          priorityAdjustments: {
-            domainNames: 10,
-            functionNames: 15,
-            operationNames: 10,
-            systemFields: 5,
-            systemTerms: 5,
-            relatedKeywords: 8
-          },
-          description: 'オファー関連クエリの優先度調整'
-        }
-      ]
+      rules: []  // ハードコードされたルールを削除
     };
   }
 
@@ -448,21 +411,9 @@ export class UnifiedKeywordExtractionService {
 
 
   private extractPatternsDynamically(query: string, coreWords: string[]): string[] {
-    const patterns: string[] = [];
-
-    // 複合語パターンの抽出
-    for (let i = 0; i < coreWords.length - 1; i++) {
-      const compound = coreWords[i] + coreWords[i + 1];
-      patterns.push(compound);
-    }
-
-    // 機能名パターンの抽出
-    const functionPatterns = coreWords.filter(word => 
-      word.includes('機能') || word.includes('管理') || word.includes('閲覧')
-    );
-    patterns.push(...functionPatterns);
-
-    return patterns;
+    // パターン抽出は使用しない
+    // findMatchingKeywordsで部分一致を行う
+    return [];
   }
 
   private generateFiltersDynamically(query: string, coreWords: string[], domain: string): string[] {
@@ -494,29 +445,13 @@ export class UnifiedKeywordExtractionService {
       context.push(`domain:${domain}`);
     }
 
-    // 機能コンテキスト
-    const functionContext = coreWords.filter(word => 
-      word.includes('機能') || word.includes('管理') || word.includes('閲覧')
-    );
-    context.push(...functionContext);
-
     return context;
   }
 
   private generateExcludePatterns(query: string, coreWords: string[]): string[] {
-    const excludePatterns: string[] = [];
-
-    // クエリの意図と無関係なキーワードを除外
-    const intent = this.detectIntentDynamically(query, coreWords);
-    
-    if (intent === 'detail') {
-      // 詳細検索の場合、一般的すぎるキーワードを除外
-      excludePatterns.push('exclude:amazonギフト券');
-      excludePatterns.push('exclude:オファー');
-      excludePatterns.push('exclude:オシゴトq&a');
-    }
-
-    return excludePatterns;
+    // ドメイン固有の除外パターンは削除
+    // 必要に応じてStructuredLabelやKnowledge Graphで対応
+    return [];
   }
 
   private async extractFromDomainKnowledge(queryAnalysis: any): Promise<string[]> {
@@ -584,32 +519,25 @@ export class UnifiedKeywordExtractionService {
   private findMatchingKeywords(query: string, keywords: string[]): string[] {
     const matchedKeywords: string[] = [];
     const queryWords = this.extractQueryWords(query);
+    const queryLower = query.toLowerCase(); // クエリ全体も使用
     
     // より厳格なマッチング条件でキーワード数を制限
     for (const keyword of keywords) {
+      const keywordLower = keyword.toLowerCase();
+      
       // 1. 完全一致を優先（最高優先度）
       if (queryWords.some(word => keyword === word)) {
         matchedKeywords.push(keyword);
         continue;
       }
       
-      // 2. クエリがキーワードを含む（4文字以上、より厳格）
-      if (queryWords.some(word => 
-        word.length >= 4 && keyword.includes(word)
-      )) {
+      // 2. クエリ全体にキーワードが含まれる（2文字以上）
+      if (keyword.length >= 2 && queryLower.includes(keywordLower)) {
         matchedKeywords.push(keyword);
         continue;
       }
       
-      // 3. キーワードがクエリの主要単語を含む（4文字以上、より厳格）
-      if (queryWords.some(word => 
-        word.length >= 4 && word.includes(keyword) && keyword.length >= 4
-      )) {
-        matchedKeywords.push(keyword);
-        continue;
-      }
-      
-      // 4. 最大20個までに制限（パフォーマンス向上）
+      // 3. 最大20個までに制限（パフォーマンス向上）
       if (matchedKeywords.length >= 20) {
         break;
       }
@@ -617,7 +545,7 @@ export class UnifiedKeywordExtractionService {
 
     return matchedKeywords;
   }
-
+  
   private extractQueryWords(query: string): string[] {
     // より適切な分割パターン
     const words = query.split(/[の・・、は？]/g).filter(word => word.trim().length > 0);
@@ -669,24 +597,9 @@ export class UnifiedKeywordExtractionService {
   }
 
   private generateFunctionKeywords(queryAnalysis: any): string[] {
-    const functionKeywords: string[] = [];
-
-    // ドメインに基づく機能キーワードの生成（制限付き）
-    if (queryAnalysis.domain !== 'unknown') {
-      const domain = queryAnalysis.domain;
-      
-      // より限定的な機能パターン（6個から4個に削減）
-      const functionPatterns = ['一覧', '登録', '編集', '詳細'];
-      
-      for (const pattern of functionPatterns) {
-        const functionKeyword = `${domain}${pattern}`;
-        if (this.isValidKeyword(functionKeyword)) {
-          functionKeywords.push(functionKeyword);
-        }
-      }
-    }
-
-    return functionKeywords;
+    // ドメイン固有のキーワード生成は削除
+    // keyword-lists-v2.json に既に含まれている
+    return [];
   }
 
   private isValidKeyword(keyword: string): boolean {
@@ -730,17 +643,7 @@ export class UnifiedKeywordExtractionService {
       priority += 80;
     }
 
-    // 機能名の優先度
-    if (keyword.includes('機能') || keyword.includes('管理')) {
-      priority += 60;
-    }
-
-    // 操作名の優先度
-    if (keyword.includes('一覧') || keyword.includes('登録') || keyword.includes('編集')) {
-      priority += 40;
-    }
-
-    // 長さによる調整
+    // 長さによる調整（短すぎず長すぎないキーワードを優先）
     if (keyword.length >= 2 && keyword.length <= 8) {
       priority += 20;
     }

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 import { streamingSummarizeConfluenceDocs } from '@/ai/flows/streaming-summarize-confluence-docs';
 import { createAPIErrorResponse } from '@/lib/genkit-error-handler';
-import { initializeStartupOptimizations } from '@/lib/startup-optimizer';
+import { waitForInitialization, isStartupInitialized } from '@/lib/startup-optimizer';
 import { getFirebaseFirestore } from '@/lib/firebase-unified';
 import * as admin from 'firebase-admin';
 import { initializeFirebaseAdmin } from '@/lib/firebase-admin-init';
@@ -15,6 +15,7 @@ import { convertPostLogToAdminFirestore } from '@/lib/firestore-data-mapper-admi
 import { postLogService } from '@/lib/post-log-service';
 import type { PostLog, ProcessingStep } from '@/types';
 import { GeminiConfig } from '@/config/ai-models-config';
+// 重複コード修正をロールバック
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
 try {
@@ -46,34 +47,39 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
     const db = admin.firestore();
     const postLogsRef = db.collection('postLogs');
     
-    console.log('🚀 [DEBUG] savePostLogToAdminDB関数が呼ばれました');
-    console.log('🚀 [DEBUG] logData.serverStartupTime:', logData.serverStartupTime);
-    console.log('🔍 サーバーサイド投稿ログデータの詳細:', {
-      userId: logData.userId,
-      question: logData.question?.substring(0, 50) + '...',
-      answer: logData.answer?.substring(0, 50) + '...',
-      serverStartupTime: logData.serverStartupTime, // サーバー起動時間を追加
-      searchTime: logData.searchTime,
-      aiGenerationTime: logData.aiGenerationTime,
-      totalTime: logData.totalTime,
-      referencesCount: logData.referencesCount,
-      answerLength: logData.answerLength,
-      timestamp: logData.timestamp,
-      metadata: logData.metadata // metadataも確認
-    });
+        // savePostLogToAdminDB関数が呼ばれました
+    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
+      console.log('🔍 サーバーサイド投稿ログデータの詳細:', {
+        userId: logData.userId,
+        question: logData.question?.substring(0, 50) + '...',
+        answer: logData.answer?.substring(0, 50) + '...',
+        serverStartupTime: logData.serverStartupTime, // サーバー起動時間を追加
+        searchTime: logData.searchTime,
+        aiGenerationTime: logData.aiGenerationTime,
+        totalTime: logData.totalTime,
+        referencesCount: logData.referencesCount,
+        answerLength: logData.answerLength,
+        timestamp: logData.timestamp,
+        metadata: logData.metadata // metadataも確認
+      });
+    }
     
     // Timestamp変換ロジックを共通化
     const firestoreData = convertPostLogToAdminFirestore(logData);
     
-    console.log('🔍 Firestore保存データ確認:', {
-      serverStartupTime: firestoreData.serverStartupTime,
-      searchTime: firestoreData.searchTime,
-      aiGenerationTime: firestoreData.aiGenerationTime,
-      totalTime: firestoreData.totalTime
-    });
+    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
+      console.log('🔍 Firestore保存データ確認:', {
+        serverStartupTime: firestoreData.serverStartupTime,
+        searchTime: firestoreData.searchTime,
+        aiGenerationTime: firestoreData.aiGenerationTime,
+        totalTime: firestoreData.totalTime
+      });
+    }
     
     const docRef = await postLogsRef.add(firestoreData);
-    console.log('📝 サーバーサイド投稿ログを保存しました:', docRef.id);
+    if (logData.totalTime > 1000) { // 1秒以上の場合のみログ出力
+      console.log('📝 サーバーサイド投稿ログを保存しました:', docRef.id);
+    }
     return docRef.id;
   } catch (error) {
     console.error('❌ サーバーサイド投稿ログ保存に失敗しました:', error);
@@ -83,7 +89,10 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
 
 // フォールバック回答生成関数
 function generateFallbackAnswer(question: string, context: any[]): string {
-  console.log('🔄 フォールバック回答生成開始');
+  // フォールバック回答生成ログ（開発環境のみ）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔄 フォールバック回答生成開始');
+  }
   
   // 関連文書から主要な情報を抽出
   const relevantDocs = context.slice(0, 3); // 上位3件の文書を使用
@@ -171,25 +180,39 @@ const PROCESSING_STEPS = [
   }
 ];
 
-// サーバー起動時に1回だけ初期化を実行（モジュールレベル）
-let isServerInitialized = false;
-let serverInitTime = 0;
-
+// Phase 6最適化: バックグラウンド初期化の状態を確認
 async function ensureServerInitialized() {
-  if (isServerInitialized) {
-    return serverInitTime;
+  const startTime = Date.now();
+  
+  // バックグラウンド初期化が完了済みか確認
+  if (isStartupInitialized()) {
+    // 初期化完了ログ（開発環境のみ）
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ [API] バックグラウンド初期化完了済み - 即座に処理開始');
+    }
+    return 0; // 待ち時間なし
   }
   
-  const startTime = Date.now();
-  await initializeStartupOptimizations();
-  serverInitTime = Date.now() - startTime;
-  isServerInitialized = true;
-  console.log(`🚀 サーバー初回起動完了: ${serverInitTime}ms`);
-  return serverInitTime;
+  // まだ初期化中の場合は完了を待つ
+  if (process.env.NODE_ENV === 'development') {
+    console.log('⏳ [API] バックグラウンド初期化中 - 完了を待機...');
+  }
+  await waitForInitialization();
+  const waitTime = Date.now() - startTime;
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`✅ [API] 初期化完了 (待機時間: ${waitTime}ms)`);
+  }
+  return waitTime;
 }
 
 export const POST = async (req: NextRequest) => {
-  console.log('🚀 [API] streaming-process route called');
+  // API呼び出し開始時刻を記録（TTFB計測用）
+  const apiStartTime = Date.now();
+  
+  // API呼び出しログ（開発環境のみ）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🚀 [API] streaming-process route called');
+  }
   
   try {
     // サーバー起動時に1回だけ初期化（2回目以降は即座にreturn）
@@ -198,17 +221,23 @@ export const POST = async (req: NextRequest) => {
     const body = await req.json();
     const { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
     
-    console.log('📝 [API] Request data:', {
-      questionLength: question?.length,
-      chatHistoryLength: chatHistory?.length,
-      labelFilters
-    });
+    // リクエストデータログ（開発環境のみ）
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📝 [API] Request data:', {
+        questionLength: question?.length,
+        chatHistoryLength: chatHistory?.length,
+        labelFilters
+      });
+    }
 
     if (!question) {
       return NextResponse.json({ error: 'question is required' }, { status: 400 });
     }
 
-    console.log('🌊 処理ステップストリーミングAPI開始:', question);
+    // ストリーミング開始ログ（開発環境のみ）
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🌊 処理ステップストリーミングAPI開始:', question);
+    }
     screenTestLogger.info('ai', `Streaming process request: "${question}"`, { 
       chatHistoryLength: chatHistory.length,
       labelFilters 
@@ -216,9 +245,26 @@ export const POST = async (req: NextRequest) => {
 
     // ストリーミング応答の設定
     const encoder = new TextEncoder();
+    // ReadableStream作成開始
     const stream = new ReadableStream({
-      async start(controller) {
-        try {
+        async start(controller) {
+          try {
+            // 【最優先】即座に最初のステップを送信してユーザーに応答を見せる
+            await updateStep(controller, encoder, 0, 'search', '処理を開始しています...');
+          
+          // TTFB（Time To First Byte）を計測: API呼び出しから最初のストリーミングチャンク送信完了までの時間
+          const ttfbTime = Date.now() - apiStartTime;
+          if (ttfbTime > 100) { // 100ms以上の場合のみログ出力
+            console.log('⚡ [TTFB] 最初のチャンク送信まで:', {
+              ttfbTime: `${ttfbTime}ms`,
+              serverStartupTime: `${serverStartupTime}ms`,
+              initWaitTime: `${ttfbTime - serverStartupTime}ms`
+            });
+          }
+          
+          // 総処理時間の開始時刻を記録（TTFB後から）
+          const processingStartTime = Date.now();
+          
           let currentStep = 0;
           let fullAnswer = '';
           let relevantDocs: any[] = [];
@@ -227,13 +273,15 @@ export const POST = async (req: NextRequest) => {
           // クライアント側の開始時刻を取得（存在しない場合は現在時刻）
           const clientStartTimeStr = req.headers.get('x-client-start-time');
           const clientStartTime = clientStartTimeStr ? parseInt(clientStartTimeStr) : Date.now();
-          const startTime = clientStartTime;
           
-          console.log('⏱️ 処理時間計測開始:', {
-            clientStartTime: new Date(clientStartTime).toISOString(),
-            serverReceiveTime: new Date().toISOString(),
-            latency: Date.now() - clientStartTime
-          });
+          const latency = Date.now() - clientStartTime;
+          if (latency > 100) { // 100ms以上の場合のみログ出力
+            console.log('⏱️ 処理時間計測開始:', {
+              clientStartTime: new Date(clientStartTime).toISOString(),
+              serverReceiveTime: new Date().toISOString(),
+              latency: latency
+            });
+          }
           
           let searchTime = 0;
           let aiGenerationTime = 0;
@@ -247,11 +295,12 @@ export const POST = async (req: NextRequest) => {
           const userAgent = req.headers.get('user-agent') || 'unknown';
           const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
           
-          // ステップ1: 検索中...
+          // ステップ更新: 検索開始
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
 
           // 検索処理とユーザー情報取得を並行実行（パフォーマンス最適化）
-          const searchStartTime = Date.now();
+          // Phase 0A-4 FIX: 検索時間は処理開始時刻から計測（TTFB後の処理時間）
+          const searchStartTime = processingStartTime;
           let userDisplayName = 'anonymous';
           
           const [searchResults, userInfo] = await Promise.all([
@@ -279,15 +328,20 @@ export const POST = async (req: NextRequest) => {
           
           relevantDocs = searchResults;
           userDisplayName = userInfo;
-          searchTime = Date.now() - searchStartTime;
+          // Phase 0A-4 FIX: 検索時間は検索開始から検索完了まで
+          const searchEndTime = Date.now();
+          searchTime = searchEndTime - searchStartTime;
           
-          console.log('🔍 投稿ログ用データ:', {
-            userId,
-            userDisplayName,
-            sessionId,
-            userAgent: userAgent.substring(0, 50) + '...',
-            ipAddress
-          });
+          // 投稿ログ用データ（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 投稿ログ用データ:', {
+              userId,
+              userDisplayName,
+              sessionId,
+              userAgent: userAgent.substring(0, 50) + '...',
+              ipAddress
+            });
+          }
           // 検索ソース別の集計
           const searchSourceStats = relevantDocs.reduce((acc: Record<string, number>, doc) => {
             const source = doc.source || 'unknown';
@@ -295,11 +349,14 @@ export const POST = async (req: NextRequest) => {
             return acc;
           }, {});
           
-          console.log('🔍 [ハイブリッド検索] 検索結果の内訳:', searchSourceStats);
-          console.log('🔍 [ハイブリッド検索] Top 3 results:');
-          relevantDocs.slice(0, 3).forEach((doc, idx) => {
-            console.log(`  ${idx + 1}. [${doc.source}] ${doc.title?.substring(0, 60)} (score: ${doc.score?.toFixed(4)}, distance: ${doc.distance?.toFixed(4)})`);
-          });
+          // ハイブリッド検索結果（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 [ハイブリッド検索] 検索結果の内訳:', searchSourceStats);
+            console.log('🔍 [ハイブリッド検索] Top 3 results:');
+            relevantDocs.slice(0, 3).forEach((doc, idx) => {
+              console.log(`  ${idx + 1}. [${doc.source}] ${doc.title?.substring(0, 60)} (score: ${doc.score?.toFixed(4)}, distance: ${doc.distance?.toFixed(4)})`);
+            });
+          }
           
           processingSteps.push({
             step: 'search',
@@ -322,7 +379,7 @@ export const POST = async (req: NextRequest) => {
           // クライアント側でも見えるように詳細情報を送信
           const searchDetailMessage = {
             type: 'step_update',
-            step: 0,
+            step: 0,  // Phase 5修正: 検索完了はステップ0（0ベース）
             stepId: 'search',
             title: '検索完了',
             description: `ハイブリッド検索完了: ${Object.entries(searchSourceStats).map(([source, count]) => `${source}=${count}`).join(', ')}`,
@@ -348,7 +405,7 @@ export const POST = async (req: NextRequest) => {
           // ドキュメント処理ステップで参照情報を含める
           const processingMessage = {
             type: 'step_update',
-            step: 1,
+            step: 1,  // Phase 5修正: ドキュメント処理はステップ1（0ベース）
             stepId: 'processing',
             title: 'ドキュメント処理中...',
             description: `検索結果 ${relevantDocs.length} 件を分析・整理しています...`,
@@ -370,9 +427,9 @@ export const POST = async (req: NextRequest) => {
             encoder.encode(`data: ${JSON.stringify(processingMessage)}\n\n`)
           );
           
-          const processingStartTime = Date.now();
+          const documentProcessingStartTime = Date.now();
           await delay(100); // 視覚的効果のための最小限の遅延
-          const processingTime = Date.now() - processingStartTime;
+          const processingTime = Date.now() - documentProcessingStartTime;
 
           // ドキュメント処理の詳細分析
           const processingAnalysis = {
@@ -393,7 +450,10 @@ export const POST = async (req: NextRequest) => {
             details: processingAnalysis
           });
 
-          console.log(`📚 関連文書取得完了: ${relevantDocs.length}件`);
+          // 関連文書取得完了（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`📚 関連文書取得完了: ${relevantDocs.length}件`);
+          }
           screenTestLogger.info('search', `Retrieved ${relevantDocs.length} relevant documents for streaming`);
 
           // ステップ3: AIが回答を生成中...
@@ -403,7 +463,8 @@ export const POST = async (req: NextRequest) => {
           // ストリーミング要約の実行
           let chunkIndex = 0;
           let totalChunks = 0;
-          const aiStartTime = Date.now();
+          // Phase 0A-4 FIX: AI生成時間は検索完了時刻から計測
+          const aiStartTime = searchEndTime;
 
           try {
             for await (const result of streamingSummarizeConfluenceDocs({
@@ -483,12 +544,14 @@ export const POST = async (req: NextRequest) => {
               });
 
               // 投稿ログの保存（completionMessageの前に実行）
-              totalTime = Date.now() - startTime;
-              console.log('🎯 ストリーミング処理完了 - postLogs保存処理を開始します');
+              // Phase 0A-4 FIX: 総処理時間はAPI開始時刻から計測（TTFBとの整合性を保つ）
+              totalTime = Date.now() - apiStartTime;
+              // ストリーミング処理完了
               
               let savedPostLogId: string | null = null;
               
               try {
+              if (totalTime > 1000) { // 1秒以上の場合のみログ出力
                 console.log('📊 postLogs保存データを準備中:', {
                   userId,
                   question: question.substring(0, 50) + '...',
@@ -498,14 +561,16 @@ export const POST = async (req: NextRequest) => {
                   totalTime,
                   referencesCount: result.references.length
                 });
+              }
                 
-                console.log('🔍 PostLog保存処理開始 - isComplete:', result.isComplete);
+                // PostLog保存処理開始
                 
                 const logData = {
                   userId,
                   question,
                   answer: fullAnswer,
                   serverStartupTime, // サーバー起動処理時間を追加
+                  ttfbTime, // 最初のチャンクまでの時間（TTFB）を追加
                   searchTime,
                   aiGenerationTime,
                   totalTime,
@@ -522,21 +587,26 @@ export const POST = async (req: NextRequest) => {
                   }
                 };
                 
-                console.log('🔍 PostLog保存データ確認:', {
-                  serverStartupTime,
-                  searchTime,
-                  aiGenerationTime,
-                  totalTime
-                });
+                if (totalTime > 1000) { // 1秒以上の場合のみログ出力
+                  console.log('🔍 PostLog保存データ確認:', {
+                    serverStartupTime,
+                    ttfbTime,
+                    searchTime,
+                    aiGenerationTime,
+                    totalTime
+                  });
+                }
                 
                 savedPostLogId = await savePostLogToAdminDB(logData);
-                console.log('✅ 投稿ログを保存しました:', {
-                  postLogId: savedPostLogId,
-                  userId: logData.userId,
-                  userDisplayName: logData.metadata.userDisplayName,
-                  question: logData.question.substring(0, 50) + '...',
-                  timestamp: logData.timestamp.toISOString()
-                });
+                if (totalTime > 1000) { // 1秒以上の場合のみログ出力
+                  console.log('✅ 投稿ログを保存しました:', {
+                    postLogId: savedPostLogId,
+                    userId: logData.userId,
+                    userDisplayName: logData.metadata.userDisplayName,
+                    question: logData.question.substring(0, 50) + '...',
+                    timestamp: logData.timestamp.toISOString()
+                  });
+                }
               } catch (logError) {
                 console.error('❌ 投稿ログの保存に失敗しました:', logError);
               }
@@ -544,7 +614,7 @@ export const POST = async (req: NextRequest) => {
               // 完了メッセージ（保存されたpostLogIdを含める）
               const completionMessage = {
                 type: 'completion',
-                step: 4,
+                step: 3,  // Phase 5修正: 完了はステップ3（0ベース）
                 stepId: 'completed',
                 title: '完了',
                 description: '回答が生成されました',
@@ -622,13 +692,15 @@ export const POST = async (req: NextRequest) => {
               chunkIndex: 1,
               isComplete: true,
               references: relevantDocs.map((doc, index) => ({
-                id: doc.id || `${doc.pageId}-${index}`,
-                title: doc.title || 'タイトル不明',
-                url: doc.url || '',
-                distance: doc.distance || 0.5,
-                score: doc.score || 0,
-                source: doc.source || 'vector'
-              })),
+              id: doc.id || `${doc.pageId}-${index}`,
+              title: doc.title || 'タイトル不明',
+              url: doc.url || '',
+              spaceName: doc.spaceName || 'Unknown',
+              labels: doc.labels || [],
+              distance: doc.distance,
+              source: doc.source,
+              scoreText: doc.scoreText
+            })),
               step: 2,
               stepId: 'ai_generation',
               title: 'フォールバック回答を生成中...',
@@ -642,7 +714,7 @@ export const POST = async (req: NextRequest) => {
             fullAnswer = fallbackAnswer;
             
             // エラー時の投稿ログの保存（completionMessageの前に実行）
-            totalTime = Date.now() - startTime;
+            totalTime = Date.now() - apiStartTime;
             let fallbackPostLogId: string | null = null;
             
             try {
@@ -697,13 +769,15 @@ export const POST = async (req: NextRequest) => {
               chunkIndex: 1,
               totalChunks: 1,
               references: relevantDocs.map((doc, index) => ({
-                id: doc.id || `${doc.pageId}-${index}`,
-                title: doc.title || 'タイトル不明',
-                url: doc.url || '',
-                distance: doc.distance || 0.5,
-                score: doc.score || 0,
-                source: doc.source || 'vector'
-              })),
+              id: doc.id || `${doc.pageId}-${index}`,
+              title: doc.title || 'タイトル不明',
+              url: doc.url || '',
+              spaceName: doc.spaceName || 'Unknown',
+              labels: doc.labels || [],
+              distance: doc.distance,
+              source: doc.source,
+              scoreText: doc.scoreText
+            })),
               fullAnswer: fallbackAnswer,
               postLogId: fallbackPostLogId
             };
@@ -726,7 +800,10 @@ export const POST = async (req: NextRequest) => {
             { requestId: crypto.randomUUID() }
           );
           
-          console.log('[GenkitErrorHandler] Streaming error handling applied:', genkitErrorResponse.body);
+          // Genkitエラーハンドリングログ（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[GenkitErrorHandler] Streaming error handling applied:', genkitErrorResponse.body);
+          }
           
           // 既存のエラーメッセージ形式を維持
           const errorMessage = {

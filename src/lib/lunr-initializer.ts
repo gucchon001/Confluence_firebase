@@ -61,6 +61,12 @@ export class LunrInitializer {
     try {
       console.log('[LunrInitializer] Starting Lunr index initialization...');
       const startTime = Date.now();
+      
+      // Phase 6修正: kuromojiを確実に初期化（品質維持のため）
+      console.log('[LunrInitializer] Pre-initializing kuromoji tokenizer...');
+      const { preInitializeTokenizer } = await import('./japanese-tokenizer');
+      await preInitializeTokenizer();
+      console.log('[LunrInitializer] ✅ Kuromoji tokenizer initialized successfully');
 
       // まずはキャッシュからロードを試みる（再インデックス回避）
       const lunrSearchClient = LunrSearchClient.getInstance();

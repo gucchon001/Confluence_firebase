@@ -72,6 +72,7 @@ const mockPostLogs: PostLog[] = [
     question: '教室管理の詳細は？',
     answer: '教室管理機能について...',
     serverStartupTime: 5,
+    ttfbTime: 320,
     searchTime: 2300,
     aiGenerationTime: 15200,
     totalTime: 17500,
@@ -94,6 +95,7 @@ const mockPostLogs: PostLog[] = [
     question: 'ログイン認証の仕組みは？',
     answer: 'ログイン認証について...',
     serverStartupTime: 5,
+    ttfbTime: 280,
     searchTime: 1800,
     aiGenerationTime: 12800,
     totalTime: 14600,
@@ -188,6 +190,21 @@ const AdminDashboard: React.FC = () => {
         userCount: userList.length,
         postLogCount: recentLogs.length
       });
+      
+      // 🔍 デバッグ: PostLogデータの詳細を確認
+      if (recentLogs.length > 0) {
+        console.log('🔍 [AdminDashboard] 最新PostLogデータ確認:', {
+          id: recentLogs[0].id,
+          question: recentLogs[0].question?.substring(0, 50) + '...',
+          answer: recentLogs[0].answer?.substring(0, 100) + '...',
+          answerLength: recentLogs[0].answer?.length || 0,
+          serverStartupTime: recentLogs[0].serverStartupTime,
+          ttfbTime: recentLogs[0].ttfbTime,
+          searchTime: recentLogs[0].searchTime,
+          aiGenerationTime: recentLogs[0].aiGenerationTime,
+          totalTime: recentLogs[0].totalTime
+        });
+      }
       
       setUsers(userList);
       setPostLogs(recentLogs);
@@ -428,6 +445,10 @@ const AdminDashboard: React.FC = () => {
         ? logsInHour.reduce((sum, log) => sum + ((log as any).serverStartupTime || 0), 0) / logsInHour.length / 1000
         : 0;
       
+      const avgTtfbTime = logsInHour.length > 0 
+        ? logsInHour.reduce((sum, log) => sum + ((log as any).ttfbTime || 0), 0) / logsInHour.length / 1000
+        : 0;
+      
       const avgSearchTime = logsInHour.length > 0 
         ? logsInHour.reduce((sum, log) => sum + log.searchTime, 0) / logsInHour.length / 1000
         : 0;
@@ -443,6 +464,7 @@ const AdminDashboard: React.FC = () => {
       hourlyData.push({
         time: `${hourStart.getHours()}:00`,
         serverStartupTime: avgServerStartupTime,
+        ttfbTime: avgTtfbTime,
         searchTime: avgSearchTime,
         aiTime: avgAiTime,
         totalTime: avgServerStartupTime + avgSearchTime + avgAiTime,
@@ -979,6 +1001,7 @@ const AdminDashboard: React.FC = () => {
                       formatter={(value, name) => [
                         `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
                         name === 'serverStartupTime' ? 'サーバー起動時間' :
+                        name === 'ttfbTime' ? '初期応答時間(TTFB)' :
                         name === 'searchTime' ? '検索時間' : 
                         name === 'aiTime' ? 'AI生成時間' : 
                         name === 'totalTime' ? '総処理時間' : name
@@ -991,6 +1014,13 @@ const AdminDashboard: React.FC = () => {
                       stroke="#8b5cf6" 
                       strokeWidth={2}
                       name="サーバー起動時間"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="ttfbTime" 
+                      stroke="#f59e0b" 
+                      strokeWidth={2}
+                      name="初期応答時間(TTFB)"
                     />
                     <Line 
                       type="monotone" 
@@ -1459,6 +1489,12 @@ const AdminDashboard: React.FC = () => {
                       <span className="text-sm text-muted-foreground">サーバー起動時間:</span>
                       <Badge variant="outline" className="text-purple-600">
                         {((selectedLog as any).serverStartupTime || 0)}ms
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">初期応答時間(TTFB):</span>
+                      <Badge variant="outline" className="text-amber-600">
+                        {((selectedLog as any).ttfbTime || 0)}ms
                       </Badge>
                     </div>
                     <div className="flex justify-between">

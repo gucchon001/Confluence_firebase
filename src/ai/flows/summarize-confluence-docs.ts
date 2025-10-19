@@ -1,11 +1,13 @@
 /**
  * Confluence文書要約（プレーン関数版）
+ * Phase 5 Week 2: 回答キャッシュ統合
  */
 // import { gemini15Flash } from '@genkit-ai/googleai';
 import * as z from 'zod';
 import Handlebars from 'handlebars';
 import { ai } from '../genkit';
 import { GeminiConfig } from '@/config/ai-models-config';
+import { getAnswerCache } from '@/lib/answer-cache';
 
 // プロンプトテンプレート (変更なし)
 const PROMPT_TEMPLATE = `
@@ -244,14 +246,39 @@ export async function summarizeConfluenceDocs({
       };
     }
 
+    // Phase 5 Week 2: 回答キャッシュチェック（品質影響なし）
+    const answerCache = getAnswerCache();
+    // ドキュメントをキャッシュ用の形式に変換（urlをIDとして使用）
+    const cacheDocuments = documents.map(doc => ({
+      id: doc.url || doc.title || '', // urlまたはtitleをIDとして使用
+      pageId: doc.url || doc.title || ''
+    }));
+    const cachedAnswer = answerCache.get(question, cacheDocuments);
+    
+    if (cachedAnswer) {
+      console.log('[Phase 5 Cache] ⚡ 回答キャッシュヒット - 即座に返却');
+      return {
+        answer: cachedAnswer.answer,
+        references: cachedAnswer.references,
+      };
+    }
+    
+    console.log('[Phase 5 Cache] キャッシュミス - Gemini生成開始');
+
     const formattedChatHistory = chatHistory
       .map((msg) => `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`)
       .join('\n\n');
 
     const contextText = documents
+      .slice(0, 10)  // Phase 5修正: 最大10件に制限（品質維持とトークン制限のバランス）
       .map(
-        (doc) =>
-          `## ドキュメント: ${doc.title}
+        (doc) => {
+          // Phase 5修正: 各文書の内容を800文字に削減（MAX_TOKENS対策）
+          const truncatedContent = doc.content && doc.content.length > 800 
+            ? doc.content.substring(0, 800) + '...' 
+            : doc.content || '内容なし';
+          
+          return `## ドキュメント: ${doc.title}
 **URL**: ${doc.url}
 **スペース**: ${doc.spaceName || 'Unknown'}
 **最終更新**: ${doc.lastUpdated || 'Unknown'}
@@ -259,7 +286,8 @@ export async function summarizeConfluenceDocs({
         **関連度スコア**: ${(doc as any).scoreText || 'N/A'}
 
 ### 内容
-${doc.content}`
+${truncatedContent}`;
+        }
       )
       .join('\n\n---\n\n');
 
@@ -407,6 +435,7 @@ ${doc.content}`
     }
 
   const references = documents.map((doc) => ({
+    id: doc.url || doc.title || '', // キャッシュ用のID
     title: removeMarkdownFormatting(doc.title), // マークダウン表記を除去
     url: doc.url,
     spaceName: doc.spaceName,
@@ -415,6 +444,14 @@ ${doc.content}`
     source: (doc as any).source, // vector / keyword / bm25 / hybrid
     scoreText: (doc as any).scoreText,
   }));
+
+  // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
+  const cacheDocumentsForSet = documents.map(doc => ({
+    id: doc.url || doc.title || '',
+    pageId: doc.url || doc.title || ''
+  }));
+  answerCache.set(question, cacheDocumentsForSet, answer, references);
+  console.log('[Phase 5 Cache] 💾 回答をキャッシュに保存');
 
     return { answer, references, prompt };
   } catch (error: any) {

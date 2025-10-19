@@ -40,14 +40,9 @@ npm run build
 
 **用途:** 通常の開発・デプロイ
 
-### 2. 高速ビルド
+### 2. 高速ビルド（削除済み）
 
-```bash
-npm run build:fast
-```
-
-**動作:**
-- データダウンロードを強制的にスキップ
+**注意:** `npm run build:fast` スクリプトは削除されました。代わりに環境変数を使用してください。
 - ローカルキャッシュまたは実行時ロードに依存
 
 **用途:**
@@ -55,14 +50,9 @@ npm run build:fast
 - CIパイプラインでの高速化
 - データ更新が不要な場合
 
-### 3. フルビルド
+### 3. フルビルド（削除済み）
 
-```bash
-npm run build:full
-```
-
-**動作:**
-- データダウンロードを強制的に実行
+**注意:** `npm run build:full` スクリプトは削除されました。代わりに環境変数を使用してください。
 - 常に最新データを取得
 
 **用途:**
@@ -137,13 +127,13 @@ graph LR
 
 ```bash
 # 初回セットアップ
-npm run build:full
+SKIP_DATA_DOWNLOAD=false npm run build
 
 # 以降の開発
-npm run build:fast
+SKIP_DATA_DOWNLOAD=true npm run build
 
 # データ更新後
-npm run build:full
+SKIP_DATA_DOWNLOAD=false npm run build
 ```
 
 ### CI/CDパイプライン
@@ -151,7 +141,7 @@ npm run build:full
 ```yaml
 # GitHub Actions の例
 - name: Build (fast mode)
-  run: npm run build:fast
+  run: npm run build
   env:
     SKIP_DATA_DOWNLOAD: true
 ```
@@ -178,7 +168,7 @@ Error: LanceDB table 'confluence' not found
 **解決策:**
 ```bash
 # データをダウンロード
-npm run build:full
+SKIP_DATA_DOWNLOAD=false npm run build
 
 # または手動でダウンロード
 npx tsx scripts/download-production-data.ts
@@ -206,7 +196,7 @@ rm -rf data/domain-knowledge-v2/
 rm -rf .cache/
 
 # 再ダウンロード
-npm run build:full
+SKIP_DATA_DOWNLOAD=false npm run build
 ```
 
 ## 📊 パフォーマンスメトリクス

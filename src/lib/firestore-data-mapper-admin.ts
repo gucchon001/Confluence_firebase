@@ -25,9 +25,21 @@ export function convertPostLogToAdminFirestore(logData: Omit<PostLog, 'id'>): an
     metadata: logData.metadata
   };
   
-  // 🔍 デバッグ: serverStartupTimeが正しく含まれているか確認
-  console.log('🔍 [convertPostLogToAdminFirestore] 入力データのserverStartupTime:', logData.serverStartupTime);
-  console.log('🔍 [convertPostLogToAdminFirestore] 出力データのserverStartupTime:', firestoreData.serverStartupTime);
+  // 🔍 デバッグ: 全タイムスタンプデータが正しく含まれているか確認
+  console.log('🔍 [convertPostLogToAdminFirestore] 入力データ:', {
+    serverStartupTime: logData.serverStartupTime,
+    ttfbTime: logData.ttfbTime,
+    searchTime: logData.searchTime,
+    aiGenerationTime: logData.aiGenerationTime,
+    totalTime: logData.totalTime
+  });
+  console.log('🔍 [convertPostLogToAdminFirestore] 出力データ:', {
+    serverStartupTime: firestoreData.serverStartupTime,
+    ttfbTime: firestoreData.ttfbTime,
+    searchTime: firestoreData.searchTime,
+    aiGenerationTime: firestoreData.aiGenerationTime,
+    totalTime: firestoreData.totalTime
+  });
   
   return firestoreData;
 }

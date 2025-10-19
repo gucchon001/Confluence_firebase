@@ -33,6 +33,7 @@ export function convertFirestoreToPostLog(docId: string, data: any): PostLog {
   console.log('🔍 [convertFirestoreToPostLog] Firestoreデータ確認:', {
     docId,
     serverStartupTime: data.serverStartupTime,
+    ttfbTime: data.ttfbTime,
     searchTime: data.searchTime,
     aiGenerationTime: data.aiGenerationTime,
     totalTime: data.totalTime,
@@ -45,6 +46,7 @@ export function convertFirestoreToPostLog(docId: string, data: any): PostLog {
     question: data.question,
     answer: data.answer,
     serverStartupTime: data.serverStartupTime || 0, // サーバー起動時間を追加（デフォルト0）
+    ttfbTime: data.ttfbTime || 0, // TTFB時間を追加（デフォルト0）
     searchTime: data.searchTime || 0, // デフォルト値0を追加
     aiGenerationTime: data.aiGenerationTime || 0, // デフォルト値0を追加
     totalTime: data.totalTime || 0, // デフォルト値0を追加
@@ -73,6 +75,7 @@ export function convertFirestoreToPostLog(docId: string, data: any): PostLog {
   console.log('🔍 [convertFirestoreToPostLog] 変換後PostLog確認:', {
     docId,
     serverStartupTime: postLog.serverStartupTime,
+    ttfbTime: postLog.ttfbTime,
     searchTime: postLog.searchTime,
     aiGenerationTime: postLog.aiGenerationTime,
     totalTime: postLog.totalTime,

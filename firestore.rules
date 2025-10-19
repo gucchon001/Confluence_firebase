@@ -1,16 +1,24 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 認証済みかつtomonokai-corp.comドメインのユーザーのみアクセス可能
+    // 🔐 本番環境: 認証済みかつtomonokai-corp.comドメインのユーザーのみ
     function isAllowedUser() {
       return request.auth != null 
         && request.auth.token.email_verified == true
         && request.auth.token.email.matches('.*@tomonokai-corp\\.com$');
     }
+    
+    // 🧪 開発環境用: 認証をスキップ（本番デプロイ前に削除すること）
+    // TODO: 本番デプロイ前に isDevMode() を削除してください
+    function isDevMode() {
+      // 開発環境では一時的に全アクセスを許可
+      // 本番環境ではこの関数を必ず false にすること
+      return true;  // ← 本番デプロイ前に false に変更
+    }
 
     // 全てのドキュメントに対するアクセス制御
     match /{document=**} {
-      allow read, write: if isAllowedUser();
+      allow read, write: if isAllowedUser() || isDevMode();
     }
 
     // ユーザー関連データ

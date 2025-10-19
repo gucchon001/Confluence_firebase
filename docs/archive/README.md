@@ -1,8 +1,18 @@
 # 🗄️ アーカイブドキュメント
 
-**最終更新**: 2025年10月11日
+**最終更新**: 2025年10月15日
 
 このディレクトリには、過去のプロジェクト、完了した分析、修正済みの問題、および非推奨になったドキュメントが保管されています。
+
+## ✨ 最新アーカイブ（2025-10-15）
+
+🎊 **Phase 0A 完了！** 以下の計画書を完了済みとしてアーカイブしました：
+
+- **phase-0A-implementation-plan.md** - Phase 0A 初期計画（100%達成で完了）
+- **phase-0a-2-implementation-plan.md** - Phase 0A-2 Knowledge Graph実装計画（完了）
+- **graphrag-tuned-architecture.md** - GraphRAG計画（Phase 0A-2で実装完了）
+
+詳細は [docs/implementation/phase-0a-2-completion-report.md](../implementation/phase-0a-2-completion-report.md) をご覧ください。
 
 ---
 
@@ -15,6 +25,7 @@ docs/archive/
 ├── performance-analysis/   # パフォーマンス分析レポート
 ├── deployment-projects/    # 完了したデプロイプロジェクト
 ├── deprecated/             # 非推奨・古いドキュメント
+├── [完了した計画書]        # Phase 0A計画書等（2025-10-15追加）
 └── [その他の履歴データ]
 ```
 
@@ -84,6 +95,49 @@ Next.jsコンパイル時間の最適化
 - **内容**: Firebase App Hostingへの初回デプロイ計画
 - **状態**: デプロイ完了
 - **成果**: 2025-10-10に安定版v1.0.0リリース
+
+---
+
+### 🎯 完了した計画書（2025-10-15追加）
+
+Phase 0Aの完了により、以下の計画書をアーカイブしました。
+
+#### [phase-0A-implementation-plan.md](./phase-0A-implementation-plan.md)
+Phase 0A 基盤強化実装計画書
+- **作成日**: 2025-10-12頃
+- **内容**: Phase 0A全体の実装計画（Phase 0A-1、0A-1.5、0A-2）
+- **目標**: 検索発見率17% → 81%
+- **結果**: **100%達成** 🎉（目標を19%超過）
+- **状態**: 完全達成によりアーカイブ
+
+#### [phase-0a-2-implementation-plan.md](./phase-0a-2-implementation-plan.md)
+Phase 0A-2 Knowledge Graph実装計画
+- **作成日**: 2025-10-15
+- **内容**: Knowledge Graph構築とSearch統合の詳細計画
+- **目標**: 検索発見率83% → 100%
+- **結果**: **100%達成** 🎉
+- **実装内容**:
+  - URLリンク・ページ番号参照抽出（1,348エッジ）
+  - ドメイン・タグ関係構築（22,860エッジ）
+  - Knowledge Graph検索統合（+5件平均拡張）
+- **状態**: 実装完了によりアーカイブ
+
+#### [graphrag-tuned-architecture.md](./graphrag-tuned-architecture.md)
+GraphRAG調整アーキテクチャ計画
+- **作成日**: 2025-10-12頃
+- **内容**: Knowledge Graph導入の長期計画
+- **Phase 0A-2での実装内容**:
+  - ページ間参照関係の自動抽出
+  - Structured Label活用による関係構築
+  - 検索結果の関連ページ拡張
+- **状態**: Phase 0A-2で基本機能実装完了
+
+**📊 Phase 0A 全体の成果**:
+- Phase 0A-1: 17% → 17%（初期実装）
+- Phase 0A-1.5: 17% → 83%（+66%、キーワード抽出改善）
+- Phase 0A-2: 83% → **100%**（+17%、Knowledge Graph統合）
+
+詳細は [docs/implementation/phase-0a-2-completion-report.md](../implementation/phase-0a-2-completion-report.md) をご覧ください。
 
 ---
 

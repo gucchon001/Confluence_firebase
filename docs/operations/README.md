@@ -1,12 +1,49 @@
 # Operations ドキュメント
 
-**最終更新**: 2025年10月11日
+**最終更新**: 2025年10月15日
 
 Confluence Copilot の運用に関する**現行有効な**ドキュメントです。
+
+## ✨ 最新情報（2025-10-15）
+
+🎊 **Phase 0A-2 完了！** Knowledge Graph実装により、**検索発見率100%を達成**しました。
+
+### Knowledge Graph 構築・管理コマンド
+
+```bash
+# Knowledge Graph 構築
+npm run kg:build
+
+# ノード一覧表示
+npm run kg:list
+
+# 特定ページの可視化
+npm run kg:visualize <pageId>
+npm run kg:visualize 718373062  # 164_教室削除機能の関係図
+
+# Graphviz DOT形式エクスポート
+npm run kg:visualize:dot <pageId>
+
+# Phase 0A 統合テスト（KG込み）
+npx tsx scripts/test-phase-0a-1.5-all-cases.ts
+```
+
+詳細は [docs/implementation/phase-0a-2-completion-report.md](../implementation/phase-0a-2-completion-report.md) をご覧ください。
 
 ---
 
 ## 📚 ドキュメント一覧
+
+### 🤖 AI開発・協働
+
+#### [cursor-ai-collaboration-guide.md](./cursor-ai-collaboration-guide.md) ⭐ **NEW**
+Cursor AI協働マニュアル
+- Cursor AIの機能を最大限に活用するためのコミュニケーション技法
+- 問題解決アプローチとデバッグ戦略
+- 実践例とチェックリスト
+- 効率的なAI活用で開発速度を10倍以上向上
+
+---
 
 ### 🔄 同期・データ管理
 

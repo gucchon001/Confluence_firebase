@@ -1,5 +1,6 @@
 /**
  * Confluence文書要約（ストリーミング版）
+ * Phase 5 Week 2: TTFB最適化 + 回答キャッシュ統合
  * リアルタイムで回答を生成・配信
  */
 
@@ -7,6 +8,8 @@ import * as z from 'zod';
 import Handlebars from 'handlebars';
 import { ai } from '../genkit';
 import { GeminiConfig } from '@/config/ai-models-config';
+import { getAnswerCache } from '@/lib/answer-cache';
+// 重複コード修正をロールバック
 
 // フォールバック回答生成関数
 function generateFallbackAnswer(question: string, context: any[]): string {
@@ -230,17 +233,72 @@ export async function* streamingSummarizeConfluenceDocs(
   const { question, context, chatHistory } = params;
   
   console.log('🌊 ストリーミング要約開始:', question);
+  console.log('🔍 [DEBUG CONTEXT] context.length:', context.length);
+  console.log('🔍 [DEBUG CONTEXT] First 3 context titles:', context.slice(0, 3).map(d => d.title));
+  
+  // Phase 5 Week 2: 回答キャッシュチェック（品質影響なし）
+  const answerCache = getAnswerCache();
+  
+  // 緊急: 「急募機能」のキャッシュをクリア（一時的に無効化）
+  // if (question.includes('急募機能')) {
+  //   answerCache.clearForQuestion('急募機能');
+  //   console.log('[Phase 5 Cache] 🗑️ 急募機能のキャッシュをクリアしました');
+  // }
+  
+  const cachedAnswer = answerCache.get(question, context);
+  
+  if (cachedAnswer) {
+    console.log('[Phase 5 Streaming Cache] ⚡ キャッシュヒット - 即座に配信');
+    
+    // キャッシュされた回答を高速にストリーム配信
+    const chunks = splitIntoChunks(cachedAnswer.answer, 100);
+    
+    for (let i = 0; i < chunks.length; i++) {
+      yield {
+        chunk: chunks[i],
+        isComplete: false,
+        chunkIndex: i,
+        references: cachedAnswer.references
+      };
+      // Phase 5最適化: チャンク間の遅延を削除（人為的な遅延は不要）
+    }
+    
+    // 完了チャンク
+    yield {
+      chunk: '',
+      isComplete: true,
+      chunkIndex: chunks.length,
+      totalChunks: chunks.length,
+      references: cachedAnswer.references
+    };
+    
+    console.log(`✅ [Phase 5 Streaming Cache] キャッシュから配信完了: ${chunks.length}チャンク`);
+    return;
+  }
+  
+  console.log('[Phase 5 Streaming Cache] キャッシュミス - Gemini生成開始');
   
   try {
     // コンテキストの準備（パフォーマンス最適化: 品質を維持しつつ削減）
+    console.log('🔍 [DEBUG CONTEXT ARRAY] context.length:', context.length);
+    console.log('🔍 [DEBUG CONTEXT ARRAY] First 3 docs:', context.slice(0, 3).map(d => ({
+      title: d.title,
+      contentLength: d.content?.length || 0,
+      hasContent: !!d.content
+    })));
+    
+    // 強制的にログを出力
+    console.error('🔍 [FORCE LOG] context.length:', context.length);
+    console.error('🔍 [FORCE LOG] First doc content:', context[0]?.content?.substring(0, 100) || 'NO CONTENT');
+    
     const contextText = context
       .slice(0, 5) // 上位5件（品質維持）
       .map(
         (doc) => {
           // 各文書の内容を3分の2に削減（800 → 530文字、パフォーマンスと品質のバランス）
-          const truncatedContent = doc.content.length > 530 
+          const truncatedContent = doc.content && doc.content.length > 530 
             ? doc.content.substring(0, 530) + '...' 
-            : doc.content;
+            : doc.content || '内容なし';
           
           return `**${doc.title}**
 ${truncatedContent}`;
@@ -257,13 +315,11 @@ ${truncatedContent}`;
     const template = Handlebars.compile(STREAMING_PROMPT_TEMPLATE);
     const prompt = template({
       context: contextText,
-      chat_history: chatHistoryText,
       question: question
     });
     
-    console.log('🔍 [DEBUG] prompt length:', prompt.length);
-    console.log('🔍 [DEBUG] context length:', context.length);
-    console.log('🔍 [DEBUG] context text length:', contextText.length);
+    console.log('🔍 [DEBUG PROMPT] Full prompt:', prompt);
+    console.log('🔍 [DEBUG CONTEXT_TEXT] contextText:', contextText);
 
     // ストリーミング生成の実行（Phase 3最適化: タイムアウト付きエラーハンドリング）
     let result;
@@ -288,12 +344,17 @@ ${truncatedContent}`;
       
       console.log('🔍 [DEBUG] AI generate完了');
       console.log('🔍 [DEBUG] result.text length:', result.text?.length || 0);
-    } catch (error) {
-      console.error('❌ Gemini API エラー:', error);
-      
-      // Phase 3最適化: 高速フォールバック回答を生成
-      const fallbackAnswer = generateFallbackAnswer(question, context);
-      console.log('🔄 フォールバック回答を生成:', fallbackAnswer.substring(0, 100) + '...');
+           } catch (error) {
+             console.error('❌ Gemini API エラー:', error);
+             console.error('🔍 [DEBUG ERROR] Error details:', {
+               name: error.name,
+               message: error.message,
+               stack: error.stack?.substring(0, 200)
+             });
+             
+             // Phase 3最適化: 高速フォールバック回答を生成
+             const fallbackAnswer = generateFallbackAnswer(question, context);
+             console.log('🔄 フォールバック回答を生成:', fallbackAnswer.substring(0, 100) + '...');
       
       // フォールバック結果を返す
       const references = context.map((doc, index) => ({
@@ -315,39 +376,25 @@ ${truncatedContent}`;
       return;
     }
 
-    // 参照元の準備
+    // 参照元の準備（元のコードに戻す）
     const references = context.map((doc, index) => ({
       id: doc.id || `${doc.pageId}-${index}`,
       title: doc.title || 'タイトル不明',
       url: doc.url,
-      distance: doc.distance,
+      distance: doc.distance || 0.5,
       score: doc.score || 0,
       source: doc.source || 'vector'
     }));
 
-    // ストリーミングをシミュレート
-    let answer = '';
-    console.log('🔍 [DEBUG] result.text:', result.text);
-    console.log('🔍 [DEBUG] typeof result.text:', typeof result.text);
+    console.log('🔍 [DEBUG REFERENCES] references.length:', references.length);
+    console.log('🔍 [DEBUG REFERENCES] First 3 references:', references.slice(0, 3));
+
+    // ストリーミングをシミュレート（元のコードに戻す）
+    let answer = result.text;
     
-    if (typeof result.text === 'string') {
-      answer = result.text;
-    } else if (result.text !== null && result.text !== undefined) {
-      answer = String(result.text);
-    } else {
-      answer = '回答を生成できませんでした。';
-    }
-    
-    console.log('🔍 [DEBUG] answer after processing:', answer);
-    console.log('🔍 [DEBUG] answer.includes("[object Object]"):', answer.includes('[object Object]'));
-    
-    // オブジェクトが混入していないかチェック
-    if (answer.includes('[object Object]')) {
-      console.warn('Object detected in answer, using fallback');
-      answer = '回答の生成中にエラーが発生しました。';
-    }
-    
-    console.log('🔍 [DEBUG] final answer:', answer);
+    console.log('🔍 [DEBUG ANSWER] Raw result.text:', result.text);
+    console.log('🔍 [DEBUG ANSWER] Raw result.text type:', typeof result.text);
+    console.log('🔍 [DEBUG ANSWER] Raw result.text length:', result.text?.length);
     
     const chunks = splitIntoChunks(answer, 100);
     
@@ -360,9 +407,13 @@ ${truncatedContent}`;
         references: references
       };
       
-      // チャンク間の遅延をシミュレート
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Phase 5最適化: チャンク間の遅延を削除（人為的な遅延は不要）
+      // 旧: await new Promise(resolve => setTimeout(resolve, 50));
     }
+
+    // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
+    answerCache.set(question, context, answer, references);
+    console.log('[Phase 5 Streaming Cache] 💾 回答をキャッシュに保存');
 
     // 完了チャンク
     yield {
@@ -408,18 +459,6 @@ function isChunkComplete(chunk: string): boolean {
  * テキストをチャンクに分割
  */
 function splitIntoChunks(text: string, chunkSize: number): string[] {
-  // 入力の安全性チェック
-  if (typeof text !== 'string') {
-    console.warn('splitIntoChunks received non-string input:', text);
-    text = String(text);
-  }
-  
-  // オブジェクトが混入していないかチェック
-  if (text.includes('[object Object]')) {
-    console.warn('Object detected in splitIntoChunks input, using fallback');
-    return ['回答の生成中にエラーが発生しました。'];
-  }
-  
   const chunks: string[] = [];
   let currentChunk = '';
   

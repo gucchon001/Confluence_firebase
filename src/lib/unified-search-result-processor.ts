@@ -5,6 +5,7 @@
 
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText, calculateHybridScore } from './score-utils';
 import { labelManager } from './label-manager';
+import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
 
 /**
  * 検索結果の生データ
@@ -14,6 +15,7 @@ export interface RawSearchResult {
   pageId?: number;
   title: string;
   content: string;
+  isChunked?: boolean;  // Phase 0A-3: チャンク統合判定フラグ
   _distance?: number;
   _bm25Score?: number;
   _keywordScore?: number;
@@ -38,8 +40,9 @@ export interface RawSearchResult {
 export interface ProcessedSearchResult {
   id: string;
   pageId?: number;
-  title: string;
+  title: string;  // Required to match LanceDBSearchResult
   content: string;
+  isChunked?: boolean;  // Phase 0A-3: チャンク統合判定フラグ
   distance: number;
   score: number;
   space_key?: string;
@@ -56,6 +59,33 @@ export interface ProcessedSearchResult {
   scoreKind?: 'vector' | 'bm25' | 'keyword' | 'hybrid';
   scoreRaw?: number;
   scoreText?: string;
+  // Phase 0A-4: Composite Scoringフィールドを保持
+  _compositeScore?: number;
+  _scoreBreakdown?: {
+    vectorContribution?: number;
+    bm25Contribution?: number;
+    titleContribution?: number;
+    labelContribution?: number;
+  };
+  // StructuredLabelフィールド
+  structured_category?: string;
+  structured_domain?: string;
+  structured_feature?: string;
+  structured_status?: string;
+  structured_priority?: string;
+  structured_confidence?: number;
+  structured_tags?: string[];
+  structured_version?: string;
+  structured_content_length?: number;
+  structured_is_valid?: boolean;
+  // 検索メタデータフィールド（デバッグ用）
+  keyword?: number;
+  titleScore?: number;  // Renamed from 'title' to avoid conflict
+  labelScore?: number;  // Renamed from 'label' to avoid conflict
+  _titleMatchRatio?: number;
+  _distance?: number;
+  _hybridScore?: number;
+  _sourceType?: string;
 }
 
 /**
@@ -204,24 +234,36 @@ export class UnifiedSearchResultProcessor {
   }
 
   /**
-   * ドメイン減衰適用
+   * ドメイン減衰・ブースト適用（RRF段階）
+   * Phase 5改善: クエリに関連するドメイン固有キーワードのみをブースト
    */
-  private applyDomainPenalty(rrf: number, result: RawSearchResult): number {
+  private applyDomainPenalty(rrf: number, result: RawSearchResult, query?: string): number {
     try {
       const titleStr = String(result.title || '').toLowerCase();
       const labelsArr = this.getLabelsAsArray(result.labels);
       const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
       
       const penaltyTerms = labelManager.getPenaltyTerms();
-      const genericTitleTerms = ['共通要件','非機能要件','用語','ワード','ディフィニション','definition','ガイドライン','一覧','フロー','要件'];
       
       const hasPenalty = penaltyTerms.some(t => titleStr.includes(t)) || 
                         lowerLabels.some(l => penaltyTerms.some(t => l.includes(t)));
-      const isGenericDoc = genericTitleTerms.some(t => titleStr.includes(t));
+      const isGenericDoc = GENERIC_DOCUMENT_TERMS.some(t => titleStr.includes(t.toLowerCase()));
       
+      // 減衰適用（強化版）
       if (hasPenalty) rrf *= 0.9;
-      if (isGenericDoc) rrf *= 0.8;
+      if (isGenericDoc) rrf *= 0.5;  // 0.8 → 0.5に強化（50%減衰）
       if (String(result.title || '').includes('本システム外')) rrf *= 0.8;
+      
+      // Phase 5改善: クエリとタイトルの両方に含まれるドメイン固有キーワードのみをブースト
+      if (query && !isGenericDoc) {
+        const matchingKeywordCount = CommonTermsHelper.countMatchingDomainKeywords(query, String(result.title || ''));
+        
+        if (matchingKeywordCount > 0) {
+          // マッチしたキーワード数に応じてブースト（最大2倍）
+          const boostFactor = 1.0 + (matchingKeywordCount * 0.5);
+          rrf *= Math.min(boostFactor, 2.0);
+        }
+      }
       
     } catch (error) {
       console.warn('[UnifiedSearchResultProcessor] Domain penalty calculation failed:', error);
@@ -257,6 +299,7 @@ export class UnifiedSearchResultProcessor {
         pageId: result.pageId,
         title: result.title || 'No Title',
         content: result.content || '',
+        isChunked: result.isChunked,  // Phase 0A-3: チャンク統合判定フラグ
         distance: distance,
         score: finalScore,
         space_key: result.space_key,
@@ -268,7 +311,29 @@ export class UnifiedSearchResultProcessor {
         rrfScore: result._rrfScore || 0,
         scoreKind,
         scoreRaw,
-        scoreText
+        scoreText,
+        // Phase 0A-4: Composite Scoringフィールドを保持
+        _compositeScore: (result as any)._compositeScore,
+        _scoreBreakdown: (result as any)._scoreBreakdown,
+        // StructuredLabelフィールドを保持
+        structured_category: (result as any).structured_category,
+        structured_domain: (result as any).structured_domain,
+        structured_feature: (result as any).structured_feature,
+        structured_status: (result as any).structured_status,
+        structured_priority: (result as any).structured_priority,
+        structured_confidence: (result as any).structured_confidence,
+        structured_tags: (result as any).structured_tags,
+        structured_version: (result as any).structured_version,
+        structured_content_length: (result as any).structured_content_length,
+        structured_is_valid: (result as any).structured_is_valid,
+        // 検索メタデータフィールドを保持（デバッグ用）
+        keyword: (result as any).keyword,
+        titleScore: (result as any).title,  // Renamed to avoid conflict with title property
+        labelScore: (result as any).label,  // Renamed to avoid conflict
+        _titleMatchRatio: (result as any)._titleMatchRatio,
+        _distance: result._distance,
+        _hybridScore: result._hybridScore,
+        _sourceType: result._sourceType,
       };
     });
   }
