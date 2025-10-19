@@ -176,7 +176,7 @@ async function main() {
     
     // 新しいテーブルを作成
     const newDb = await lancedb.connect('.lancedb');
-    await newDb.createTable('confluence', updatedRecords, { 
+    await newDb.createTable('confluence', updatedRecords as any, { 
       schema: EXTENDED_LANCEDB_SCHEMA 
     });
     

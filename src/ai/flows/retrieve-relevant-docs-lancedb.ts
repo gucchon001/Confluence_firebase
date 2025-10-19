@@ -99,10 +99,9 @@ async function lancedbRetrieverTool(
 ): Promise<any[]> {
   const searchStartTime = Date.now();
   try {
-    // 検索開始ログ（開発環境のみ）
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[lancedbRetrieverTool] Retrieving documents for query: ${query}`);
-    }
+    // 検索開始ログ（本番環境でも出力）
+    console.log(`[lancedbRetrieverTool] 🔍 Search started for query: "${query}"`);
+    console.log(`[lancedbRetrieverTool] ⏱️ Start time: ${new Date().toISOString()}`);
 
     // モックデータの使用を無効化（本番データを使用）
     if (false) {
@@ -161,6 +160,7 @@ async function lancedbRetrieverTool(
     });
     
     // Phase 0A-4: 詳細な検索パフォーマンス計測
+    console.log(`[lancedbRetrieverTool] ⏱️ Starting searchLanceDB at ${new Date().toISOString()}`);
     const searchLanceDBStartTime = Date.now();
     const unifiedResults = await searchLanceDB({
       query: optimizedQuery, // 最適化されたクエリを使用
@@ -173,9 +173,9 @@ async function lancedbRetrieverTool(
     });
     const searchLanceDBDuration = Date.now() - searchLanceDBStartTime;
     
-    if (searchLanceDBDuration > 500) { // 500ms以上の場合のみログ出力
-      console.log(`[lancedbRetrieverTool] 🔍 searchLanceDB took ${searchLanceDBDuration}ms for query: "${optimizedQuery}"`);
-    }
+    // 本番環境でも常にログ出力
+    console.log(`[lancedbRetrieverTool] 📊 searchLanceDB completed in ${searchLanceDBDuration}ms (${(searchLanceDBDuration / 1000).toFixed(2)}s) for query: "${optimizedQuery}"`);
+    console.log(`[lancedbRetrieverTool] ⏱️ Completed searchLanceDB at ${new Date().toISOString()}`);
     
     // 検索結果ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
@@ -205,22 +205,24 @@ async function lancedbRetrieverTool(
     }));
 
     // Phase 0A-1.5: 全チャンク統合（サーバー側で実装）
+    console.log(`[lancedbRetrieverTool] ⏱️ Starting enrichWithAllChunks at ${new Date().toISOString()} for ${mapped.length} results`);
     const enrichStartTime = Date.now();
     const enriched = await enrichWithAllChunks(mapped);
     const enrichDuration = Date.now() - enrichStartTime;
     
-    if (enrichDuration > 500) { // 500ms以上の場合のみログ出力
-      console.log(`[lancedbRetrieverTool] 🔗 enrichWithAllChunks took ${enrichDuration}ms for ${mapped.length} results`);
-    }
+    // 本番環境でも常にログ出力
+    console.log(`[lancedbRetrieverTool] 📊 enrichWithAllChunks completed in ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s) for ${mapped.length} results`);
+    console.log(`[lancedbRetrieverTool] ⏱️ Completed enrichWithAllChunks at ${new Date().toISOString()}`);
     
     // Phase 0A-1.5: 空ページフィルター（サーバー側で実装）
+    console.log(`[lancedbRetrieverTool] ⏱️ Starting filterInvalidPagesServer at ${new Date().toISOString()}`);
     const filterStartTime = Date.now();
     const filtered = await filterInvalidPagesServer(enriched);
     const filterDuration = Date.now() - filterStartTime;
     
-    if (filterDuration > 200) { // 200ms以上の場合のみログ出力
-      console.log(`[lancedbRetrieverTool] 🔍 filterInvalidPagesServer took ${filterDuration}ms for ${enriched.length} results`);
-    }
+    // 本番環境でも常にログ出力
+    console.log(`[lancedbRetrieverTool] 📊 filterInvalidPagesServer completed in ${filterDuration}ms (${(filterDuration / 1000).toFixed(2)}s) for ${enriched.length} results`);
+    console.log(`[lancedbRetrieverTool] ⏱️ Completed filterInvalidPagesServer at ${new Date().toISOString()}`);
 
     return filtered;
   } catch (error: any) {

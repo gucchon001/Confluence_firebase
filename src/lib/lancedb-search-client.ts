@@ -125,10 +125,12 @@ export interface LanceDBSearchResult {
  * LanceDBで検索を実行する
  */
 export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceDBSearchResult[]> {
+  const searchFunctionStartTime = Date.now();
   try {
     console.log(`\n========================================`);
     console.log(`🔍 [searchLanceDB] 検索開始`);
     console.log(`Query: "${params.query}"`);
+    console.log(`⏱️ Start time: ${new Date().toISOString()}`);
     console.log(`========================================\n`);
     
     // キャッシュインスタンスの存在確認
@@ -175,6 +177,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const titleWeight = params.titleWeight || 1.0; // デフォルトのタイトル重み
     
     // 並列実行でパフォーマンス最適化（最適化されたLanceDB接続を使用）
+    console.log(`⏱️ [searchLanceDB] Starting parallel initialization at ${new Date().toISOString()}`);
+    const parallelStartTime = Date.now();
     const [vector, keywords, connection] = await Promise.all([
       getEmbeddings(params.query),
       (async () => {
@@ -185,6 +189,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         return await optimizedLanceDBClient.getConnection();
       })()
     ]);
+    const parallelDuration = Date.now() - parallelStartTime;
+    console.log(`📊 [searchLanceDB] Parallel initialization completed in ${parallelDuration}ms (${(parallelDuration / 1000).toFixed(2)}s)`);
+    console.log(`⏱️ [searchLanceDB] Completed parallel initialization at ${new Date().toISOString()}`);
     
     console.log(`[searchLanceDB] Generated embedding vector with ${vector.length} dimensions`);
     console.log(`[searchLanceDB] Extracted ${keywords.length} keywords: ${keywords.join(', ')}`);
@@ -736,6 +743,14 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     cacheInstance.set(cacheKey, processedResults);
     console.log(`💾 キャッシュ保存: "${cacheKey}" (${processedResults.length}件)`);
     console.log(`📦 キャッシュ保存後のサイズ: ${cacheInstance.size}`);
+    
+    // 本番環境でも総計時間を出力
+    const searchFunctionDuration = Date.now() - searchFunctionStartTime;
+    console.log(`\n========================================`);
+    console.log(`📊 [searchLanceDB] Total search completed`);
+    console.log(`⏱️ Total duration: ${searchFunctionDuration}ms (${(searchFunctionDuration / 1000).toFixed(2)}s)`);
+    console.log(`📌 End time: ${new Date().toISOString()}`);
+    console.log(`✅ Returned ${processedResults.length} results`);
     console.log(`========================================\n`);
     
     return processedResults;
