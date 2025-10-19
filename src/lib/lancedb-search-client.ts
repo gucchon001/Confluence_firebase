@@ -289,36 +289,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         console.log(`\n[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         console.log(`[Phase 4] KG拡張開始: ${titleMatchedResults.length}件のタイトルマッチ結果`);
         
-        // Phase 6最適化: 上位30件のみKG拡張（242件→30件で-85%削減）
-        // ベクトルスコアでソートして上位を選択
-        const MAX_KG_EXPANSION = 30;
-        const sortedTitleResults = titleMatchedResults
-          .sort((a, b) => (a._distance || 2.0) - (b._distance || 2.0))
-          .slice(0, MAX_KG_EXPANSION);
+        // Phase 7最適化: KG拡張を無効化（9.2秒→0秒で大幅高速化）
+        // KG拡張は高コスト・低効果のため一時的に無効化
+        console.log(`[Phase 7 KG Optimization] KG拡張を無効化（パフォーマンス最適化）`);
+        console.log(`[Phase 7 KG Optimization] 期待効果: 検索時間 -9.2秒（約50%改善）`);
         
-        console.log(`[Phase 6 KG Optimization] Limiting KG expansion: ${titleMatchedResults.length} → ${sortedTitleResults.length} results`);
-        
-        const kgExpandedResults = await expandTitleResultsWithKG(
-          sortedTitleResults,
-          tbl,
-          {
-            maxReferences: 2,
-            minWeight: 0.7
-          }
-        );
-        
-        // KG拡張結果を既存の結果にマージ
-        const existingIds = new Set(vectorResults.map(r => r.id));
-        let kgAddedCount = 0;
-        
-        for (const kgResult of kgExpandedResults) {
-          if (!existingIds.has(kgResult.id)) {
-            vectorResults.push(kgResult);
-            kgAddedCount++;
-          }
-        }
-        
-        console.log(`[Phase 4] KG拡張完了: +${kgAddedCount}件追加（合計: ${vectorResults.length}件）`);
+        console.log(`[Phase 4] KG拡張スキップ: 0件追加（合計: ${vectorResults.length}件）`);
         console.log(`[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
       } else {
         console.log(`[Phase 4] タイトルマッチ結果なし - KG拡張をスキップ`);
@@ -643,27 +619,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           console.log(`\n[Phase 4 RRF-KG] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
           console.log(`[Phase 4 RRF-KG] RRF上位${rrfResultsWithPageId.length}件からKG拡張開始`);
           
-          const kgExpandedResults = await expandTitleResultsWithKG(
-            rrfResultsWithPageId,
-            tbl,
-            {
-              maxReferences: 3,  // 各ページから3件まで参照を追加（Case 2対応）
-              minWeight: 0.7
-            }
-          );
+          // Phase 7最適化: RRF-KG拡張も無効化（追加の1.1秒削減）
+          console.log(`[Phase 7 RRF-KG Optimization] RRF-KG拡張を無効化（パフォーマンス最適化）`);
+          console.log(`[Phase 7 RRF-KG Optimization] 期待効果: 検索時間 -1.1秒（追加改善）`);
           
-          // KG拡張結果を既存の結果にマージ
-          const existingIds = new Set(vectorResults.map(r => r.id));
-          let kgAddedCount = 0;
-          
-          for (const kgResult of kgExpandedResults) {
-            if (!existingIds.has(kgResult.id)) {
-              vectorResults.push(kgResult);
-              kgAddedCount++;
-            }
-          }
-          
-          console.log(`[Phase 4 RRF-KG] KG拡張完了: +${kgAddedCount}件追加（合計: ${vectorResults.length}件）`);
+          console.log(`[Phase 4 RRF-KG] KG拡張スキップ: 0件追加（合計: ${vectorResults.length}件）`);
           console.log(`[Phase 4 RRF-KG] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
         }
       } catch (error) {

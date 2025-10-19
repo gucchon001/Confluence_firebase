@@ -25,6 +25,14 @@
 - **[structured-label-design.md](./architecture/structured-label-design.md)** - 構造化ラベル設計
 - **[label-domain-kg-integration.md](./architecture/label-domain-kg-integration.md)** - ラベル・ドメイン知識・KG統合
 
+#### Knowledge Graph / GraphRAG
+- **[KNOWLEDGE_GRAPH_README.md](./architecture/KNOWLEDGE_GRAPH_README.md)** 📚 **NEW** - KG/GraphRAG ドキュメント一覧（ナビゲーション）
+- **[knowledge-graph-comprehensive-overview.md](./architecture/knowledge-graph-comprehensive-overview.md)** 🌟 **NEW** - KG/GraphRAG 総合ドキュメント
+  - 現在の実装状況（KG拡張無効化の経緯）
+  - GraphRAGとの比較
+  - パフォーマンス分析
+  - 将来的な導入計画（デュアルモード検索）
+
 #### 将来計画
 - **[phase-5-improvement-plan.md](./architecture/phase-5-improvement-plan.md)** 🚀 **NEW** - Phase 5: パフォーマンス最適化計画（レスポンス速度85%削減）
 - **[foundation-first-strategy.md](./architecture/foundation-first-strategy.md)** 🔥 - 基盤強化優先戦略（ラベル+KG → 横断拡張）
@@ -103,6 +111,24 @@
 - **[spec.md](./specifications/spec.md)** - システム仕様書
 - **[lancedb-integration-guide.md](./specifications/lancedb-integration-guide.md)** - LanceDB統合ガイド
 - **[implementation-gap-analysis.md](./specifications/implementation-gap-analysis.md)** - 仕様書と実装のギャップ分析
+
+### 📊 [analysis/](./analysis/) - 分析レポート
+パフォーマンス分析、技術調査レポート
+
+- **[graphrag-performance-impact.md](./analysis/graphrag-performance-impact.md)** 🔬 **NEW** - GraphRAG導入時のパフォーマンス影響分析
+  - グラフトラバーサルのコスト
+  - Community Detectionの計算量
+  - Firestoreクエリのボトルネック
+  - 最適化後の予測
+
+### 💡 [proposals/](./proposals/) - 提案書
+新機能・改善提案に関するドキュメント
+
+- **[graphrag-dual-mode-search.md](./proposals/graphrag-dual-mode-search.md)** 🚀 **NEW** - GraphRAG デュアルモード検索提案
+  - 「高速検索」と「詳細分析」の2モード提供
+  - OpenAI o1 "Thinking Mode"と同様のコンセプト
+  - UI/UX設計、段階的な実装計画
+  - 期待される効果とリスク対策
 
 ### 📁 [archive/](./archive/) - アーカイブ
 過去の分析レポート、テスト結果、最適化計画、非推奨ドキュメント
