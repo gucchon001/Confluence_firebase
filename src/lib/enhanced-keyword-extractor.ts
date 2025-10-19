@@ -23,8 +23,8 @@ export class EnhancedKeywordExtractor {
     priorityKeywords: string[];
   } {
     // ネガティブワードを除去
-    const coreKeywords = originalKeywords.filter(kw => !NEGATIVE_WORDS_SET.has(kw));
-    const removedWords = originalKeywords.filter(kw => NEGATIVE_WORDS_SET.has(kw));
+    const coreKeywords = originalKeywords.filter(kw => !NEGATIVE_WORDS_SET.has(kw as any));
+    const removedWords = originalKeywords.filter(kw => NEGATIVE_WORDS_SET.has(kw as any));
     
     // Phase 5改善: ハードコードパターンを削除
     // 優先キーワードはドメイン知識から抽出されたキーワードの上位3つを使用

@@ -58,7 +58,7 @@ export function calculateLabelMatchScore(
           
           if (queryLower.includes(substring)) {
             // 汎用語かチェック（統一設定から）
-            const isGeneric = GENERIC_FUNCTION_TERMS_SET.has(substring);
+            const isGeneric = GENERIC_FUNCTION_TERMS_SET.has(substring as any);
             const weight = isGeneric ? 0.2 : 0.8;
             partialMatchScore += len * weight; // 長いマッチほど高スコア
           }

@@ -89,7 +89,10 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
 
 // フォールバック回答生成関数
 function generateFallbackAnswer(question: string, context: any[]): string {
-  console.log('🔄 フォールバック回答生成開始');
+  // フォールバック回答生成ログ（開発環境のみ）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔄 フォールバック回答生成開始');
+  }
   
   // 関連文書から主要な情報を抽出
   const relevantDocs = context.slice(0, 3); // 上位3件の文書を使用
@@ -183,15 +186,22 @@ async function ensureServerInitialized() {
   
   // バックグラウンド初期化が完了済みか確認
   if (isStartupInitialized()) {
-    console.log('✅ [API] バックグラウンド初期化完了済み - 即座に処理開始');
+    // 初期化完了ログ（開発環境のみ）
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ [API] バックグラウンド初期化完了済み - 即座に処理開始');
+    }
     return 0; // 待ち時間なし
   }
   
   // まだ初期化中の場合は完了を待つ
-  console.log('⏳ [API] バックグラウンド初期化中 - 完了を待機...');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('⏳ [API] バックグラウンド初期化中 - 完了を待機...');
+  }
   await waitForInitialization();
   const waitTime = Date.now() - startTime;
-  console.log(`✅ [API] 初期化完了 (待機時間: ${waitTime}ms)`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`✅ [API] 初期化完了 (待機時間: ${waitTime}ms)`);
+  }
   return waitTime;
 }
 
@@ -199,8 +209,10 @@ export const POST = async (req: NextRequest) => {
   // API呼び出し開始時刻を記録（TTFB計測用）
   const apiStartTime = Date.now();
   
-  console.log('🚀 [API] streaming-process route called');
-  console.error('🔍 [FORCE API LOG] API呼び出し開始');
+  // API呼び出しログ（開発環境のみ）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🚀 [API] streaming-process route called');
+  }
   
   try {
     // サーバー起動時に1回だけ初期化（2回目以降は即座にreturn）
@@ -209,17 +221,23 @@ export const POST = async (req: NextRequest) => {
     const body = await req.json();
     const { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
     
-    console.log('📝 [API] Request data:', {
-      questionLength: question?.length,
-      chatHistoryLength: chatHistory?.length,
-      labelFilters
-    });
+    // リクエストデータログ（開発環境のみ）
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📝 [API] Request data:', {
+        questionLength: question?.length,
+        chatHistoryLength: chatHistory?.length,
+        labelFilters
+      });
+    }
 
     if (!question) {
       return NextResponse.json({ error: 'question is required' }, { status: 400 });
     }
 
-    console.log('🌊 処理ステップストリーミングAPI開始:', question);
+    // ストリーミング開始ログ（開発環境のみ）
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🌊 処理ステップストリーミングAPI開始:', question);
+    }
     screenTestLogger.info('ai', `Streaming process request: "${question}"`, { 
       chatHistoryLength: chatHistory.length,
       labelFilters 
@@ -234,7 +252,7 @@ export const POST = async (req: NextRequest) => {
             // 【最優先】即座に最初のステップを送信してユーザーに応答を見せる
             await updateStep(controller, encoder, 0, 'search', '処理を開始しています...');
           
-          // TTFB（Time To First Byte）を計測: API呼び出しから最初のストリーミングチャンクまでの時間
+          // TTFB（Time To First Byte）を計測: API呼び出しから最初のストリーミングチャンク送信完了までの時間
           const ttfbTime = Date.now() - apiStartTime;
           if (ttfbTime > 100) { // 100ms以上の場合のみログ出力
             console.log('⚡ [TTFB] 最初のチャンク送信まで:', {
@@ -314,13 +332,16 @@ export const POST = async (req: NextRequest) => {
           const searchEndTime = Date.now();
           searchTime = searchEndTime - searchStartTime;
           
-          console.log('🔍 投稿ログ用データ:', {
-            userId,
-            userDisplayName,
-            sessionId,
-            userAgent: userAgent.substring(0, 50) + '...',
-            ipAddress
-          });
+          // 投稿ログ用データ（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 投稿ログ用データ:', {
+              userId,
+              userDisplayName,
+              sessionId,
+              userAgent: userAgent.substring(0, 50) + '...',
+              ipAddress
+            });
+          }
           // 検索ソース別の集計
           const searchSourceStats = relevantDocs.reduce((acc: Record<string, number>, doc) => {
             const source = doc.source || 'unknown';
@@ -328,11 +349,14 @@ export const POST = async (req: NextRequest) => {
             return acc;
           }, {});
           
-          console.log('🔍 [ハイブリッド検索] 検索結果の内訳:', searchSourceStats);
-          console.log('🔍 [ハイブリッド検索] Top 3 results:');
-          relevantDocs.slice(0, 3).forEach((doc, idx) => {
-            console.log(`  ${idx + 1}. [${doc.source}] ${doc.title?.substring(0, 60)} (score: ${doc.score?.toFixed(4)}, distance: ${doc.distance?.toFixed(4)})`);
-          });
+          // ハイブリッド検索結果（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 [ハイブリッド検索] 検索結果の内訳:', searchSourceStats);
+            console.log('🔍 [ハイブリッド検索] Top 3 results:');
+            relevantDocs.slice(0, 3).forEach((doc, idx) => {
+              console.log(`  ${idx + 1}. [${doc.source}] ${doc.title?.substring(0, 60)} (score: ${doc.score?.toFixed(4)}, distance: ${doc.distance?.toFixed(4)})`);
+            });
+          }
           
           processingSteps.push({
             step: 'search',
@@ -426,7 +450,10 @@ export const POST = async (req: NextRequest) => {
             details: processingAnalysis
           });
 
-          console.log(`📚 関連文書取得完了: ${relevantDocs.length}件`);
+          // 関連文書取得完了（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`📚 関連文書取得完了: ${relevantDocs.length}件`);
+          }
           screenTestLogger.info('search', `Retrieved ${relevantDocs.length} relevant documents for streaming`);
 
           // ステップ3: AIが回答を生成中...
@@ -773,7 +800,10 @@ export const POST = async (req: NextRequest) => {
             { requestId: crypto.randomUUID() }
           );
           
-          console.log('[GenkitErrorHandler] Streaming error handling applied:', genkitErrorResponse.body);
+          // Genkitエラーハンドリングログ（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[GenkitErrorHandler] Streaming error handling applied:', genkitErrorResponse.body);
+          }
           
           // 既存のエラーメッセージ形式を維持
           const errorMessage = {

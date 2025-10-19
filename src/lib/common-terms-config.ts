@@ -181,35 +181,35 @@ export const CommonTermsHelper = {
    * 汎用的な機能用語かどうか判定
    */
   isGenericFunctionTerm(term: string): boolean {
-    return GENERIC_FUNCTION_TERMS_SET.has(term);
+    return GENERIC_FUNCTION_TERMS_SET.has(term as any);
   },
   
   /**
    * 汎用的なドキュメント用語かどうか判定
    */
   isGenericDocumentTerm(term: string): boolean {
-    return GENERIC_DOCUMENT_TERMS_SET.has(term);
+    return GENERIC_DOCUMENT_TERMS_SET.has(term as any);
   },
   
   /**
    * ストップワードかどうか判定
    */
   isStopWord(term: string): boolean {
-    return QUERY_STOP_WORDS_SET.has(term);
+    return QUERY_STOP_WORDS_SET.has(term as any);
   },
   
   /**
    * ネガティブワードかどうか判定
    */
   isNegativeWord(term: string): boolean {
-    return NEGATIVE_WORDS_SET.has(term);
+    return NEGATIVE_WORDS_SET.has(term as any);
   },
   
   /**
    * ペナルティ対象用語かどうか判定
    */
   isPenaltyTerm(term: string): boolean {
-    return PENALTY_TERMS_SET.has(term);
+    return PENALTY_TERMS_SET.has(term as any);
   },
   
   /**
@@ -261,8 +261,8 @@ export const CommonTermsHelper = {
    * より汎用的な用語ほど低い重みを返す
    */
   getGenericTermWeight(term: string): number {
-    if (GENERIC_DOCUMENT_TERMS_SET.has(term)) return 0.3;  // 最も汎用的
-    if (GENERIC_FUNCTION_TERMS_SET.has(term)) return 0.5;  // やや汎用的
+    if (GENERIC_DOCUMENT_TERMS_SET.has(term as any)) return 0.3;  // 最も汎用的
+    if (GENERIC_FUNCTION_TERMS_SET.has(term as any)) return 0.5;  // やや汎用的
     return 1.0;  // 汎用用語ではない
   }
 };

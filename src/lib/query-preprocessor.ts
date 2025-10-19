@@ -67,7 +67,7 @@ function extractKeywords(query: string): string[] {
  * ストップワード判定（統一設定から）
  */
 function isStopWord(word: string): boolean {
-  return QUERY_STOP_WORDS_SET.has(word.toLowerCase());
+  return QUERY_STOP_WORDS_SET.has(word.toLowerCase() as any);
 }
 
 /**

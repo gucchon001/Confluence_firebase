@@ -55,8 +55,7 @@ export class AnswerCache {
     this.enabled = enabled;
     this.cache = new GenericCache<CachedAnswer>({
       ttl,
-      maxSize,
-      name: 'answer-cache'
+      maxSize
     });
 
     console.log(`[AnswerCache] Initialized: TTL=${ttl}ms, MaxSize=${maxSize}, Enabled=${enabled}`);
@@ -174,17 +173,11 @@ export class AnswerCache {
     console.log('[AnswerCache] 🗑️ Cache cleared');
   }
 
-  // 緊急: 特定の質問のキャッシュをクリア
+  // 緊急: 特定の質問のキャッシュをクリア（全体クリアにフォールバック）
   clearForQuestion(questionPattern: string): void {
-    const keysToDelete: string[] = [];
-    for (const key of this.cache.keys()) {
-      if (key.includes(questionPattern)) {
-        keysToDelete.push(key);
-      }
-    }
-    
-    keysToDelete.forEach(key => this.cache.delete(key));
-    console.log(`[AnswerCache] 🗑️ Cleared ${keysToDelete.length} entries for pattern: "${questionPattern}"`);
+    // GenericCacheにkeys()メソッドがないため、全体クリアを実行
+    this.cache.clear();
+    console.log(`[AnswerCache] 🗑️ Cleared all cache entries (pattern matching not supported)`);
   }
 
   /**

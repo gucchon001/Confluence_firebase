@@ -435,6 +435,7 @@ ${truncatedContent}`;
     }
 
   const references = documents.map((doc) => ({
+    id: doc.url || doc.title || '', // キャッシュ用のID
     title: removeMarkdownFormatting(doc.title), // マークダウン表記を除去
     url: doc.url,
     spaceName: doc.spaceName,
@@ -444,9 +445,13 @@ ${truncatedContent}`;
     scoreText: (doc as any).scoreText,
   }));
 
-    // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
-    answerCache.set(question, documents, answer, references);
-    console.log('[Phase 5 Cache] 💾 回答をキャッシュに保存');
+  // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
+  const cacheDocumentsForSet = documents.map(doc => ({
+    id: doc.url || doc.title || '',
+    pageId: doc.url || doc.title || ''
+  }));
+  answerCache.set(question, cacheDocumentsForSet, answer, references);
+  console.log('[Phase 5 Cache] 💾 回答をキャッシュに保存');
 
     return { answer, references, prompt };
   } catch (error: any) {

@@ -79,7 +79,7 @@ export class KGReferenceExtractor {
   async resolvePageIdByTitle(
     titlePattern: string,
     allPages: Array<{ pageId: string; title: string }>
-  ): string | null {
+  ): Promise<string | null> {
     const cleanPattern = titlePattern.trim().toLowerCase();
     
     for (const page of allPages) {
