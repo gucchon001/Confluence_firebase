@@ -22,11 +22,24 @@ config(); // .envファイルをロード
 
 // Firebase Admin SDK初期化
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(
-      require('../keys/firebase-adminsdk-key.json')
-    )
-  });
+  try {
+    // 本番環境では環境変数から認証情報を取得
+    if (process.env.NODE_ENV === 'production') {
+      // Cloud RunやApp Engineでは自動的に認証情報が提供される
+      admin.initializeApp();
+    } else {
+      // 開発環境ではローカルキーファイルを使用
+      admin.initializeApp({
+        credential: admin.credential.cert(
+          require('../keys/firebase-adminsdk-key.json')
+        )
+      });
+    }
+  } catch (error) {
+    console.error('[SyncScript] Firebase Admin SDK初期化エラー:', error);
+    // 本番環境での認証情報取得に失敗した場合は、デフォルト認証を試行
+    admin.initializeApp();
+  }
 }
 
 const db = admin.firestore();

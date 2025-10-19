@@ -9,13 +9,25 @@ import { config } from 'dotenv';
 config();
 
 // Firebase Admin初期化
-const serviceAccountPath = path.join(process.cwd(), 'keys', 'firebase-adminsdk-key.json');
-const serviceAccount = require(serviceAccountPath);
-
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
+  try {
+    // 本番環境では環境変数から認証情報を取得
+    if (process.env.NODE_ENV === 'production') {
+      // Cloud RunやApp Engineでは自動的に認証情報が提供される
+      admin.initializeApp();
+    } else {
+      // 開発環境ではローカルキーファイルを使用
+      const serviceAccountPath = path.join(process.cwd(), 'keys', 'firebase-adminsdk-key.json');
+      const serviceAccount = require(serviceAccountPath);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
+  } catch (error) {
+    console.error('[CheckScript] Firebase Admin SDK初期化エラー:', error);
+    // 本番環境での認証情報取得に失敗した場合は、デフォルト認証を試行
+    admin.initializeApp();
+  }
 }
 
 const db = admin.firestore();
