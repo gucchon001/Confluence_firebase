@@ -24,9 +24,10 @@ export async function register() {
       
       // GCSからデータをダウンロードして /dev/shm にコピー
       try {
-        // Phase 0A-4 FIX: 正しいパスでインポート
-        const inmemoryLoader = require('./src/lib/inmemory-data-loader.js');
-        await inmemoryLoader.loadDataToMemory();
+        // Phase 0A-4 FIX: await import() を使用（require()ではなく）
+        // startup-optimizer.ts と同じパターンに統一
+        const { loadDataToMemory } = await import('./src/lib/inmemory-data-loader.js');
+        await loadDataToMemory();
         console.log('✅ [Instrumentation] データをメモリにロード完了');
       } catch (error) {
         console.error('❌ [Instrumentation] メモリロード失敗:', error);
