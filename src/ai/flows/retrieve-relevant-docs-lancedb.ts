@@ -165,10 +165,9 @@ async function lancedbRetrieverTool(
     });
     const searchLanceDBDuration = Date.now() - searchLanceDBStartTime;
     
-    // Phase 0A-4 EMERGENCY: 全ての検索でログ出力（パフォーマンス問題の詳細調査）
-    console.log(`📊 [lancedbRetrieverTool] searchLanceDB duration: ${searchLanceDBDuration}ms (${(searchLanceDBDuration / 1000).toFixed(2)}s) for query: "${optimizedQuery}"`);
-    if (searchLanceDBDuration > 10000) {
-      console.warn(`⚠️ [lancedbRetrieverTool] SLOW searchLanceDB detected!`);
+    // Phase 0A-4 ROLLBACK: ログ出力を開発環境のみに制限（前のバージョンと同じ）
+    if (process.env.NODE_ENV === 'development' && searchLanceDBDuration > 10000) {
+      console.warn(`⚠️ [lancedbRetrieverTool] SLOW searchLanceDB: ${searchLanceDBDuration}ms for query: "${optimizedQuery}"`);
     }
     
     // 検索結果ログ（開発環境のみ）
@@ -177,12 +176,12 @@ async function lancedbRetrieverTool(
       console.log('[lancedbRetrieverTool] Raw search results titles:', unifiedResults.map(r => r.title));
     }
     
-    // 検索処理時間の計測
-    const searchDuration = Date.now() - searchStartTime;
-    // Phase 0A-4 EMERGENCY: 全ての検索でログ出力
-    console.log(`📊 [lancedbRetrieverTool] TOTAL search duration: ${searchDuration}ms (${(searchDuration / 1000).toFixed(2)}s) for query: "${query}"`);
-    if (searchDuration > 10000) {
-      console.warn(`⚠️ [lancedbRetrieverTool] SLOW TOTAL search detected!`);
+    // 検索処理時間の計測（開発環境のみ）
+    if (process.env.NODE_ENV === 'development') {
+      const searchDuration = Date.now() - searchStartTime;
+      if (searchDuration > 10000) {
+        console.warn(`⚠️ [lancedbRetrieverTool] SLOW TOTAL search: ${searchDuration}ms for query: "${query}"`);
+      }
     }
 
     // UIが期待する形へ最小変換（scoreText, source を保持）
@@ -201,15 +200,7 @@ async function lancedbRetrieverTool(
     }));
 
     // Phase 0A-1.5: 全チャンク統合（サーバー側で実装）
-    const enrichStartTime = Date.now();
     const enriched = await enrichWithAllChunks(mapped);
-    const enrichDuration = Date.now() - enrichStartTime;
-    
-    // Phase 0A-4 EMERGENCY: 全てのエンリッチメントでログ出力
-    console.log(`📊 [lancedbRetrieverTool] enrichWithAllChunks duration: ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s) for ${mapped.length} results`);
-    if (enrichDuration > 5000) {
-      console.warn(`⚠️ [lancedbRetrieverTool] SLOW enrichWithAllChunks detected!`);
-    }
     
     // Phase 0A-1.5: 空ページフィルター（サーバー側で実装）
     const filterStartTime = Date.now();
@@ -296,13 +287,9 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
     return results;
   }
 
-  const enrichStartTime = Date.now();
-  // Phase 0A-4 EMERGENCY: 全てのエンリッチメントでログ出力
-  console.log(`📊 [ChunkMerger] Starting chunk enrichment for ${results.length} results`);
-  
+  // Phase 0A-4 ROLLBACK: ログ削除（前のバージョンと同じ）
   let skippedCount = 0;
   let mergedCount = 0;
-  let totalChunkRetrievalTime = 0;
 
   const enriched = await Promise.all(
     results.map(async (result, index) => {
@@ -318,25 +305,11 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
         if (result.isChunked === false) {
           // チャンク分割されていないページ → 統合不要（66.3%）
           skippedCount++;
-          console.log(`[ChunkMerger] Page ${index + 1}/${results.length}: Skipped (not chunked) - ${result.title}`);
           return result;
         }
 
-        // Phase 0A-4 EMERGENCY: 詳細ログ追加
-        console.log(`[ChunkMerger] Page ${index + 1}/${results.length}: Processing ${pageId} - ${result.title}`);
-        
-        // Phase 5緊急修正: チャンク処理の最適化（品質維持）
-        const chunkStartTime = Date.now();
+        // Phase 0A-4 ROLLBACK: ログ削除（前のバージョンと同じ）
         const allChunks = await getAllChunksByPageId(String(pageId));
-        const chunkDuration = Date.now() - chunkStartTime;
-        totalChunkRetrievalTime += chunkDuration;
-        
-        // Phase 0A-4 EMERGENCY: 全てのチャンク取得でログ出力
-        console.log(`[ChunkMerger] Page ${index + 1}: Chunk retrieval took ${chunkDuration}ms for ${allChunks.length} chunks (pageId: ${pageId})`);
-        
-        if (chunkDuration > 500) {
-          console.warn(`[ChunkMerger] ⚠️ SLOW chunk retrieval detected!`);
-        }
 
         if (allChunks.length <= 1) {
           // チャンクが1つ以下の場合は統合不要
@@ -386,10 +359,10 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
     })
   );
 
-  const totalChunks = enriched.reduce((sum, r) => sum + (r.chunkCount || 1), 0);
-  const enrichDuration = Date.now() - enrichStartTime;
-  if (enrichDuration > 200 || mergedCount > 0) { // 200ms以上またはマージがあった場合のみログ出力
-    console.log(`[ChunkMerger] ⚡ Enrichment complete in ${enrichDuration}ms. Skipped: ${skippedCount}, Merged: ${mergedCount}, Total chunks: ${totalChunks}`);
+  // Phase 0A-4 ROLLBACK: サマリーログを開発環境のみに
+  if (process.env.NODE_ENV === 'development' && mergedCount > 0) {
+    const totalChunks = enriched.reduce((sum, r) => sum + (r.chunkCount || 1), 0);
+    console.log(`[ChunkMerger] ⚡ Enrichment complete. Skipped: ${skippedCount}, Merged: ${mergedCount}, Total chunks: ${totalChunks}`);
   }
 
   return enriched;
@@ -403,25 +376,9 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
  * - 見つからない場合は前方一致で検索（制限付き）
  */
 async function getAllChunksByPageId(pageId: string): Promise<any[]> {
-  // Phase 0A-4 EMERGENCY: 5秒タイムアウトを設定（本番環境の30秒遅延を防ぐ）
-  const TIMEOUT_MS = 5000;
-  
-  try {
-    const result = await Promise.race([
-      getAllChunksByPageIdInternal(pageId),
-      new Promise<any[]>((_, reject) => 
-        setTimeout(() => reject(new Error(`Timeout after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
-      )
-    ]);
-    return result;
-  } catch (error: any) {
-    if (error.message.includes('Timeout')) {
-      console.warn(`⚠️ [getAllChunksByPageId] Timeout (${TIMEOUT_MS}ms) for pageId: ${pageId}, skipping chunk enrichment`);
-      return [];
-    }
-    console.error(`[getAllChunksByPageId] Error fetching chunks for pageId ${pageId}:`, error.message);
-    return [];
-  }
+  // Phase 0A-4 ROLLBACK: タイムアウト削除（前のバージョンと同じ動作に戻す）
+  // Gen1環境では30秒遅延は発生しないため、タイムアウト不要
+  return await getAllChunksByPageIdInternal(pageId);
 }
 
 async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
