@@ -34,12 +34,28 @@ export class OptimizedLanceDBClient {
   };
   
   private readonly config = {
-    dbPath: path.resolve(process.cwd(), '.lancedb'),
+    // Phase 0A-4: インメモリファイルシステム対応
+    dbPath: this.getDbPath(),
     tableName: 'confluence',
     connectionTimeout: 30000, // 30秒
     maxRetries: 3,
     retryDelay: 1000 // 1秒
   };
+  
+  /**
+   * Phase 0A-4: Cloud Run Gen2環境でインメモリファイルシステムのパスを返す
+   */
+  private getDbPath(): string {
+    const isCloudRun = process.env.K_SERVICE !== undefined;
+    const useInMemoryFS = process.env.USE_INMEMORY_FS === 'true' && isCloudRun;
+    
+    if (useInMemoryFS) {
+      console.log('🔥 [OptimizedLanceDBClient] Using in-memory file system: /dev/shm/.lancedb');
+      return '/dev/shm/.lancedb';
+    }
+    
+    return path.resolve(process.cwd(), '.lancedb');
+  }
 
   private constructor() {}
 

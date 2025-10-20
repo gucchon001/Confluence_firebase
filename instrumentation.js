@@ -11,13 +11,35 @@ export async function register() {
     
     const startTime = Date.now();
     
-    // Phase 0A-4 FIX: データ存在確認
+    // Phase 0A-4 FIX: Cloud Run Gen2 + インメモリファイルシステム対応
     const fs = require('fs');
     const path = require('path');
     
+    // Phase 0A-4: Cloud Run Gen2環境検知
+    const isCloudRun = process.env.K_SERVICE !== undefined;
+    const useInMemoryFS = process.env.USE_INMEMORY_FS === 'true' && isCloudRun;
+    
+    if (useInMemoryFS) {
+      console.log('🔥 [Instrumentation] Cloud Run Gen2モード: インメモリファイルシステムを使用');
+      
+      // GCSからデータをダウンロードして /dev/shm にコピー
+      try {
+        const { loadDataToMemory } = await import('./src/lib/inmemory-data-loader.js');
+        await loadDataToMemory();
+        console.log('✅ [Instrumentation] データをメモリにロード完了');
+      } catch (error) {
+        console.error('❌ [Instrumentation] メモリロード失敗:', error);
+        console.error('   フォールバック: 通常のファイルシステムを使用します');
+      }
+    }
+    
     console.log('📦 [Instrumentation] データ存在確認中...');
-    const lancedbPath = path.resolve(process.cwd(), '.lancedb');
-    const dataPath = path.resolve(process.cwd(), 'data');
+    const lancedbPath = useInMemoryFS 
+      ? '/dev/shm/.lancedb' 
+      : path.resolve(process.cwd(), '.lancedb');
+    const dataPath = useInMemoryFS
+      ? '/dev/shm/data'
+      : path.resolve(process.cwd(), 'data');
     const kuromojiDictPath = path.resolve(process.cwd(), 'node_modules/kuromoji/dict');
     const kuromojiStandalonePath = path.resolve(process.cwd(), '.next/standalone/node_modules/kuromoji/dict');
     
@@ -27,8 +49,9 @@ export async function register() {
     const kuromojiStandaloneExists = fs.existsSync(kuromojiStandalonePath);
     
     console.log(`📊 [Instrumentation] データチェック結果:`);
-    console.log(`   - LanceDB (.lancedb): ${lancedbExists ? '✅' : '❌'}`);
-    console.log(`   - Domain Knowledge (data/): ${dataExists ? '✅' : '❌'}`);
+    console.log(`   - モード: ${useInMemoryFS ? 'InMemory (/dev/shm)' : 'FileSystem'}`);
+    console.log(`   - LanceDB: ${lancedbExists ? '✅' : '❌'} (${lancedbPath})`);
+    console.log(`   - Domain Knowledge: ${dataExists ? '✅' : '❌'} (${dataPath})`);
     console.log(`   - Kuromoji Dict (node_modules): ${kuromojiDictExists ? '✅' : '❌'}`);
     console.log(`   - Kuromoji Dict (standalone): ${kuromojiStandaloneExists ? '✅' : '❌'}`);
     

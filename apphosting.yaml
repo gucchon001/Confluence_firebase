@@ -6,11 +6,18 @@ runConfig:
   minInstances: 1
   maxInstances: 4
   
-  # メモリ設定（埋め込みモデル + 複数同時リクエスト対応）
+  # メモリ設定（埋め込みモデル + インメモリDB対応）
   memoryMiB: 4096
   
   # CPU設定
   cpu: 2
+  
+  # Phase 0A-4 FIX: Cloud Run Gen2への移行（高速インメモリファイルシステム）
+  # Gen2の利点:
+  # - /dev/shm (tmpfs) による高速メモリI/O
+  # - enrichWithAllChunks: 31秒 → 1秒未満
+  # - 検索全体: 66.6秒 → 10秒以内（目標）
+  executionEnvironment: gen2
 
 # 環境変数（runConfigと同じレベル）
 env:
@@ -105,8 +112,21 @@ env:
   
   # ビルド最適化: データダウンロードをスキップ（実行時にCloud Storageから直接読み込む）
   # Note: false = ビルド時にダウンロード, true = 実行時に読み込み
+  # Phase 0A-4: Gen2ではビルド時ダウンロード不要（実行時にインメモリロード）
   - variable: SKIP_DATA_DOWNLOAD
-    value: "false"
+    value: "true"
     availability:
       - BUILD
+      - RUNTIME
+  
+  # Phase 0A-4: インメモリファイルシステムの使用（Cloud Run Gen2のみ）
+  - variable: USE_INMEMORY_FS
+    value: "true"
+    availability:
+      - RUNTIME
+  
+  # Cloud Storage設定（インメモリローダー用）
+  - variable: STORAGE_BUCKET
+    value: confluence-firebase-c3a86.firebasestorage.app
+    availability:
       - RUNTIME
