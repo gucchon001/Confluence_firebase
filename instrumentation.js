@@ -24,11 +24,13 @@ export async function register() {
       
       // GCSからデータをダウンロードして /dev/shm にコピー
       try {
-        const { loadDataToMemory } = await import('./src/lib/inmemory-data-loader.js');
-        await loadDataToMemory();
+        // Phase 0A-4 FIX: 正しいパスでインポート
+        const inmemoryLoader = require('./src/lib/inmemory-data-loader.js');
+        await inmemoryLoader.loadDataToMemory();
         console.log('✅ [Instrumentation] データをメモリにロード完了');
       } catch (error) {
         console.error('❌ [Instrumentation] メモリロード失敗:', error);
+        console.error('   詳細:', error.stack);
         console.error('   フォールバック: 通常のファイルシステムを使用します');
       }
     }
