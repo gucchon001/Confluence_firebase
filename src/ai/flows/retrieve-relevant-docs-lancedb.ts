@@ -6,6 +6,7 @@ import { searchLanceDB } from '@/lib/lancedb-search-client';
 import * as admin from 'firebase-admin';
 import { getStructuredLabels } from '@/lib/structured-label-service-admin';
 import { optimizedLanceDBClient } from '@/lib/optimized-lancedb-client';
+import { getLanceDBCache } from '@/lib/lancedb-cache';
 
 /**
  * 検索クエリを拡張して、より具体的なキーワードを含める
@@ -376,9 +377,20 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
  * - 見つからない場合は前方一致で検索（制限付き）
  */
 async function getAllChunksByPageId(pageId: string): Promise<any[]> {
-  // Phase 0A-4 ROLLBACK: タイムアウト削除（前のバージョンと同じ動作に戻す）
-  // Gen1環境では30秒遅延は発生しないため、タイムアウト不要
-  return await getAllChunksByPageIdInternal(pageId);
+  // Phase 0A-4 Cache: メモリキャッシュ優先
+  const cache = getLanceDBCache();
+  const cached = cache.getChunks(pageId);
+  
+  if (cached) {
+    // キャッシュヒット: 即座に返す（DBアクセスなし）
+    return cached;
+  }
+  
+  // キャッシュミス: DBから取得してキャッシュに保存
+  const chunks = await getAllChunksByPageIdInternal(pageId);
+  cache.setChunks(pageId, chunks);
+  
+  return chunks;
 }
 
 async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
