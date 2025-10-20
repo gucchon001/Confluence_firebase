@@ -9,6 +9,7 @@
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "prebuild": "node scripts/conditional-download.js",
     "build": "next build",
+    "postbuild": "node scripts/copy-kuromoji-dict.js",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",

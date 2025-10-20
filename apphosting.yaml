@@ -112,17 +112,16 @@ env:
   
   # ビルド最適化: データダウンロードをスキップ（実行時にCloud Storageから直接読み込む）
   # Note: false = ビルド時にダウンロード, true = 実行時に読み込み
-  # EMERGENCY FIX: ビルド時にダウンロード（インメモリロード問題のため）
+  # Phase 0A-4 Step 2: インメモリFSを使用するため、ビルド時ダウンロードをスキップ
   - variable: SKIP_DATA_DOWNLOAD
-    value: "false"
+    value: "true"
     availability:
       - BUILD
       - RUNTIME
   
-  # Phase 0A-4: インメモリファイルシステムの使用（Cloud Run Gen2のみ）
-  # EMERGENCY FIX: 一時的に無効化（データロード問題のため）
+  # Phase 0A-4 Step 2: インメモリファイルシステムを再有効化（import修正済み）
   - variable: USE_INMEMORY_FS
-    value: "false"
+    value: "true"
     availability:
       - RUNTIME
   
