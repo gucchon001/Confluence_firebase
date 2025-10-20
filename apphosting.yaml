@@ -6,18 +6,16 @@ runConfig:
   minInstances: 1
   maxInstances: 4
   
-  # メモリ設定（埋め込みモデル + インメモリDB対応）
+  # メモリ設定（埋め込みモデル + 複数同時リクエスト対応）
   memoryMiB: 4096
   
   # CPU設定
   cpu: 2
   
-  # Phase 0A-4 FIX: Cloud Run Gen2への移行（高速インメモリファイルシステム）
-  # Gen2の利点:
-  # - /dev/shm (tmpfs) による高速メモリI/O
-  # - enrichWithAllChunks: 31秒 → 1秒未満
-  # - 検索全体: 66.6秒 → 10秒以内（目標）
-  executionEnvironment: gen2
+  # Phase 0A-4 ROLLBACK: Gen1に戻す（Gen2で問題発生）
+  # 理由: Gen2では Kuromoji辞書ファイルやデータファイルの配置に問題
+  # 前のバージョン（Gen1）では問題なく動作していた
+  # executionEnvironment: gen2  ← コメントアウト（Gen1がデフォルト）
 
 # 環境変数（runConfigと同じレベル）
 env:
