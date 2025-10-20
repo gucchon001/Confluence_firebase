@@ -112,16 +112,16 @@ env:
   
   # ビルド最適化: データダウンロードをスキップ（実行時にCloud Storageから直接読み込む）
   # Note: false = ビルド時にダウンロード, true = 実行時に読み込み
-  # Phase 0A-4 Step 2: インメモリFSを使用するため、ビルド時ダウンロードをスキップ
+  # ROLLBACK: インメモリFS再び失敗、ビルド時ダウンロードに戻す
   - variable: SKIP_DATA_DOWNLOAD
-    value: "true"
+    value: "false"
     availability:
       - BUILD
       - RUNTIME
   
-  # Phase 0A-4 Step 2: インメモリファイルシステムを再有効化（import修正済み）
+  # ROLLBACK: インメモリファイルシステムを再び無効化
   - variable: USE_INMEMORY_FS
-    value: "true"
+    value: "false"
     availability:
       - RUNTIME
   
