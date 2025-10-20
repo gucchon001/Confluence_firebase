@@ -42,6 +42,7 @@ export interface StreamingMessage {
 
 export class StreamingProcessClient {
   private controller: AbortController | null = null;
+  private buffer: string = ''; // Phase 0A-4 FIX: バッファを追加してチャンク分割問題を解決
 
   /**
    * ストリーミング処理を開始
@@ -66,6 +67,9 @@ export class StreamingProcessClient {
 
       // 新しいAbortControllerを作成
       this.controller = new AbortController();
+      
+      // Phase 0A-4 FIX: バッファをリセット
+      this.buffer = '';
 
       console.log('🌊 ストリーミング処理開始:', question);
 
@@ -115,24 +119,27 @@ export class StreamingProcessClient {
 
         // ストリームが終了したらループを抜ける
         if (done) {
+          // Phase 0A-4 FIX: 残りのバッファを処理
+          if (this.buffer.trim()) {
+            this.processLine(this.buffer.trim(), onStepUpdate, onChunk, onCompletion, onError);
+          }
           console.log('Stream finished.');
           break;
         }
         
-        // 受け取ったデータ (Uint8Array) を文字列に変換
+        // Phase 0A-4 FIX: 受け取ったデータをバッファに追加
         const chunk = decoder.decode(value, { stream: true });
+        this.buffer += chunk;
         
-        // 各行を処理
-        const lines = chunk.split('\n');
+        // Phase 0A-4 FIX: 完全な行のみを処理（不完全なJSONを避ける）
+        const lines = this.buffer.split('\n');
+        
+        // 最後の行は不完全な可能性があるのでバッファに戻す
+        this.buffer = lines.pop() || '';
+        
+        // 完全な行のみを処理
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6)) as StreamingMessage;
-              this.handleMessage(data, onStepUpdate, onChunk, onCompletion, onError);
-            } catch (parseError) {
-              console.warn('Failed to parse streaming data:', parseError);
-            }
-          }
+          this.processLine(line, onStepUpdate, onChunk, onCompletion, onError);
         }
       }
 
@@ -144,6 +151,36 @@ export class StreamingProcessClient {
       
       console.error('Streaming failed:', error);
       onError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      // Phase 0A-4 FIX: バッファをクリア
+      this.buffer = '';
+    }
+  }
+  
+  /**
+   * Phase 0A-4 FIX: 行を処理する専用メソッド（JSONパースエラーを最小化）
+   */
+  private processLine(
+    line: string,
+    onStepUpdate: (step: ProcessingStep) => void,
+    onChunk: (chunk: string, chunkIndex: number) => void,
+    onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
+    onError: (error: string) => void
+  ): void {
+    if (line.startsWith('data: ')) {
+      try {
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) return; // 空行はスキップ
+        
+        const data = JSON.parse(jsonStr) as StreamingMessage;
+        this.handleMessage(data, onStepUpdate, onChunk, onCompletion, onError);
+      } catch (parseError) {
+        // Phase 0A-4 FIX: パースエラーの詳細をログ出力（開発環境のみ）
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Failed to parse streaming data:', parseError);
+          console.warn('Problematic line:', line.substring(0, 200));
+        }
+      }
     }
   }
 

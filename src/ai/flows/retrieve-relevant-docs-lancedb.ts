@@ -165,9 +165,10 @@ async function lancedbRetrieverTool(
     });
     const searchLanceDBDuration = Date.now() - searchLanceDBStartTime;
     
-    // 10秒以上かかった場合のみログ（パフォーマンス問題の検知）
+    // Phase 0A-4 EMERGENCY: 全ての検索でログ出力（パフォーマンス問題の詳細調査）
+    console.log(`📊 [lancedbRetrieverTool] searchLanceDB duration: ${searchLanceDBDuration}ms (${(searchLanceDBDuration / 1000).toFixed(2)}s) for query: "${optimizedQuery}"`);
     if (searchLanceDBDuration > 10000) {
-      console.warn(`⚠️ [lancedbRetrieverTool] Slow searchLanceDB: ${searchLanceDBDuration}ms (${(searchLanceDBDuration / 1000).toFixed(2)}s) for query: "${optimizedQuery}"`);
+      console.warn(`⚠️ [lancedbRetrieverTool] SLOW searchLanceDB detected!`);
     }
     
     // 検索結果ログ（開発環境のみ）
@@ -178,8 +179,10 @@ async function lancedbRetrieverTool(
     
     // 検索処理時間の計測
     const searchDuration = Date.now() - searchStartTime;
-    if (searchDuration > 10000) { // 10秒以上の場合のみログ出力
-      console.warn(`⚠️ [lancedbRetrieverTool] Slow total search: ${searchDuration}ms for query: "${query}"`);
+    // Phase 0A-4 EMERGENCY: 全ての検索でログ出力
+    console.log(`📊 [lancedbRetrieverTool] TOTAL search duration: ${searchDuration}ms (${(searchDuration / 1000).toFixed(2)}s) for query: "${query}"`);
+    if (searchDuration > 10000) {
+      console.warn(`⚠️ [lancedbRetrieverTool] SLOW TOTAL search detected!`);
     }
 
     // UIが期待する形へ最小変換（scoreText, source を保持）
@@ -202,9 +205,10 @@ async function lancedbRetrieverTool(
     const enriched = await enrichWithAllChunks(mapped);
     const enrichDuration = Date.now() - enrichStartTime;
     
-    // 5秒以上かかった場合のみログ（パフォーマンス問題の検知）
+    // Phase 0A-4 EMERGENCY: 全てのエンリッチメントでログ出力
+    console.log(`📊 [lancedbRetrieverTool] enrichWithAllChunks duration: ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s) for ${mapped.length} results`);
     if (enrichDuration > 5000) {
-      console.warn(`⚠️ [lancedbRetrieverTool] Slow enrichWithAllChunks: ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s) for ${mapped.length} results`);
+      console.warn(`⚠️ [lancedbRetrieverTool] SLOW enrichWithAllChunks detected!`);
     }
     
     // Phase 0A-1.5: 空ページフィルター（サーバー側で実装）
@@ -293,17 +297,17 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
   }
 
   const enrichStartTime = Date.now();
-  // チャンクエンリッチメント開始ログ（開発環境のみ）
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[ChunkMerger] Starting chunk enrichment for ${results.length} results`);
-  }
+  // Phase 0A-4 EMERGENCY: 全てのエンリッチメントでログ出力
+  console.log(`📊 [ChunkMerger] Starting chunk enrichment for ${results.length} results`);
   
   let skippedCount = 0;
   let mergedCount = 0;
+  let totalChunkRetrievalTime = 0;
 
   const enriched = await Promise.all(
-    results.map(async (result) => {
+    results.map(async (result, index) => {
       try {
+        const pageStartTime = Date.now();
         const pageId = result.pageId || result.id;
         if (!pageId) {
           console.warn(`[ChunkMerger] Skipping result without pageId`);
@@ -314,17 +318,24 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
         if (result.isChunked === false) {
           // チャンク分割されていないページ → 統合不要（66.3%）
           skippedCount++;
+          console.log(`[ChunkMerger] Page ${index + 1}/${results.length}: Skipped (not chunked) - ${result.title}`);
           return result;
         }
 
+        // Phase 0A-4 EMERGENCY: 詳細ログ追加
+        console.log(`[ChunkMerger] Page ${index + 1}/${results.length}: Processing ${pageId} - ${result.title}`);
+        
         // Phase 5緊急修正: チャンク処理の最適化（品質維持）
         const chunkStartTime = Date.now();
         const allChunks = await getAllChunksByPageId(String(pageId));
         const chunkDuration = Date.now() - chunkStartTime;
+        totalChunkRetrievalTime += chunkDuration;
         
-        // 遅いチャンク取得をログ出力（500ms以上）
+        // Phase 0A-4 EMERGENCY: 全てのチャンク取得でログ出力
+        console.log(`[ChunkMerger] Page ${index + 1}: Chunk retrieval took ${chunkDuration}ms for ${allChunks.length} chunks (pageId: ${pageId})`);
+        
         if (chunkDuration > 500) {
-          console.log(`[ChunkMerger] ⚠️ Slow chunk retrieval: ${chunkDuration}ms for pageId ${pageId} (${allChunks.length} chunks)`);
+          console.warn(`[ChunkMerger] ⚠️ SLOW chunk retrieval detected!`);
         }
 
         if (allChunks.length <= 1) {
