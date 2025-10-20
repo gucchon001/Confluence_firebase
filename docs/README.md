@@ -95,12 +95,9 @@
 - **[cloud-storage-region-analysis.md](./operations/cloud-storage-region-analysis.md)** 🌏 - Cloud Storageリージョン整合性分析（米国 vs 東京）
 
 #### パフォーマンス分析（Phase 0A-4）
-- **[phase-0a-4-search-performance-emergency.md](./operations/phase-0a-4-search-performance-emergency.md)** 🚨 **緊急** - 検索パフォーマンス緊急対応（96.5秒問題）
-- **[phase-0a-4-streaming-performance-fix.md](./operations/phase-0a-4-streaming-performance-fix.md)** 🔧 - ストリーミングパフォーマンス修正（JSONパースエラー解消）
-- **[phase-0a-4-cloud-logging-analysis.md](./operations/phase-0a-4-cloud-logging-analysis.md)** 🔍 - Cloud Logging詳細分析（145秒遅延問題）
-- **[phase-0a-4-production-issue-analysis.md](./operations/phase-0a-4-production-issue-analysis.md)** - 本番環境問題分析
+- **[phase-0a-4-next-steps.md](./operations/phase-0a-4-next-steps.md)** 🚀 **最新** - 次のステップ（Cloud Logging確認手順）
+- **[phase-0a-4-search-performance-emergency.md](./operations/phase-0a-4-search-performance-emergency.md)** 🚨 - 検索パフォーマンス緊急対応（96.5秒問題）
 - **[phase-0a-4-production-deployment-fixes.md](./operations/phase-0a-4-production-deployment-fixes.md)** - 本番デプロイ修正
-- **[phase-0a-4-performance-regression-analysis.md](./operations/phase-0a-4-performance-regression-analysis.md)** - パフォーマンス低下分析
 
 #### 運用・管理
 - **[backup-management-guide.md](./operations/backup-management-guide.md)** - バックアップ管理ガイド

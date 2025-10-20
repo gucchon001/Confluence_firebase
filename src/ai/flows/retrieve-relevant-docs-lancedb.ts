@@ -403,6 +403,28 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
  * - 見つからない場合は前方一致で検索（制限付き）
  */
 async function getAllChunksByPageId(pageId: string): Promise<any[]> {
+  // Phase 0A-4 EMERGENCY: 5秒タイムアウトを設定（本番環境の30秒遅延を防ぐ）
+  const TIMEOUT_MS = 5000;
+  
+  try {
+    const result = await Promise.race([
+      getAllChunksByPageIdInternal(pageId),
+      new Promise<any[]>((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
+      )
+    ]);
+    return result;
+  } catch (error: any) {
+    if (error.message.includes('Timeout')) {
+      console.warn(`⚠️ [getAllChunksByPageId] Timeout (${TIMEOUT_MS}ms) for pageId: ${pageId}, skipping chunk enrichment`);
+      return [];
+    }
+    console.error(`[getAllChunksByPageId] Error fetching chunks for pageId ${pageId}:`, error.message);
+    return [];
+  }
+}
+
+async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
   try {
     const scanStartTime = Date.now();
     const connection = await optimizedLanceDBClient.getConnection();
