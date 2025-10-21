@@ -4,11 +4,18 @@
  * 
  * Phase 5緊急修正:
  * - ローカルモデルパスを優先（Hugging Faceレートリミット回避）
+ * - Xenova Transformers.jsにカスタムモデルパスを指定
  */
-import { pipeline } from '@xenova/transformers';
+import { pipeline, env } from '@xenova/transformers';
 import { embeddingCache } from './embedding-cache';
 import { EmbeddingConfig } from '@/config/ai-models-config';
 import path from 'path';
+
+// Xenova Transformers.jsの環境設定
+// リモートモデルのダウンロードを無効化（ローカルファイルのみ使用）
+env.allowRemoteModels = false;
+// カスタムモデルディレクトリを指定
+env.localModelPath = path.join(process.cwd(), 'models');
 
 let extractor: any | null = null;
 
@@ -76,42 +83,26 @@ export default { getEmbeddings };
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
     // Phase 5緊急修正: ローカルモデルパスを優先（Hugging Faceレートリミット回避）
-    const fs = require('fs');
+    // ★★★ 最終修正: env.localModelPathで指定したディレクトリからモデルをロード ★★★
+    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
     
-    // ★★★ シンプルな相対パスを使用 ★★★
-    const modelPath = './models/paraphrase-multilingual-mpnet-base-v2';
-    
-    // デバッグログ
-    console.log(`[MODEL_LOADER] Current working directory: ${process.cwd()}`);
-    console.log(`[MODEL_LOADER] Using relative model path: ${modelPath}`);
+    console.log(`[MODEL_LOADER] Attempting to load model: ${modelName}`);
+    console.log(`[MODEL_LOADER] Xenova will search in: ${env.localModelPath}`);
+    console.log(`[MODEL_LOADER] Remote models allowed: ${env.allowRemoteModels}`);
     
     try {
-      const checkFilePath = path.join(process.cwd(), modelPath, 'tokenizer.json');
-      const fileExists = fs.existsSync(checkFilePath);
-      console.log(`[MODEL_LOADER] Checking for file at: ${checkFilePath}`);
-      console.log(`[MODEL_LOADER] Does tokenizer.json exist? -> ${fileExists}`);
-    } catch (e) {
-      console.error(`[MODEL_LOADER] Error while checking file existence:`, e);
-    }
-    
-    try {
-      console.log(`[MODEL_LOADER] Attempting to load model with local_files_only...`);
-      
-      // pipeline関数には、この単純な相対パスを渡す
-      extractor = await pipeline('feature-extraction', modelPath, {
+      // pipelineにHugging Faceスタイルのモデル名を渡す
+      // env.localModelPathが設定されているため、ローカルから読み込む
+      extractor = await pipeline('feature-extraction', modelName, {
         cache_dir: '/tmp/model_cache',
-        local_files_only: true,
       });
       
-      console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
+      console.log(`✅ [Embedding] Model loaded successfully from local path`);
     } catch (error) {
       console.error(`❌ [Embedding] Failed to load local model:`, error);
-      console.warn(`⚠️ [Embedding] Falling back to Hugging Face (Risk: Rate limit 429)`);
       
-      // フォールバック：Hugging Faceからダウンロード（本番環境では推奨されない）
-      extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId, {
-        cache_dir: '/tmp/model_cache',
-      });
+      // env.allowRemoteModels = false なのでフォールバックは発生しないはず
+      throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });

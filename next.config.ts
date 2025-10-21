@@ -41,24 +41,22 @@ const nextConfig = {
         new CopyPlugin({
           patterns: [
             // ★★★ Xenova Transformers.js用モデルファイル ★★★
-            // Standaloneビルド用にmodelsディレクトリをコピー（本番環境用）
+            // Xenovaは models/Xenova/model-name という階層を期待する
+            // Standaloneビルド用：Xenova/サブディレクトリ付きでコピー
             {
-              from: path.resolve(__dirname, 'models'),
-              to: path.resolve(__dirname, '.next/standalone/models'),
+              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
+              to: path.resolve(__dirname, '.next/standalone/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
               noErrorOnMissing: false,
-              // 全てのファイルを再帰的にコピー（隠しファイル含む）
               globOptions: {
                 dot: true,
                 ignore: ['**/.DS_Store', '**/Thumbs.db']
               },
-              // ディレクトリ構造を保持
-              force: true,
-              priority: 10
+              force: true
             },
-            // サーバービルド用にmodelsディレクトリをコピー（開発環境用）
+            // サーバービルド用：Xenova/サブディレクトリ付きでコピー
             {
-              from: path.resolve(__dirname, 'models'),
-              to: path.resolve(__dirname, '.next/server/models'),
+              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
+              to: path.resolve(__dirname, '.next/server/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
               noErrorOnMissing: false,
               globOptions: {
                 dot: true,
