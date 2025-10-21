@@ -31,12 +31,12 @@ const nextConfig = {
       config.plugins.push(
         new CopyPlugin({
           patterns: [
-            // ★★★ ここからが追加・修正箇所 ★★★
+            // ★★★ Xenova Transformers.js用モデルファイル ★★★
             // Standaloneビルド用にmodelsディレクトリをコピー（本番環境用）
             {
               from: path.resolve(__dirname, 'models'),
               to: path.resolve(__dirname, '.next/standalone/models'),
-              noErrorOnMissing: false, // コピー元がない場合にエラーにする
+              noErrorOnMissing: false,
             },
             // サーバービルド用にmodelsディレクトリをコピー（開発環境用）
             {

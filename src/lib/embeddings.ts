@@ -76,34 +76,40 @@ export default { getEmbeddings };
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
     // Phase 5緊急修正: ローカルモデルパスを優先（Hugging Faceレートリミット回避）
-    // 相対パスを使用（Xenova Transformers.jsが自動的にプレフィックスを追加するため）
-    const relativeModelPath = './models/paraphrase-multilingual-mpnet-base-v2';
+    // Xenova Transformers.jsの環境変数でモデルディレクトリを指定
     const fs = require('fs');
+    
+    // モデルディレクトリを環境変数で指定（Xenova Transformers.jsが参照する）
+    const modelsDir = path.join(process.cwd(), 'models');
+    process.env.TRANSFORMERS_CACHE = modelsDir;
+    
+    const modelName = 'paraphrase-multilingual-mpnet-base-v2';
+    const modelPath = path.join(modelsDir, modelName);
     
     // デバッグ用：実際に使用されるパスをログ出力
     console.log(`[MODEL_LOADER] Current working directory: ${process.cwd()}`);
-    console.log(`[MODEL_LOADER] Relative model path: ${relativeModelPath}`);
+    console.log(`[MODEL_LOADER] TRANSFORMERS_CACHE: ${process.env.TRANSFORMERS_CACHE}`);
+    console.log(`[MODEL_LOADER] Model path: ${modelPath}`);
     
-    // 存在確認のために絶対パスを使用
-    const absolutePathForCheck = path.resolve(process.cwd(), relativeModelPath);
-    const hasLocalModel = fs.existsSync(absolutePathForCheck) && 
-                          fs.existsSync(path.join(absolutePathForCheck, 'config.json'));
+    // モデルファイルの存在確認
+    const hasLocalModel = fs.existsSync(modelPath) && 
+                          fs.existsSync(path.join(modelPath, 'config.json'));
     
-    console.log(`[MODEL_LOADER] Checking model at: ${absolutePathForCheck}`);
     console.log(`[MODEL_LOADER] Model exists: ${hasLocalModel}`);
     
     if (hasLocalModel) {
-      console.log(`✅ [Embedding] Using local model (relative path): ${relativeModelPath}`);
+      console.log(`✅ [Embedding] Using local model: ${modelName}`);
+      console.log(`✅ [Embedding] Cache directory: ${modelsDir}`);
+      
       // cache_dirを/tmpに設定してCloud Runの読み取り専用ファイルシステム問題を回避
       // local_files_onlyを強制してHugging Faceへのネットワークアクセスを完全に禁止
-      // 重要：相対パスをそのまま渡す（Xenova Transformers.jsが自動的に処理する）
-      extractor = await pipeline('feature-extraction', relativeModelPath, {
-        cache_dir: '/tmp/model_cache',
+      extractor = await pipeline('feature-extraction', modelName, {
+        cache_dir: modelsDir,
         local_files_only: true,
       });
       console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
     } else {
-      console.warn(`⚠️ [Embedding] Local model not found at: ${absolutePathForCheck}`);
+      console.warn(`⚠️ [Embedding] Local model not found at: ${modelPath}`);
       console.warn(`   ⚠️ Risk: Rate limit (429) may occur on Cloud Run`);
       console.warn(`   📝 Run: npm run model:download to cache locally`);
       // フォールバック：Hugging Faceからダウンロード（本番環境では推奨されない）
