@@ -409,7 +409,7 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     // LanceDBエンジンにフィルタリングを任せることで、メモリ効率とI/O効率が向上
     const results = await table
       .search(dummyVector)
-      .filter(`pageId = '${pageId}' OR id = '${pageId}' OR id LIKE '${pageId}-%'`)
+      .where(`"pageId" = '${pageId}' OR id = '${pageId}' OR id LIKE '${pageId}-%'`)
       .limit(1000) // ページあたりの最大チャンク数（十分な余裕）
       .toArray();
     
