@@ -76,42 +76,38 @@ export default { getEmbeddings };
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
     // Phase 5緊急修正: ローカルモデルパスを優先（Hugging Faceレートリミット回避）
-    // Xenova Transformers.jsの環境変数でモデルディレクトリを指定
     const fs = require('fs');
     
-    // モデルディレクトリを環境変数で指定（Xenova Transformers.jsが参照する）
-    const modelsDir = path.join(process.cwd(), 'models');
-    process.env.TRANSFORMERS_CACHE = modelsDir;
+    // ★★★ シンプルな相対パスを使用 ★★★
+    const modelPath = './models/paraphrase-multilingual-mpnet-base-v2';
     
-    const modelName = 'paraphrase-multilingual-mpnet-base-v2';
-    const modelPath = path.join(modelsDir, modelName);
-    
-    // デバッグ用：実際に使用されるパスをログ出力
+    // デバッグログ
     console.log(`[MODEL_LOADER] Current working directory: ${process.cwd()}`);
-    console.log(`[MODEL_LOADER] TRANSFORMERS_CACHE: ${process.env.TRANSFORMERS_CACHE}`);
-    console.log(`[MODEL_LOADER] Model path: ${modelPath}`);
+    console.log(`[MODEL_LOADER] Using relative model path: ${modelPath}`);
     
-    // モデルファイルの存在確認
-    const hasLocalModel = fs.existsSync(modelPath) && 
-                          fs.existsSync(path.join(modelPath, 'config.json'));
+    try {
+      const checkFilePath = path.join(process.cwd(), modelPath, 'tokenizer.json');
+      const fileExists = fs.existsSync(checkFilePath);
+      console.log(`[MODEL_LOADER] Checking for file at: ${checkFilePath}`);
+      console.log(`[MODEL_LOADER] Does tokenizer.json exist? -> ${fileExists}`);
+    } catch (e) {
+      console.error(`[MODEL_LOADER] Error while checking file existence:`, e);
+    }
     
-    console.log(`[MODEL_LOADER] Model exists: ${hasLocalModel}`);
-    
-    if (hasLocalModel) {
-      console.log(`✅ [Embedding] Using local model: ${modelName}`);
-      console.log(`✅ [Embedding] Cache directory: ${modelsDir}`);
+    try {
+      console.log(`[MODEL_LOADER] Attempting to load model with local_files_only...`);
       
-      // cache_dirを/tmpに設定してCloud Runの読み取り専用ファイルシステム問題を回避
-      // local_files_onlyを強制してHugging Faceへのネットワークアクセスを完全に禁止
-      extractor = await pipeline('feature-extraction', modelName, {
-        cache_dir: modelsDir,
+      // pipeline関数には、この単純な相対パスを渡す
+      extractor = await pipeline('feature-extraction', modelPath, {
+        cache_dir: '/tmp/model_cache',
         local_files_only: true,
       });
+      
       console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
-    } else {
-      console.warn(`⚠️ [Embedding] Local model not found at: ${modelPath}`);
-      console.warn(`   ⚠️ Risk: Rate limit (429) may occur on Cloud Run`);
-      console.warn(`   📝 Run: npm run model:download to cache locally`);
+    } catch (error) {
+      console.error(`❌ [Embedding] Failed to load local model:`, error);
+      console.warn(`⚠️ [Embedding] Falling back to Hugging Face (Risk: Rate limit 429)`);
+      
       // フォールバック：Hugging Faceからダウンロード（本番環境では推奨されない）
       extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId, {
         cache_dir: '/tmp/model_cache',
