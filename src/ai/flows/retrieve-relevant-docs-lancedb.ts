@@ -9,7 +9,7 @@ import { optimizedLanceDBClient } from '@/lib/optimized-lancedb-client';
 import { getLanceDBCache } from '@/lib/lancedb-cache';
 
 /**
- * 検索クエリを拡張して、より具体的なキーワードを含める
+ * 検索クエリを拡張して、より具体的なキーワードを含める（メモ）
  * LLM拡張に基づいた動的なクエリ拡張
  */
 function expandSearchQuery(query: string): string {
