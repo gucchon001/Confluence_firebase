@@ -1,10 +1,14 @@
 /**
  * 埋め込みベクトル生成のための抽象化レイヤー（外部API不使用・ローカル実装）
  * キャッシュ機能付きで最適化
+ * 
+ * Phase 5緊急修正:
+ * - ローカルモデルパスを優先（Hugging Faceレートリミット回避）
  */
 import { pipeline } from '@xenova/transformers';
 import { embeddingCache } from './embedding-cache';
 import { EmbeddingConfig } from '@/config/ai-models-config';
+import path from 'path';
 
 let extractor: any | null = null;
 
@@ -71,7 +75,23 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId);
+    // Phase 5緊急修正: ローカルモデルパスを優先（Hugging Faceレートリミット回避）
+    const localModelPath = path.join(process.cwd(), 'models', 'paraphrase-multilingual-mpnet-base-v2');
+    const fs = require('fs');
+    
+    // ローカルモデルが存在するか確認
+    const hasLocalModel = fs.existsSync(localModelPath) && 
+                          fs.existsSync(path.join(localModelPath, 'config.json'));
+    
+    if (hasLocalModel) {
+      console.log(`✅ [Embedding] Using local model from: ${localModelPath}`);
+      extractor = await pipeline('feature-extraction', localModelPath);
+    } else {
+      console.warn(`⚠️ [Embedding] Local model not found, downloading from Hugging Face...`);
+      console.warn(`   ⚠️ Risk: Rate limit (429) may occur on Cloud Run`);
+      console.warn(`   📝 Run: npm run model:download to cache locally`);
+      extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId);
+    }
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
   return Array.from(output.data); // 既に正規化済み

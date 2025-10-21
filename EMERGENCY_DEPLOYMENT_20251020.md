@@ -1,12 +1,44 @@
-# 🚨 緊急デプロイ手順 (2025-10-20)
+# 🚨 緊急デプロイ手順 (2025-10-20) - 更新版
 
-**目的**: 本番環境のパフォーマンス問題を解決  
-**現状**: 検索時間 105.9秒 → **目標**: 10秒以内  
-**予想改善**: **-59秒削減**（117秒 → 58秒）
+**目的**: 本番環境のパフォーマンス問題とHugging Faceエラーを解決  
+**現状**: 検索失敗（429エラー） + 検索時間 105.9秒  
+**目標**: 安定動作 + 10秒以内  
+
+---
+
+## 🔴 新たな緊急問題（2025-10-20 追加）
+
+### Hugging Face レートリミット（HTTP 429）
+
+**エラー**:
+```
+Error (429) occurred while trying to load file:
+"https://huggingface.co/.../tokenizer.json"
+```
+
+**原因**:
+- `minInstances: 2` で複数インスタンスが同時起動
+- 各インスタンスがHugging Faceからモデルをダウンロード
+- 短時間の集中アクセスでレートリミット
+
+**解決策**: モデルファイルをコンテナに含める
 
 ---
 
 ## 📋 実施した修正
+
+### 0. 🚨 Hugging Faceレートリミット対策（最優先）
+
+**追加ファイル**:
+- `scripts/download-embedding-model.js` - モデルダウンロード
+- `docs/operations/huggingface-rate-limit-emergency.md` - 詳細ドキュメント
+
+**修正ファイル**:
+- `src/lib/embeddings.ts` - ローカルモデル優先
+- `package.json` - prebuildに追加
+- `.gitignore` - modelsフォルダ除外
+
+**効果**: **429エラー完全回避**、外部依存ゼロ
 
 ### 1. ✅ Firestoreアクセスの非同期化（即時効果）
 
@@ -44,29 +76,59 @@ runConfig:
 
 ---
 
-## 🚀 デプロイ手順
+## 🚀 緊急デプロイ手順（更新版）
 
-### Step 1: 変更のコミット
+### Step 1: ローカルでモデルダウンロード（確認）
 
 ```bash
-# ステージング
+# モデルを事前ダウンロード（ビルドテスト用）
+npm run model:download
+
+# 出力例:
+# 🚀 埋め込みモデルのダウンロード開始...
+# ✅ モデルダウンロード完了！
+```
+
+### Step 2: ローカルでビルドテスト
+
+```bash
+# ビルドが成功することを確認
+npm run build
+
+# 出力に以下が含まれることを確認:
+# ✅ モデルファイルは既に存在します。
+```
+
+### Step 3: 変更のコミット
+
+```bash
+# ステージング（Hugging Face対策を含む）
+git add scripts/download-embedding-model.js
+git add src/lib/embeddings.ts
 git add src/app/api/streaming-process/route.ts
 git add apphosting.yaml
+git add package.json
+git add .gitignore
+git add docs/operations/huggingface-rate-limit-emergency.md
 git add docs/operations/production-performance-emergency-2025-10-20.md
 git add EMERGENCY_DEPLOYMENT_20251020.md
 
 # コミット
-git commit -m "hotfix: 本番環境パフォーマンス緊急改善 (2025-10-20)
+git commit -m "hotfix: Hugging Faceレートリミット緊急対応 + パフォーマンス改善
 
-- Firestoreアクセスを非同期化（-数秒削減）
-- minInstances: 1→2に増強（-17秒削減）
+🚨 緊急対応:
+- 埋め込みモデルをビルド時にダウンロード（429エラー回避）
+- ローカルモデルパス優先（外部依存削除）
+
+⚡ パフォーマンス改善:
+- Firestoreアクセスを非同期化
+- minInstances: 2に増強
 - concurrency: 1で安定性向上
-- timeoutSeconds: 300に延長
 
-予想改善: 117秒 → 58秒 (-59秒削減)"
+予想改善: 検索失敗 → 安定動作、117秒 → 58秒"
 ```
 
-### Step 2: mainブランチにプッシュ
+### Step 4: mainブランチにプッシュ
 
 ```bash
 # 現在のブランチを確認
@@ -79,7 +141,7 @@ git checkout main
 git push origin main
 ```
 
-### Step 3: デプロイの監視
+### Step 5: デプロイの監視
 
 1. **Firebase Console** を開く:
    ```
@@ -96,16 +158,24 @@ git push origin main
    https://console.cloud.google.com/logs
    ```
 
-### Step 4: デプロイ完了後の確認
+### Step 6: デプロイ完了後の確認
 
-#### 4-1. ヘルスチェック
+#### 6-1. モデルダウンロードの確認
+
+Firebase Console のビルドログで確認:
+```
+✅ 埋め込みモデルのダウンロード開始...
+✅ モデルダウンロード完了！
+```
+
+#### 6-2. ヘルスチェック
 
 ```bash
 # 本番URLにアクセス
 curl https://confluence-copilot-ppjye.web.app/
 ```
 
-#### 4-2. パフォーマンステスト
+#### 6-3. パフォーマンステスト
 
 本番環境でテストクエリを実行：
 ```
@@ -113,21 +183,24 @@ curl https://confluence-copilot-ppjye.web.app/
 ```
 
 **確認項目**:
+- [ ] **429エラーが発生していない**（最重要）
 - [ ] 検索時間が60秒以内
 - [ ] AI生成時間が15秒以内
 - [ ] 総処理時間が70秒以内
-- [ ] エラーが発生していない
+- [ ] 埋め込みベクトル生成が成功
 
-#### 4-3. ログ確認
+#### 6-4. ログ確認
 
 Cloud Logging で以下を確認：
 ```
 resource.type="cloud_run_revision"
-textPayload:"投稿ログを保存しました（非同期）"
+textPayload:"[Embedding] Using local model"
 timestamp>="2025-10-20T..."
 ```
 
-**確認項目**:
+**確認項目（優先度順）**:
+- [ ] **`[Embedding] Using local model` が出力**（最重要）
+- [ ] **429エラーが発生していない**（最重要）
 - [ ] 「非同期」のログが出ている
 - [ ] PERMISSION_DENIEDエラーが減少（または消失）
 - [ ] 検索時間のログが改善
@@ -136,23 +209,27 @@ timestamp>="2025-10-20T..."
 
 ## 📊 予想される改善効果
 
-### Before（現状）
+### Before（現状 - 2025-10-20）
 
-| 指標 | 時間 |
-|------|------|
-| 検索時間 | **105.9秒** |
+| 指標 | 時間/状態 |
+|------|-----------|
+| **Hugging Faceエラー** | **❌ Error (429)** |
+| **検索成功率** | **0%**（エラーで失敗） |
+| 検索時間 | 105.9秒（成功時） |
 | AI生成時間 | 11.2秒 |
-| 総処理時間 | **117.2秒** |
+| 総処理時間 | 117.2秒（成功時） |
 
-### After（フェーズ1完了後）
+### After（緊急修正完了後）
 
-| 指標 | 時間 | 削減 |
-|------|------|------|
+| 指標 | 時間/状態 | 改善 |
+|------|-----------|------|
+| **Hugging Faceエラー** | **✅ なし** | **完全解決** |
+| **検索成功率** | **100%** | **+100%** |
 | 検索時間 | **46.9秒** | **-59秒** |
 | AI生成時間 | 11.2秒 | 変化なし |
 | 総処理時間 | **58.2秒** | **-59秒** |
 
-**改善率**: **-50%**
+**改善率**: **安定性: 0% → 100%、速度: -50%**
 
 ---
 

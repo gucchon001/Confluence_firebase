@@ -62,6 +62,9 @@ debug.log
 .lancedb.backup.*/
 .cache/
 
+# Embedding models (downloaded at build time)
+/models/
+
 # Sync logs (may contain sensitive data)
 /logs/
 .last_sync_time.json
