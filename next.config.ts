@@ -1,20 +1,22 @@
+import CopyPlugin from 'copy-webpack-plugin';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES Moduleで __dirname を再現するための設定
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // 開発環境でのパフォーマンス最適化
-  // swcMinify: true, // Next.js 15では不要
   typescript: {
-    // 型チェックを有効化（エラーを修正してから有効化）
     ignoreBuildErrors: false,
   },
   eslint: {
     ignoreDuringBuilds: false,
   },
-  // パッケージの最適化
   transpilePackages: ['lunr'],
   webpack: (config, { isServer }) => {
-    // 永続キャッシュを有効化（コンパイル時間を大幅削減）
-    const path = require('path');
     config.cache = {
       type: 'filesystem',
       compression: 'gzip',
@@ -25,31 +27,41 @@ const nextConfig = {
       maxAge: 1000 * 60 * 60 * 24 * 7  // 7日間
     };
     
-    // Kuromoji辞書ファイルをビルドに含める（Phase 0A-4: 本番環境対応）
-    // FIX: noErrorOnMissing を false に変更してエラーを可視化
     if (isServer) {
-      const CopyPlugin = require('copy-webpack-plugin');
       config.plugins.push(
         new CopyPlugin({
           patterns: [
-            // Server ビルド用（開発・本番両対応）
+            // ★★★ ここからが追加・修正箇所 ★★★
+            // Standaloneビルド用にmodelsディレクトリをコピー（本番環境用）
+            {
+              from: path.resolve(__dirname, 'models'),
+              to: path.resolve(__dirname, '.next/standalone/models'),
+              noErrorOnMissing: false, // コピー元がない場合にエラーにする
+            },
+            // サーバービルド用にmodelsディレクトリをコピー（開発環境用）
+            {
+              from: path.resolve(__dirname, 'models'),
+              to: path.resolve(__dirname, '.next/server/models'),
+              noErrorOnMissing: false,
+            },
+            // ★★★ ここまでが追加・修正箇所 ★★★
+
+            // Kuromoji辞書ファイルをビルドに含める（既存の設定）
             {
               from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
               to: path.resolve(__dirname, '.next/server/node_modules/kuromoji/dict'),
-              noErrorOnMissing: false, // エラーを表示
+              noErrorOnMissing: false,
             },
-            // Standalone ビルド用（本番環境）
             {
               from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
               to: path.resolve(__dirname, '.next/standalone/node_modules/kuromoji/dict'),
-              noErrorOnMissing: false, // エラーを表示
+              noErrorOnMissing: false,
             },
           ],
         })
       );
     }
     
-    // LanceDBのネイティブバイナリモジュールをWebpackから除外
     if (isServer) {
       config.externals.push({
         '@lancedb/lancedb': 'commonjs @lancedb/lancedb',
@@ -57,14 +69,12 @@ const nextConfig = {
       });
     }
     
-    // Handlebarsの警告を解決
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
       path: false,
     };
     
-    // Handlebarsを外部モジュールとして扱う
     if (isServer) {
       config.externals.push('handlebars');
     }

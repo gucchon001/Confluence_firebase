@@ -76,8 +76,14 @@ export default { getEmbeddings };
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
     // Phase 5緊急修正: ローカルモデルパスを優先（Hugging Faceレートリミット回避）
-    const localModelPath = path.join(process.cwd(), 'models', 'paraphrase-multilingual-mpnet-base-v2');
+    // 絶対パスを使用してXenova Transformers.jsがHugging Face URLとして誤解釈するのを防ぐ
+    const relativeModelPath = './models/paraphrase-multilingual-mpnet-base-v2';
+    const localModelPath = path.resolve(process.cwd(), relativeModelPath);
     const fs = require('fs');
+    
+    // デバッグ用：実際に使用されるパスをログ出力
+    console.log(`[MODEL_LOADER] Current working directory: ${process.cwd()}`);
+    console.log(`[MODEL_LOADER] Resolved model path: ${localModelPath}`);
     
     // ローカルモデルが存在するか確認
     const hasLocalModel = fs.existsSync(localModelPath) && 
@@ -85,12 +91,17 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     
     if (hasLocalModel) {
       console.log(`✅ [Embedding] Using local model from: ${localModelPath}`);
-      extractor = await pipeline('feature-extraction', localModelPath);
+      // cache_dirを/tmpに設定してCloud Runの読み取り専用ファイルシステム問題を回避
+      extractor = await pipeline('feature-extraction', localModelPath, {
+        cache_dir: '/tmp/model_cache',
+      });
     } else {
-      console.warn(`⚠️ [Embedding] Local model not found, downloading from Hugging Face...`);
+      console.warn(`⚠️ [Embedding] Local model not found at: ${localModelPath}`);
       console.warn(`   ⚠️ Risk: Rate limit (429) may occur on Cloud Run`);
       console.warn(`   📝 Run: npm run model:download to cache locally`);
-      extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId);
+      extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId, {
+        cache_dir: '/tmp/model_cache',
+      });
     }
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
