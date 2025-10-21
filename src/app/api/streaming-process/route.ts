@@ -525,75 +525,53 @@ export const POST = async (req: NextRequest) => {
                 }
               });
 
-              // 投稿ログの保存（completionMessageの前に実行）
+              // 投稿ログの保存（非同期実行 - パフォーマンス最適化）
               // Phase 0A-4 FIX: 総処理時間はAPI開始時刻から計測（TTFBとの整合性を保つ）
               totalTime = Date.now() - apiStartTime;
               // ストリーミング処理完了
               
               let savedPostLogId: string | null = null;
               
-              try {
-              if (totalTime > 1000) { // 1秒以上の場合のみログ出力
-                console.log('📊 postLogs保存データを準備中:', {
-                  userId,
-                  question: question.substring(0, 50) + '...',
-                  answerLength: fullAnswer.length,
-                  searchTime,
-                  aiGenerationTime,
-                  totalTime,
-                  referencesCount: result.references.length
-                });
-              }
-                
-                // PostLog保存処理開始
-                
-                const logData = {
-                  userId,
-                  question,
-                  answer: fullAnswer,
-                  serverStartupTime, // サーバー起動処理時間を追加
-                  ttfbTime, // 最初のチャンクまでの時間（TTFB）を追加
-                  searchTime,
-                  aiGenerationTime,
-                  totalTime,
-                  referencesCount: result.references.length,
-                  answerLength: fullAnswer.length,
-                  timestamp: new Date(),
-                  processingSteps,
-                  errors: [],
-                  metadata: {
-                    sessionId,
-                    userAgent,
-                    ipAddress,
-                    userDisplayName // ユーザー表示名を追加
+              // PostLog保存データを準備
+              const logData = {
+                userId,
+                question,
+                answer: fullAnswer,
+                serverStartupTime, // サーバー起動処理時間を追加
+                ttfbTime, // 最初のチャンクまでの時間（TTFB）を追加
+                searchTime,
+                aiGenerationTime,
+                totalTime,
+                referencesCount: result.references.length,
+                answerLength: fullAnswer.length,
+                timestamp: new Date(),
+                processingSteps,
+                errors: [],
+                metadata: {
+                  sessionId,
+                  userAgent,
+                  ipAddress,
+                  userDisplayName // ユーザー表示名を追加
+                }
+              };
+              
+              // 🚀 パフォーマンス最適化: 非同期でログ保存（await不要）
+              // ユーザーへの応答を待たせない
+              savePostLogToAdminDB(logData)
+                .then(logId => {
+                  savedPostLogId = logId;
+                  if (process.env.NODE_ENV === 'development' && totalTime > 1000) {
+                    console.log('✅ 投稿ログを保存しました（非同期）:', {
+                      postLogId: logId,
+                      userId: logData.userId,
+                      userDisplayName: logData.metadata.userDisplayName,
+                      question: logData.question.substring(0, 50) + '...'
+                    });
                   }
-                };
-                
-                // 開発環境のみログ出力
-                if (process.env.NODE_ENV === 'development' && totalTime > 1000) {
-                  console.log('🔍 PostLog保存データ確認:', {
-                    serverStartupTime,
-                    ttfbTime,
-                    searchTime,
-                    aiGenerationTime,
-                    totalTime
-                  });
-                }
-                
-                savedPostLogId = await savePostLogToAdminDB(logData);
-                
-                // 開発環境のみログ出力
-                if (process.env.NODE_ENV === 'development' && totalTime > 1000) {
-                  console.log('✅ 投稿ログを保存しました:', {
-                    postLogId: savedPostLogId,
-                    userId: logData.userId,
-                    userDisplayName: logData.metadata.userDisplayName,
-                    question: logData.question.substring(0, 50) + '...'
-                  });
-                }
-              } catch (logError) {
-                console.error('❌ 投稿ログの保存に失敗しました:', logError);
-              }
+                })
+                .catch(logError => {
+                  console.error('❌ 投稿ログの保存に失敗しました（非同期）:', logError);
+                });
 
               // 完了メッセージ（保存されたpostLogIdを含める）
               const completionMessage = {

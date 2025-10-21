@@ -2,8 +2,9 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # インスタンス設定（コールドスタート軽減のためminを1に）
-  minInstances: 1
+  # インスタンス設定（パフォーマンス最適化 2025-10-20）
+  # コールドスタート完全回避のため2インスタンス維持
+  minInstances: 2  # 1→2に増強（冗長性とパフォーマンス向上）
   maxInstances: 4
   
   # メモリ設定（埋め込みモデル + 複数同時リクエスト対応）
@@ -11,6 +12,13 @@ runConfig:
   
   # CPU設定
   cpu: 2
+  
+  # コンカレンシー設定（安定性優先）
+  # 1インスタンスで1リクエスト処理（リソース競合回避）
+  concurrency: 1
+  
+  # タイムアウト設定（検索処理時間を考慮）
+  timeoutSeconds: 300  # 5分（デフォルト60秒から延長）
   
   # Phase 0A-4 ROLLBACK: Gen1に戻す（Gen2で問題発生）
   # 理由: Gen2では Kuromoji辞書ファイルやデータファイルの配置に問題
