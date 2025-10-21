@@ -92,13 +92,17 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     if (hasLocalModel) {
       console.log(`✅ [Embedding] Using local model from: ${localModelPath}`);
       // cache_dirを/tmpに設定してCloud Runの読み取り専用ファイルシステム問題を回避
+      // local_files_onlyを強制してHugging Faceへのネットワークアクセスを完全に禁止
       extractor = await pipeline('feature-extraction', localModelPath, {
         cache_dir: '/tmp/model_cache',
+        local_files_only: true,
       });
+      console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
     } else {
       console.warn(`⚠️ [Embedding] Local model not found at: ${localModelPath}`);
       console.warn(`   ⚠️ Risk: Rate limit (429) may occur on Cloud Run`);
       console.warn(`   📝 Run: npm run model:download to cache locally`);
+      // フォールバック：Hugging Faceからダウンロード（本番環境では推奨されない）
       extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId, {
         cache_dir: '/tmp/model_cache',
       });
