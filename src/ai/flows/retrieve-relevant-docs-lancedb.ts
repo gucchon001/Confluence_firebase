@@ -1,6 +1,7 @@
 /**
  * 関連ドキュメント検索（LanceDB版）
  */
+// Force re-build
 import * as z from 'zod';
 import { searchLanceDB } from '@/lib/lancedb-search-client';
 import * as admin from 'firebase-admin';
