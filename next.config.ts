@@ -8,6 +8,9 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // ★★★ Firebase App Hosting用のスタンドアロン出力設定 ★★★
+  output: 'standalone',
+  
   reactStrictMode: true,
   typescript: {
     ignoreBuildErrors: false,
@@ -28,6 +31,12 @@ const nextConfig = {
     };
     
     if (isServer) {
+      // ビルド時のデバッグログ（モデルファイルのコピー確認用）
+      console.log('[Build] CopyPlugin configuration:');
+      console.log('[Build] - Project root:', __dirname);
+      console.log('[Build] - Models source:', path.resolve(__dirname, 'models'));
+      console.log('[Build] - Standalone target:', path.resolve(__dirname, '.next/standalone/models'));
+      
       config.plugins.push(
         new CopyPlugin({
           patterns: [
@@ -37,12 +46,25 @@ const nextConfig = {
               from: path.resolve(__dirname, 'models'),
               to: path.resolve(__dirname, '.next/standalone/models'),
               noErrorOnMissing: false,
+              // 全てのファイルを再帰的にコピー（隠しファイル含む）
+              globOptions: {
+                dot: true,
+                ignore: ['**/.DS_Store', '**/Thumbs.db']
+              },
+              // ディレクトリ構造を保持
+              force: true,
+              priority: 10
             },
             // サーバービルド用にmodelsディレクトリをコピー（開発環境用）
             {
               from: path.resolve(__dirname, 'models'),
               to: path.resolve(__dirname, '.next/server/models'),
               noErrorOnMissing: false,
+              globOptions: {
+                dot: true,
+                ignore: ['**/.DS_Store', '**/Thumbs.db']
+              },
+              force: true
             },
             // ★★★ ここまでが追加・修正箇所 ★★★
 
