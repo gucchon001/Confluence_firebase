@@ -66,6 +66,43 @@ const nextConfig = {
             },
             // ★★★ ここまでが追加・修正箇所 ★★★
 
+            // ★★★ LanceDBのネイティブモジュール（最重要！）★★★
+            // 理由: Next.jsのスタンドアロンビルドは動的依存を解決できない
+            // firebase-admin-initの動的requireにより、LanceDBのネイティブバイナリが
+            // 自動検出されず、手動コピーが必須となる
+            
+            // Cloud Run（Linux x64-gnu）用のネイティブバイナリ
+            {
+              from: path.resolve(__dirname, 'node_modules/@lancedb/lancedb-linux-x64-gnu'),
+              to: path.resolve(__dirname, '.next/standalone/node_modules/@lancedb/lancedb-linux-x64-gnu'),
+              noErrorOnMissing: true, // ローカル環境（Windows/Mac）では存在しない
+              globOptions: {
+                dot: true,
+                ignore: ['**/.DS_Store', '**/Thumbs.db']
+              },
+              force: true
+            },
+            
+            // LanceDB本体（JavaScript部分）
+            {
+              from: path.resolve(__dirname, 'node_modules/@lancedb/lancedb'),
+              to: path.resolve(__dirname, '.next/standalone/node_modules/@lancedb/lancedb'),
+              noErrorOnMissing: true,
+              globOptions: {
+                dot: true,
+                ignore: [
+                  '**/.DS_Store', 
+                  '**/Thumbs.db', 
+                  '**/node_modules/**', // 再帰的なnode_modulesを除外
+                  '**/*.md',            // ドキュメントを除外
+                  '**/test/**',         // テストファイルを除外
+                  '**/tests/**'
+                ]
+              },
+              force: true
+            },
+            // ★★★ LanceDB ネイティブモジュール終わり ★★★
+
             // Kuromoji辞書ファイルをビルドに含める（既存の設定）
             {
               from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
@@ -82,12 +119,8 @@ const nextConfig = {
       );
     }
     
-    if (isServer) {
-      config.externals.push({
-        '@lancedb/lancedb': 'commonjs @lancedb/lancedb',
-        '@lancedb/lancedb-win32-x64-msvc': 'commonjs @lancedb/lancedb-win32-x64-msvc'
-      });
-    }
+    // Note: LanceDBはserverExternalPackagesで管理するため、externalsへの追加は不要
+    // Next.js 13+では、serverExternalPackagesのみで十分
     
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -109,6 +142,7 @@ const nextConfig = {
     'genkit',
     '@lancedb/lancedb',
     '@lancedb/lancedb-win32-x64-msvc',
+    '@lancedb/lancedb-linux-x64-gnu',
   ],
   images: {
     remotePatterns: [
