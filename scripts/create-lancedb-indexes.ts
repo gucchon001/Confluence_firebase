@@ -71,14 +71,14 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
       const scalarStartTime = Date.now();
       
       try {
-        // pageId列にインデックス作成
-        await table.createIndex('pageId', {
+        // pageId列にインデックス作成（ダブルクォートで囲む）
+        await table.createIndex('"pageId"', {
           config: lancedb.Index.btree()
         });
         console.log('   ✅ pageId列のインデックス作成完了');
         
         // id列にもインデックス作成
-        await table.createIndex('id', {
+        await table.createIndex('"id"', {
           config: lancedb.Index.btree()
         });
         console.log('   ✅ id列のインデックス作成完了');
