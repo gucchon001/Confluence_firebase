@@ -92,42 +92,13 @@ const nextConfig = {
             },
             // ★★★ ここまでが追加・修正箇所 ★★★
 
-            // ★★★ LanceDBのネイティブモジュール（最重要！）★★★
-            // 理由: Next.jsのスタンドアロンビルドは動的依存を解決できない
-            // firebase-admin-initの動的requireにより、LanceDBのネイティブバイナリが
-            // 自動検出されず、手動コピーが必須となる
-            
-            // Cloud Run（Linux x64-gnu）用のネイティブバイナリ
-            {
-              from: path.resolve(__dirname, 'node_modules/@lancedb/lancedb-linux-x64-gnu'),
-              to: path.resolve(__dirname, '.next/standalone/node_modules/@lancedb/lancedb-linux-x64-gnu'),
-              noErrorOnMissing: true, // ローカル環境（Windows/Mac）では存在しない
-              globOptions: {
-                dot: true,
-                ignore: ['**/.DS_Store', '**/Thumbs.db']
-              },
-              force: true
-            },
-            
-            // LanceDB本体（JavaScript部分）
-            {
-              from: path.resolve(__dirname, 'node_modules/@lancedb/lancedb'),
-              to: path.resolve(__dirname, '.next/standalone/node_modules/@lancedb/lancedb'),
-              noErrorOnMissing: true,
-              globOptions: {
-                dot: true,
-                ignore: [
-                  '**/.DS_Store', 
-                  '**/Thumbs.db', 
-                  '**/node_modules/**', // 再帰的なnode_modulesを除外
-                  '**/*.md',            // ドキュメントを除外
-                  '**/test/**',         // テストファイルを除外
-                  '**/tests/**'
-                ]
-              },
-              force: true
-            },
-            // ★★★ LanceDB ネイティブモジュール終わり ★★★
+            // 注意: LanceDBのネイティブモジュールは手動コピーしない
+            // 理由:
+            // 1. ファイルサイズが巨大で、ビルド時のメモリ不足（OOM Kill）を引き起こす
+            // 2. serverExternalPackages設定により、Cloud Runのnpm install時に
+            //    自動的に@lancedb/lancedb-linux-x64-gnuがインストールされる
+            // 3. Next.jsのスタンドアロンビルドは、serverExternalPackagesを
+            //    package.jsonに含め、デプロイ時にnpm installが実行される
 
             // Kuromoji辞書ファイルをビルドに含める（既存の設定）
             {
