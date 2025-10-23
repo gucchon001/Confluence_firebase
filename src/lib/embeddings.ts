@@ -28,8 +28,8 @@ env.localModelPath = path.join(process.cwd(), 'models');
 
 // ★★★ キャッシュクリア設定 ★★★
 // 既存のキャッシュを無効化して、強制的にローカルファイルを使用
-env.useBrowserCache = false;
-env.useCustomCache = false;
+// env.useBrowserCache = false;  // 型定義にないためコメントアウト
+// env.useCustomCache = false;   // 型定義にないためコメントアウト
 // キャッシュディレクトリを明示的に指定（書き込み可能な場所）
 env.cacheDir = '/tmp/xenova_cache';
 
@@ -118,8 +118,6 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
       extractor = await pipeline('feature-extraction', modelName, {
         cache_dir: '/tmp/model_cache',
         // ★★★ キャッシュクリア設定 ★★★
-        use_browser_cache: false,
-        use_custom_cache: false,
         local_files_only: true,
       });
       
