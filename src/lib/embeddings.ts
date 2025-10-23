@@ -113,11 +113,21 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     console.log(`[MODEL_LOADER] Remote models allowed: ${env.allowRemoteModels}`);
     
     try {
-      // pipelineにHugging Faceスタイルのモデル名を渡す
-      // env.localModelPathが設定されているため、ローカルから読み込む
-      extractor = await pipeline('feature-extraction', modelName, {
+      // ★★★ 最終手段：モデルファイルの絶対パスを直接指定 ★★★
+      // Hugging Faceスタイルのモデル名ではなく、ローカルファイルの絶対パスを使用
+      const modelPath = path.join(process.cwd(), 'models', 'paraphrase-multilingual-mpnet-base-v2');
+      
+      console.log(`[MODEL_LOADER] Using absolute model path: ${modelPath}`);
+      
+      // モデルファイルの存在確認
+      const fs = require('fs');
+      if (!fs.existsSync(modelPath)) {
+        throw new Error(`Model directory not found: ${modelPath}`);
+      }
+      
+      // 絶対パスでpipelineを初期化
+      extractor = await pipeline('feature-extraction', modelPath, {
         cache_dir: '/tmp/model_cache',
-        // ★★★ キャッシュクリア設定 ★★★
         local_files_only: true,
       });
       

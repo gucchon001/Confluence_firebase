@@ -56,6 +56,19 @@ env:
       - BUILD
       - RUNTIME
   
+  # ★★★ 追加のオフライン設定 ★★★
+  # transformers.jsの内部設定を強制的にオフラインモードに
+  - variable: TRANSFORMERS_CACHE
+    value: "/tmp/transformers_cache"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: HF_HUB_DISABLE_TELEMETRY
+    value: "1"
+    availability:
+      - BUILD
+      - RUNTIME
+  
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     value: confluence-copilot-ppjye.firebasestorage.app
     availability:
