@@ -11,6 +11,15 @@ import { embeddingCache } from './embedding-cache';
 import { EmbeddingConfig } from '@/config/ai-models-config';
 import path from 'path';
 
+// ======================= DEBUGLOG =======================
+console.log('[DEBUG] Checking Environment Variables before model load:');
+console.log(`[DEBUG] HF_HUB_OFFLINE: ${process.env.HF_HUB_OFFLINE}`);
+console.log(`[DEBUG] typeof HF_HUB_OFFLINE: ${typeof process.env.HF_HUB_OFFLINE}`);
+console.log(`[DEBUG] All env keys: ${Object.keys(process.env).join(', ')}`);
+console.log(`[DEBUG] Current working directory: ${process.cwd()}`);
+console.log(`[DEBUG] Models path: ${path.join(process.cwd(), 'models')}`);
+// ==========================================================
+
 // Xenova Transformers.jsの環境設定
 // リモートモデルのダウンロードを無効化（ローカルファイルのみ使用）
 env.allowRemoteModels = false;
@@ -82,6 +91,12 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
+    // ======================= DEBUGLOG =======================
+    console.log('[DEBUG] getLocalEmbeddings called. HF_HUB_OFFLINE is:', process.env.HF_HUB_OFFLINE);
+    console.log('[DEBUG] env.allowRemoteModels:', env.allowRemoteModels);
+    console.log('[DEBUG] env.localModelPath:', env.localModelPath);
+    // ==========================================================
+    
     // Phase 5緊急修正: ローカルモデルパスを優先（Hugging Faceレートリミット回避）
     // ★★★ 最終修正: env.localModelPathで指定したディレクトリからモデルをロード ★★★
     const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
