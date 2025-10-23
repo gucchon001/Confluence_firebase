@@ -9,7 +9,7 @@
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "model:download": "node scripts/download-embedding-model.js",
     "model:clean": "node -e \"require('fs').rmSync('models', {recursive: true, force: true})\"",
-    "prebuild": "node scripts/download-embedding-model.js && node scripts/conditional-download.js",
+    "prebuild": "node scripts/download-embedding-model.js",
     "build": "next build && node scripts/copy-kuromoji-dict.js && node scripts/copy-xenova-models.js",
     "start": "next start",
     "lint": "next lint",
