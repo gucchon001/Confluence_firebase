@@ -113,20 +113,15 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     console.log(`[MODEL_LOADER] Remote models allowed: ${env.allowRemoteModels}`);
     
     try {
-      // ★★★ 最終手段：モデルファイルの絶対パスを直接指定 ★★★
-      // Hugging Faceスタイルのモデル名ではなく、ローカルファイルの絶対パスを使用
-      const modelPath = path.join(process.cwd(), 'models', 'Xenova', 'paraphrase-multilingual-mpnet-base-v2');
+      // ★★★ 修正：Hugging Faceスタイルのモデル名を使用 ★★★
+      // transformers.jsが内部でenv.localModelPathと結合するため、相対モデル名を渡す
+      const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
       
-      console.log(`[MODEL_LOADER] Using absolute model path: ${modelPath}`);
+      console.log(`[MODEL_LOADER] Using Hugging Face model name: ${modelName}`);
+      console.log(`[MODEL_LOADER] Base path: ${env.localModelPath}`);
       
-      // モデルファイルの存在確認
-      const fs = require('fs');
-      if (!fs.existsSync(modelPath)) {
-        throw new Error(`Model directory not found: ${modelPath}`);
-      }
-      
-      // 絶対パスでpipelineを初期化
-      extractor = await pipeline('feature-extraction', modelPath, {
+      // Hugging Faceスタイルのモデル名でpipelineを初期化
+      extractor = await pipeline('feature-extraction', modelName, {
         cache_dir: '/tmp/model_cache',
         local_files_only: true,
       });
