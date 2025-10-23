@@ -8,6 +8,7 @@ import * as admin from 'firebase-admin';
 import { getStructuredLabels } from '@/lib/structured-label-service-admin';
 import { optimizedLanceDBClient } from '@/lib/optimized-lancedb-client';
 import { getLanceDBCache } from '@/lib/lancedb-cache';
+import { initializeData } from '@/lib/data-initializer';
 
 /**
  * 検索クエリを拡張して、より具体的なキーワードを含める（メモ）
@@ -260,6 +261,14 @@ export async function retrieveRelevantDocs({
   };
 }): Promise<any[]> {
   try {
+    // ★★★ データ初期化チェック ★★★
+    console.log('🔧 [retrieveRelevantDocs] Ensuring LanceDB data is available...');
+    const dataInitialized = await initializeData();
+    if (!dataInitialized) {
+      throw new Error('Failed to initialize LanceDB data');
+    }
+    console.log('✅ [retrieveRelevantDocs] LanceDB data is available');
+    
     // 検索処理ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
       console.log(`[retrieveRelevantDocs] Searching for question: ${question}`);
