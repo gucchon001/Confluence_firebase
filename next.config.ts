@@ -20,15 +20,9 @@ const nextConfig = {
   },
   transpilePackages: ['lunr'],
   webpack: (config, { isServer }) => {
-    config.cache = {
-      type: 'filesystem',
-      compression: 'gzip',
-      buildDependencies: {
-        config: [__filename]
-      },
-      cacheDirectory: path.resolve(__dirname, '.next/cache/webpack'),
-      maxAge: 1000 * 60 * 60 * 24 * 7  // 7日間
-    };
+    // ★★★ キャッシュクリア設定 ★★★
+    // デバッグ中はキャッシュを無効化して、確実に最新の設定を使用
+    config.cache = false;
     
     if (isServer) {
       // ビルド時のデバッグログ（モデルファイルのコピー確認用）

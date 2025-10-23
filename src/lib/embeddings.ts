@@ -26,6 +26,13 @@ env.allowRemoteModels = false;
 // カスタムモデルディレクトリを指定
 env.localModelPath = path.join(process.cwd(), 'models');
 
+// ★★★ キャッシュクリア設定 ★★★
+// 既存のキャッシュを無効化して、強制的にローカルファイルを使用
+env.useBrowserCache = false;
+env.useCustomCache = false;
+// キャッシュディレクトリを明示的に指定（書き込み可能な場所）
+env.cacheDir = '/tmp/xenova_cache';
+
 let extractor: any | null = null;
 
 export async function getEmbeddings(text: string): Promise<number[]> {
@@ -110,6 +117,10 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
       // env.localModelPathが設定されているため、ローカルから読み込む
       extractor = await pipeline('feature-extraction', modelName, {
         cache_dir: '/tmp/model_cache',
+        // ★★★ キャッシュクリア設定 ★★★
+        use_browser_cache: false,
+        use_custom_cache: false,
+        local_files_only: true,
       });
       
       console.log(`✅ [Embedding] Model loaded successfully from local path`);
