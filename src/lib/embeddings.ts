@@ -115,7 +115,7 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     try {
       // ★★★ 最終手段：モデルファイルの絶対パスを直接指定 ★★★
       // Hugging Faceスタイルのモデル名ではなく、ローカルファイルの絶対パスを使用
-      const modelPath = path.join(process.cwd(), 'models', 'paraphrase-multilingual-mpnet-base-v2');
+      const modelPath = path.join(process.cwd(), 'models', 'Xenova', 'paraphrase-multilingual-mpnet-base-v2');
       
       console.log(`[MODEL_LOADER] Using absolute model path: ${modelPath}`);
       
