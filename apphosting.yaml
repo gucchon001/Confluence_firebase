@@ -46,6 +46,29 @@ env:
       - BUILD
       - RUNTIME
   
+  # ★★★ Xenova Transformers.js完全オフラインモード設定 ★★★
+  # 問題: Cloud Run環境からHugging Face Hubへの通信が失敗
+  # 原因: ネットワーク制限、ファイアウォール、一時的障害
+  # 解決: HF_HUB_OFFLINE=1で一切の外部通信を無効化
+  - variable: HF_HUB_OFFLINE
+    value: "1"
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  # ★★★ 追加のオフライン設定 ★★★
+  # transformers.jsの内部設定を強制的にオフラインモードに
+  - variable: TRANSFORMERS_CACHE
+    value: "/tmp/transformers_cache"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: HF_HUB_DISABLE_TELEMETRY
+    value: "1"
+    availability:
+      - BUILD
+      - RUNTIME
+  
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     value: confluence-copilot-ppjye.firebasestorage.app
     availability:

@@ -21,7 +21,6 @@ import * as path from 'path';
 interface IndexCreationOptions {
   createScalarIndex: boolean;
   createVectorIndex: boolean;
-  vectorIndexType: 'ivf_pq' | 'ivf_hnsw';
   numPartitions: number;
   numSubVectors: number;
 }
@@ -29,7 +28,6 @@ interface IndexCreationOptions {
 const DEFAULT_OPTIONS: IndexCreationOptions = {
   createScalarIndex: true,
   createVectorIndex: true,
-  vectorIndexType: 'ivf_pq',
   numPartitions: 256, // データ量の平方根が目安。1000ページ程度なら256
   numSubVectors: 96, // 768次元の場合、768/8=96が一般的
 };
@@ -41,7 +39,7 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
   console.log('📊 設定:');
   console.log(`   - スカラーインデックス: ${options.createScalarIndex ? '✅ 作成する' : '⏭️ スキップ'}`);
   console.log(`   - ベクトルインデックス: ${options.createVectorIndex ? '✅ 作成する' : '⏭️ スキップ'}`);
-  console.log(`   - ベクトルタイプ: ${options.vectorIndexType}`);
+  console.log(`   - ベクトルタイプ: IVF_PQ`);
   console.log(`   - パーティション数: ${options.numPartitions}`);
   console.log(`   - サブベクトル数: ${options.numSubVectors}\n`);
   
@@ -71,14 +69,14 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
       const scalarStartTime = Date.now();
       
       try {
-        // pageId列にインデックス作成
-        await table.createIndex('pageId', {
+        // pageId列にインデックス作成（ダブルクォートで囲む）
+        await table.createIndex('"pageId"', {
           config: lancedb.Index.btree()
         });
         console.log('   ✅ pageId列のインデックス作成完了');
         
         // id列にもインデックス作成
-        await table.createIndex('id', {
+        await table.createIndex('"id"', {
           config: lancedb.Index.btree()
         });
         console.log('   ✅ id列のインデックス作成完了');
@@ -95,13 +93,14 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
     // 2. ベクトルインデックスの作成
     if (options.createVectorIndex) {
       console.log('🔧 ベクトルインデックス作成中...');
-      console.log(`   タイプ: ${options.vectorIndexType.toUpperCase()}`);
+      console.log(`   タイプ: IVF_PQ`);
       console.log(`   パーティション数: ${options.numPartitions}`);
       console.log(`   サブベクトル数: ${options.numSubVectors}`);
       
       const vectorStartTime = Date.now();
       
       try {
+<<<<<<< HEAD
         if (options.vectorIndexType === 'ivf_pq') {
           await table.createIndex('vector', {
             config: lancedb.Index.ivfPq({
@@ -119,6 +118,14 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
             })
           });
         }
+=======
+        await table.createIndex('vector', {
+          config: lancedb.Index.ivfPq({
+            numPartitions: options.numPartitions,
+            numSubVectors: options.numSubVectors
+          })
+        });
+>>>>>>> e345680eabf81ba2ab1631b1e1a18fc53b205fb1
         
         const vectorDuration = Date.now() - vectorStartTime;
         console.log(`   ✅ ベクトルインデックス作成完了`);
@@ -160,7 +167,6 @@ async function main() {
   const options: IndexCreationOptions = {
     createScalarIndex: !args.includes('--skip-scalar'),
     createVectorIndex: !args.includes('--skip-vector'),
-    vectorIndexType: args.includes('--ivf-hnsw') ? 'ivf_hnsw' : 'ivf_pq',
     numPartitions: parseInt(args.find(arg => arg.startsWith('--partitions='))?.split('=')[1] || '256'),
     numSubVectors: parseInt(args.find(arg => arg.startsWith('--subvectors='))?.split('=')[1] || '96'),
   };

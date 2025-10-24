@@ -20,15 +20,9 @@ const nextConfig = {
   },
   transpilePackages: ['lunr'],
   webpack: (config, { isServer }) => {
-    config.cache = {
-      type: 'filesystem',
-      compression: 'gzip',
-      buildDependencies: {
-        config: [__filename]
-      },
-      cacheDirectory: path.resolve(__dirname, '.next/cache/webpack'),
-      maxAge: 1000 * 60 * 60 * 24 * 7  // 7日間
-    };
+    // ★★★ キャッシュクリア設定 ★★★
+    // デバッグ中はキャッシュを無効化して、確実に最新の設定を使用
+    config.cache = false;
     
     if (isServer) {
       // ビルド時のデバッグログ（モデルファイルのコピー確認用）
@@ -41,24 +35,48 @@ const nextConfig = {
         new CopyPlugin({
           patterns: [
             // ★★★ Xenova Transformers.js用モデルファイル ★★★
-            // Standaloneビルド用にmodelsディレクトリをコピー（本番環境用）
+            // Xenovaは models/Xenova/model-name という階層を期待する
+            
+            // 方針変更: postbuildスクリプトに依存せず、CopyPluginで直接Xenova/構造を作る
+            // これにより、Firebase App Hostingのビルド環境でも確実に動作する
+            
+            // Step 1: まず通常のmodelsディレクトリにコピー
             {
-              from: path.resolve(__dirname, 'models'),
-              to: path.resolve(__dirname, '.next/standalone/models'),
+              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
+              to: path.resolve(__dirname, '.next/standalone/models/paraphrase-multilingual-mpnet-base-v2'),
               noErrorOnMissing: false,
-              // 全てのファイルを再帰的にコピー（隠しファイル含む）
               globOptions: {
                 dot: true,
                 ignore: ['**/.DS_Store', '**/Thumbs.db']
               },
-              // ディレクトリ構造を保持
-              force: true,
-              priority: 10
+              force: true
             },
-            // サーバービルド用にmodelsディレクトリをコピー（開発環境用）
+            // Step 2: 同時にXenova/サブディレクトリにもコピー
             {
-              from: path.resolve(__dirname, 'models'),
-              to: path.resolve(__dirname, '.next/server/models'),
+              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
+              to: path.resolve(__dirname, '.next/standalone/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
+              noErrorOnMissing: false,
+              globOptions: {
+                dot: true,
+                ignore: ['**/.DS_Store', '**/Thumbs.db']
+              },
+              force: true
+            },
+            
+            // サーバービルド用も同様
+            {
+              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
+              to: path.resolve(__dirname, '.next/server/models/paraphrase-multilingual-mpnet-base-v2'),
+              noErrorOnMissing: false,
+              globOptions: {
+                dot: true,
+                ignore: ['**/.DS_Store', '**/Thumbs.db']
+              },
+              force: true
+            },
+            {
+              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
+              to: path.resolve(__dirname, '.next/server/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
               noErrorOnMissing: false,
               globOptions: {
                 dot: true,
@@ -67,6 +85,14 @@ const nextConfig = {
               force: true
             },
             // ★★★ ここまでが追加・修正箇所 ★★★
+
+            // 注意: LanceDBのネイティブモジュールは手動コピーしない
+            // 理由:
+            // 1. ファイルサイズが巨大で、ビルド時のメモリ不足（OOM Kill）を引き起こす
+            // 2. serverExternalPackages設定により、Cloud Runのnpm install時に
+            //    自動的に@lancedb/lancedb-linux-x64-gnuがインストールされる
+            // 3. Next.jsのスタンドアロンビルドは、serverExternalPackagesを
+            //    package.jsonに含め、デプロイ時にnpm installが実行される
 
             // Kuromoji辞書ファイルをビルドに含める（既存の設定）
             {
@@ -84,12 +110,8 @@ const nextConfig = {
       );
     }
     
-    if (isServer) {
-      config.externals.push({
-        '@lancedb/lancedb': 'commonjs @lancedb/lancedb',
-        '@lancedb/lancedb-win32-x64-msvc': 'commonjs @lancedb/lancedb-win32-x64-msvc'
-      });
-    }
+    // Note: LanceDBはserverExternalPackagesで管理するため、externalsへの追加は不要
+    // Next.js 13+では、serverExternalPackagesのみで十分
     
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -111,6 +133,7 @@ const nextConfig = {
     'genkit',
     '@lancedb/lancedb',
     '@lancedb/lancedb-win32-x64-msvc',
+    '@lancedb/lancedb-linux-x64-gnu',
   ],
   images: {
     remotePatterns: [
