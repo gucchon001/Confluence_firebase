@@ -955,12 +955,18 @@ async function executeVectorSearch(
   topK: number
 ): Promise<any[]> {
   try {
+    // ★★★ PERF LOG: ベクトル検索の時間計測 ★★★
+    const vectorSearchStart = Date.now();
+    
     let vectorQuery = tbl.search(vector);
     if (params.filter) {
       vectorQuery = vectorQuery.where(params.filter);
     }
     
     let vectorResults = await vectorQuery.limit(topK * 10).toArray();
+    const vectorSearchDuration = Date.now() - vectorSearchStart;
+    
+    console.log(`[PERF] 🔍 Vector search completed in ${vectorSearchDuration}ms`);
     console.log(`[Vector Search] Found ${vectorResults.length} results`);
     
     // 距離閾値でフィルタリング

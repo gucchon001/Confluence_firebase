@@ -289,6 +289,10 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
     return results;
   }
 
+  // ★★★ PERF LOG: ドキュメント取得全体の時間計測 ★★★
+  const enrichStartTime = Date.now();
+  console.log(`[PERF] 📚 enrichWithAllChunks started for ${results.length} results`);
+
   // Phase 0A-4 ROLLBACK: ログ削除（前のバージョンと同じ）
   let skippedCount = 0;
   let mergedCount = 0;
@@ -310,8 +314,14 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
           return result;
         }
 
-        // Phase 0A-4 ROLLBACK: ログ削除（前のバージョンと同じ）
+        // ★★★ PERF LOG: 個別ページのチャンク取得時間 ★★★
+        const chunkFetchStart = Date.now();
         const allChunks = await getAllChunksByPageId(String(pageId));
+        const chunkFetchDuration = Date.now() - chunkFetchStart;
+        
+        if (chunkFetchDuration > 1000) {
+          console.warn(`[PERF] ⚠️ Slow chunk fetch for pageId ${pageId}: ${chunkFetchDuration}ms (${allChunks.length} chunks)`);
+        }
 
         if (allChunks.length <= 1) {
           // チャンクが1つ以下の場合は統合不要
@@ -360,6 +370,17 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
       }
     })
   );
+
+  // ★★★ PERF LOG: ドキュメント取得全体の完了時間 ★★★
+  const enrichDuration = Date.now() - enrichStartTime;
+  console.log(`[PERF] ✅ enrichWithAllChunks completed in ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s)`);
+  console.log(`[PERF]    - Total results: ${results.length}`);
+  console.log(`[PERF]    - Skipped (not chunked): ${skippedCount}`);
+  console.log(`[PERF]    - Merged: ${mergedCount}`);
+  
+  if (enrichDuration > 10000) {
+    console.warn(`[PERF] ⚠️ Slow enrichment detected: ${enrichDuration}ms`);
+  }
 
   // Phase 0A-4 ROLLBACK: サマリーログを開発環境のみに
   if (process.env.NODE_ENV === 'development' && mergedCount > 0) {
