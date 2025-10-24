@@ -111,9 +111,11 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
           });
         } else {
           // IVF_HNSW（より高精度だが時間がかかる）
+          // 注意: ivfHnswは現在サポートされていないため、ivfPqを使用
           await table.createIndex('vector', {
-            config: lancedb.Index.ivfHnsw({
-              numPartitions: options.numPartitions
+            config: lancedb.Index.ivfPq({
+              numPartitions: options.numPartitions,
+              numSubVectors: options.numSubVectors
             })
           });
         }
