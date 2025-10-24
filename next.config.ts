@@ -20,81 +20,11 @@ const nextConfig = {
   },
   transpilePackages: ['lunr'],
   webpack: (config, { isServer }) => {
-    // ★★★ キャッシュクリア設定 ★★★
-    // デバッグ中はキャッシュを無効化して、確実に最新の設定を使用
-    config.cache = false;
-    
     if (isServer) {
-      // ビルド時のデバッグログ（モデルファイルのコピー確認用）
-      console.log('[Build] CopyPlugin configuration:');
-      console.log('[Build] - Project root:', __dirname);
-      console.log('[Build] - Models source:', path.resolve(__dirname, 'models'));
-      console.log('[Build] - Standalone target:', path.resolve(__dirname, '.next/standalone/models'));
-      
       config.plugins.push(
         new CopyPlugin({
           patterns: [
-            // ★★★ Xenova Transformers.js用モデルファイル ★★★
-            // Xenovaは models/Xenova/model-name という階層を期待する
-            
-            // 方針変更: postbuildスクリプトに依存せず、CopyPluginで直接Xenova/構造を作る
-            // これにより、Firebase App Hostingのビルド環境でも確実に動作する
-            
-            // Step 1: まず通常のmodelsディレクトリにコピー
-            {
-              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
-              to: path.resolve(__dirname, '.next/standalone/models/paraphrase-multilingual-mpnet-base-v2'),
-              noErrorOnMissing: false,
-              globOptions: {
-                dot: true,
-                ignore: ['**/.DS_Store', '**/Thumbs.db']
-              },
-              force: true
-            },
-            // Step 2: 同時にXenova/サブディレクトリにもコピー
-            {
-              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
-              to: path.resolve(__dirname, '.next/standalone/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
-              noErrorOnMissing: false,
-              globOptions: {
-                dot: true,
-                ignore: ['**/.DS_Store', '**/Thumbs.db']
-              },
-              force: true
-            },
-            
-            // サーバービルド用も同様
-            {
-              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
-              to: path.resolve(__dirname, '.next/server/models/paraphrase-multilingual-mpnet-base-v2'),
-              noErrorOnMissing: false,
-              globOptions: {
-                dot: true,
-                ignore: ['**/.DS_Store', '**/Thumbs.db']
-              },
-              force: true
-            },
-            {
-              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
-              to: path.resolve(__dirname, '.next/server/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
-              noErrorOnMissing: false,
-              globOptions: {
-                dot: true,
-                ignore: ['**/.DS_Store', '**/Thumbs.db']
-              },
-              force: true
-            },
-            // ★★★ ここまでが追加・修正箇所 ★★★
-
-            // 注意: LanceDBのネイティブモジュールは手動コピーしない
-            // 理由:
-            // 1. ファイルサイズが巨大で、ビルド時のメモリ不足（OOM Kill）を引き起こす
-            // 2. serverExternalPackages設定により、Cloud Runのnpm install時に
-            //    自動的に@lancedb/lancedb-linux-x64-gnuがインストールされる
-            // 3. Next.jsのスタンドアロンビルドは、serverExternalPackagesを
-            //    package.jsonに含め、デプロイ時にnpm installが実行される
-
-            // Kuromoji辞書ファイルをビルドに含める（既存の設定）
+            // Kuromoji辞書ファイルをビルドに含める
             {
               from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
               to: path.resolve(__dirname, '.next/server/node_modules/kuromoji/dict'),
@@ -109,20 +39,17 @@ const nextConfig = {
         })
       );
     }
-    
-    // Note: LanceDBはserverExternalPackagesで管理するため、externalsへの追加は不要
-    // Next.js 13+では、serverExternalPackagesのみで十分
-    
+
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
       path: false,
     };
-    
+
     if (isServer) {
       config.externals.push('handlebars');
     }
-    
+
     return config;
   },
   serverExternalPackages: [
