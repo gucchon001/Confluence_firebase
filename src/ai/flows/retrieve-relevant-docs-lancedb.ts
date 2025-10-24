@@ -421,15 +421,11 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     const connection = await optimizedLanceDBClient.getConnection();
     const table = connection.table;
 
-    // Phase 5パフォーマンス最適化: .search().filter()を使用（LanceDB推奨API）
-    // ダミーベクトル（ゼロベクトル）で検索を起動し、filterで絞り込む
-    const vectorSize = 768; // paraphrase-multilingual-mpnet-base-v2の次元数
-    const dummyVector = new Array(vectorSize).fill(0);
-    
-    // pageIdまたはid列での完全一致・前方一致の両方を試行
-    // LanceDBエンジンにフィルタリングを任せることで、メモリ効率とI/O効率が向上
+    // ★★★ PERF FIX: .query()を使用してインデックス活用 ★★★
+    // .search()はベクトル検索のため、全ベクトルとの類似度計算が発生する（遅い）
+    // .query()はSQL風のクエリで、B-Treeインデックスを活用できる（速い）
     const results = await table
-      .search(dummyVector)
+      .query()
       .where(`"pageId" = '${pageId}' OR id = '${pageId}' OR id LIKE '${pageId}-%'`)
       .limit(1000) // ページあたりの最大チャンク数（十分な余裕）
       .toArray();
