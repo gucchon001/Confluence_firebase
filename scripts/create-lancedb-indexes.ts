@@ -100,32 +100,12 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
       const vectorStartTime = Date.now();
       
       try {
-<<<<<<< HEAD
-        if (options.vectorIndexType === 'ivf_pq') {
-          await table.createIndex('vector', {
-            config: lancedb.Index.ivfPq({
-              numPartitions: options.numPartitions,
-              numSubVectors: options.numSubVectors
-            })
-          });
-        } else {
-          // IVF_HNSW（より高精度だが時間がかかる）
-          // 注意: ivfHnswは現在サポートされていないため、ivfPqを使用
-          await table.createIndex('vector', {
-            config: lancedb.Index.ivfPq({
-              numPartitions: options.numPartitions,
-              numSubVectors: options.numSubVectors
-            })
-          });
-        }
-=======
         await table.createIndex('vector', {
           config: lancedb.Index.ivfPq({
             numPartitions: options.numPartitions,
             numSubVectors: options.numSubVectors
           })
         });
->>>>>>> e345680eabf81ba2ab1631b1e1a18fc53b205fb1
         
         const vectorDuration = Date.now() - vectorStartTime;
         console.log(`   ✅ ベクトルインデックス作成完了`);
@@ -183,4 +163,3 @@ if (require.main === module) {
 }
 
 export { createLanceDBIndexes };
-
