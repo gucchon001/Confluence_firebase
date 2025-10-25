@@ -5,17 +5,12 @@
  * ★★★ ローカルモデル使用設定 ★★★
  * - モデルファイルはprebuildでダウンロード済み
  * - 実行時は外部通信せず、ローカルファイルのみ使用
+ * - env設定は行わず、相対パスとlocal_files_onlyで制御
  */
-import { pipeline, env } from '@xenova/transformers';
+import { pipeline } from '@xenova/transformers';
 import { embeddingCache } from './embedding-cache';
 import { EmbeddingConfig } from '@/config/ai-models-config';
 import path from 'path';
-
-// ★★★ Xenova Transformers.jsの環境設定 ★★★
-// リモートモデルのダウンロードを無効化（ローカルファイルのみ使用）
-env.allowRemoteModels = false;
-// カスタムモデルディレクトリを指定
-env.localModelPath = path.join(process.cwd(), 'models');
 
 let extractor: any | null = null;
 
@@ -82,20 +77,20 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    // ★★★ ローカルモデルを使用 ★★★
-    // env.localModelPath と env.allowRemoteModels の設定により、
-    // Hugging Face-style のモデル名を指定しても、ローカルファイルから読み込まれる
-    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
+    // ★★★ cb2ccb10の成功パターンを使用 ★★★
+    // シンプルな相対パス + local_files_only で確実に動作する
+    const modelPath = './models/paraphrase-multilingual-mpnet-base-v2';
     
-    console.log(`[Embedding] Loading model from local path: ${env.localModelPath}`);
-    console.log(`[Embedding] Remote models allowed: ${env.allowRemoteModels}`);
+    console.log(`[MODEL_LOADER] Current working directory: ${process.cwd()}`);
+    console.log(`[MODEL_LOADER] Using relative model path: ${modelPath}`);
+    console.log(`[MODEL_LOADER] Attempting to load model with local_files_only...`);
     
-    extractor = await pipeline('feature-extraction', modelName, {
-      // 念のため、local_files_only も指定
+    extractor = await pipeline('feature-extraction', modelPath, {
+      cache_dir: '/tmp/model_cache',
       local_files_only: true,
     });
     
-    console.log(`[Embedding] ✅ Model loaded successfully from local files`);
+    console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
   return Array.from(output.data);
