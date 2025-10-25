@@ -2,15 +2,23 @@
  * 埋め込みベクトル生成のための抽象化レイヤー（外部API不使用・ローカル実装）
  * キャッシュ機能付きで最適化
  * 
- * ★★★ ローカルモデル使用設定 ★★★
+ * ★★★ 最終推奨設定 ★★★
  * - モデルファイルはprebuildでダウンロード済み
- * - 実行時は外部通信せず、ローカルファイルのみ使用
- * - env設定は行わず、相対パスとlocal_files_onlyで制御
+ * - CopyPluginでコンテナに確実に含める
+ * - env.localModelPathでベースパスを明示、pipelineにはモデル名を渡す
  */
-import { pipeline } from '@xenova/transformers';
+import { pipeline, env } from '@xenova/transformers';
 import { embeddingCache } from './embedding-cache';
 import { EmbeddingConfig } from '@/config/ai-models-config';
 import path from 'path';
+
+// ★★★ 最終推奨設定 ★★★
+// 1. ライブラリのデフォルト検索パスを上書きする
+// これにより、ライブラリは常にこのディレクトリを基準にモデルを探すようになる
+env.localModelPath = path.join(process.cwd(), 'models');
+
+// 2. 外部通信を念のためコードレベルでもブロック
+env.allowRemoteModels = false;
 
 let extractor: any | null = null;
 
@@ -77,20 +85,24 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    // ★★★ cb2ccb10の成功パターンを使用 ★★★
-    // シンプルな相対パス + local_files_only で確実に動作する
-    const modelPath = './models/paraphrase-multilingual-mpnet-base-v2';
+    // ★★★ 最終推奨実装 ★★★
+    // 3. pipelineには「Hugging Faceのモデル名」を渡す
+    // ライブラリは env.localModelPath + モデル名 で正しいパスを自動生成してくれる
+    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
     
-    console.log(`[MODEL_LOADER] Current working directory: ${process.cwd()}`);
-    console.log(`[MODEL_LOADER] Using relative model path: ${modelPath}`);
-    console.log(`[MODEL_LOADER] Attempting to load model with local_files_only...`);
+    console.log(`[MODEL_LOADER] Base model path: ${env.localModelPath}`);
+    console.log(`[MODEL_LOADER] Model name: ${modelName}`);
+    console.log(`[MODEL_LOADER] Remote models allowed: ${env.allowRemoteModels}`);
     
-    extractor = await pipeline('feature-extraction', modelPath, {
-      cache_dir: '/tmp/model_cache',
-      local_files_only: true,
-    });
-    
-    console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
+    try {
+      extractor = await pipeline('feature-extraction', modelName, {
+        local_files_only: true, // 念のための保険
+      });
+      console.log(`✅ [Embedding] Model loaded successfully from local path`);
+    } catch (error) {
+      console.error(`❌ [Embedding] Failed to load local model:`, error);
+      throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
   return Array.from(output.data);
