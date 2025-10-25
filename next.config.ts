@@ -24,6 +24,27 @@ const nextConfig = {
       config.plugins.push(
         new CopyPlugin({
           patterns: [
+            // ★★★ Xenova Transformers.js用モデルファイル ★★★
+            // prebuildでダウンロードしたモデルをビルド成果物に含める
+            {
+              from: path.resolve(__dirname, 'models'),
+              to: path.resolve(__dirname, '.next/standalone/models'),
+              noErrorOnMissing: false,
+              globOptions: {
+                dot: true,
+                ignore: ['**/.DS_Store', '**/Thumbs.db']
+              },
+            },
+            {
+              from: path.resolve(__dirname, 'models'),
+              to: path.resolve(__dirname, '.next/server/models'),
+              noErrorOnMissing: false,
+              globOptions: {
+                dot: true,
+                ignore: ['**/.DS_Store', '**/Thumbs.db']
+              },
+            },
+            
             // Kuromoji辞書ファイルをビルドに含める
             {
               from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),

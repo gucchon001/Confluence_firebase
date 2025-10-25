@@ -1,10 +1,21 @@
 /**
  * 埋め込みベクトル生成のための抽象化レイヤー（外部API不使用・ローカル実装）
  * キャッシュ機能付きで最適化
+ * 
+ * ★★★ ローカルモデル使用設定 ★★★
+ * - モデルファイルはprebuildでダウンロード済み
+ * - 実行時は外部通信せず、ローカルファイルのみ使用
  */
-import { pipeline } from '@xenova/transformers';
+import { pipeline, env } from '@xenova/transformers';
 import { embeddingCache } from './embedding-cache';
 import { EmbeddingConfig } from '@/config/ai-models-config';
+import path from 'path';
+
+// ★★★ Xenova Transformers.jsの環境設定 ★★★
+// リモートモデルのダウンロードを無効化（ローカルファイルのみ使用）
+env.allowRemoteModels = false;
+// カスタムモデルディレクトリを指定
+env.localModelPath = path.join(process.cwd(), 'models');
 
 let extractor: any | null = null;
 
@@ -71,8 +82,20 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
+    // ★★★ ローカルモデルを使用 ★★★
+    // env.localModelPath と env.allowRemoteModels の設定により、
+    // Hugging Face-style のモデル名を指定しても、ローカルファイルから読み込まれる
     const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
-    extractor = await pipeline('feature-extraction', modelName);
+    
+    console.log(`[Embedding] Loading model from local path: ${env.localModelPath}`);
+    console.log(`[Embedding] Remote models allowed: ${env.allowRemoteModels}`);
+    
+    extractor = await pipeline('feature-extraction', modelName, {
+      // 念のため、local_files_only も指定
+      local_files_only: true,
+    });
+    
+    console.log(`[Embedding] ✅ Model loaded successfully from local files`);
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
   return Array.from(output.data);
