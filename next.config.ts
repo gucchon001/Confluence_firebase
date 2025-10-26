@@ -20,6 +20,7 @@ const nextConfig = {
   },
   transpilePackages: ['lunr'],
   webpack: (config, { isServer }) => {
+    // ★★★ CopyPluginはサーバービルドでのみ実行 ★★★
     if (isServer) {
       config.plugins.push(
         new CopyPlugin({
@@ -37,7 +38,7 @@ const nextConfig = {
               to: path.resolve(__dirname, '.next/server/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
               noErrorOnMissing: false,
             },
-            
+
             // Kuromoji辞書ファイルをビルドに含める
             {
               from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
