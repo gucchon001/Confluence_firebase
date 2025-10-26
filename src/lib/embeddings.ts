@@ -14,8 +14,9 @@ import path from 'path';
 
 // ★★★ 最終推奨設定 ★★★
 // 1. ライブラリのデフォルト検索パスを上書きする
-// これにより、ライブラリは常にこのディレクトリを基準にモデルを探すようになる
-env.localModelPath = path.join(process.cwd(), 'models');
+// Standalone環境では /workspace/.next/standalone から実行される
+const basePath = process.cwd();
+env.localModelPath = basePath;
 
 // 2. 外部通信を念のためコードレベルでもブロック
 env.allowRemoteModels = false;
