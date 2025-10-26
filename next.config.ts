@@ -1,4 +1,3 @@
-import CopyPlugin from 'copy-webpack-plugin';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -20,41 +19,6 @@ const nextConfig = {
   },
   transpilePackages: ['lunr'],
   webpack: (config, { isServer }) => {
-    // ★★★ CopyPluginはサーバービルドでのみ実行 ★★★
-    if (isServer) {
-      config.plugins.push(
-        new CopyPlugin({
-          patterns: [
-            // ★★★ これが最終的な正しい設定 ★★★
-            // ライブラリが期待する 'Xenova/' プレフィックス付きのパスにモデルファイルをコピーする
-            {
-              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
-              to: path.resolve(__dirname, '.next/standalone/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
-              noErrorOnMissing: false, // ファイルがない場合はビルドを失敗させる
-            },
-            // サーバービルド用にも同じ設定を追加
-            {
-              from: path.resolve(__dirname, 'models/paraphrase-multilingual-mpnet-base-v2'),
-              to: path.resolve(__dirname, '.next/server/models/Xenova/paraphrase-multilingual-mpnet-base-v2'),
-              noErrorOnMissing: false,
-            },
-
-            // Kuromoji辞書ファイルをビルドに含める
-            {
-              from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
-              to: path.resolve(__dirname, '.next/server/node_modules/kuromoji/dict'),
-              noErrorOnMissing: false,
-            },
-            {
-              from: path.resolve(__dirname, 'node_modules/kuromoji/dict'),
-              to: path.resolve(__dirname, '.next/standalone/node_modules/kuromoji/dict'),
-              noErrorOnMissing: false,
-            },
-          ],
-        })
-      );
-    }
-
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
