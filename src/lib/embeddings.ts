@@ -13,9 +13,7 @@ import { EmbeddingConfig } from '@/config/ai-models-config';
 import path from 'path';
 
 // ★★★ 最終推奨設定 ★★★
-// env.localModelPathを設定してからモデルを読み込む
 let extractor: any | null = null;
-let isEnvConfigured = false;
 
 export async function getEmbeddings(text: string): Promise<number[]> {
   const startTime = Date.now();
@@ -80,29 +78,43 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    // ★★★ 環境設定の確認 ★★★
-    if (!isEnvConfigured) {
-      env.localModelPath = process.cwd();
-      env.allowRemoteModels = false;
-      isEnvConfigured = true;
-      console.log(`[MODEL_LOADER] env.localModelPath: ${env.localModelPath}`);
-      console.log(`[MODEL_LOADER] env.allowRemoteModels: ${env.allowRemoteModels}`);
+    // ★★★ 実行時に環境設定 ★★★
+    const cwd = process.cwd();
+    env.localModelPath = cwd;
+    env.allowRemoteModels = false;
+    
+    console.log(`[MODEL_LOADER] ===== モデルロード開始 =====`);
+    console.log(`[MODEL_LOADER] process.cwd(): ${cwd}`);
+    console.log(`[MODEL_LOADER] env.localModelPath: ${env.localModelPath}`);
+    console.log(`[MODEL_LOADER] env.allowRemoteModels: ${env.allowRemoteModels}`);
+    
+    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
+    const expectedPath = path.join(cwd, modelName);
+    console.log(`[MODEL_LOADER] Model name: ${modelName}`);
+    console.log(`[MODEL_LOADER] Expected path: ${expectedPath}`);
+    
+    // ファイル存在確認
+    const fs = require('fs');
+    if (fs.existsSync(expectedPath)) {
+      console.log(`[MODEL_LOADER] ✅ モデルディレクトリが存在します`);
+      const files = fs.readdirSync(expectedPath);
+      console.log(`[MODEL_LOADER]   ファイル数: ${files.length}`);
+    } else {
+      console.log(`[MODEL_LOADER] ❌ モデルディレクトリが見つかりません`);
     }
     
-    // ★★★ Hugging Face形式のモデル名を渡す ★★★
-    // ライブラリは env.localModelPath + モデル名 で検索する
-    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
-    
-    console.log(`[MODEL_LOADER] Model name: ${modelName}`);
-    console.log(`[MODEL_LOADER] Expected path: ${path.join(env.localModelPath, modelName)}`);
+    console.log(`[MODEL_LOADER] Environment variables:`);
+    console.log(`[MODEL_LOADER]   HF_HUB_OFFLINE=${process.env.HF_HUB_OFFLINE}`);
+    console.log(`[MODEL_LOADER]   TRANSFORMERS_CACHE=${process.env.TRANSFORMERS_CACHE}`);
     
     try {
       extractor = await pipeline('feature-extraction', modelName, {
-        local_files_only: true, // オフラインモード強制
+        local_files_only: true,
+        cache_dir: '/tmp/transformers_cache',
       });
-      console.log(`✅ [Embedding] Model loaded successfully`);
+      console.log(`[MODEL_LOADER] ✅ モデル読み込み成功`);
     } catch (error) {
-      console.error(`❌ [Embedding] Failed to load local model:`, error);
+      console.error(`[MODEL_LOADER] ❌ モデル読み込み失敗:`, error);
       throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
