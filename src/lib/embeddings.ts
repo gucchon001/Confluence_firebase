@@ -87,9 +87,10 @@ export default { getEmbeddings };
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
     // ★★★ 最終推奨実装 ★★★
-    // 3. pipelineには「Hugging Faceのモデル名」を渡す
-    // ライブラリは env.localModelPath + モデル名 で正しいパスを自動生成してくれる
-    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
+    // 3. pipelineにはモデル名を渡す（Xenova/プレフィックスなし）
+    // ファイルは /workspace/.next/standalone/models/Xenova/paraphrase-multilingual-mpnet-base-v2/ に配置されている
+    // ライブラリは env.localModelPath + models/ + モデル名 で検索する
+    const modelName = 'paraphrase-multilingual-mpnet-base-v2';
     
     console.log(`[MODEL_LOADER] Base model path: ${env.localModelPath}`);
     console.log(`[MODEL_LOADER] Model name: ${modelName}`);
