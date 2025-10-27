@@ -11,7 +11,7 @@ const path = require('path');
 console.log('📦 [PostBuild] モデルファイルをコピー中...');
 
 const sourceDir = path.resolve(__dirname, '../models/paraphrase-multilingual-mpnet-base-v2');
-const standaloneDestDir = path.resolve(__dirname, '../.next/standalone/models/Xenova/paraphrase-multilingual-mpnet-base-v2');
+const standaloneDestDir = path.resolve(__dirname, '../.next/standalone/Xenova/paraphrase-multilingual-mpnet-base-v2');
 
 // sourceディレクトリが存在しない場合はエラー
 if (!fs.existsSync(sourceDir)) {

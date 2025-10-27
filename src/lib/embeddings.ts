@@ -15,8 +15,8 @@ import path from 'path';
 // ★★★ 最終推奨設定 ★★★
 // 1. ライブラリのデフォルト検索パスを上書きする
 // Standalone環境では /workspace/.next/standalone から実行される
-// ファイルは /workspace/.next/standalone/models/Xenova/... に配置されている
-env.localModelPath = path.join(process.cwd(), 'models');
+// ファイルは /workspace/.next/standalone/Xenova/paraphrase-multilingual-mpnet-base-v2/ に配置されている
+env.localModelPath = process.cwd();
 
 // 2. 外部通信を念のためコードレベルでもブロック
 env.allowRemoteModels = false;
@@ -87,10 +87,10 @@ export default { getEmbeddings };
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
     // ★★★ 最終推奨実装 ★★★
-    // 3. pipelineにはモデル名を渡す（Xenova/プレフィックスなし）
-    // ファイルは /workspace/.next/standalone/models/Xenova/paraphrase-multilingual-mpnet-base-v2/ に配置されている
-    // ライブラリは env.localModelPath + models/ + モデル名 で検索する
-    const modelName = 'paraphrase-multilingual-mpnet-base-v2';
+    // 3. pipelineにはモデル名を渡す（Xenova/プレフィックス付き）
+    // ファイルは /workspace/.next/standalone/Xenova/paraphrase-multilingual-mpnet-base-v2/ に配置されている
+    // ライブラリは env.localModelPath + モデル名 で検索する
+    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
     
     console.log(`[MODEL_LOADER] Base model path: ${env.localModelPath}`);
     console.log(`[MODEL_LOADER] Model name: ${modelName}`);
