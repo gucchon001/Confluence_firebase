@@ -13,10 +13,9 @@ import { EmbeddingConfig } from '@/config/ai-models-config';
 import path from 'path';
 
 // ★★★ 最終推奨設定 ★★★
-// envオブジェクトの操作は一切行わない
-// pipeline()に渡す絶対パスで全て解決する
-
+// env.localModelPathを設定してからモデルを読み込む
 let extractor: any | null = null;
+let isEnvConfigured = false;
 
 export async function getEmbeddings(text: string): Promise<number[]> {
   const startTime = Date.now();
@@ -81,21 +80,27 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    // ★★★ 最終実装: 絶対パスで明示的に指定 ★★★
-    // ファイルは /workspace/.next/standalone/Xenova/paraphrase-multilingual-mpnet-base-v2/ に配置されている
-    // ライブラリに直接このパスを指定して、確実にローカルファイルを読み込む
-    const modelPath = path.join(process.cwd(), 'Xenova', 'paraphrase-multilingual-mpnet-base-v2');
+    // ★★★ 環境設定の確認 ★★★
+    if (!isEnvConfigured) {
+      env.localModelPath = process.cwd();
+      env.allowRemoteModels = false;
+      isEnvConfigured = true;
+      console.log(`[MODEL_LOADER] env.localModelPath: ${env.localModelPath}`);
+      console.log(`[MODEL_LOADER] env.allowRemoteModels: ${env.allowRemoteModels}`);
+    }
     
-    console.log(`[MODEL_LOADER] Loading model from absolute path: ${modelPath}`);
-    console.log(`[MODEL_LOADER] process.cwd(): ${process.cwd()}`);
-    console.log(`[MODEL_LOADER] Remote models allowed: ${env.allowRemoteModels}`);
+    // ★★★ Hugging Face形式のモデル名を渡す ★★★
+    // ライブラリは env.localModelPath + モデル名 で検索する
+    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
+    
+    console.log(`[MODEL_LOADER] Model name: ${modelName}`);
+    console.log(`[MODEL_LOADER] Expected path: ${path.join(env.localModelPath, modelName)}`);
     
     try {
-      // modelPathを直接渡して、ローカルファイルを強制的に読み込む
-      extractor = await pipeline('feature-extraction', modelPath, {
+      extractor = await pipeline('feature-extraction', modelName, {
         local_files_only: true, // オフラインモード強制
       });
-      console.log(`✅ [Embedding] Model loaded successfully from local path: ${modelPath}`);
+      console.log(`✅ [Embedding] Model loaded successfully`);
     } catch (error) {
       console.error(`❌ [Embedding] Failed to load local model:`, error);
       throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : String(error)}`);
