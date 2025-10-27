@@ -88,17 +88,26 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     console.log(`[MODEL_LOADER] env.localModelPath: ${env.localModelPath}`);
     console.log(`[MODEL_LOADER] env.allowRemoteModels: ${env.allowRemoteModels}`);
     
-    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
-    const expectedPath = path.join(cwd, modelName);
-    console.log(`[MODEL_LOADER] Model name: ${modelName}`);
-    console.log(`[MODEL_LOADER] Expected path: ${expectedPath}`);
+    // 絶対パスを直接指定
+    const absoluteModelPath = path.join(cwd, 'Xenova', 'paraphrase-multilingual-mpnet-base-v2');
+    console.log(`[MODEL_LOADER] Absolute model path: ${absoluteModelPath}`);
     
     // ファイル存在確認
     const fs = require('fs');
-    if (fs.existsSync(expectedPath)) {
+    if (fs.existsSync(absoluteModelPath)) {
       console.log(`[MODEL_LOADER] ✅ モデルディレクトリが存在します`);
-      const files = fs.readdirSync(expectedPath);
+      const files = fs.readdirSync(absoluteModelPath);
       console.log(`[MODEL_LOADER]   ファイル数: ${files.length}`);
+      
+      // tokenizer.jsonの存在確認
+      const tokenizerPath = path.join(absoluteModelPath, 'tokenizer.json');
+      if (fs.existsSync(tokenizerPath)) {
+        console.log(`[MODEL_LOADER] ✅ tokenizer.json が存在します`);
+        const stat = fs.statSync(tokenizerPath);
+        console.log(`[MODEL_LOADER]   tokenizer.json size: ${(stat.size / 1024).toFixed(2)} KB`);
+      } else {
+        console.error(`[MODEL_LOADER] ❌ tokenizer.json が見つかりません`);
+      }
     } else {
       console.log(`[MODEL_LOADER] ❌ モデルディレクトリが見つかりません`);
     }
@@ -108,13 +117,20 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     console.log(`[MODEL_LOADER]   TRANSFORMERS_CACHE=${process.env.TRANSFORMERS_CACHE}`);
     
     try {
-      extractor = await pipeline('feature-extraction', modelName, {
+      // 絶対パスを直接指定
+      console.log(`[MODEL_LOADER] Attempting to load model from absolute path: ${absoluteModelPath}`);
+      extractor = await pipeline('feature-extraction', absoluteModelPath, {
         local_files_only: true,
-        cache_dir: '/tmp/transformers_cache',
       });
       console.log(`[MODEL_LOADER] ✅ モデル読み込み成功`);
     } catch (error) {
       console.error(`[MODEL_LOADER] ❌ モデル読み込み失敗:`, error);
+      // エラーの詳細を出力
+      if (error instanceof Error) {
+        console.error(`[MODEL_LOADER] Error name: ${error.name}`);
+        console.error(`[MODEL_LOADER] Error message: ${error.message}`);
+        console.error(`[MODEL_LOADER] Error stack: ${error.stack}`);
+      }
       throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
