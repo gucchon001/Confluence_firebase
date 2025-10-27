@@ -13,13 +13,8 @@ import { EmbeddingConfig } from '@/config/ai-models-config';
 import path from 'path';
 
 // ★★★ 最終推奨設定 ★★★
-// 1. ライブラリのデフォルト検索パスを上書きする
-// Standalone環境では /workspace/.next/standalone から実行される
-// ファイルは /workspace/.next/standalone/Xenova/paraphrase-multilingual-mpnet-base-v2/ に配置されている
-env.localModelPath = process.cwd();
-
-// 2. 外部通信を念のためコードレベルでもブロック
-env.allowRemoteModels = false;
+// envオブジェクトの操作は一切行わない
+// pipeline()に渡す絶対パスで全て解決する
 
 let extractor: any | null = null;
 
@@ -86,21 +81,21 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    // ★★★ 最終推奨実装 ★★★
-    // 3. pipelineにはモデル名を渡す（Xenova/プレフィックス付き）
+    // ★★★ 最終実装: 絶対パスで明示的に指定 ★★★
     // ファイルは /workspace/.next/standalone/Xenova/paraphrase-multilingual-mpnet-base-v2/ に配置されている
-    // ライブラリは env.localModelPath + モデル名 で検索する
-    const modelName = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
+    // ライブラリに直接このパスを指定して、確実にローカルファイルを読み込む
+    const modelPath = path.join(process.cwd(), 'Xenova', 'paraphrase-multilingual-mpnet-base-v2');
     
-    console.log(`[MODEL_LOADER] Base model path: ${env.localModelPath}`);
-    console.log(`[MODEL_LOADER] Model name: ${modelName}`);
+    console.log(`[MODEL_LOADER] Loading model from absolute path: ${modelPath}`);
+    console.log(`[MODEL_LOADER] process.cwd(): ${process.cwd()}`);
     console.log(`[MODEL_LOADER] Remote models allowed: ${env.allowRemoteModels}`);
     
     try {
-      extractor = await pipeline('feature-extraction', modelName, {
-        local_files_only: true, // 念のための保険
+      // modelPathを直接渡して、ローカルファイルを強制的に読み込む
+      extractor = await pipeline('feature-extraction', modelPath, {
+        local_files_only: true, // オフラインモード強制
       });
-      console.log(`✅ [Embedding] Model loaded successfully from local path`);
+      console.log(`✅ [Embedding] Model loaded successfully from local path: ${modelPath}`);
     } catch (error) {
       console.error(`❌ [Embedding] Failed to load local model:`, error);
       throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : String(error)}`);
