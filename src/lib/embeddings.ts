@@ -90,8 +90,8 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     console.log(`[MODEL_LOADER] env.localModelPath: ${env.localModelPath} (空に設定)`);
     console.log(`[MODEL_LOADER] env.allowRemoteModels: ${env.allowRemoteModels}`);
     
-    // 絶対パスを直接指定
-    const absoluteModelPath = path.join(cwd, 'Xenova', 'paraphrase-multilingual-mpnet-base-v2');
+    // 絶対パスを直接指定 (Windowsの場合は先頭のスラッシュを除去)
+    const absoluteModelPath = path.resolve(cwd, 'Xenova', 'paraphrase-multilingual-mpnet-base-v2').replace(/^\/+/, '');
     console.log(`[MODEL_LOADER] Absolute model path: ${absoluteModelPath}`);
     
     // ファイル存在確認
