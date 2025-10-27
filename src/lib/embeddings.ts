@@ -78,40 +78,25 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    // ★★★ 実行時に環境設定 ★★★
+    // ★★★ 徹底的に簡素化：ライブラリの期待する通りの使い方 ★★★
     const cwd = process.cwd();
-    // 絶対パスを直接指定する場合は、env.localModelPath を空にする
-    // そうしないと、ライブラリが env.localModelPath + 渡したパス として扱ってしまう
-    env.localModelPath = '';
-    env.allowRemoteModels = false;
     
     console.log(`[MODEL_LOADER] ===== モデルロード開始 =====`);
     console.log(`[MODEL_LOADER] process.cwd(): ${cwd}`);
-    console.log(`[MODEL_LOADER] env.localModelPath: ${env.localModelPath} (空に設定)`);
-    console.log(`[MODEL_LOADER] env.allowRemoteModels: ${env.allowRemoteModels}`);
-    
-    // 絶対パスを直接指定 (Windowsの場合は先頭のスラッシュを除去)
-    const absoluteModelPath = path.resolve(cwd, 'Xenova', 'paraphrase-multilingual-mpnet-base-v2').replace(/^\/+/, '');
-    console.log(`[MODEL_LOADER] Absolute model path: ${absoluteModelPath}`);
     
     // ファイル存在確認
     const fs = require('fs');
-    if (fs.existsSync(absoluteModelPath)) {
-      console.log(`[MODEL_LOADER] ✅ モデルディレクトリが存在します`);
-      const files = fs.readdirSync(absoluteModelPath);
-      console.log(`[MODEL_LOADER]   ファイル数: ${files.length}`);
-      
-      // tokenizer.jsonの存在確認
-      const tokenizerPath = path.join(absoluteModelPath, 'tokenizer.json');
-      if (fs.existsSync(tokenizerPath)) {
-        console.log(`[MODEL_LOADER] ✅ tokenizer.json が存在します`);
-        const stat = fs.statSync(tokenizerPath);
-        console.log(`[MODEL_LOADER]   tokenizer.json size: ${(stat.size / 1024).toFixed(2)} KB`);
-      } else {
-        console.error(`[MODEL_LOADER] ❌ tokenizer.json が見つかりません`);
-      }
+    const modelDir = path.join(cwd, 'Xenova', 'paraphrase-multilingual-mpnet-base-v2');
+    const tokenizerPath = path.join(modelDir, 'tokenizer.json');
+    
+    if (fs.existsSync(tokenizerPath)) {
+      console.log(`[MODEL_LOADER] ✅ tokenizer.json が存在します`);
+      const stat = fs.statSync(tokenizerPath);
+      console.log(`[MODEL_LOADER]   tokenizer.json size: ${(stat.size / 1024).toFixed(2)} KB`);
     } else {
-      console.log(`[MODEL_LOADER] ❌ モデルディレクトリが見つかりません`);
+      console.log(`[MODEL_LOADER] ❌ tokenizer.json が見つかりません: ${tokenizerPath}`);
+      console.log(`[MODEL_LOADER]   モデルディレクトリ: ${modelDir}`);
+      console.log(`[MODEL_LOADER]   存在するディレクトリ: ${fs.existsSync(modelDir)}`);
     }
     
     console.log(`[MODEL_LOADER] Environment variables:`);
@@ -119,15 +104,24 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
     console.log(`[MODEL_LOADER]   TRANSFORMERS_CACHE=${process.env.TRANSFORMERS_CACHE}`);
     
     try {
-      // 絶対パスを直接指定
-      console.log(`[MODEL_LOADER] Attempting to load model from absolute path: ${absoluteModelPath}`);
-      extractor = await pipeline('feature-extraction', absoluteModelPath, {
+      // シンプルにモデルIDを渡す（ライブラリがローカルキャッシュを探す）
+      console.log(`[MODEL_LOADER] Attempting to load model: Xenova/paraphrase-multilingual-mpnet-base-v2`);
+      
+      // キャッシュディレクトリを指定して、ライブラリがそこから探すようにする
+      const cacheDir = path.join(cwd, 'Xenova');
+      console.log(`[MODEL_LOADER] Cache directory: ${cacheDir}`);
+      
+      env.localModelPath = cwd;
+      env.allowRemoteModels = false;
+      env.cacheDir = cacheDir;
+      
+      extractor = await pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-mpnet-base-v2', {
         local_files_only: true,
+        cache_dir: cacheDir,
       });
       console.log(`[MODEL_LOADER] ✅ モデル読み込み成功`);
     } catch (error) {
       console.error(`[MODEL_LOADER] ❌ モデル読み込み失敗:`, error);
-      // エラーの詳細を出力
       if (error instanceof Error) {
         console.error(`[MODEL_LOADER] Error name: ${error.name}`);
         console.error(`[MODEL_LOADER] Error message: ${error.message}`);
