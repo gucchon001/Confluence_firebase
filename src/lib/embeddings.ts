@@ -80,12 +80,14 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
     // ★★★ 実行時に環境設定 ★★★
     const cwd = process.cwd();
-    env.localModelPath = cwd;
+    // 絶対パスを直接指定する場合は、env.localModelPath を空にする
+    // そうしないと、ライブラリが env.localModelPath + 渡したパス として扱ってしまう
+    env.localModelPath = '';
     env.allowRemoteModels = false;
     
     console.log(`[MODEL_LOADER] ===== モデルロード開始 =====`);
     console.log(`[MODEL_LOADER] process.cwd(): ${cwd}`);
-    console.log(`[MODEL_LOADER] env.localModelPath: ${env.localModelPath}`);
+    console.log(`[MODEL_LOADER] env.localModelPath: ${env.localModelPath} (空に設定)`);
     console.log(`[MODEL_LOADER] env.allowRemoteModels: ${env.allowRemoteModels}`);
     
     // 絶対パスを直接指定
