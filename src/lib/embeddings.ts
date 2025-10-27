@@ -2,17 +2,14 @@
  * 埋め込みベクトル生成のための抽象化レイヤー（外部API不使用・ローカル実装）
  * キャッシュ機能付きで最適化
  * 
- * ★★★ 最終推奨設定 ★★★
- * - モデルファイルはprebuildでダウンロード済み
- * - CopyPluginでコンテナに確実に含める
- * - env.localModelPathでベースパスを明示、pipelineにはモデル名を渡す
+ * Phase 5緊急修正:
+ * - ローカルモデルパスを優先（Hugging Faceレートリミット回避）
  */
-import { pipeline, env } from '@xenova/transformers';
+import { pipeline } from '@xenova/transformers';
 import { embeddingCache } from './embedding-cache';
 import { EmbeddingConfig } from '@/config/ai-models-config';
 import path from 'path';
 
-// ★★★ 最終推奨設定 ★★★
 let extractor: any | null = null;
 
 export async function getEmbeddings(text: string): Promise<number[]> {
@@ -78,53 +75,45 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    // ★★★ 最も基本的な方法：環境変数を設定し、モデルIDを渡すだけ ★★★
-    const cwd = process.cwd();
-    
-    console.log(`[MODEL_LOADER] ===== モデルロード開始 =====`);
-    console.log(`[MODEL_LOADER] process.cwd(): ${cwd}`);
-    
-    // ファイル存在確認
+    // Phase 5緊急修正: ローカルモデルパスを優先（Hugging Faceレートリミット回避）
     const fs = require('fs');
-    const modelDir = path.join(cwd, 'Xenova', 'paraphrase-multilingual-mpnet-base-v2');
-    const tokenizerPath = path.join(modelDir, 'tokenizer.json');
     
-    if (fs.existsSync(tokenizerPath)) {
-      console.log(`[MODEL_LOADER] ✅ tokenizer.json が存在します`);
-      const stat = fs.statSync(tokenizerPath);
-      console.log(`[MODEL_LOADER]   tokenizer.json size: ${(stat.size / 1024).toFixed(2)} KB`);
-    } else {
-      console.log(`[MODEL_LOADER] ❌ tokenizer.json が見つかりません: ${tokenizerPath}`);
-    }
+    // ★★★ postbuildでコピーされたパスを使用 ★★★
+    const modelPath = './Xenova/paraphrase-multilingual-mpnet-base-v2';
     
-    // 環境変数設定
-    process.env.HF_HUB_OFFLINE = '1';
-    process.env.HF_HOME = cwd;
-    process.env.CACHE_DIR = path.join(cwd, 'Xenova');
-    
-    console.log(`[MODEL_LOADER] Environment variables:`);
-    console.log(`[MODEL_LOADER]   HF_HUB_OFFLINE=${process.env.HF_HUB_OFFLINE}`);
-    console.log(`[MODEL_LOADER]   HF_HOME=${process.env.HF_HOME}`);
-    console.log(`[MODEL_LOADER]   CACHE_DIR=${process.env.CACHE_DIR}`);
+    // デバッグログ
+    console.log(`[MODEL_LOADER] Current working directory: ${process.cwd()}`);
+    console.log(`[MODEL_LOADER] Using relative model path: ${modelPath}`);
     
     try {
-      // 最もシンプルな方法
-      console.log(`[MODEL_LOADER] Loading model: Xenova/paraphrase-multilingual-mpnet-base-v2`);
+      const checkFilePath = path.join(process.cwd(), modelPath, 'tokenizer.json');
+      const fileExists = fs.existsSync(checkFilePath);
+      console.log(`[MODEL_LOADER] Checking for file at: ${checkFilePath}`);
+      console.log(`[MODEL_LOADER] Does tokenizer.json exist? -> ${fileExists}`);
+    } catch (e) {
+      console.error(`[MODEL_LOADER] Error while checking file existence:`, e);
+    }
+    
+    try {
+      console.log(`[MODEL_LOADER] Attempting to load model with local_files_only...`);
       
-      extractor = await pipeline('feature-extraction', 'paraphrase-multilingual-mpnet-base-v2', {
+      // pipeline関数には、この単純な相対パスを渡す
+      extractor = await pipeline('feature-extraction', modelPath, {
+        cache_dir: '/tmp/model_cache',
         local_files_only: true,
-        cache_dir: path.join(cwd, 'Xenova'),
       });
-      console.log(`[MODEL_LOADER] ✅ モデル読み込み成功`);
+      
+      console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
     } catch (error) {
-      console.error(`[MODEL_LOADER] ❌ モデル読み込み失敗:`, error);
-      if (error instanceof Error) {
-        console.error(`[MODEL_LOADER] Error name: ${error.name}`);
-        console.error(`[MODEL_LOADER] Error message: ${error.message}`);
-      }
-      throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`❌ [Embedding] Failed to load local model:`, error);
+      console.warn(`⚠️ [Embedding] Falling back to Hugging Face (Risk: Rate limit 429)`);
+      
+      // フォールバック：Hugging Faceからダウンロード（本番環境では推奨されない）
+      extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId, {
+        cache_dir: '/tmp/model_cache',
+      });
     }
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
-  return Array.from(output.data);
+  return Array.from(output.data); // 既に正規化済み
 }
