@@ -78,7 +78,7 @@ export default { getEmbeddings };
 
 async function getLocalEmbeddings(text: string): Promise<number[]> {
   if (!extractor) {
-    // ★★★ 徹底的に簡素化：ライブラリの期待する通りの使い方 ★★★
+    // ★★★ 最も基本的な方法：環境変数を設定し、モデルIDを渡すだけ ★★★
     const cwd = process.cwd();
     
     console.log(`[MODEL_LOADER] ===== モデルロード開始 =====`);
@@ -95,29 +95,25 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
       console.log(`[MODEL_LOADER]   tokenizer.json size: ${(stat.size / 1024).toFixed(2)} KB`);
     } else {
       console.log(`[MODEL_LOADER] ❌ tokenizer.json が見つかりません: ${tokenizerPath}`);
-      console.log(`[MODEL_LOADER]   モデルディレクトリ: ${modelDir}`);
-      console.log(`[MODEL_LOADER]   存在するディレクトリ: ${fs.existsSync(modelDir)}`);
     }
+    
+    // 環境変数設定
+    process.env.HF_HUB_OFFLINE = '1';
+    process.env.HF_HOME = cwd;
+    process.env.CACHE_DIR = path.join(cwd, 'Xenova');
     
     console.log(`[MODEL_LOADER] Environment variables:`);
     console.log(`[MODEL_LOADER]   HF_HUB_OFFLINE=${process.env.HF_HUB_OFFLINE}`);
-    console.log(`[MODEL_LOADER]   TRANSFORMERS_CACHE=${process.env.TRANSFORMERS_CACHE}`);
+    console.log(`[MODEL_LOADER]   HF_HOME=${process.env.HF_HOME}`);
+    console.log(`[MODEL_LOADER]   CACHE_DIR=${process.env.CACHE_DIR}`);
     
     try {
-      // シンプルにモデルIDを渡す（ライブラリがローカルキャッシュを探す）
-      console.log(`[MODEL_LOADER] Attempting to load model: Xenova/paraphrase-multilingual-mpnet-base-v2`);
+      // 最もシンプルな方法
+      console.log(`[MODEL_LOADER] Loading model: Xenova/paraphrase-multilingual-mpnet-base-v2`);
       
-      // キャッシュディレクトリを指定して、ライブラリがそこから探すようにする
-      const cacheDir = path.join(cwd, 'Xenova');
-      console.log(`[MODEL_LOADER] Cache directory: ${cacheDir}`);
-      
-      env.localModelPath = cwd;
-      env.allowRemoteModels = false;
-      env.cacheDir = cacheDir;
-      
-      extractor = await pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-mpnet-base-v2', {
+      extractor = await pipeline('feature-extraction', 'paraphrase-multilingual-mpnet-base-v2', {
         local_files_only: true,
-        cache_dir: cacheDir,
+        cache_dir: path.join(cwd, 'Xenova'),
       });
       console.log(`[MODEL_LOADER] ✅ モデル読み込み成功`);
     } catch (error) {
@@ -125,7 +121,6 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
       if (error instanceof Error) {
         console.error(`[MODEL_LOADER] Error name: ${error.name}`);
         console.error(`[MODEL_LOADER] Error message: ${error.message}`);
-        console.error(`[MODEL_LOADER] Error stack: ${error.stack}`);
       }
       throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : String(error)}`);
     }
