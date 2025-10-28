@@ -317,8 +317,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // ボトルネック検出: 5秒以上かかった場合
     if (parallelSearchTime > 5000) {
-      console.warn(`⚠️ [PERF] Slow parallel search detected: ${parallelSearchTime}ms`);
-      console.warn(`⚠️ [PERF] This indicates a bottleneck in either vector or BM25 search`);
+      console.error(`🚨 [CRITICAL] Slow parallel search detected: ${parallelSearchTime}ms (${(parallelSearchTime / 1000).toFixed(2)}s)`);
+      console.error(`🚨 [CRITICAL] This indicates a bottleneck in either vector or BM25 search`);
+      console.error(`🚨 [CRITICAL] Total results: Vector=${vectorResults.length}, BM25=${bm25Results.length}`);
     }
     
     // フォールバック: 両方失敗した場合は警告
