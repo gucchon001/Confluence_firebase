@@ -52,6 +52,7 @@
     "lancedb:verify": "tsx scripts/verify-label-filtering.ts",
     "lancedb:analyze": "tsx scripts/analyze-page-sizes.ts",
     "lancedb:create-indexes": "tsx scripts/create-lancedb-indexes.ts",
+    "lancedb:check-schema": "tsx scripts/check-lancedb-schema.ts",
     "lancedb:create-indexes:scalar-only": "tsx scripts/create-lancedb-indexes.ts --skip-vector",
     "lancedb:create-indexes:vector-only": "tsx scripts/create-lancedb-indexes.ts --skip-scalar",
     "embedding:test": "tsx scripts/test-gemini-embedding-limits.ts",

@@ -69,19 +69,30 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
       const scalarStartTime = Date.now();
       
       try {
-        // pageId列にインデックス作成
-        // 注意: LanceDBのcreateIndexは列名ではなく、SQL式を受け取る
-        // そのため、大文字小文字を区別するにはバッククォートで囲む必要がある
-        await table.createIndex('`pageId`', {
-          config: lancedb.Index.btree()
-        });
-        console.log('   ✅ pageId列のインデックス作成完了');
+        // インデックスが既に存在するかチェック
+        const existingIndexes = await table.listIndexes();
+        const pageIdIndexExists = existingIndexes.some(idx => idx.includes('pageId'));
+        const idIndexExists = existingIndexes.some(idx => idx.includes('id'));
         
-        // id列にもインデックス作成
-        await table.createIndex('`id`', {
-          config: lancedb.Index.btree()
-        });
-        console.log('   ✅ id列のインデックス作成完了');
+        // pageId列にインデックス作成（既に存在しない場合のみ）
+        if (!pageIdIndexExists) {
+          await table.createIndex('pageId', {
+            config: lancedb.Index.btree()
+          });
+          console.log('   ✅ pageId列のインデックス作成完了');
+        } else {
+          console.log('   ⏭️ pageId列のインデックスは既に存在します');
+        }
+        
+        // id列にもインデックス作成（既に存在する場合のみ）
+        if (!idIndexExists) {
+          await table.createIndex('id', {
+            config: lancedb.Index.btree()
+          });
+          console.log('   ✅ id列のインデックス作成完了');
+        } else {
+          console.log('   ⏭️ id列のインデックスは既に存在します');
+        }
         
         const scalarDuration = Date.now() - scalarStartTime;
         console.log(`   ⏱️ スカラーインデックス作成時間: ${(scalarDuration / 1000).toFixed(2)}秒\n`);
