@@ -421,16 +421,19 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     const connection = await optimizedLanceDBClient.getConnection();
     const table = connection.table;
 
-    // ★★★ PERF FIX: .query()を使用してインデックス活用 ★★★
-    // .search()はベクトル検索のため、全ベクトルとの類似度計算が発生する（遅い）
-    // .query()はSQL風のクエリで、B-Treeインデックスを活用できる（速い）
+    // ★★★ CRITICAL PERF FIX: 単純なpageId完全一致のみを使用 ★★★
+    // LIKEやORを含むクエリはインデックスを効率よく使えず、フルスキャンになる可能性がある
+    // 完全一致の単純クエリが最も高速
     const results = await table
       .query()
-      .where(`"pageId" = '${pageId}' OR id = '${pageId}' OR id LIKE '${pageId}-%'`)
+      .where(`pageId = '${pageId}'`)
       .limit(1000) // ページあたりの最大チャンク数（十分な余裕）
       .toArray();
     
     const scanDuration = Date.now() - scanStartTime;
+    
+    // 詳細ログ: クエリ時間と結果数
+    console.log(`[getAllChunksByPageIdInternal] Query completed in ${scanDuration}ms, found ${results.length} results for pageId: ${pageId}`);
     
     if (results.length > 0) {
       // chunkIndexでソート
