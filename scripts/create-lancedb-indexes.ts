@@ -19,14 +19,12 @@ import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
 
 interface IndexCreationOptions {
-  createScalarIndex: boolean;
   createVectorIndex: boolean;
   numPartitions: number;
   numSubVectors: number;
 }
 
 const DEFAULT_OPTIONS: IndexCreationOptions = {
-  createScalarIndex: true,
   createVectorIndex: true,
   numPartitions: 256, // データ量の平方根が目安。1000ページ程度なら256
   numSubVectors: 96, // 768次元の場合、768/8=96が一般的
@@ -37,9 +35,8 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
   
   console.log('🚀 LanceDBインデックス作成開始...\n');
   console.log('📊 設定:');
-  console.log(`   - スカラーインデックス: ${options.createScalarIndex ? '✅ 作成する' : '⏭️ スキップ'}`);
   console.log(`   - ベクトルインデックス: ${options.createVectorIndex ? '✅ 作成する' : '⏭️ スキップ'}`);
-  console.log(`   - ベクトルタイプ: IVF_PQ`);
+  console.log(`   - タイプ: IVF_PQ`);
   console.log(`   - パーティション数: ${options.numPartitions}`);
   console.log(`   - サブベクトル数: ${options.numSubVectors}\n`);
   
@@ -61,49 +58,6 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
     console.log(`📊 テーブル統計:`);
     console.log(`   - 総行数: ${rowCount.toLocaleString()}行\n`);
     
-    // 1. スカラーインデックスの作成（pageId列）
-    if (options.createScalarIndex) {
-      console.log('🔧 スカラーインデックス作成中...');
-      console.log('   対象列: pageId, id');
-      
-      const scalarStartTime = Date.now();
-      
-      try {
-        // インデックスが既に存在するかチェック
-        const existingIndexes = await table.listIndexes();
-        const pageIdIndexExists = existingIndexes.some(idx => idx.includes('pageId'));
-        const idIndexExists = existingIndexes.some(idx => idx.includes('id'));
-        
-        // pageId列にインデックス作成（既に存在しない場合のみ）
-        if (!pageIdIndexExists) {
-          await table.createIndex('pageId', {
-            config: lancedb.Index.btree()
-          });
-          console.log('   ✅ pageId列のインデックス作成完了');
-        } else {
-          console.log('   ⏭️ pageId列のインデックスは既に存在します');
-        }
-        
-        // id列にもインデックス作成（既に存在する場合のみ）
-        if (!idIndexExists) {
-          await table.createIndex('id', {
-            config: lancedb.Index.btree()
-          });
-          console.log('   ✅ id列のインデックス作成完了');
-        } else {
-          console.log('   ⏭️ id列のインデックスは既に存在します');
-        }
-        
-        const scalarDuration = Date.now() - scalarStartTime;
-        console.log(`   ⏱️ スカラーインデックス作成時間: ${(scalarDuration / 1000).toFixed(2)}秒\n`);
-        
-      } catch (scalarError: any) {
-        console.error('   ❌ スカラーインデックス作成失敗:', scalarError.message);
-        console.error('      既にインデックスが存在する可能性があります\n');
-      }
-    }
-    
-    // 2. ベクトルインデックスの作成
     if (options.createVectorIndex) {
       console.log('🔧 ベクトルインデックス作成中...');
       console.log(`   タイプ: IVF_PQ`);
@@ -136,9 +90,7 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
     console.log(`⏱️ 総実行時間: ${(totalDuration / 1000).toFixed(2)}秒\n`);
     
     console.log('📊 期待される効果:');
-    console.log('   - getAllChunksByPageId: 30秒 → 1秒未満');
-    console.log('   - ベクトル検索: 大規模データでも高速維持');
-    console.log('   - フィルター検索: インデックスルックアップで高速化\n');
+    console.log('   - ベクトル検索: 大規模データでも高速維持\n');
     
     console.log('✅ 次のステップ:');
     console.log('   1. データを本番環境にアップロード');
@@ -158,7 +110,6 @@ async function main() {
   
   // コマンドライン引数でオプションを制御
   const options: IndexCreationOptions = {
-    createScalarIndex: !args.includes('--skip-scalar'),
     createVectorIndex: !args.includes('--skip-vector'),
     numPartitions: parseInt(args.find(arg => arg.startsWith('--partitions='))?.split('=')[1] || '256'),
     numSubVectors: parseInt(args.find(arg => arg.startsWith('--subvectors='))?.split('=')[1] || '96'),
