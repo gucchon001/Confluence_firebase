@@ -1,16 +1,12 @@
 /**
- * 埋め込みベクトル生成のための抽象化レイヤー（外部API不使用・ローカル実装）
+ * 埋め込みベクトル生成のための抽象化レイヤー（Gemini Embeddings API使用）
  * キャッシュ機能付きで最適化
- * 
- * Phase 5緊急修正:
- * - ローカルモデルパスを優先（Hugging Faceレートリミット回避）
  */
-import { pipeline } from '@xenova/transformers';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { embeddingCache } from './embedding-cache';
-import { EmbeddingConfig } from '@/config/ai-models-config';
-import path from 'path';
 
-let extractor: any | null = null;
+let genAI: GoogleGenerativeAI | null = null;
+let embeddingModel: any | null = null;
 
 export async function getEmbeddings(text: string): Promise<number[]> {
   const startTime = Date.now();
@@ -38,16 +34,10 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   const generationStartTime = Date.now();
   console.log(`🔍 埋め込みベクトル生成中: ${text.substring(0, 50)}...`);
   
-  if (EmbeddingConfig.provider !== 'local') {
-    // 強制ローカル運用
-    // eslint-disable-next-line no-console
-    console.warn('EMBEDDINGS_PROVIDERはlocalのみサポート。localとして処理します。');
-  }
-  
-  // Phase 0A-4: タイムアウト処理を追加（30秒）
+  // Gemini Embeddings APIを使用
   const EMBEDDING_TIMEOUT = 30000; // 30秒
   const embedding = await Promise.race([
-    getLocalEmbeddings(text),
+    getGeminiEmbeddings(text),
     new Promise<never>((_, reject) => 
       setTimeout(() => reject(new Error(`Embedding generation timeout after ${EMBEDDING_TIMEOUT}ms`)), EMBEDDING_TIMEOUT)
     )
@@ -73,43 +63,33 @@ export async function getEmbeddings(text: string): Promise<number[]> {
 // デフォルトエクスポートも追加
 export default { getEmbeddings };
 
-async function getLocalEmbeddings(text: string): Promise<number[]> {
-  if (!extractor) {
-    // Phase 5緊急修正: ローカルモデルパスを優先（Hugging Faceレートリミット回避）
-    const fs = require('fs');
-    
-    // ★★★ postbuildでコピーされたパスを使用 ★★★
-    const modelPath = './Xenova/paraphrase-multilingual-mpnet-base-v2';
-    
-    // デバッグログ
-    console.log(`[MODEL_LOADER] Current working directory: ${process.cwd()}`);
-    console.log(`[MODEL_LOADER] Using relative model path: ${modelPath}`);
-    
-    try {
-      const checkFilePath = path.join(process.cwd(), modelPath, 'tokenizer.json');
-      const fileExists = fs.existsSync(checkFilePath);
-      console.log(`[MODEL_LOADER] Checking for file at: ${checkFilePath}`);
-      console.log(`[MODEL_LOADER] Does tokenizer.json exist? -> ${fileExists}`);
-    } catch (e) {
-      console.error(`[MODEL_LOADER] Error while checking file existence:`, e);
+async function getGeminiEmbeddings(text: string): Promise<number[]> {
+  // Gemini Embeddings API を初期化
+  if (!genAI) {
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY environment variable is not set');
     }
-    
-    try {
-      console.log(`[MODEL_LOADER] Attempting to load model with local_files_only...`);
-      
-      // pipeline関数には、この単純な相対パスを渡す
-      extractor = await pipeline('feature-extraction', modelPath, {
-        cache_dir: '/tmp/model_cache',
-        local_files_only: true,
-      });
-      
-      console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
-    } catch (error) {
-      console.error(`❌ [Embedding] Failed to load local model:`, error);
-      // フォールバックなし - エラーをそのまま投げる
-      throw new Error(`Failed to load local embedding model. This should not happen. Original error: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   }
-  const output = await extractor(text, { pooling: 'mean', normalize: true });
-  return Array.from(output.data); // 既に正規化済み
+  
+  if (!embeddingModel) {
+    embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+  }
+  
+  try {
+    const result = await embeddingModel.embedContent(text);
+    
+    // Gemini Embeddings API のレスポンス形式に応じて取得
+    // text-embedding-004 の場合は result.embedding.values を返す
+    if (result.embedding && 'values' in result.embedding) {
+      return result.embedding.values as number[];
+    } else {
+      // 互換性のため、異なるレスポンス形式にも対応
+      return result.embedding as any;
+    }
+  } catch (error) {
+    console.error(`❌ [Embedding] Failed to generate embedding via Gemini API:`, error);
+    throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }

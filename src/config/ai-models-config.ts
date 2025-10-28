@@ -62,14 +62,14 @@ export const GeminiConfig = {
  * 埋め込みモデル設定
  */
 export const EmbeddingConfig = {
-  /** プロバイダー（local または api） */
-  provider: (process.env.EMBEDDINGS_PROVIDER || 'local') as 'local' | 'api',
+  /** プロバイダー（api - Gemini Embeddings API使用） */
+  provider: 'api' as const,
   
   /** モデルID
-   * Xenova提供の多言語モデル（日本語対応・768次元）
-   * 参考: https://huggingface.co/Xenova/paraphrase-multilingual-mpnet-base-v2
+   * text-embedding-004: Gemini Embeddings API（768次元）
+   * 参考: https://ai.google.dev/models/gemini#embedding
    */
-  modelId: process.env.EMBEDDINGS_MODEL || 'Xenova/paraphrase-multilingual-mpnet-base-v2',
+  modelId: 'text-embedding-004',
   
   /** 埋め込みベクトルの次元数 */
   dimensions: 768,
