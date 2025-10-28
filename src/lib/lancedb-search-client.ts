@@ -302,9 +302,24 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     bm25Results = bm25SearchResult.status === 'fulfilled' ? bm25SearchResult.value : [];
     
     const parallelSearchTime = Date.now() - parallelSearchStart;
+    
+    // 詳細なパフォーマンス計測ログ
+    if (vectorSearchResult.status === 'rejected') {
+      console.error(`[Phase 5] ❌ Vector search failed: ${vectorSearchResult.reason}`);
+    }
+    if (bm25SearchResult.status === 'rejected') {
+      console.error(`[Phase 5] ❌ BM25 search failed: ${bm25SearchResult.reason}`);
+    }
+    
     console.log(`[Phase 5] ✅ 並列検索完了: ${parallelSearchTime}ms`);
     console.log(`[Phase 5]    - Vector: ${vectorResults.length}件 (${vectorSearchResult.status})`);
     console.log(`[Phase 5]    - BM25: ${bm25Results.length}件 (${bm25SearchResult.status})\n`);
+    
+    // ボトルネック検出: 5秒以上かかった場合
+    if (parallelSearchTime > 5000) {
+      console.warn(`⚠️ [PERF] Slow parallel search detected: ${parallelSearchTime}ms`);
+      console.warn(`⚠️ [PERF] This indicates a bottleneck in either vector or BM25 search`);
+    }
     
     // フォールバック: 両方失敗した場合は警告
     if (vectorSearchResult.status === 'rejected' && bm25SearchResult.status === 'rejected') {
@@ -1036,6 +1051,7 @@ async function executeBM25Search(
   finalKeywords: string[],
   topK: number
 ): Promise<any[]> {
+  const bm25SearchStart = Date.now();
   try {
     // Phase 6修正: lunrSearchClientの状態を直接チェック（lunrInitializerの間接チェックは信頼性が低い）
     if (!params.useLunrIndex || !lunrSearchClient.isReady()) {
@@ -1046,7 +1062,7 @@ async function executeBM25Search(
     const kwCap = Math.max(100, Math.floor(topK * 2));
     const searchKeywords = finalKeywords.slice(0, 5);
     
-    console.log(`[BM25 Search] Keywords: ${searchKeywords.join(', ')}`);
+    console.log(`[BM25 Search] Starting search for keywords: ${searchKeywords.join(', ')}`);
     
     const allLunrResults: any[] = [];
     const processedIds = new Set<string>();
@@ -1095,11 +1111,19 @@ async function executeBM25Search(
       };
     });
     
+    const bm25SearchDuration = Date.now() - bm25SearchStart;
+    console.log(`[PERF] 📝 BM25 search completed in ${bm25SearchDuration}ms`);
     console.log(`[BM25 Search] Completed with ${bm25Results.length} results`);
+    
+    if (bm25SearchDuration > 5000) {
+      console.warn(`⚠️ [PERF] Slow BM25 search detected: ${bm25SearchDuration}ms`);
+    }
+    
     return bm25Results;
     
   } catch (error) {
-    console.error(`[BM25 Search] Error:`, error);
+    const bm25SearchDuration = Date.now() - bm25SearchStart;
+    console.error(`[BM25 Search] Error after ${bm25SearchDuration}ms:`, error);
     return [];
   }
 }
