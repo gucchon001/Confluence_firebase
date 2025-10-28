@@ -106,12 +106,8 @@ async function getLocalEmbeddings(text: string): Promise<number[]> {
       console.log(`✅ [Embedding] Model loaded successfully with local_files_only mode`);
     } catch (error) {
       console.error(`❌ [Embedding] Failed to load local model:`, error);
-      console.warn(`⚠️ [Embedding] Falling back to Hugging Face (Risk: Rate limit 429)`);
-      
-      // フォールバック：Hugging Faceからダウンロード（本番環境では推奨されない）
-      extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId, {
-        cache_dir: '/tmp/model_cache',
-      });
+      // フォールバックなし - エラーをそのまま投げる
+      throw new Error(`Failed to load local embedding model. This should not happen. Original error: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   const output = await extractor(text, { pooling: 'mean', normalize: true });
