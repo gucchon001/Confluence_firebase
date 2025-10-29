@@ -424,17 +424,44 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     // ★★★ CRITICAL PERF FIX: 単純なpageId完全一致のみを使用 ★★★
     // LIKEやORを含むクエリはインデックスを効率よく使えず、フルスキャンになる可能性がある
     // 完全一致の単純クエリが最も高速
-    // ★★★ CASE SENSITIVE FIX: バッククォートでpageIdを囲む ★★★
-    const results = await table
-      .query()
-      .where(`\`pageId\` = '${pageId}'`)
-      .limit(1000) // ページあたりの最大チャンク数（十分な余裕）
-      .toArray();
+    // ★★★ MULTI-ENV FIX: ローカル（文字列）と本番（Float64）の両方に対応 ★★★
+    let results: any[] = [];
     
-    const scanDuration = Date.now() - scanStartTime;
+    // 方法1: 文字列として比較（ローカル環境用）
+    try {
+      results = await table
+        .query()
+        .where(`\`pageId\` = '${pageId}'`)
+        .limit(1000)
+        .toArray();
+      
+      if (results.length > 0) {
+        const scanDuration = Date.now() - scanStartTime;
+        console.log(`[getAllChunksByPageIdInternal] Query completed (string) in ${scanDuration}ms, found ${results.length} results for pageId: ${pageId}`);
+      }
+    } catch (stringError) {
+      // 文字列比較が失敗した場合、数値として比較を試行（本番環境用）
+      console.log(`[getAllChunksByPageIdInternal] String comparison failed, trying numeric comparison`);
+    }
     
-    // 詳細ログ: クエリ時間と結果数
-    console.log(`[getAllChunksByPageIdInternal] Query completed in ${scanDuration}ms, found ${results.length} results for pageId: ${pageId}`);
+    // 方法2: 数値として比較（本番環境用）- 方法1が失敗した場合のみ
+    if (results.length === 0) {
+      try {
+        results = await table
+          .query()
+          .where(`\`pageId\` = ${pageId}`)  // 数値比較（クォートなし）
+          .limit(1000)
+          .toArray();
+        
+        if (results.length > 0) {
+          const scanDuration = Date.now() - scanStartTime;
+          console.log(`[getAllChunksByPageIdInternal] Query completed (numeric) in ${scanDuration}ms, found ${results.length} results for pageId: ${pageId}`);
+        }
+      } catch (numericError) {
+        console.error(`[getAllChunksByPageIdInternal] Both string and numeric comparisons failed`);
+        throw numericError;
+      }
+    }
     
     if (results.length > 0) {
       // chunkIndexでソート
