@@ -424,9 +424,10 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     // ★★★ CRITICAL PERF FIX: 単純なpageId完全一致のみを使用 ★★★
     // LIKEやORを含むクエリはインデックスを効率よく使えず、フルスキャンになる可能性がある
     // 完全一致の単純クエリが最も高速
+    // ★★★ CASE SENSITIVE FIX: バッククォートでpageIdを囲む ★★★
     const results = await table
       .query()
-      .where(`pageId = '${pageId}'`)
+      .where(`\`pageId\` = '${pageId}'`)
       .limit(1000) // ページあたりの最大チャンク数（十分な余裕）
       .toArray();
     
