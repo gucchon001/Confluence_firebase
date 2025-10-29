@@ -425,9 +425,16 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     // LIKEやORを含むクエリはインデックスを効率よく使えず、フルスキャンになる可能性がある
     // 完全一致の単純クエリが最も高速
     // ★★★ FLOAT64 TYPE: 本番環境のpageIdはFloat64型（数値型）のため、数値として比較 ★★★
+    // pageIdを明示的に数値に変換してから比較（型変換のオーバーヘッドを削減）
+    const numericPageId = Number(pageId);
+    if (isNaN(numericPageId)) {
+      console.error(`[getAllChunksByPageIdInternal] Invalid pageId (not a number): ${pageId}`);
+      return [];
+    }
+    
     const results = await table
       .query()
-      .where(`\`pageId\` = ${pageId}`)  // クォートなしで数値型として扱う
+      .where(`\`pageId\` = ${numericPageId}`)  // 数値型として明示的に比較
       .limit(1000)
       .toArray();
 
