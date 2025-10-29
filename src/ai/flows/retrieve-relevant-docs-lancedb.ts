@@ -424,10 +424,10 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     // ★★★ CRITICAL PERF FIX: 単純なpageId完全一致のみを使用 ★★★
     // LIKEやORを含むクエリはインデックスを効率よく使えず、フルスキャンになる可能性がある
     // 完全一致の単純クエリが最も高速
-    // ★★★ STRING TYPE: ローカル・本番ともにpageIdはstring型のため、文字列として比較 ★★★
+    // ★★★ FLOAT64 TYPE: 本番環境のpageIdはFloat64型（数値型）のため、数値として比較 ★★★
     const results = await table
       .query()
-      .where(`\`pageId\` = '${pageId}'`)  // クォートありで文字列型として扱う
+      .where(`\`pageId\` = ${pageId}`)  // クォートなしで数値型として扱う
       .limit(1000)
       .toArray();
 
