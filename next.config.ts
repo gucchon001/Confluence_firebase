@@ -9,6 +9,10 @@ const __dirname = path.dirname(__filename);
 const nextConfig = {
   // ★★★ Firebase App Hosting用のスタンドアロン出力設定 ★★★
   output: 'standalone',
+  // ★★★ Instrumentation Hook を有効化 ★★★
+  experimental: {
+    instrumentationHook: true,
+  },
   
   reactStrictMode: true,
   typescript: {

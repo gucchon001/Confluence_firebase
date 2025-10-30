@@ -5,9 +5,14 @@
  */
 
 export async function register() {
+  console.log('🚀 [Instrumentation] register() 呼び出し検知');
   // サーバーサイドでのみ実行
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    console.log('🚀 [Instrumentation] サーバー起動検知 - バックグラウンド初期化開始');
+    console.log('🚀 [Instrumentation] サーバー起動検知 - バックグラウンド初期化開始 (NEXT_RUNTIME=nodejs)');
+  } else {
+    console.log(`⚠️  [Instrumentation] NEXT_RUNTIME=${process.env.NEXT_RUNTIME} - 初期化スキップ`);
+    return;
+  }
     
     const startTime = Date.now();
     
