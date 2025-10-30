@@ -421,22 +421,93 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     const connection = await optimizedLanceDBClient.getConnection();
     const table = connection.table;
 
-    // ★★★ CRITICAL PERF FIX: 単純なpageId完全一致のみを使用 ★★★
-    // LIKEやORを含むクエリはインデックスを効率よく使えず、フルスキャンになる可能性がある
-    // 完全一致の単純クエリが最も高速
-    // ★★★ FLOAT64 TYPE: 本番環境のpageIdはFloat64型（数値型）のため、数値として比較 ★★★
-    // pageIdを明示的に数値に変換してから比較（型変換のオーバーヘッドを削減）
+    // ★★★ CRITICAL PERF FIX: 本番環境で10-15秒かかる問題を解決 ★★★
+    // ★★★ TYPE DETECTION: 本番環境の実際のpageId型をログで確認 ★★★
+    console.log(`[getAllChunksByPageIdInternal] pageId='${pageId}' (typeof=${typeof pageId}), timestamp=${Date.now()}`);
+
     const numericPageId = Number(pageId);
     if (isNaN(numericPageId)) {
       console.error(`[getAllChunksByPageIdInternal] Invalid pageId (not a number): ${pageId}`);
       return [];
     }
+
+    // ★★★ 環境別の型対応: ローカル（Utf8/文字列）と本番（int64/数値）の両方に対応 ★★★
+    let results: any[] = [];
+    let successfulMethod = '';
+    const queryMethods = [
+      // Method 1: 文字列型での完全一致（ローカル環境向け）
+      {
+        name: 'string-exact',
+        query: async () => {
+          return await table
+            .query()
+            .where(`\`pageId\` = '${pageId}'`)
+            .limit(1000)
+            .toArray();
+        }
+      },
+      // Method 2: 数値型での範囲検索（本番環境向け、インデックスを使いやすい）
+      {
+        name: 'numeric-range',
+        query: async () => {
+          const lower = numericPageId;
+          const upper = numericPageId + 1;
+          return await table
+            .query()
+            .where(`\`pageId\` >= ${lower} AND \`pageId\` < ${upper}`)
+            .limit(1000)
+            .toArray();
+        }
+      },
+      // Method 3: 数値型での完全一致（本番環境向け）
+      {
+        name: 'numeric-exact',
+        query: async () => {
+          return await table
+            .query()
+            .where(`\`pageId\` = ${numericPageId}`)
+            .limit(1000)
+            .toArray();
+        }
+      }
+    ];
+
+    // 各メソッドを順に試行（最初に成功したものを使用、またはエラーが発生しないもの）
+    for (const method of queryMethods) {
+      try {
+        const methodStartTime = Date.now();
+        results = await method.query();
+        const methodDuration = Date.now() - methodStartTime;
+        
+        // 結果が見つかった場合はそれを使用
+        if (results.length > 0) {
+          successfulMethod = method.name;
+          if (methodDuration > 1000) {
+            console.warn(`[getAllChunksByPageIdInternal] Slow query with method "${method.name}": ${methodDuration}ms`);
+          }
+          console.log(`[getAllChunksByPageIdInternal] ✅ Success with method "${method.name}" (${methodDuration}ms, ${results.length} results)`);
+          break;
+        }
+        
+        // 結果が見つからなかったが、エラーも発生していない場合は次のメソッドを試行
+        // （型が異なる環境の可能性があるため）
+        if (methodDuration > 5000) {
+          console.warn(`[getAllChunksByPageIdInternal] Timeout with method "${method.name}" after ${methodDuration}ms, trying next method...`);
+        }
+      } catch (error: any) {
+        // エラーが発生した場合は次のメソッドを試行
+        // （型不一致などの可能性があるため、これは正常な動作）
+        console.log(`[getAllChunksByPageIdInternal] ❌ Method "${method.name}" failed: ${error.message.substring(0, 100)}`);
+        continue;
+      }
+    }
     
-    const results = await table
-      .query()
-      .where(`\`pageId\` = ${numericPageId}`)  // 数値型として明示的に比較
-      .limit(1000)
-      .toArray();
+    // どのメソッドが成功したかをログに記録（型特定に重要）
+    if (successfulMethod) {
+      console.log(`[getAllChunksByPageIdInternal] 🎯 Production pageId type detected: ${successfulMethod.includes('string') ? 'STRING' : 'NUMERIC'}`);
+    } else {
+      console.error(`[getAllChunksByPageIdInternal] ❌ All query methods failed or returned no results`);
+    }
 
     const scanDuration = Date.now() - scanStartTime;
 
@@ -532,3 +603,4 @@ export async function filterInvalidPagesServer(results: any[]): Promise<any[]> {
 
   return validResults;
 }
+
