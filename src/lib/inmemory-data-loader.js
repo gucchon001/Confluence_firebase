@@ -19,9 +19,9 @@ const { Storage } = require('@google-cloud/storage');
 const { execSync } = require('child_process');
 
 // GCS設定
-const BUCKET_NAME = process.env.STORAGE_BUCKET || 'confluence-firebase-c3a86.firebasestorage.app';
-const GCS_LANCEDB_PATH = 'production-data/.lancedb';
-const GCS_DOMAIN_KNOWLEDGE_PATH = 'production-data/data';
+const BUCKET_NAME = process.env.STORAGE_BUCKET || 'confluence-copilot-data';
+const GCS_LANCEDB_PATH = process.env.LANCEDB_PREFIX || 'lancedb/confluence.lance';
+const GCS_DOMAIN_KNOWLEDGE_PATH = process.env.DATA_PREFIX || 'domain-knowledge-v2';
 
 // インメモリファイルシステムのパス
 const INMEMORY_ROOT = '/dev/shm';

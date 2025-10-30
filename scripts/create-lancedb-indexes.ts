@@ -84,6 +84,19 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
       }
     }
     
+    // スカラーインデックス（pageId, id）作成
+    try {
+      console.log('🔧 スカラーインデックス作成中...');
+      const scalarStart = Date.now();
+      // 一部の LanceDB バージョンでは config 省略でスカラーになる
+      await table.createIndex('"pageId"');
+      await table.createIndex('"id"');
+      console.log(`   ✅ スカラーインデックス作成完了 (pageId, id)`);
+      console.log(`   ⏱️ スカラーインデックス作成時間: ${((Date.now()-scalarStart)/1000).toFixed(2)}秒\n`);
+    } catch (scalarError: any) {
+      console.warn('   ⚠️ スカラーインデックス作成スキップ/失敗:', scalarError?.message || scalarError);
+    }
+
     const totalDuration = Date.now() - startTime;
     
     console.log('🎉 インデックス作成完了！');

@@ -148,14 +148,18 @@ env:
       - BUILD
       - RUNTIME
   
-  # ROLLBACK: インメモリファイルシステムを再び無効化
+  # インメモリファイルシステムを有効化（Cloud RunでGCS→/dev/shmへ事前ロード）
   - variable: USE_INMEMORY_FS
-    value: "false"
+    value: "true"
     availability:
       - RUNTIME
   
   # Cloud Storage設定（インメモリローダー用）
   - variable: STORAGE_BUCKET
-    value: confluence-firebase-c3a86.firebasestorage.app
+    value: confluence-copilot-data
+    availability:
+      - RUNTIME
+  - variable: LANCEDB_PREFIX
+    value: lancedb/confluence.lance
     availability:
       - RUNTIME
