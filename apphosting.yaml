@@ -148,9 +148,9 @@ env:
       - BUILD
       - RUNTIME
   
-  # インメモリファイルシステムを有効化（Cloud RunでGCS→/dev/shmへ事前ロード）
+  # インメモリファイルシステム（Gen1では無効化、Gen2のみで有効）
   - variable: USE_INMEMORY_FS
-    value: "true"
+    value: "false"
     availability:
       - RUNTIME
   
