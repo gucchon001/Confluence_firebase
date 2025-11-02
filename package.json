@@ -11,7 +11,7 @@
     "model:clean": "node -e \"require('fs').rmSync('models', {recursive: true, force: true})\"",
     "prebuild": "node scripts/conditional-download.js",
     "build": "next build",
-    "postbuild": "node scripts/copy-kuromoji-dict.js",
+    "postbuild": "node scripts/copy-kuromoji-dict.js && node scripts/copy-lancedb-data.js",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
