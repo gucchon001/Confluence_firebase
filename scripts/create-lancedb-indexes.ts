@@ -88,11 +88,39 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
     try {
       console.log('🔧 スカラーインデックス作成中...');
       const scalarStart = Date.now();
-      // フィールド名は引用符なしで指定
-      await table.createIndex('pageId');
-      await table.createIndex('id');
-      console.log(`   ✅ スカラーインデックス作成完了 (pageId, id)`);
-      console.log(`   ⏱️ スカラーインデックス作成時間: ${((Date.now()-scalarStart)/1000).toFixed(2)}秒\n`);
+      
+      // pageIdインデックスの作成を試行
+      // 注意: LanceDBの内部でSQLパースする際にフィールド名が小文字に変換される問題がある可能性
+      try {
+        // 方法1: 通常の方法（フィールド名のみ）
+        await table.createIndex('pageId');
+        console.log(`   ✅ pageIdインデックス作成完了`);
+      } catch (pageIdError: any) {
+        const errorMessage = pageIdError?.message || String(pageIdError);
+        if (errorMessage.includes('already exists') || errorMessage.includes('既に存在')) {
+          console.log(`   ✅ pageIdインデックスは既に存在します`);
+        } else {
+          console.warn(`   ⚠️ pageIdインデックス作成失敗: ${errorMessage.substring(0, 150)}`);
+          console.warn(`   💡 スカラーインデックスがなくても、.query().where()は十分高速です（ローカル: 3-8ms）`);
+          console.warn(`   💡 本番環境での遅延は、コールドスタート時のI/O遅延が主な原因の可能性があります`);
+        }
+      }
+      
+      // idインデックスの作成を試行
+      try {
+        await table.createIndex('id');
+        console.log(`   ✅ idインデックス作成完了`);
+      } catch (idError: any) {
+        const errorMessage = idError?.message || String(idError);
+        if (errorMessage.includes('already exists') || errorMessage.includes('既に存在')) {
+          console.log(`   ✅ idインデックスは既に存在します`);
+        } else {
+          console.warn(`   ⚠️ idインデックス作成失敗: ${errorMessage.substring(0, 150)}`);
+        }
+      }
+      
+      const scalarDuration = Date.now() - scalarStart;
+      console.log(`   ⏱️ スカラーインデックス作成時間: ${(scalarDuration / 1000).toFixed(2)}秒\n`);
     } catch (scalarError: any) {
       console.warn('   ⚠️ スカラーインデックス作成スキップ/失敗:', scalarError?.message || scalarError);
     }

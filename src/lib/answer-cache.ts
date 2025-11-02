@@ -95,8 +95,13 @@ export class AnswerCache {
 
     try {
       // ドキュメントIDを抽出
+      // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+      const { getPageIdFromRecord } = require('./pageid-migration-helper');
       const documentIds = documents
-        .map(doc => doc.id || doc.pageId)
+        .map(doc => {
+          const pageId = getPageIdFromRecord(doc);
+          return doc.id || (pageId ? String(pageId) : null) || doc.pageId;
+        })
         .filter(id => id) as string[];
 
       if (documentIds.length === 0) {
@@ -140,8 +145,13 @@ export class AnswerCache {
 
     try {
       // ドキュメントIDを抽出
+      // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+      const { getPageIdFromRecord } = require('./pageid-migration-helper');
       const documentIds = documents
-        .map(doc => doc.id || doc.pageId)
+        .map(doc => {
+          const pageId = getPageIdFromRecord(doc);
+          return doc.id || (pageId ? String(pageId) : null) || doc.pageId;
+        })
         .filter(id => id) as string[];
 
       if (documentIds.length === 0) {

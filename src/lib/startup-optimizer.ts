@@ -133,6 +133,43 @@ async function performInitializationAsync(): Promise<void> {
         const endTime = Date.now();
         console.log(`[StartupOptimizer] Japanese tokenizer initialized in ${endTime - startTime}ms`);
       }
+    },
+    {
+      name: 'LanceDB Warmup',
+      fn: async () => {
+        console.log('[StartupOptimizer] 🔥 Starting LanceDB warmup...');
+        const startTime = Date.now();
+        
+        try {
+          // OptimizedLanceDBClientを使用して接続を確立
+          const { optimizedLanceDBClient } = await import('./optimized-lancedb-client');
+          const connection = await optimizedLanceDBClient.getConnection();
+          const connectionTime = Date.now() - startTime;
+          console.log(`[StartupOptimizer] ✅ LanceDB connection established in ${connectionTime}ms`);
+          
+          // ダミーのベクトル検索を実行してインデックスをメモリに読み込む
+          const warmupStartTime = Date.now();
+          const dummyVector = new Array(768).fill(0.1); // 768次元のダミーベクトル
+          const warmupResults = await connection.table
+            .search(dummyVector)
+            .limit(1)
+            .toArray();
+          const warmupTime = Date.now() - warmupStartTime;
+          
+          console.log(`[StartupOptimizer] ✅ LanceDB warmup search completed in ${warmupTime}ms (found ${warmupResults.length} results)`);
+          console.log(`[StartupOptimizer] 🎯 LanceDB indexes are now loaded in memory`);
+          
+          const endTime = Date.now();
+          const totalTime = endTime - startTime;
+          console.log(`[StartupOptimizer] 🚀 LanceDB warmup completed in ${totalTime}ms`);
+          
+        } catch (error: any) {
+          // エラーが発生してもアプリケーションは起動を続行
+          console.error(`[StartupOptimizer] ⚠️ LanceDB warmup failed: ${error?.message || error}`);
+          console.error(`[StartupOptimizer] ⚠️ LanceDB will be initialized on first request`);
+          // エラーをスローしない（他の初期化処理を継続）
+        }
+      }
     }
   ];
 

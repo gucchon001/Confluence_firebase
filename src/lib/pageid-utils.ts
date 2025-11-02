@@ -6,12 +6,13 @@
 
 /**
  * Build a WHERE fragment that matches exactly one pageId via half-open range.
- * Example: "\"pageId\" >= 512 AND \"pageId\" < 513"
+ * Example: "`page_id` >= 512 AND `page_id` < 513"
+ * ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
  */
 export function buildPageIdEqualityWhere(pageId: number): string {
   const lower = Number(pageId) | 0;
   const upper = lower + 1;
-  return `"pageId" >= ${lower} AND "pageId" < ${upper}`;
+  return `\`page_id\` >= ${lower} AND \`page_id\` < ${upper}`;
 }
 
 /**

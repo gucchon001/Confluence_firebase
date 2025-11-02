@@ -149,12 +149,16 @@ export class LunrInitializer {
             labels = getLabelsAsArray(doc.labels);
           }
 
+          // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+          const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+          const pageId = getPageIdFromRecord(doc) || doc.pageId || 0;
+          
           lunrDocs.push({
             id: doc.id || '',
             title: cleanTitle,
             content: cleanContent,
             labels,
-            pageId: doc.pageId || 0,
+            pageId: pageId,
             tokenizedTitle,
             tokenizedContent,
             originalTitle: doc.title || '',

@@ -638,9 +638,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       }
 
       // 同一pageId/titleの重複を1件に正規化（最良スコアを残す）
+      // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+      const { getPageIdFromRecord } = await import('./pageid-migration-helper');
       const dedupMap = new Map<string, any>();
       for (const r of resultsWithHybridScore) {
-        const key = `${r.pageId || ''}::${(r.title || '').toLowerCase()}`;
+        const pageId = getPageIdFromRecord(r) || '';
+        const key = `${pageId}::${(r.title || '').toLowerCase()}`;
         const prev = dedupMap.get(key);
         if (!prev || (r._rrfScore ?? 0) > (prev._rrfScore ?? 0)) {
           dedupMap.set(key, r);
@@ -667,7 +670,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       try {
         const topRrfResults = vectorResults.slice(0, 10); // RRF上位10件
-        const rrfResultsWithPageId = topRrfResults.filter(r => r.pageId);
+        // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+        const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+        const rrfResultsWithPageId = topRrfResults.filter(r => getPageIdFromRecord(r));
         
         if (rrfResultsWithPageId.length > 0) {
           console.log(`\n[Phase 4 RRF-KG] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
@@ -766,7 +771,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     });
     
     // Phase 0A-1.5: ページ単位の重複排除
-    const deduplicated = deduplicateByPageId(finalResults);
+    // ★★★ MIGRATION: 非同期対応 ★★★
+    const deduplicated = await deduplicateByPageId(finalResults);
     
     // Phase 0A-1.5: 空ページフィルター（コンテンツ長ベース、StructuredLabel不要）
     const contentFiltered = filterInvalidPagesByContent(deduplicated);
@@ -833,11 +839,13 @@ export const defaultLanceDBSearchClient = createLanceDBSearchClient();
  * ページ単位の重複排除（Phase 0A-1.5）
  * 同じpageIdの複数チャンクから、ベストスコアのチャンクのみを選択
  */
-function deduplicateByPageId(results: any[]): any[] {
+async function deduplicateByPageId(results: any[]): Promise<any[]> {
   const pageMap = new Map<string, any>();
   
-  results.forEach(result => {
-    const pageId = String(result.pageId || 'unknown');
+  // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+  const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+  for (const result of results) {
+    const pageId = String(getPageIdFromRecord(result) || result.pageId || 'unknown');
     const existing = pageMap.get(pageId);
     
     if (!existing) {
@@ -854,7 +862,7 @@ function deduplicateByPageId(results: any[]): any[] {
         console.log(`[Deduplicator] Updated best chunk for ${result.title}: chunk ${result.chunkIndex || 0}`);
       }
     }
-  });
+  }
   
   const deduplicated = Array.from(pageMap.values());
   
@@ -1086,6 +1094,8 @@ async function executeBM25Search(
     console.log(`[BM25 Search] Total unique results: ${allLunrResults.length}`);
     
     // タイトルブースト適用
+    // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+    const { getPageIdFromRecord } = await import('./pageid-migration-helper');
     const bm25Results = allLunrResults.map((r: any) => {
       const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(r.title, finalKeywords);
       
@@ -1101,7 +1111,7 @@ async function executeBM25Search(
         title: r.title,
         content: r.content,
         labels: r.labels,
-        pageId: r.pageId,
+        pageId: getPageIdFromRecord(r) || r.pageId,
         isChunked: r.isChunked,
         url: r.url,
         space_key: r.space_key,
@@ -1191,14 +1201,18 @@ async function fetchPageFromLanceDB(tbl: any, pageId: string): Promise<any | nul
     }
     
     // バッククォートを使用してフィールド名を囲む（LanceDB SQL方言）
+    // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
     const results = await tbl.query()
-      .where(`\`pageId\` = '${pageId}'`)
+      .where(`\`page_id\` = '${pageId}'`)
       .limit(1)
       .toArray();
     
     if (results.length > 0) {
-      console.log(`[fetchPageFromLanceDB] Found page ${pageId}: ${results[0].title}`);
-      return results[0];
+      // ★★★ MIGRATION: データベースのpage_idをpageIdに変換（API互換性） ★★★
+      const { mapLanceDBRecordToAPI } = await import('./pageid-migration-helper');
+      const mappedResult = mapLanceDBRecordToAPI(results[0]);
+      console.log(`[fetchPageFromLanceDB] Found page ${pageId}: ${mappedResult.title}`);
+      return mappedResult;
     }
     
     console.log(`[fetchPageFromLanceDB] Page ${pageId} not found in LanceDB`);
@@ -1234,13 +1248,24 @@ async function expandTitleResultsWithKG(
   console.log(`[Phase 5 KG] Expanding ${titleResults.length} title-matched results with KG (バッチクエリ)`);
   const kgStartTime = Date.now();
   
+  // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+  const { getPageIdFromRecord: getPageId } = await import('./pageid-migration-helper');
   const expandedResults = [...titleResults];
-  const addedPageIds = new Set(titleResults.map(r => r.pageId).filter(Boolean));
+  const addedPageIds = new Set(titleResults.map(r => {
+    const pageId = getPageId(r) || r.pageId;
+    return pageId ? String(pageId) : null;
+  }).filter(Boolean));
   
   try {
     // Phase 5最適化: バッチで参照先を取得（逐次クエリから一括クエリへ）
-    const validResults = titleResults.filter(r => r.pageId);
-    const pageIds = validResults.map(r => r.pageId);
+    const validResults = titleResults.filter(r => {
+      const pageId = getPageId(r) || r.pageId;
+      return !!pageId;
+    });
+    const pageIds = validResults.map(r => {
+      const pageId = getPageId(r) || r.pageId;
+      return pageId ? String(pageId) : '';
+    }).filter(Boolean);
     
     if (pageIds.length === 0) {
       return titleResults;
@@ -1261,18 +1286,20 @@ async function expandTitleResultsWithKG(
         let totalAdded = 0;
         
         for (const result of validResults) {
-          const references = batchReferences.get(result.pageId) || [];
+          const resultPageId = getPageId(result) || result.pageId;
+          const references = batchReferences.get(String(resultPageId)) || [];
           
           if (references.length === 0) {
-            console.log(`[Phase 5 KG] No references found for page ${result.pageId}`);
+            console.log(`[Phase 5 KG] No references found for page ${resultPageId}`);
             continue;
           }
           
-          console.log(`[Phase 5 KG] Found ${references.length} references for page ${result.pageId} (${result.title})`);
+          console.log(`[Phase 5 KG] Found ${references.length} references for page ${resultPageId} (${result.title})`);
           
           // Phase 5緊急修正: 並列でページデータを取得（品質維持）
           const pagePromises = references.map(async ({ node, edge }) => {
-            if (!node.pageId || addedPageIds.has(node.pageId)) {
+            const nodePageId = node.pageId ? String(node.pageId) : null;
+            if (!nodePageId || addedPageIds.has(nodePageId)) {
               return null;
             }
             
@@ -1283,7 +1310,7 @@ async function expandTitleResultsWithKG(
                   ...referencedPage,
                   _sourceType: 'kg-reference',
                   _kgWeight: edge.weight,
-                  _referencedFrom: result.pageId,
+                  _referencedFrom: resultPageId,
                   _distance: 0.4
                 };
               }

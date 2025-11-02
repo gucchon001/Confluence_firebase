@@ -82,6 +82,7 @@ export async function register() {
           const totalTime = Date.now() - startTime;
           console.log(`✅ [Instrumentation] バックグラウンド初期化完了: ${totalTime}ms`);
           console.log(`   - Kuromoji: ✅`);
+          console.log(`   - LanceDB: ✅ (ウォームアップ済み)`);
           console.log(`   - Lunr Index: ✅ (MessagePack)`);
           console.log(`🎯 検索API準備完了 - ユーザーリクエスト受付可能`);
         })

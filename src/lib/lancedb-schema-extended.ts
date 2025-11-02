@@ -21,7 +21,7 @@ export const EXTENDED_LANCEDB_SCHEMA = new arrow.Schema([
   // 基本フィールド
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   new arrow.Field('id', new arrow.Utf8(), false),                          // レコードID
-  new arrow.Field('pageId', new arrow.Int64(), false),                      // ConfluenceページID（数値型）
+  new arrow.Field('page_id', new arrow.Int64(), false),                    // ConfluenceページID（数値型）- pageIdからpage_idに変更（スカラーインデックス対応）
   new arrow.Field('title', new arrow.Utf8(), false),                       // ページタイトル
   new arrow.Field('content', new arrow.Utf8(), false),                     // ページ本文
   

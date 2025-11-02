@@ -333,7 +333,8 @@ export class ConfluenceSyncService {
         }
         
         if (shouldRemove) {
-          await table.delete(`"pageId" = ${chunk.pageId}`);
+          // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
+          await table.delete(`\`page_id\` = ${chunk.pageId}`);
           console.log(`🗑️ 除外対象ページを削除: ${chunk.title} (ID: ${chunk.pageId}) - ${reason}`);
           removedCount++;
         }
@@ -555,7 +556,8 @@ export class ConfluenceSyncService {
       const dummyVector = new Array(768).fill(0);
       const allChunks = await table.search(dummyVector).limit(10000).toArray();
       
-      const existingChunks = allChunks.filter((chunk: any) => chunk.pageId === parseInt(pageId));
+      // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
+      const existingChunks = allChunks.filter((chunk: any) => chunk.page_id === parseInt(pageId));
       console.log(`🔍 ページID ${pageId} の既存チャンク数: ${existingChunks.length}`);
       
       // チャンクインデックス順にソート
@@ -603,9 +605,10 @@ export class ConfluenceSyncService {
         };
 
         // LanceDB公式ドキュメントに基づく正しいデータ形式（型安全性を強化）
+        // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
         const lanceData = {
           id: String(chunkData.id),
-          pageId: Number(chunkData.pageId),
+          page_id: Number(chunkData.pageId),  // データベースフィールド名はpage_id
           title: String(chunkData.title),
           content: String(chunkData.content),
           chunkIndex: Number(chunkData.chunkIndex),
@@ -706,17 +709,24 @@ export class ConfluenceSyncService {
     try {
       console.log(`  🗑️ 既存チャンクセット ${existingChunks.length} 件を削除中...`);
       
-      // 1. 既存のチャンクセット全体を削除（pageIdで一括削除）
-      const deleteResult = await table.delete(`"pageId" = ${existingChunks[0].pageId}`);
-      console.log(`  ✅ 既存チャンクセットの削除完了: pageId=${existingChunks[0].pageId}`);
+      // 1. 既存のチャンクセット全体を削除（page_idで一括削除）
+      // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
+      const targetPageId = existingChunks[0].pageId;
+      const deleteResult = await table.delete(`\`page_id\` = ${targetPageId}`);
+      console.log(`  ✅ 既存チャンクセットの削除完了: pageId=${targetPageId}`);
       
       // 2. 削除の確認（少し待機してから確認）
       await new Promise(resolve => setTimeout(resolve, 200));
       
       // 3. 削除が正しく実行されたか確認
+      // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
+      const { getPageIdFromRecord } = await import('./pageid-migration-helper');
       const dummyVector = new Array(768).fill(0);
       const remainingChunks = await table.search(dummyVector).limit(10000).toArray();
-      const remainingPageChunks = remainingChunks.filter((chunk: any) => chunk.pageId === existingChunks[0].pageId);
+      const remainingPageChunks = remainingChunks.filter((chunk: any) => {
+        const chunkPageId = getPageIdFromRecord(chunk) || chunk.pageId;
+        return chunkPageId === targetPageId;
+      });
       
       if (remainingPageChunks.length > 0) {
         console.log(`  ⚠️ 削除後も ${remainingPageChunks.length} チャンクが残存しています。強制削除を実行...`);
@@ -733,7 +743,11 @@ export class ConfluenceSyncService {
         // 再度確認
         await new Promise(resolve => setTimeout(resolve, 100));
         const finalCheck = await table.search(dummyVector).limit(10000).toArray();
-        const finalPageChunks = finalCheck.filter((chunk: any) => chunk.pageId === existingChunks[0].pageId);
+        // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
+        const finalPageChunks = finalCheck.filter((chunk: any) => {
+          const chunkPageId = getPageIdFromRecord(chunk) || chunk.pageId;
+          return chunkPageId === targetPageId;
+        });
         console.log(`  📊 最終確認: ${finalPageChunks.length} チャンクが残存`);
       } else {
         console.log(`  ✅ 削除確認完了: チャンクは完全に削除されました`);

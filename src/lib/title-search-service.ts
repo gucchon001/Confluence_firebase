@@ -122,14 +122,19 @@ export class TitleSearchService {
       });
     }
     
-    return exactMatches.map(r => ({
-      id: r.id,
-      pageId: r.pageId || r.id,
-      title: r.title,
-      content: r.content,
-      similarity: r.similarity,
-      source: 'title-exact' as const
-    }));
+    // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+    const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+    return exactMatches.map(r => {
+      const pageId = getPageIdFromRecord(r) || r.pageId || r.id;
+      return {
+        id: r.id,
+        pageId: pageId,
+        title: r.title,
+        content: r.content,
+        similarity: r.similarity,
+        source: 'title-exact' as const
+      };
+    });
   }
   
   /**
@@ -176,15 +181,19 @@ export class TitleSearchService {
       });
     }
     
-    return partialMatches.map(r => ({
-      id: r.id,
-      pageId: r.pageId || r.id,
-      title: r.title,
-      content: r.content,
-      matchedKeywords: r.matchedKeywords,
-      matchRatio: r.matchRatio,
-      source: 'title-partial' as const
-    }));
+    // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+    return partialMatches.map(r => {
+      const pageId = getPageIdFromRecord(r) || r.pageId || r.id;
+      return {
+        id: r.id,
+        pageId: pageId,
+        title: r.title,
+        content: r.content,
+        matchedKeywords: r.matchedKeywords,
+        matchRatio: r.matchRatio,
+        source: 'title-partial' as const
+      };
+    });
   }
   
   /**

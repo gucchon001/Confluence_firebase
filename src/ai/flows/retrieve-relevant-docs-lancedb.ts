@@ -187,19 +187,24 @@ async function lancedbRetrieverTool(
     }
 
     // UIが期待する形へ最小変換（scoreText, source を保持）
-    const mapped = unifiedResults.slice(0, 12).map(r => ({
-      id: String(r.pageId ?? r.id ?? ''),
-      pageId: String(r.pageId ?? r.id ?? ''), // Phase 0A-1.5: チャンク統合用
-      content: r.content || '',
-      url: r.url || '',
-      lastUpdated: (r as any).lastUpdated || null,
-      spaceName: (r as any).space_key || 'Unknown',
-      title: r.title || 'No Title',
-      labels: r.labels || [],
-      distance: (r as any).distance,
-      source: r.source as any,
-      scoreText: r.scoreText,
-    }));
+    // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+    const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
+    const mapped = unifiedResults.slice(0, 12).map(r => {
+      const pageId = getPageIdFromRecord(r) ?? r.id ?? '';
+      return {
+        id: String(pageId),
+        pageId: String(pageId), // Phase 0A-1.5: チャンク統合用
+        content: r.content || '',
+        url: r.url || '',
+        lastUpdated: (r as any).lastUpdated || null,
+        spaceName: (r as any).space_key || 'Unknown',
+        title: r.title || 'No Title',
+        labels: r.labels || [],
+        distance: (r as any).distance,
+        source: r.source as any,
+        scoreText: r.scoreText,
+      };
+    });
 
     // Phase 0A-1.5: 全チャンク統合（サーバー側で実装）
     const enriched = await enrichWithAllChunks(mapped);
@@ -301,7 +306,9 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
     results.map(async (result, index) => {
       try {
         const pageStartTime = Date.now();
-        const pageId = result.pageId || result.id;
+        // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+        const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
+        const pageId = getPageIdFromRecord(result) || result.id;
         if (!pageId) {
           console.warn(`[ChunkMerger] Skipping result without pageId`);
           return result;
@@ -421,123 +428,36 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     const connection = await optimizedLanceDBClient.getConnection();
     const table = connection.table;
 
-    // ★★★ CRITICAL PERF FIX: 本番環境で10-15秒かかる問題を解決 ★★★
-    // ★★★ OPTIMIZATION: 本番環境では数値型が確定しているため、数値型を最優先に試行 ★★★
+    // ★★★ CRITICAL PERF FIX: スカラーインデックスを活用した最適化 ★★★
+    // Phase 2では .search().where() が推奨されていましたが、
+    // テスト結果では .query().where() の方が正しく動作することが確認されました
+    // スカラーインデックス（pageId）が作成されていれば、.query().where() でも高速です
+    
     const numericPageId = Number(pageId);
     if (isNaN(numericPageId)) {
       console.error(`[getAllChunksByPageIdInternal] Invalid pageId (not a number): ${pageId}`);
       return [];
     }
     
-    // デバッグログ（開発環境のみ、またはパフォーマンス問題発生時のみ）
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[getAllChunksByPageIdInternal] pageId='${pageId}' (numeric=${numericPageId})`);
-    }
-
-    // ★★★ 最適化: 本番環境では数値型が確定しているため、数値型を最初に試行 ★★★
-    // 本番環境では常にNUMERIC型が使用されるため、無駄な文字列型の試行を回避してパフォーマンス向上
-    let results: any[] = [];
-    let successfulMethod = '';
-    const queryMethods = [
-      // Method 1: 数値型での完全一致（本番環境向け・最優先・インデックス使用）
-      {
-        name: 'numeric-exact',
-        query: async () => {
-          return await table
-            .query()
-            .where(`\`pageId\` = ${numericPageId}`)
-            .limit(1000)
-            .toArray();
-        }
-      },
-      // Method 2: 数値型での範囲検索（フォールバック・インデックスを使いやすい）
-      {
-        name: 'numeric-range',
-        query: async () => {
-          const lower = numericPageId;
-          const upper = numericPageId + 1;
-          return await table
-            .query()
-            .where(`\`pageId\` >= ${lower} AND \`pageId\` < ${upper}`)
-            .limit(1000)
-            .toArray();
-        }
-      },
-      // Method 3: 文字列型での完全一致（ローカル環境向け・最後のフォールバック）
-      {
-        name: 'string-exact',
-        query: async () => {
-          return await table
-            .query()
-            .where(`\`pageId\` = '${pageId}'`)
-            .limit(1000)
-            .toArray();
-        }
-      }
-    ];
-
-    // 各メソッドを順に試行（最初に成功したものを使用、またはエラーが発生しないもの）
-    for (const method of queryMethods) {
-      try {
-        const methodStartTime = Date.now();
-        results = await method.query();
-        const methodDuration = Date.now() - methodStartTime;
-        
-        // 結果が見つかった場合はそれを使用
-        if (results.length > 0) {
-          successfulMethod = method.name;
-          if (methodDuration > 1000) {
-            console.warn(`[getAllChunksByPageIdInternal] Slow query with method "${method.name}": ${methodDuration}ms`);
-          }
-          // 本番環境では数値型が確定しているため、最初のメソッドが成功した場合のみログ出力
-          if (method.name === 'numeric-exact' || methodDuration > 100 || process.env.NODE_ENV === 'development') {
-            console.log(`[getAllChunksByPageIdInternal] ✅ Success with method "${method.name}" (${methodDuration}ms, ${results.length} results)`);
-          }
-          break;
-        }
-        
-        // 結果が見つからなかったが、エラーも発生していない場合は次のメソッドを試行
-        // （型が異なる環境の可能性があるため）
-        if (methodDuration > 5000) {
-          console.warn(`[getAllChunksByPageIdInternal] Timeout with method "${method.name}" after ${methodDuration}ms, trying next method...`);
-        }
-      } catch (error: any) {
-        // エラーが発生した場合は次のメソッドを試行
-        // （型不一致などの可能性があるため、これは正常な動作）
-        // 文字列型の失敗は通常なので、ログを削減（開発環境のみ）
-        if (method.name === 'string-exact') {
-          // 本番環境では文字列型の失敗は予想通りなので、ログを出力しない
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[getAllChunksByPageIdInternal] ℹ️  Method "${method.name}" skipped (expected in production)`);
-          }
-        } else {
-          // 数値型の失敗は異常なので、ログを出力
-          console.warn(`[getAllChunksByPageIdInternal] ❌ Method "${method.name}" failed: ${error.message.substring(0, 100)}`);
-        }
-        continue;
-      }
-    }
+    // スカラーインデックスを使用した数値型での完全一致検索
+    // スカラーインデックス（B-Tree）が作成されていれば、O(log n)で高速
+    // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
+    const results = await table
+      .query()
+      .where(`\`page_id\` = ${numericPageId}`)
+      .limit(1000)
+      .toArray();
     
-    // どのメソッドが成功したかをログに記録（型特定に重要）
-    if (successfulMethod) {
-      // 本番環境では数値型が確定しているため、数値型で成功した場合はログを削減
-      if (successfulMethod.includes('numeric')) {
-        // 正常ケース: 開発環境のみログ出力
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[getAllChunksByPageIdInternal] 🎯 PageId type: NUMERIC (method: ${successfulMethod})`);
-        }
-      } else {
-        // 文字列型で成功した場合は警告（ローカル環境では正常）
-        console.log(`[getAllChunksByPageIdInternal] 🎯 PageId type: STRING (method: ${successfulMethod})`);
-      }
-    } else {
-      console.error(`[getAllChunksByPageIdInternal] ❌ All query methods failed or returned no results`);
-    }
-
     const scanDuration = Date.now() - scanStartTime;
 
     // 詳細ログ: クエリ時間と結果数
-    console.log(`[getAllChunksByPageIdInternal] Query completed in ${scanDuration}ms, found ${results.length} results for pageId: ${pageId}`);
+    if (scanDuration > 100 || process.env.NODE_ENV === 'development') {
+      console.log(`[getAllChunksByPageIdInternal] ✅ Query completed in ${scanDuration}ms, found ${results.length} results for pageId: ${pageId}`);
+    }
+    
+    if (scanDuration > 1000) {
+      console.warn(`[getAllChunksByPageIdInternal] ⚠️ Slow query: ${scanDuration}ms (expected < 100ms with indexes)`);
+    }
     
     if (results.length > 0) {
       // chunkIndexでソート
@@ -547,13 +467,18 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
         return aIndex - bIndex;
       });
       
+      // ★★★ MIGRATION: データベースのpage_idをpageIdに変換（API互換性） ★★★
+      // 内部処理ではpage_idを使用、APIレスポンスではpageIdを維持
+      const { mapLanceDBRecordsToAPI } = await import('../../lib/pageid-migration-helper');
+      const mappedResults = mapLanceDBRecordsToAPI(results);
+      
       if (scanDuration > 100) { // 100ms以上の場合のみログ出力
         console.log(`[getAllChunksByPageId] ⚡ Phase 5最適化: ${results.length} chunks in ${scanDuration}ms for pageId: ${pageId}`);
       } else if (process.env.NODE_ENV === 'development') {
         console.log(`[getAllChunksByPageId] ⚡ Phase 5最適化: ${results.length} chunks in ${scanDuration}ms for pageId: ${pageId}`);
       }
       
-      return results;
+      return mappedResults;
     }
     
     // 見つからない場合は空配列を返す
@@ -580,14 +505,20 @@ export async function filterInvalidPagesServer(results: any[]): Promise<any[]> {
   }
 
   // StructuredLabelを一括取得（Admin SDK使用）
-  const pageIds = results.map((r) => String(r.pageId || r.id || 'unknown'));
+  // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+  const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
+  const pageIds = results.map((r) => {
+    const pageId = getPageIdFromRecord(r);
+    return String(pageId || r.id || 'unknown');
+  });
   const labels = await getStructuredLabels(pageIds);
 
   const validResults = [];
 
   for (const result of results) {
-    const pageId = String(result.pageId || result.id || 'unknown');
-    const label = labels.get(pageId);
+    const pageId = getPageIdFromRecord(result);
+    const pageIdStr = String(pageId || result.id || 'unknown');
+    const label = labels.get(pageIdStr);
 
     // StructuredLabelがある場合: is_validで判定
     if (label) {

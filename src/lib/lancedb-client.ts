@@ -72,7 +72,7 @@ export class LanceDBClient {
           title: 'dummy',
           labels: ['dummy'], // 文字列配列（明示的に配列として定義）
           content: 'dummy',
-          pageId: 0,
+          page_id: 0,  // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
           chunkIndex: 0,
           url: 'dummy',
           lastUpdated: new Date().toISOString()
@@ -93,7 +93,7 @@ export class LanceDBClient {
             field: { type: 'utf8' } 
           },
           content: 'utf8',
-          pageId: 'int64',
+          page_id: 'int64',  // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
           chunkIndex: 'int32',
           url: 'utf8',
           lastUpdated: 'utf8'
