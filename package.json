@@ -53,6 +53,7 @@
     "lancedb:analyze": "tsx scripts/analyze-page-sizes.ts",
     "lancedb:create-indexes": "tsx scripts/create-lancedb-indexes.ts",
     "lancedb:create-indexes:skip": "tsx scripts/create-lancedb-indexes.ts --skip-vector",
+    "lancedb:check-indexes": "tsx scripts/check-lancedb-indexes.ts",
     "lancedb:check-schema": "tsx scripts/check-lancedb-schema.ts",
     "lancedb:verify-upload": "tsx scripts/verify-data-upload.ts",
     "lancedb:compare": "tsx scripts/compare-local-production-data.ts",

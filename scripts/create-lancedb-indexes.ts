@@ -88,9 +88,9 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
     try {
       console.log('🔧 スカラーインデックス作成中...');
       const scalarStart = Date.now();
-      // 一部の LanceDB バージョンでは config 省略でスカラーになる
-      await table.createIndex('"pageId"');
-      await table.createIndex('"id"');
+      // フィールド名は引用符なしで指定
+      await table.createIndex('pageId');
+      await table.createIndex('id');
       console.log(`   ✅ スカラーインデックス作成完了 (pageId, id)`);
       console.log(`   ⏱️ スカラーインデックス作成時間: ${((Date.now()-scalarStart)/1000).toFixed(2)}秒\n`);
     } catch (scalarError: any) {
