@@ -422,31 +422,35 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     const table = connection.table;
 
     // ★★★ CRITICAL PERF FIX: 本番環境で10-15秒かかる問題を解決 ★★★
-    // ★★★ TYPE DETECTION: 本番環境の実際のpageId型をログで確認 ★★★
-    console.log(`[getAllChunksByPageIdInternal] pageId='${pageId}' (typeof=${typeof pageId}), timestamp=${Date.now()}`);
-
+    // ★★★ OPTIMIZATION: 本番環境では数値型が確定しているため、数値型を最優先に試行 ★★★
     const numericPageId = Number(pageId);
     if (isNaN(numericPageId)) {
       console.error(`[getAllChunksByPageIdInternal] Invalid pageId (not a number): ${pageId}`);
       return [];
     }
+    
+    // デバッグログ（開発環境のみ、またはパフォーマンス問題発生時のみ）
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[getAllChunksByPageIdInternal] pageId='${pageId}' (numeric=${numericPageId})`);
+    }
 
-    // ★★★ 環境別の型対応: ローカル（Utf8/文字列）と本番（int64/数値）の両方に対応 ★★★
+    // ★★★ 最適化: 本番環境では数値型が確定しているため、数値型を最初に試行 ★★★
+    // 本番環境では常にNUMERIC型が使用されるため、無駄な文字列型の試行を回避してパフォーマンス向上
     let results: any[] = [];
     let successfulMethod = '';
     const queryMethods = [
-      // Method 1: 文字列型での完全一致（ローカル環境向け）
+      // Method 1: 数値型での完全一致（本番環境向け・最優先・インデックス使用）
       {
-        name: 'string-exact',
+        name: 'numeric-exact',
         query: async () => {
           return await table
             .query()
-            .where(`\`pageId\` = '${pageId}'`)
+            .where(`\`pageId\` = ${numericPageId}`)
             .limit(1000)
             .toArray();
         }
       },
-      // Method 2: 数値型での範囲検索（本番環境向け、インデックスを使いやすい）
+      // Method 2: 数値型での範囲検索（フォールバック・インデックスを使いやすい）
       {
         name: 'numeric-range',
         query: async () => {
@@ -459,13 +463,13 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
             .toArray();
         }
       },
-      // Method 3: 数値型での完全一致（本番環境向け）
+      // Method 3: 文字列型での完全一致（ローカル環境向け・最後のフォールバック）
       {
-        name: 'numeric-exact',
+        name: 'string-exact',
         query: async () => {
           return await table
             .query()
-            .where(`\`pageId\` = ${numericPageId}`)
+            .where(`\`pageId\` = '${pageId}'`)
             .limit(1000)
             .toArray();
         }
@@ -485,7 +489,10 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
           if (methodDuration > 1000) {
             console.warn(`[getAllChunksByPageIdInternal] Slow query with method "${method.name}": ${methodDuration}ms`);
           }
-          console.log(`[getAllChunksByPageIdInternal] ✅ Success with method "${method.name}" (${methodDuration}ms, ${results.length} results)`);
+          // 本番環境では数値型が確定しているため、最初のメソッドが成功した場合のみログ出力
+          if (method.name === 'numeric-exact' || methodDuration > 100 || process.env.NODE_ENV === 'development') {
+            console.log(`[getAllChunksByPageIdInternal] ✅ Success with method "${method.name}" (${methodDuration}ms, ${results.length} results)`);
+          }
           break;
         }
         
@@ -497,14 +504,32 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
       } catch (error: any) {
         // エラーが発生した場合は次のメソッドを試行
         // （型不一致などの可能性があるため、これは正常な動作）
-        console.log(`[getAllChunksByPageIdInternal] ❌ Method "${method.name}" failed: ${error.message.substring(0, 100)}`);
+        // 文字列型の失敗は通常なので、ログを削減（開発環境のみ）
+        if (method.name === 'string-exact') {
+          // 本番環境では文字列型の失敗は予想通りなので、ログを出力しない
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[getAllChunksByPageIdInternal] ℹ️  Method "${method.name}" skipped (expected in production)`);
+          }
+        } else {
+          // 数値型の失敗は異常なので、ログを出力
+          console.warn(`[getAllChunksByPageIdInternal] ❌ Method "${method.name}" failed: ${error.message.substring(0, 100)}`);
+        }
         continue;
       }
     }
     
     // どのメソッドが成功したかをログに記録（型特定に重要）
     if (successfulMethod) {
-      console.log(`[getAllChunksByPageIdInternal] 🎯 Production pageId type detected: ${successfulMethod.includes('string') ? 'STRING' : 'NUMERIC'}`);
+      // 本番環境では数値型が確定しているため、数値型で成功した場合はログを削減
+      if (successfulMethod.includes('numeric')) {
+        // 正常ケース: 開発環境のみログ出力
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[getAllChunksByPageIdInternal] 🎯 PageId type: NUMERIC (method: ${successfulMethod})`);
+        }
+      } else {
+        // 文字列型で成功した場合は警告（ローカル環境では正常）
+        console.log(`[getAllChunksByPageIdInternal] 🎯 PageId type: STRING (method: ${successfulMethod})`);
+      }
     } else {
       console.error(`[getAllChunksByPageIdInternal] ❌ All query methods failed or returned no results`);
     }
