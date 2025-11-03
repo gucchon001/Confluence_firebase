@@ -132,9 +132,10 @@ export class APIErrorHandler {
    */
   static async handleUnifiedInitialization(): Promise<boolean> {
     try {
-      const { unifiedInitializer } = await import('./unified-initializer');
-      await unifiedInitializer.initializeAll();
-      console.log('✅ Unified initialization completed');
+      // unified-initializerはアーカイブに移動済み。代わりにstartup-optimizerを使用
+      const { initializeStartupOptimizations } = await import('./startup-optimizer');
+      await initializeStartupOptimizations();
+      console.log('✅ Startup initialization completed');
       return true;
     } catch (error) {
       console.warn('⚠️ Unified initialization failed:', error);

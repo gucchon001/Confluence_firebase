@@ -39,6 +39,8 @@
     "node_modules",
     "functions",
     "src/tests",
-    "src/components"
+    "src/components",
+    "src/lib/archive/**/*",
+    "scripts/archive/**/*"
   ]
 }

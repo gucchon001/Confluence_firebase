@@ -3,7 +3,10 @@
  * キャッシュ機能付きで最適化
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { embeddingCache } from './embedding-cache';
+// embedding-cacheはアーカイブに移動済み。簡易キャッシュ実装を使用
+
+// 簡易キャッシュ（メモリ内のみ）
+const embeddingCache = new Map<string, { embedding: number[]; timestamp: number }>();
 
 let genAI: GoogleGenerativeAI | null = null;
 let embeddingModel: any | null = null;
@@ -20,14 +23,15 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     text = 'No content available';
   }
 
-  // キャッシュから取得を試行
-  const cachedEmbedding = await embeddingCache.getCachedEmbedding(text);
-  if (cachedEmbedding) {
+  // 簡易キャッシュ（メモリ内のみ）
+  const cacheKey = `embedding:${text.substring(0, 100)}`;
+  const cached = embeddingCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) { // 15分TTL
     const duration = Date.now() - startTime;
     if (duration > 100) {
       console.log(`🚀 埋め込みベクトルをキャッシュから取得 (${duration}ms): ${text.substring(0, 50)}...`);
     }
-    return cachedEmbedding;
+    return cached.embedding;
   }
 
   // Phase 0A-4: 埋め込み生成の開始ログ（本番環境でも遅延検知のため）
@@ -50,7 +54,13 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   }
   
   // キャッシュに保存
-  await embeddingCache.setCachedEmbedding(text, embedding);
+  embeddingCache.set(cacheKey, { embedding, timestamp: Date.now() });
+  
+  // キャッシュサイズが大きくなりすぎないように制限（1000エントリ）
+  if (embeddingCache.size > 1000) {
+    const firstKey = embeddingCache.keys().next().value;
+    embeddingCache.delete(firstKey);
+  }
   
   const totalDuration = Date.now() - startTime;
   if (totalDuration > 1000) {

@@ -154,8 +154,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // 最適化されたLunr初期化を使用（重複初期化を防止）
     try {
-      const { optimizedLunrInitializer } = await import('./optimized-lunr-initializer');
-      await optimizedLunrInitializer.initializeOnce();
+      // optimized-lunr-initializerはアーカイブに移動済み。代わりにlunr-initializerを使用
+      const { lunrInitializer } = await import('./lunr-initializer');
+      await lunrInitializer.initializeAsync();
       
       // Phase 6修正: 初期化完了を確実に待つ（並列検索前）
       await new Promise(resolve => setTimeout(resolve, 100));

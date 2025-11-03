@@ -9,7 +9,7 @@
  */
 
 import { LanceDBClient } from './lancedb-client';
-import { UnifiedEmbeddingService } from './unified-embedding-service';
+import { getEmbeddings } from './embeddings';
 import { convertLabelsToArray, shouldExcludeByLabels } from './label-helper';
 import axios from 'axios';
 
@@ -46,7 +46,6 @@ export interface SyncResult {
 
 export class ConfluenceSyncService {
   private lancedbClient: LanceDBClient;
-  private embeddingService: UnifiedEmbeddingService;
   private baseUrl: string;
   private username: string;
   private apiToken: string;
@@ -58,7 +57,7 @@ export class ConfluenceSyncService {
 
   constructor() {
     this.lancedbClient = LanceDBClient.getInstance();
-    this.embeddingService = UnifiedEmbeddingService.getInstance();
+    // embeddings.ts の getEmbeddings 関数を使用
     
     // 環境変数からConfluence設定を取得
     this.baseUrl = process.env.CONFLUENCE_BASE_URL || '';
@@ -582,7 +581,7 @@ export class ConfluenceSyncService {
         const chunk = chunks[i];
         
         // 埋め込みベクトルを生成
-        const embedding = await this.embeddingService.generateSingleEmbedding(chunk.content);
+        const embedding = await getEmbeddings(chunk.content);
         
         // ラベルを抽出（デバッグログ付き）
         console.log(`🔍 ページ処理開始: ${page.title}`);

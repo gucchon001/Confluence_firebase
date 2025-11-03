@@ -61,12 +61,6 @@ async function main() {
         await lunrInitializer.initializeAsync();
         console.log('✅ Lunrインデックス再構築完了');
 
-        // 最適化版Lunrインデックス再構築
-        console.log('⚡ 最適化版Lunrインデックス再構築中...');
-        const { optimizedLunrInitializer } = await import('../lib/optimized-lunr-initializer');
-        await optimizedLunrInitializer.initializeOnce();
-        console.log('✅ 最適化版Lunrインデックス再構築完了');
-
         // LanceDBベクトルインデックス最適化
         console.log('🔍 LanceDBベクトルインデックス最適化中...');
         const { lancedbClient } = await import('../lib/lancedb-client');
