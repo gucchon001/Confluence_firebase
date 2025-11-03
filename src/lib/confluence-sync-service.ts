@@ -660,7 +660,7 @@ export class ConfluenceSyncService {
         // LanceDBに追加（明示的な型変換）
         const finalData = {
           id: lanceData.id,
-          pageId: lanceData.pageId,
+          pageId: lanceData.page_id,
           title: lanceData.title,
           content: lanceData.content,
           chunkIndex: lanceData.chunkIndex,

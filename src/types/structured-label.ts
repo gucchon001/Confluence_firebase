@@ -136,9 +136,13 @@ export interface LabeledDocument {
 
 /**
  * ラベル移行の記録
+ * 
+ * 注意: この型はAPI層（Firestore、型定義）で使用されるため、`pageId`フィールドを使用します。
+ * LanceDBでは`page_id`を使用しますが、この型はAPI層でのみ使用されるため、`pageId`のままです。
+ * 実際の使用時には、`getPageIdFromRecord`ヘルパーを使用してデータベースレコードから取得してください。
  */
 export interface LabelMigrationRecord {
-  pageId: string;
+  pageId: string;  // API層で使用されるため、pageIdのまま（FirestoreのStructuredLabelDocumentと一致）
   oldLabels: string[];
   newLabel: StructuredLabel;
   migratedAt: Date;
