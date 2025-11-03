@@ -10,7 +10,7 @@ export interface SearchParams {
 }
 
 export interface LanceDBRow {
-  pageId: number; // 小文字i
+  pageId: number; // 小文字i?
   title: string;
   content: string;
   labels: string[];
