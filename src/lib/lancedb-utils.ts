@@ -1,3 +1,5 @@
+import { mapLanceDBRecordsToAPI } from './pageid-migration-helper';
+
 export async function getRowsByPageId(tbl: any, pageId: number) {
   // Fallback strategy to emulate equality in environments where '=' may not hit
   // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
@@ -7,7 +9,6 @@ export async function getRowsByPageId(tbl: any, pageId: number) {
   const results = await (tbl as any).query().where(where).toArray();
   
   // ★★★ MIGRATION: データベースのpage_idをpageIdに変換（API互換性） ★★★
-  const { mapLanceDBRecordsToAPI } = await import('./pageid-migration-helper');
   return mapLanceDBRecordsToAPI(results);
 }
 

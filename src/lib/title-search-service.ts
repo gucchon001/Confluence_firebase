@@ -5,6 +5,8 @@
  * 参考: https://zenn.dev/yumefuku/articles/llm-neo4j-hybrid
  */
 
+import { getPageIdFromRecord } from './pageid-migration-helper';
+
 /**
  * タイトル類似度計算（Levenshtein距離ベース）
  */
@@ -123,7 +125,6 @@ export class TitleSearchService {
     }
     
     // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
-    const { getPageIdFromRecord } = await import('./pageid-migration-helper');
     return exactMatches.map(r => {
       const pageId = getPageIdFromRecord(r) || r.pageId || r.id;
       return {
