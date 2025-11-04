@@ -100,6 +100,8 @@
 - **[phase-0a-4-production-deployment-fixes.md](./operations/phase-0a-4-production-deployment-fixes.md)** - 本番デプロイ修正
 
 #### 運用・管理
+- **[extended-schema-operation-guide.md](./operations/extended-schema-operation-guide.md)** 🌟 **NEW** - 拡張スキーマ運用ガイド（StructuredLabel統合版）
+- **[production-schema-verification-guide.md](./operations/production-schema-verification-guide.md)** 🔍 **NEW** - 本番環境スキーマ確認ガイド
 - **[backup-management-guide.md](./operations/backup-management-guide.md)** - バックアップ管理ガイド
 - **[migration-guide.md](./operations/migration-guide.md)** - リポジトリ移管ガイド
 - **[network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有ガイド
@@ -181,12 +183,13 @@
 5. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイ手順を確認
 
 ### 運用担当者向け
-1. **[operations/build-optimization-guide.md](./operations/build-optimization-guide.md)** 🚀 - ビルド最適化（75-90%高速化）
-2. **[operations/data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** - データ同期戦略と定期実行スケジュール
-3. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイガイド
-4. **[operations/migration-guide.md](./operations/migration-guide.md)** - 移行手順を確認
-5. **[operations/network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有設定
-6. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
+1. **[operations/extended-schema-operation-guide.md](./operations/extended-schema-operation-guide.md)** 🌟 **NEW** - 拡張スキーマ運用ガイド（StructuredLabel統合版）
+2. **[operations/build-optimization-guide.md](./operations/build-optimization-guide.md)** 🚀 - ビルド最適化（75-90%高速化）
+3. **[operations/data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** - データ同期戦略と定期実行スケジュール
+4. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイガイド
+5. **[operations/migration-guide.md](./operations/migration-guide.md)** - 移行手順を確認
+6. **[operations/network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有設定
+7. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
 
 ### 開発者向け
 1. **[architecture/hybrid-search-logic-current.md](./architecture/hybrid-search-logic-current.md)** ✅ - 現在のハイブリッド検索ロジック（最新版）

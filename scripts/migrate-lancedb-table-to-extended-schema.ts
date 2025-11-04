@@ -131,13 +131,14 @@ async function main() {
       isChunked: true,
       totalChunks: 1,
       // StructuredLabelフィールド（nullではなく空文字列や0を使用）
+      // 注意: structured_tagsは空配列ではなく、少なくとも1つの要素を含む必要がある
       structured_category: '',
       structured_domain: '',
       structured_feature: '',
       structured_priority: '',
       structured_status: '',
       structured_version: '',
-      structured_tags: [],
+      structured_tags: ['dummy'],  // 空配列ではなく、少なくとも1つの要素を含む
       structured_confidence: 0.0,
       structured_content_length: 0,
       structured_is_valid: false
@@ -188,7 +189,7 @@ async function main() {
         structured_priority: row.structured_priority || '',
         structured_status: row.structured_status || '',
         structured_version: row.structured_version || '',
-        structured_tags: Array.isArray(row.structured_tags) && row.structured_tags.length > 0 ? row.structured_tags.map(String) : [],
+        structured_tags: Array.isArray(row.structured_tags) && row.structured_tags.length > 0 ? row.structured_tags.map(String) : ['dummy'],  // 空配列の場合はダミー要素を含む
         structured_confidence: row.structured_confidence !== undefined && row.structured_confidence !== null ? Number(row.structured_confidence) : 0.0,
         structured_content_length: row.structured_content_length !== undefined && row.structured_content_length !== null ? Number(row.structured_content_length) : 0,
         structured_is_valid: row.structured_is_valid !== undefined && row.structured_is_valid !== null ? Boolean(row.structured_is_valid) : false
@@ -233,6 +234,168 @@ async function main() {
     }
     
     console.log('✅ 移行完了\n');
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Step 6: インデックスを再作成
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    console.log('🔧 Step 6: インデックスを再作成中...\n');
+    
+    try {
+      // ベクトルインデックス作成
+      console.log('   📊 ベクトルインデックス作成中...');
+      const vectorStart = Date.now();
+      try {
+        await newTable.createIndex('vector', {
+          config: lancedb.Index.ivfPq({
+            numPartitions: 256,
+            numSubVectors: 16
+          })
+        });
+        const vectorDuration = ((Date.now() - vectorStart) / 1000).toFixed(2);
+        console.log(`   ✅ ベクトルインデックス作成完了（${vectorDuration}秒）\n`);
+      } catch (vectorError: any) {
+        const errorMessage = vectorError?.message || String(vectorError);
+        if (errorMessage.includes('already exists') || errorMessage.includes('既に存在')) {
+          console.log(`   ✅ ベクトルインデックスは既に存在します\n`);
+        } else {
+          console.warn(`   ⚠️ ベクトルインデックス作成失敗: ${errorMessage.substring(0, 150)}\n`);
+        }
+      }
+      
+      // page_idスカラーインデックス作成
+      console.log('   📊 page_idスカラーインデックス作成中...');
+      const scalarStart = Date.now();
+      try {
+        await newTable.createIndex('page_id');
+        const scalarDuration = ((Date.now() - scalarStart) / 1000).toFixed(2);
+        console.log(`   ✅ page_idスカラーインデックス作成完了（${scalarDuration}秒）\n`);
+      } catch (pageIdError: any) {
+        const errorMessage = pageIdError?.message || String(pageIdError);
+        if (errorMessage.includes('already exists') || errorMessage.includes('既に存在')) {
+          console.log(`   ✅ page_idスカラーインデックスは既に存在します\n`);
+        } else {
+          console.warn(`   ⚠️ page_idスカラーインデックス作成失敗: ${errorMessage.substring(0, 150)}`);
+          console.warn(`   💡 スカラーインデックスがなくても、.query().where()は十分高速です（ローカル: 3-8ms）\n`);
+        }
+      }
+    } catch (indexError) {
+      console.warn(`   ⚠️ インデックス作成中にエラーが発生しました: ${indexError}\n`);
+    }
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Step 7: FirestoreからStructuredLabelを同期
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    console.log('🔄 Step 7: FirestoreからStructuredLabelを同期中...\n');
+    
+    try {
+      const { getStructuredLabels } = await import('../src/lib/structured-label-service-admin');
+      const { flattenStructuredLabel } = await import('../src/lib/lancedb-schema-extended');
+      
+      // LanceDBの全データを取得（データが存在する場合のみ）
+      const rowCount = await newTable.countRows();
+      if (rowCount === 0) {
+        console.log('   ⚠️ LanceDBにデータが存在しません');
+        console.log('   → 通常の同期処理を実行してから、再度マイグレーションを実行してください\n');
+        return;
+      }
+      
+      console.log(`   📊 LanceDBデータ件数: ${rowCount}件\n`);
+      
+      const allLanceData = await newTable.search(new Array(768).fill(0)).limit(100000).toArray();
+      
+      // ユニークなpage_idのリストを作成
+      const uniquePageIds = new Set<string>();
+      for (const lanceRecord of allLanceData) {
+        const pageId = String(lanceRecord.page_id || '');
+        if (pageId && pageId !== '0' && pageId !== '') {
+          uniquePageIds.add(pageId);
+        }
+      }
+      
+      const pageIdArray = Array.from(uniquePageIds);
+      console.log(`   📥 FirestoreからStructuredLabelを取得中（${pageIdArray.length}件のページID）...`);
+      
+      // FirestoreからStructuredLabelを取得
+      const labelsByPageId = await getStructuredLabels(pageIdArray);
+      console.log(`   ✅ 取得完了: ${labelsByPageId.size}件\n`);
+      
+      if (labelsByPageId.size === 0) {
+        console.log('   ⚠️ FirestoreにStructuredLabelが存在しません\n');
+        return;
+      }
+      
+      console.log(`   🔄 ${labelsByPageId.size}件のページIDにStructuredLabelを適用中...`);
+      
+      // 更新対象のデータを準備
+      const updates: any[] = [];
+      let updatedCount = 0;
+      
+      for (const lanceRecord of allLanceData) {
+        const pageId = String(lanceRecord.page_id || '');
+        if (labelsByPageId.has(pageId)) {
+          const structuredLabel = labelsByPageId.get(pageId)!;
+          const structuredLabelFlat = flattenStructuredLabel(structuredLabel);
+          
+          // 更新データを作成
+          const updateData = {
+            id: String(lanceRecord.id),
+            page_id: Number(lanceRecord.page_id),
+            title: String(lanceRecord.title),
+            content: String(lanceRecord.content),
+            chunkIndex: Number(lanceRecord.chunkIndex),
+            lastUpdated: String(lanceRecord.lastUpdated),
+            space_key: String(lanceRecord.space_key),
+            url: String(lanceRecord.url || ''),
+            labels: Array.isArray(lanceRecord.labels) ? lanceRecord.labels.map(String) : [],
+            vector: Array.isArray(lanceRecord.vector) ? lanceRecord.vector.map(Number) : new Array(768).fill(0.0),
+            isChunked: Boolean(lanceRecord.isChunked),
+            totalChunks: Number(lanceRecord.totalChunks),
+            // StructuredLabelを統合
+            structured_category: structuredLabelFlat.structured_category || '',
+            structured_domain: structuredLabelFlat.structured_domain || '',
+            structured_feature: structuredLabelFlat.structured_feature || '',
+            structured_priority: structuredLabelFlat.structured_priority || '',
+            structured_status: structuredLabelFlat.structured_status || '',
+            structured_version: structuredLabelFlat.structured_version || '',
+            structured_tags: Array.isArray(structuredLabelFlat.structured_tags) && structuredLabelFlat.structured_tags.length > 0 ? structuredLabelFlat.structured_tags.map(String) : ['dummy'],
+            structured_confidence: structuredLabelFlat.structured_confidence !== undefined && structuredLabelFlat.structured_confidence !== null ? Number(structuredLabelFlat.structured_confidence) : 0.0,
+            structured_content_length: structuredLabelFlat.structured_content_length !== undefined && structuredLabelFlat.structured_content_length !== null ? Number(structuredLabelFlat.structured_content_length) : 0,
+            structured_is_valid: structuredLabelFlat.structured_is_valid !== undefined && structuredLabelFlat.structured_is_valid !== null ? Boolean(structuredLabelFlat.structured_is_valid) : false
+          };
+          
+          updates.push(updateData);
+          updatedCount++;
+          
+          // バッチ処理（100件ずつ）
+          if (updates.length >= 100) {
+            // 既存レコードを削除
+            for (const update of updates) {
+              await newTable.delete(`page_id = ${update.page_id} AND chunkIndex = ${update.chunkIndex}`);
+            }
+            // 新しいデータを追加
+            await newTable.add(updates);
+            updates.length = 0;
+          }
+        }
+      }
+      
+      // 残りの更新を処理
+      if (updates.length > 0) {
+        for (const update of updates) {
+          await newTable.delete(`page_id = ${update.page_id} AND chunkIndex = ${update.chunkIndex}`);
+        }
+        await newTable.add(updates);
+      }
+      
+      console.log(`   ✅ ${updatedCount}件のレコードにStructuredLabelを適用しました\n`);
+    } catch (syncError: any) {
+      console.warn(`   ⚠️ StructuredLabel同期中にエラーが発生しました: ${syncError.message}`);
+      console.warn(`   → マイグレーションは完了していますが、ラベル同期は後で手動実行してください\n`);
+    }
+    
+    console.log('✅ 全ステップ完了\n');
     
   } catch (error) {
     console.error('❌ エラーが発生しました:', error);

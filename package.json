@@ -68,6 +68,7 @@
     "check:firestore-structured-labels": "tsx scripts/check-firestore-structured-labels.ts",
     "test:firestore-labels-integration": "tsx scripts/test-firestore-labels-integration.ts",
     "check:lancedb-table-schema": "tsx scripts/check-lancedb-table-schema.ts",
+    "check:production-lancedb-schema": "tsx scripts/check-production-lancedb-schema.ts",
     "migrate:lancedb-to-extended-schema": "tsx scripts/migrate-lancedb-table-to-extended-schema.ts",
     "restore:lancedb-backup": "tsx scripts/restore-lancedb-from-backup.ts",
     "debug:lancedb-data-query": "tsx scripts/debug-lancedb-data-query.ts",
