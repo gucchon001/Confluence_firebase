@@ -1,6 +1,11 @@
 # **App Name**: Confluence Spec-Finder
 
 ## 更新履歴
+- **2025年11月**: 現在の実装に合わせて最新化
+  - pageId → page_id マイグレーション完了（スカラーインデックス対応）
+  - パフォーマンス最適化（getAllChunksByPageId: 14秒 → 5ms）
+  - アーカイブ整理完了（未使用ファイルの整理）
+  - 型チェック・ビルド成功確認
 - **2025年1月**: 現在の実装に合わせて最新化
   - ストリーミング機能の追加
   - Firebase認証のドメイン制限
@@ -26,10 +31,19 @@
 - **UI Components**: Radix UI (Headless UI)
 - **Markdown**: ReactMarkdown + remark-gfm
 - **Authentication**: Firebase Authentication 11.9.1
-- **Database**: Firestore 11.9.1 (conversations, user data), LanceDB 0.22.0 (vector search)
+- **Database**: 
+  - Firestore 11.9.1 (conversations, user data)
+  - LanceDB 0.22.0 (vector search with scalar indexes on `page_id`)
 - **Search Engine**: Hybrid search (LanceDB + Lunr.js + keyword search)
+  - ベクトル検索: Gemini Embedding 768次元
+  - BM25検索: Lunr.js + Kuromoji（最優先、50%）
+  - タイトル救済検索: LanceDB LIKE検索（25%）
+  - ラベルスコア: カテゴリ、ドメイン、優先度（15%）
 - **AI**: Google AI Gemini API (gemini-2.5-flash)
-- **Vector Embeddings**: Xenova Transformers (paraphrase-multilingual-mpnet-base-v2, 768 dimensions)
+- **Vector Embeddings**: Gemini Embeddings API (text-embedding-004, 768 dimensions)
+- **Performance Optimization**: 
+  - スカラーインデックス（`page_id`）による高速クエリ（平均5ms）
+  - startup-optimizerによるウォームアップ処理
 
 ## Style Guidelines:
 

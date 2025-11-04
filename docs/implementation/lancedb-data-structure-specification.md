@@ -11,6 +11,13 @@ LanceDBは、大規模な生成AI・検索アプリケーション向けのオ�
 - **ベクトルデータベース**: Confluenceページの埋め込みベクトルを保存
 - **ハイブリッド検索**: ベクトル検索とBM25検索の組み合わせ
 - **RAGシステム**: チャットボットの知識ベースとして機能
+- **スカラーインデックス**: `page_id`フィールドにスカラーインデックスを設定し、高速なクエリを実現
+
+### 1.3 更新履歴
+- **2025年11月**: pageId → page_id マイグレーション完了
+  - スカラーインデックス対応のため`pageId` → `page_id`に変更
+  - パフォーマンス向上（14秒 → 5ms）
+  - API互換性のため変換レイヤーを実装
 
 ## 2. データベーススキーマ
 
@@ -18,7 +25,9 @@ LanceDBは、大規模な生成AI・検索アプリケーション向けのオ�
 - **テーブル名**: `confluence`
 - **データベースパス**: `.lancedb`
 - **ストレージ形式**: Lance Format（列指向ストレージ）
-- **インデックス**: ベクトルインデックス（自動生成）
+- **インデックス**: 
+  - ベクトルインデックス（IVF_PQ、自動生成）
+  - スカラーインデックス（`page_id`、明示的に作成）
 
 ### 2.2 スキーマ定義（TypeScript）
 
@@ -30,7 +39,7 @@ export const FullLanceDBSchema: SchemaDefinition = {
   title: { type: 'string', nullable: false },                // ページタイトル
   labels: { type: 'list', valueType: 'string', nullable: false }, // ラベル配列
   content: { type: 'string', nullable: false },              // チャンク内容
-  pageId: { type: 'int64', nullable: false },                // ページID（数値型）
+  page_id: { type: 'int64', nullable: false },                // ページID（数値型）- pageIdから変更（スカラーインデックス対応）
   chunkIndex: { type: 'int32', nullable: false },            // チャンクインデックス
   url: { type: 'string', nullable: false },                  // ページURL
   lastUpdated: { type: 'string', nullable: false }           // 最終更新日時
@@ -41,6 +50,7 @@ export const FullLanceDBSchema: SchemaDefinition = {
 
 ```typescript
 // LanceDBクライアントで使用するArrow形式スキーマ
+// ★★★ 2025年11月: pageId → page_id に変更（スカラーインデックス対応） ★★★
 const lanceSchema = {
   id: 'utf8',
   vector: {
@@ -52,7 +62,7 @@ const lanceSchema = {
   title: 'utf8',
   labels: { type: 'list', field: { type: 'utf8' } },
   content: 'utf8',
-  pageId: 'int64',
+  page_id: 'int64',  // pageIdから変更（スカラーインデックス対応）
   chunkIndex: 'int32',
   url: 'utf8',
   lastUpdated: 'utf8'
@@ -69,7 +79,7 @@ const lanceSchema = {
 | `title` | `string` | `utf8` | ページタイトル |
 | `labels` | `string[]` | `list<utf8>` | ラベル配列 |
 | `content` | `string` | `utf8` | チャンク内容 |
-| `pageId` | `number` | `int64` | ページID（数値型） |
+| `page_id` | `number` | `int64` | ページID（数値型）- pageIdから変更（スカラーインデックス対応） |
 | `chunkIndex` | `number` | `int32` | チャンクインデックス |
 | `url` | `string` | `utf8` | ページURL |
 | `lastUpdated` | `string` | `utf8` | 最終更新日時（ISO 8601） |
@@ -92,10 +102,13 @@ const lanceSchema = {
 - **制約**: `nullable: false`
 - **説明**: テキスト内容の意味的表現を表す768次元ベクトル
 
-#### 3.1.3 pageId（ページID）
+#### 3.1.3 page_id（ページID）
 - **型**: `int64`
 - **制約**: `nullable: false`
 - **説明**: Confluenceページの一意識別子（数値型）
+- **変更履歴**: `pageId`から`page_id`に変更（2025年11月、スカラーインデックス対応）
+- **インデックス**: スカラーインデックスが作成され、高速なクエリが可能（平均5ms）
+- **API互換性**: APIレスポンスでは`pageId`として返却（変換レイヤーで対応）
 - **変換**: 文字列から数値への変換が必要
 
 #### 3.1.4 chunkIndex（チャンクインデックス）
@@ -238,10 +251,11 @@ private splitPageIntoChunks(page: IdealPage): Omit<IdealChunk, 'vector'>[] {
 ```typescript
 /**
  * LanceDBに保存するチャンクデータの作成
+ * ★★★ 2025年11月: pageId → page_id に変更（スカラーインデックス対応） ★★★
  */
 const chunkData = {
   id: `${chunk.pageId}-${chunk.chunkIndex}`,
-  pageId: parseInt(chunk.pageId),           // 数値型に変換
+  page_id: Number(chunk.pageId),           // 数値型に変換、フィールド名はpage_id
   title: chunk.title,
   content: chunk.content,
   chunkIndex: chunk.chunkIndex,
@@ -259,7 +273,8 @@ const chunkData = {
 await table.add([chunkData]);
 
 // データ削除（ページIDで削除）
-await table.delete(`"pageId" = ${pageId}`);
+// ★★★ 2025年11月: pageId → page_id に変更（スカラーインデックス対応） ★★★
+await table.delete(`\`page_id\` = ${pageId}`);
 
 // データ検索
 const dummyVector = new Array(768).fill(0);
@@ -308,9 +323,10 @@ const filteredResults = await table.search(queryVector)
   .limit(20)
   .toArray();
 
-// ページIDによる検索
-const pageResults = await table.search(queryVector)
-  .where(`pageId = ${pageId}`)
+// ページIDによる検索（スカラーインデックス使用）
+// ★★★ 2025年11月: pageId → page_id に変更（スカラーインデックス対応） ★★★
+const pageResults = await table.query()
+  .where(`\`page_id\` = ${pageId}`)  // スカラーインデックスが効くため高速（平均5ms）
   .limit(100)
   .toArray();
 
@@ -362,7 +378,7 @@ const rerankedResults = results
 ## 9. パフォーマンス最適化
 
 ### 9.1 インデックス戦略
-LanceDBは自動的にベクトルインデックスを生成し、効率的な検索を提供します。
+LanceDBは自動的にベクトルインデックスを生成し、効率的な検索を提供します。また、スカラーインデックスを明示的に作成することで、特定フィールドのクエリを高速化できます。
 
 ```typescript
 // ベクトルインデックスの設定
@@ -374,12 +390,16 @@ const table = await db.createTable("confluence", data, {
   }
 });
 
-// インデックスの再構築（必要に応じて）
+// ベクトルインデックスの作成（IVF_PQ）
 await table.createIndex("vector", {
   type: "IVF_PQ",
   num_partitions: 256,
   num_sub_vectors: 16
 });
+
+// ★★★ 2025年11月追加: スカラーインデックスの作成（page_id） ★★★
+// スカラーインデックスにより、page_idでのクエリが劇的に高速化（14秒 → 5ms）
+await table.createIndex("page_id");
 ```
 
 ### 9.2 メモリ管理
@@ -398,8 +418,14 @@ for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
 
 ### 9.3 検索パフォーマンス
 - **ベクトル検索**: O(log n) - インデックス使用
-- **フィルタリング**: O(n) - 全件スキャン
-- **ハイブリッド検索**: ベクトル検索 + 後処理フィルタリング
+- **スカラー検索（page_id）**: O(log n) - スカラーインデックス使用（平均5ms）
+- **フィルタリング**: O(n) - 全件スキャン（インデックスなしの場合）
+- **ハイブリッド検索**: ベクトル検索 + BM25検索 + 後処理フィルタリング
+
+### 9.3.1 スカラーインデックスの効果
+- **page_idインデックス作成前**: 約14秒（全件スキャン）
+- **page_idインデックス作成後**: 約5ms（インデックス使用）
+- **改善率**: 約99.96%の高速化
 
 ### 9.4 ストレージ最適化
 LanceDBの列指向ストレージにより、以下の最適化が自動的に適用されます：
@@ -427,8 +453,9 @@ const inefficientQuery = await table.search(queryVector)
 ### 10.1 データ整合性テスト
 ```typescript
 // 全チャンクのデータ型を検証
+// ★★★ 2025年11月: pageId → page_id に変更 ★★★
 allData.forEach((row: any) => {
-  assert(typeof row.pageId === 'number', 'pageId must be number');
+  assert(typeof row.page_id === 'number', 'page_id must be number');
   assert(Array.isArray(row.labels), 'labels must be array');
   assert(typeof row.lastUpdated === 'string', 'lastUpdated must be string');
 });
@@ -437,7 +464,8 @@ allData.forEach((row: any) => {
 ### 10.2 ラベル機能テスト
 ```typescript
 // ラベルが正しく保存されているかテスト
-const testPage = allData.find(row => row.pageId === testPageId);
+// ★★★ 2025年11月: pageId → page_id に変更 ★★★
+const testPage = allData.find(row => row.page_id === testPageId);
 assert(testPage.labels.length > 0, 'Labels should be saved');
 ```
 
@@ -502,13 +530,15 @@ console.log('Sample data:', sample[0]);
 
 この仕様書に従って実装することで、LanceDBでのデータ保存・検索が正しく動作し、ラベル機能も含めたハイブリッド検索が期待通りに機能します。特に以下の点に注意してください：
 
-1. **pageIdは数値型**で保存する
-2. **lastUpdatedフィールド名**を使用する
-3. **ラベル抽出メソッド**を正しく実装する
-4. **データ型変換**を適切に行う
-5. **エラーハンドリング**を適切に実装する
-6. **パフォーマンス最適化**を考慮する
-7. **LanceDBのベストプラクティス**に従う
+1. **page_idは数値型**で保存する（pageIdから変更済み、2025年11月）
+2. **スカラーインデックス**を`page_id`に作成してパフォーマンスを最適化
+3. **API互換性**のため、変換レイヤー（pageid-migration-helper.ts）を使用
+4. **lastUpdatedフィールド名**を使用する
+5. **ラベル抽出メソッド**を正しく実装する
+6. **データ型変換**を適切に行う
+7. **エラーハンドリング**を適切に実装する
+8. **パフォーマンス最適化**を考慮する（スカラーインデックスの活用）
+9. **LanceDBのベストプラクティス**に従う
 
 ### 参考資料
 - [LanceDB公式ドキュメント](https://lancedb.com/docs/)

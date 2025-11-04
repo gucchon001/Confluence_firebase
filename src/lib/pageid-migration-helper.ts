@@ -55,15 +55,15 @@ export function mapAPIToDatabaseRecord(record: any): any {
 }
 
 /**
- * データベースレコードからpageIdを取得（両方のフィールド名に対応）
+ * データベースレコードからpage_idを取得
+ * page_idフィールドのみを使用（フォールバックなし）
  */
 export function getPageIdFromRecord(record: any): number | string | undefined {
+  // page_idフィールドのみを使用（唯一の信頼できる情報源）
   if (record.page_id !== undefined) {
     return record.page_id;
   }
-  if (record.pageId !== undefined) {
-    return record.pageId;
-  }
+  // page_idが存在しない場合はundefinedを返す（フォールバックしない）
   return undefined;
 }
 

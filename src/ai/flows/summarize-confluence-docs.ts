@@ -272,10 +272,12 @@ export async function summarizeConfluenceDocs({
     const contextText = documents
       .slice(0, 10)  // Phase 5修正: 最大10件に制限（品質維持とトークン制限のバランス）
       .map(
-        (doc) => {
-          // Phase 5修正: 各文書の内容を800文字に削減（MAX_TOKENS対策）
-          const truncatedContent = doc.content && doc.content.length > 800 
-            ? doc.content.substring(0, 800) + '...' 
+        (doc, index) => {
+          // ランキングに基づく動的な文字数制限（1位のドキュメントに十分な文字数を確保）
+          // 1位: 2000文字、2位: 1500文字、3位: 1200文字、4位以降: 800文字
+          const maxLength = index === 0 ? 2000 : index === 1 ? 1500 : index === 2 ? 1200 : 800;
+          const truncatedContent = doc.content && doc.content.length > maxLength 
+            ? doc.content.substring(0, maxLength) + '...' 
             : doc.content || '内容なし';
           
           return `## ドキュメント: ${doc.title}

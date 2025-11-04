@@ -6,16 +6,24 @@ Confluence仕様書要約チャットボット (仮称: Spec-Finder)
 
 ## 1.4 更新履歴
 
+**2025年11月**: 現在の実装に合わせて仕様書を最新化
+- pageId → page_id マイグレーション完了: スカラーインデックス対応のためフィールド名を変更
+- パフォーマンス最適化: `getAllChunksByPageId`が14秒 → 5msに高速化（99.96%改善）
+- スカラーインデックス: `page_id`フィールドにスカラーインデックスを設定
+- API互換性: 変換レイヤー（pageid-migration-helper.ts）によりAPIレスポンスでは`pageId`を維持
+- アーカイブ整理: 未使用ファイルを`src/lib/archive/`と`scripts/archive/`に移動
+- 型チェック・ビルド: すべての型エラーを解消、ビルドが正常に完了
+
 **2025年1月**: 現在の実装に合わせて仕様書を最新化
 - ストリーミング機能: リアルタイム回答生成とプログレス表示
 - マークダウン表示: 高度な正規化とテーブル表示機能
 - Firebase認証: @tomonokai-corp.com ドメイン制限
 - 会話履歴: Firestore統合による永続化
-- 埋め込みモデル: paraphrase-multilingual-mpnet-base-v2（768次元）
+- 埋め込みモデル: Gemini Embeddings API (text-embedding-004, 768次元)
 - LLM: Gemini API (gemini-2.5-flash)
 - ハイブリッド検索: ベクトル検索 + BM25検索 + キーワード検索 + 動的関連性スコアリング
 - 日本語対応: Kuromojiトークナイザー使用
-- AIフレームワーク: 現在は直接API呼び出し（Genkit統合予定）
+- AIフレームワーク: Genkit 1.19.2（部分統合、3つのFlows実装）
 
 **2024年12月**: 初期実装完了
 - 基本検索機能の実装
@@ -135,19 +143,24 @@ graph TD
 
 ## AI・機械学習
 - **LLM**: Google AI - Gemini API (gemini-2.5-flash)
-- **埋め込みモデル**: @xenova/transformers (paraphrase-multilingual-mpnet-base-v2)
+- **埋め込みモデル**: Gemini Embeddings API (text-embedding-004)
   - 768次元のベクトル生成
-  - ローカル実行によるコスト削減
-  - API依存なしでオフライン動作可能
-  - 初回ロード後の高速な処理（8-14ms）
+  - API経由での埋め込み生成
+  - 簡易メモリキャッシュ実装（TTL 15分、最大1000エントリ）
   - 日本語テキスト対応（Kuromojiトークナイザー使用）
-- **AIフレームワーク**: 現在は直接API呼び出し（Genkit統合予定）
+- **AIフレームワーク**: Genkit 1.19.2（部分統合）
+  - 実装済みFlows: auto-label-flow, retrieve-relevant-docs-lancedb, streaming-summarize-confluence-docs
+  - Dev UI: http://localhost:9004
 
 ## データベース・ストレージ
 - **認証**: Firebase Authentication 11.9.1
 - **NoSQL**: Firestore (会話履歴・ユーザーデータ・システムメトリクス)
 - **ベクトルDB**: LanceDB 0.22.0 (ローカルベクトルDB)
   - 高速なローカルベクトル検索
+  - ベクトルインデックス（IVF_PQ）自動生成
+  - スカラーインデックス（`page_id`）明示的に作成
+  - スキーマ: `page_id`フィールド（pageIdから変更、2025年11月）
+  - パフォーマンス: `getAllChunksByPageId`が平均5ms（スカラーインデックス使用）
   - 検索時間: 平均7-23ms
   - メモリ効率: 低消費（100回の検索で約0.5MB増加）
   - メタデータ統合管理: 検索結果に必要なメタデータを直接格納

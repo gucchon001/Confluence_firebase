@@ -101,11 +101,29 @@ export function calculateHybridSearchScore(
   return vectorWeight * vectorSimilarity + bm25Weight * normalizedBm25;
 }
 
+/**
+ * スコアテキストを生成（最新の計算ロジック対応）
+ * @param sourceType ソースタイプ
+ * @param score スコア値
+ * @param distance 距離値（ベクトル/ハイブリッドの場合）
+ * @param compositeScore Composite Score（0-1の範囲、最新の計算ロジック）
+ * @returns スコアテキスト
+ */
 export function generateScoreText(
   sourceType: 'vector' | 'bm25' | 'keyword' | 'hybrid',
   score?: number,
-  distance?: number
+  distance?: number,
+  compositeScore?: number
 ): string {
+  // Composite Score が提供されている場合は、それを優先的に使用（最新の計算ロジック）
+  if (compositeScore !== undefined && compositeScore !== null) {
+    // Composite Score を0-100%に変換
+    // Composite Score は0-1の範囲なので、100を掛けてパーセンテージに変換
+    const compositePct = Math.round(Math.max(0, Math.min(100, compositeScore * 100)));
+    return `Composite ${compositePct}%`;
+  }
+  
+  // フォールバック: 既存のロジック（Composite Score が提供されていない場合）
   switch (sourceType) {
     case 'vector':
     case 'hybrid':

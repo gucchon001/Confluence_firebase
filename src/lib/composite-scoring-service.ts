@@ -9,6 +9,7 @@
 
 import { calculateLabelMatchScore } from './structured-label-scorer';
 import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
+import { searchLogger } from './search-logger';
 
 export interface SearchSignals {
   vectorDistance: number;      // ベクトル距離（小さいほど良い）
@@ -185,10 +186,16 @@ export class CompositeScoringService {
       !record.structured_domain &&
       !record.structured_feature
     ) {
+      // DEBUG: StructuredLabelがない場合もログ出力
+      if (process.env.NODE_ENV === 'development' && record.title) {
+        const logMessage = `[CompositeScoring] ❌ No StructuredLabel for: "${record.title}"`;
+        console.log(logMessage);
+        searchLogger.addDebugLog(logMessage);
+      }
       return null;
     }
     
-    return {
+    const structuredLabel = {
       category: record.structured_category,
       domain: record.structured_domain,
       feature: record.structured_feature,
@@ -200,6 +207,15 @@ export class CompositeScoringService {
       content_length: record.structured_content_length,
       is_valid: record.structured_is_valid,
     };
+    
+    // DEBUG: StructuredLabelが抽出された場合もログ出力
+    if (process.env.NODE_ENV === 'development' && record.title) {
+      const logMessage = `[CompositeScoring] ✅ StructuredLabel extracted for: "${record.title}" - feature: ${structuredLabel.feature}, domain: ${structuredLabel.domain}, category: ${structuredLabel.category}`;
+      console.log(logMessage);
+      searchLogger.addDebugLog(logMessage);
+    }
+    
+    return structuredLabel;
   }
   
   /**
@@ -283,6 +299,13 @@ export class CompositeScoringService {
       return Math.min(score, 1.0);
     }
     
+    // DEBUG: StructuredLabelの内容をログ出力
+    if (process.env.NODE_ENV === 'development') {
+      const logMessage = `[CompositeScoring] StructuredLabel found: feature=${structuredLabel.feature}, domain=${structuredLabel.domain}, category=${structuredLabel.category}, keywords=${lowerKeywords.join(',')}`;
+      console.log(logMessage);
+      searchLogger.addDebugLog(logMessage);
+    }
+    
     // StructuredLabel処理（lowerKeywordsは既に上で定義済み）
     let structuredMatchCount = 0;
     let totalChecks = 0;
@@ -293,15 +316,60 @@ export class CompositeScoringService {
       const domainLower = structuredLabel.domain.toLowerCase();
       if (lowerKeywords.some(k => domainLower.includes(k) || k.includes(domainLower))) {
         structuredMatchCount += 2; // ドメインは2倍重要
+        if (process.env.NODE_ENV === 'development') {
+          const logMessage = `[CompositeScoring] ✅ Domain match: "${structuredLabel.domain}" with keywords`;
+          console.log(logMessage);
+          searchLogger.addDebugLog(logMessage);
+        }
       }
     }
     
-    // 機能名マッチング（重要）
+    // 機能名マッチング（重要） - 完全一致を優先
     if (structuredLabel.feature) {
       totalChecks++;
       const featureLower = structuredLabel.feature.toLowerCase();
-      if (lowerKeywords.some(k => featureLower.includes(k) || k.includes(featureLower))) {
-        structuredMatchCount += 1.5; // 機能名は1.5倍重要
+      
+      // キーワードを結合してクエリ全体をチェック（順序と空白を考慮）
+      // 例：["削除", "教室"] → "削除 教室" と "教室削除" の両方をチェック
+      const queryLowerWithSpace = lowerKeywords.join(' ').toLowerCase();
+      const queryLowerWithoutSpace = lowerKeywords.join('').toLowerCase();
+      // キーワードの順序を逆にした場合もチェック
+      const queryLowerReversed = lowerKeywords.slice().reverse().join('').toLowerCase();
+      
+      // 完全一致を最優先（例：「教室削除機能」と「教室削除」の部分一致）
+      // 空白あり・なし・逆順のすべてのパターンをチェック
+      const isFullMatch = featureLower.includes(queryLowerWithSpace) || 
+                          featureLower.includes(queryLowerWithoutSpace) ||
+                          featureLower.includes(queryLowerReversed) ||
+                          queryLowerWithSpace.includes(featureLower) ||
+                          queryLowerWithoutSpace.includes(featureLower) ||
+                          queryLowerReversed.includes(featureLower);
+      
+      if (isFullMatch) {
+        // 完全一致またはクエリが機能名に含まれる場合：3倍重要
+        structuredMatchCount += 3;
+        // 本番環境以外でログ出力
+        if (process.env.NODE_ENV !== 'production') {
+          const logMessage = `[CompositeScoring] ✅✅✅ Feature FULL match: "${structuredLabel.feature}" with query "${queryLowerWithoutSpace}" (score: +3)`;
+          console.log(logMessage);
+          searchLogger.addDebugLog(logMessage);
+        }
+      } else if (lowerKeywords.some(k => featureLower.includes(k) || k.includes(featureLower))) {
+        // 部分一致の場合：1.5倍重要
+        structuredMatchCount += 1.5;
+        // 本番環境以外でログ出力
+        if (process.env.NODE_ENV !== 'production') {
+          const logMessage = `[CompositeScoring] ✅ Feature partial match: "${structuredLabel.feature}" with keywords (score: +1.5)`;
+          console.log(logMessage);
+          searchLogger.addDebugLog(logMessage);
+        }
+      } else {
+        // 本番環境以外でログ出力
+        if (process.env.NODE_ENV !== 'production') {
+          const logMessage = `[CompositeScoring] ❌ Feature NO match: "${structuredLabel.feature}" with query "${queryLowerWithoutSpace}"`;
+          console.log(logMessage);
+          searchLogger.addDebugLog(logMessage);
+        }
       }
     }
     
@@ -333,8 +401,16 @@ export class CompositeScoringService {
     
     // 正規化して0-1の範囲に
     if (totalChecks > 0) {
-      const maxPossibleScore = 2 + 1.5 + 0.5 + 0.3 + 0.2; // 4.5
-      score += Math.min(structuredMatchCount / maxPossibleScore, 1.0) * 0.8; // 80%の重み
+      const maxPossibleScore = 2 + 3 + 0.5 + 0.3 + 0.2; // 6.0（機能名の最大スコアを3に更新）
+      const structuredScore = Math.min(structuredMatchCount / maxPossibleScore, 1.0) * 0.8; // 80%の重み
+      score += structuredScore;
+      
+      // DEBUG: スコア計算の詳細をログ出力
+      if (process.env.NODE_ENV === 'development') {
+        const logMessage = `[CompositeScoring] Label score breakdown: structuredMatchCount=${structuredMatchCount}, maxPossibleScore=${maxPossibleScore}, structuredScore=${structuredScore.toFixed(4)}, totalScore=${Math.min(score, 1.0).toFixed(4)}`;
+        console.log(logMessage);
+        searchLogger.addDebugLog(logMessage);
+      }
     }
     
     return Math.min(score, 1.0); // 最大1.0に制限

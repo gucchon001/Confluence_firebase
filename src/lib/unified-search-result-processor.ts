@@ -13,6 +13,7 @@ import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config
 export interface RawSearchResult {
   id: string;
   pageId?: number;
+  page_id?: number; // ★★★ MIGRATION: page_idフィールドを追加 ★★★
   title: string;
   content: string;
   isChunked?: boolean;  // Phase 0A-3: チャンク統合判定フラグ
@@ -40,6 +41,7 @@ export interface RawSearchResult {
 export interface ProcessedSearchResult {
   id: string;
   pageId?: number;
+  page_id?: number; // ★★★ MIGRATION: page_idフィールドを追加 ★★★
   title: string;  // Required to match LanceDBSearchResult
   content: string;
   isChunked?: boolean;  // Phase 0A-3: チャンク統合判定フラグ
@@ -83,6 +85,8 @@ export interface ProcessedSearchResult {
   titleScore?: number;  // Renamed from 'title' to avoid conflict
   labelScore?: number;  // Renamed from 'label' to avoid conflict
   _titleMatchRatio?: number;
+  _titleMatchedKeywords?: number; // ★★★ 追加: タイトルマッチキーワード数 ★★★
+  _bm25Score?: number; // ★★★ 追加: BM25スコア ★★★
   _distance?: number;
   _hybridScore?: number;
   _sourceType?: string;
@@ -289,14 +293,16 @@ export class UnifiedSearchResultProcessor {
         finalScore = calculateSimilarityPercentage(distance);
       }
 
-      // スコア情報生成
+      // スコア情報生成（最新の計算ロジック: Composite Score を優先的に使用）
       const scoreKind = sourceType;
       const scoreRaw = sourceType === 'bm25' || sourceType === 'keyword' ? bm25Score : distance;
-      const scoreText = generateScoreText(sourceType, bm25Score, distance);
+      const compositeScore = (result as any)._compositeScore; // 最新の計算ロジック（Composite Score）
+      const scoreText = generateScoreText(sourceType, bm25Score, distance, compositeScore);
 
       return {
         id: result.id,
-        pageId: result.pageId,
+        pageId: result.pageId ?? result.page_id, // ★★★ MIGRATION: page_idをフォールバックとして使用 ★★★
+        page_id: result.page_id ?? result.pageId, // ★★★ MIGRATION: page_idを保持 ★★★
         title: result.title || 'No Title',
         content: result.content || '',
         isChunked: result.isChunked,  // Phase 0A-3: チャンク統合判定フラグ
@@ -331,6 +337,8 @@ export class UnifiedSearchResultProcessor {
         titleScore: (result as any).title,  // Renamed to avoid conflict with title property
         labelScore: (result as any).label,  // Renamed to avoid conflict
         _titleMatchRatio: (result as any)._titleMatchRatio,
+        _titleMatchedKeywords: (result as any)._titleMatchedKeywords, // ★★★ 追加: タイトルマッチキーワード数を保持 ★★★
+        _bm25Score: (result as any)._bm25Score, // ★★★ 追加: BM25スコアを保持 ★★★
         _distance: result._distance,
         _hybridScore: result._hybridScore,
         _sourceType: result._sourceType,

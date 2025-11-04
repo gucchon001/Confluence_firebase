@@ -294,10 +294,12 @@ export async function* streamingSummarizeConfluenceDocs(
     const contextText = context
       .slice(0, 5) // 上位5件（品質維持）
       .map(
-        (doc) => {
-          // 各文書の内容を3分の2に削減（800 → 530文字、パフォーマンスと品質のバランス）
-          const truncatedContent = doc.content && doc.content.length > 530 
-            ? doc.content.substring(0, 530) + '...' 
+        (doc, index) => {
+          // ランキングに基づく動的な文字数制限（1位のドキュメントに十分な文字数を確保）
+          // 1位: 1500文字、2位: 1000文字、3位: 800文字、4位以降: 530文字
+          const maxLength = index === 0 ? 1500 : index === 1 ? 1000 : index === 2 ? 800 : 530;
+          const truncatedContent = doc.content && doc.content.length > maxLength 
+            ? doc.content.substring(0, maxLength) + '...' 
             : doc.content || '内容なし';
           
           return `**${doc.title}**

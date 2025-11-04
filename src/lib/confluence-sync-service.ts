@@ -11,6 +11,8 @@
 import { LanceDBClient } from './lancedb-client';
 import { getEmbeddings } from './embeddings';
 import { convertLabelsToArray, shouldExcludeByLabels } from './label-helper';
+import { getStructuredLabel } from './structured-label-service';
+import { flattenStructuredLabel, type ExtendedLanceDBRecord } from './lancedb-schema-extended';
 import axios from 'axios';
 
 export interface ConfluencePage {
@@ -577,17 +579,44 @@ export class ConfluenceSyncService {
       // ページを2-3チャンクに分割
       const chunks = this.splitPageIntoChunks(page);
       
+      // 【新規】FirestoreからStructuredLabelを取得（ページ単位で1回のみ）
+      let structuredLabelFlat: Partial<ExtendedLanceDBRecord> = {};
+      try {
+        const structuredLabel = await getStructuredLabel(page.id);
+        if (structuredLabel) {
+          structuredLabelFlat = flattenStructuredLabel(structuredLabel);
+          // 本番環境では詳細ログを抑制（パフォーマンス最適化）
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`  ✅ Firestore StructuredLabel取得: ${page.id} (feature: ${structuredLabel.feature || 'N/A'})`);
+          }
+        } else {
+          // 本番環境では警告ログを抑制（StructuredLabelがないのは正常なケース）
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`  ⚠️ Firestore StructuredLabelなし: ${page.id}`);
+          }
+        }
+      } catch (error) {
+        // Firestore取得エラーは警告のみ（同期を継続）
+        // 本番環境でもエラーはログに記録（問題の検知のため）
+        console.warn(`  ⚠️ Firestore StructuredLabel取得エラー: ${page.id}`, error);
+      }
+      
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         
         // 埋め込みベクトルを生成
         const embedding = await getEmbeddings(chunk.content);
         
-        // ラベルを抽出（デバッグログ付き）
-        console.log(`🔍 ページ処理開始: ${page.title}`);
-        console.log(`  page.metadata:`, page.metadata);
+        // ラベルを抽出
+        // 本番環境では詳細ログを抑制（パフォーマンス最適化）
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`🔍 ページ処理開始: ${page.title}`);
+          console.log(`  page.metadata:`, page.metadata);
+        }
         const labels = this.extractLabelsFromPage(page);
-        console.log(`  🏷️ 抽出されたラベル: [${labels.join(', ')}]`);
+        if (process.env.NODE_ENV !== 'production' && labels.length > 0) {
+          console.log(`  🏷️ 抽出されたラベル: [${labels.join(', ')}]`);
+        }
         
         // チャンクデータを作成（LanceDBのスキーマに合わせる）
         const chunkData = {
@@ -642,24 +671,29 @@ export class ConfluenceSyncService {
             } else {
               return new Array(768).fill(0.0);
             }
-          })()
+          })(),
+          // 【新規】Firestore StructuredLabelを統合
+          ...structuredLabelFlat
         };
 
-        // デバッグ用ログ
-        if (labels.length > 0) {
-          console.log(`  🏷️ ラベル抽出: ${labels.join(', ')}`);
+        // デバッグ用ログ（本番環境では抑制）
+        if (process.env.NODE_ENV !== 'production') {
+          if (labels.length > 0) {
+            console.log(`  🏷️ ラベル抽出: ${labels.join(', ')}`);
+          }
+          
+          // 型変換のデバッグログ
+          console.log(`  🔍 型変換前 - labels: ${typeof chunkData.labels}, vector: ${typeof chunkData.vector}`);
+          console.log(`  🔍 型変換後 - labels: ${typeof lanceData.labels}, vector: ${typeof lanceData.vector}`);
+          console.log(`  🔍 ラベル配列確認: ${Array.isArray(lanceData.labels)}`);
+          console.log(`  🔍 ベクトル配列確認: ${Array.isArray(lanceData.vector)}`);
         }
-        
-        // 型変換のデバッグログ
-        console.log(`  🔍 型変換前 - labels: ${typeof chunkData.labels}, vector: ${typeof chunkData.vector}`);
-        console.log(`  🔍 型変換後 - labels: ${typeof lanceData.labels}, vector: ${typeof lanceData.vector}`);
-        console.log(`  🔍 ラベル配列確認: ${Array.isArray(lanceData.labels)}`);
-        console.log(`  🔍 ベクトル配列確認: ${Array.isArray(lanceData.vector)}`);
 
         // LanceDBに追加（明示的な型変換）
+        // 注意: pageIdは含めない（LanceDBスキーマはpage_idのみ）
         const finalData = {
           id: lanceData.id,
-          pageId: lanceData.page_id,
+          page_id: lanceData.page_id,  // データベースフィールド名はpage_id
           title: lanceData.title,
           content: lanceData.content,
           chunkIndex: lanceData.chunkIndex,
@@ -667,14 +701,26 @@ export class ConfluenceSyncService {
           space_key: lanceData.space_key,
           url: lanceData.url,
           labels: [...lanceData.labels], // スプレッド演算子で新しい配列を作成
-          vector: [...lanceData.vector]  // スプレッド演算子で新しい配列を作成
+          vector: [...lanceData.vector], // スプレッド演算子で新しい配列を作成
+          // 【新規】Firestore StructuredLabelを統合
+          ...structuredLabelFlat
         };
         
-        console.log(`  🔍 最終データ型確認 - labels: ${typeof finalData.labels}, vector: ${typeof finalData.vector}`);
-        console.log(`  🔍 最終配列確認 - labels: ${Array.isArray(finalData.labels)}, vector: ${Array.isArray(finalData.vector)}`);
+        // 本番環境では詳細ログを抑制（パフォーマンス最適化）
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`  🔍 最終データ型確認 - labels: ${typeof finalData.labels}, vector: ${typeof finalData.vector}`);
+          console.log(`  🔍 最終配列確認 - labels: ${Array.isArray(finalData.labels)}, vector: ${Array.isArray(finalData.vector)}`);
+        }
         
         await table.add([finalData]);
-        console.log(`  ✅ チャンク ${i + 1}/${chunks.length} を追加: ${chunk.title}`);
+        // 本番環境でも進捗ログは出力（重要な情報のため）
+        if (i === 0 || i === chunks.length - 1) {
+          // 最初と最後のチャンクのみログ出力（パフォーマンス最適化）
+          console.log(`  ✅ チャンク ${i + 1}/${chunks.length} を追加: ${chunk.title.substring(0, 50)}${chunk.title.length > 50 ? '...' : ''}`);
+        } else if (process.env.NODE_ENV !== 'production') {
+          // 開発環境では全チャンクのログを出力
+          console.log(`  ✅ チャンク ${i + 1}/${chunks.length} を追加: ${chunk.title}`);
+        }
       }
     } catch (error) {
       console.error(`ページ追加エラー: ${error}`);

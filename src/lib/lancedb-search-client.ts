@@ -14,9 +14,10 @@ import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
-import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
+import { GENERIC_DOCUMENT_TERMS, GENERIC_FUNCTION_TERMS, CommonTermsHelper } from './common-terms-config';
 import { GenericCache } from './generic-cache';
 import { kgSearchService } from './kg-search-service';
+import { searchLogger } from './search-logger';
 
 // 検索結果キャッシュ（グローバルに保持してHMRの影響を回避）
 // Phase 5最適化: TTLとサイズを拡大（品質影響なし）
@@ -99,7 +100,8 @@ export interface LanceDBSearchParams {
  */
 export interface LanceDBSearchResult {
   id: string;
-  pageId?: number; // LanceDB行に含まれる場合があるため追加
+  pageId?: number; // LanceDB行に含まれる場合があるため追加（API互換性のため）
+  page_id?: number; // データベース形式（内部処理用、唯一の信頼できる情報源）
   title: string;
   content: string;
   distance: number;
@@ -552,8 +554,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
           
           let added = 0;
           for (const row of bm25Results) {
-            if (!resultsWithHybridScore.some(r => r.id === row.id)) {
-            // BM25結果にも calculateKeywordScore を適用
+            const existingIndex = resultsWithHybridScore.findIndex(r => r.id === row.id);
+            
+            if (existingIndex === -1) {
+              // BM25結果にも calculateKeywordScore を適用
               // labelsを配列として正規化
               const normalizedLabels = Array.isArray(row.labels) 
                 ? row.labels 
@@ -580,6 +584,18 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
               merged._hybridScore = calculateHybridScore(merged._distance, merged._keywordScore, merged._labelScore);
               resultsWithHybridScore.push(merged);
               added++;
+            } else {
+              // ★★★ 修正: 既存のベクトル検索結果にBM25スコアを追加 ★★★
+              const existing = resultsWithHybridScore[existingIndex];
+              if (existing._bm25Score === undefined && row._bm25Score !== undefined) {
+                existing._bm25Score = row._bm25Score;
+                existing._titleMatchRatio = row._titleMatchRatio ?? existing._titleMatchRatio;
+                existing._titleMatchedKeywords = row._titleMatchedKeywords ?? existing._titleMatchedKeywords;
+                // ソースタイプをhybridに更新（ベクトルとBM25の両方がある場合）
+                if (existing._sourceType === 'vector') {
+                  existing._sourceType = 'hybrid';
+                }
+              }
             }
           }
           console.log(`[searchLanceDB] Added ${added} BM25 rows to hybrid candidates`);
@@ -809,6 +825,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       console.log(`⏱️ Total duration: ${searchFunctionDuration}ms (${(searchFunctionDuration / 1000).toFixed(2)}s)`);
       console.log(`✅ Returned ${processedResults.length} results`);
       console.log(`========================================\n`);
+      
+      // 検索ログをファイルに保存
+      try {
+        searchLogger.saveSearchLog(params.query, processedResults);
+      } catch (logError) {
+        console.warn('[searchLanceDB] Failed to save search log:', logError);
+      }
     }
     
     return processedResults;
@@ -1020,8 +1043,14 @@ async function executeVectorSearch(
     }
     
     // タイトルブースト適用
+    // ★★★ MIGRATION: page_idフィールドを確実に保持 ★★★
+    const { getPageIdFromRecord } = await import('./pageid-migration-helper');
     vectorResults = vectorResults.map(result => {
       const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(result.title, finalKeywords);
+      
+      // page_idを確実に保持（getPageIdFromRecordを使用）
+      const pageId = getPageIdFromRecord(result);
+      const page_id = result.page_id ?? pageId;
       
       if (matchedKeywords.length > 0) {
         let boostFactor = 1.0;
@@ -1033,13 +1062,18 @@ async function executeVectorSearch(
         
         return { 
           ...result, 
+          page_id: page_id, // ★★★ MIGRATION: page_idを確実に保持 ★★★
           _distance: result._distance * (1 / boostFactor), 
           _titleBoosted: true,
           _titleMatchedKeywords: matchedKeywords.length,
           _titleMatchRatio: titleMatchRatio
         };
       }
-      return result;
+      // マッチしない場合もpage_idを保持
+      return {
+        ...result,
+        page_id: page_id // ★★★ MIGRATION: page_idを確実に保持 ★★★
+      };
     });
     
     console.log(`[Vector Search] Title boost applied: ${vectorResults.filter(r => r._titleBoosted).length} results`);
@@ -1107,12 +1141,15 @@ async function executeBM25Search(
         boostedScore *= 3.0;
       }
       
+      const pageId = getPageIdFromRecord(r) || r.pageId;
+      const page_id = r.page_id ?? pageId; // ★★★ MIGRATION: page_idを確実に保持 ★★★
       return {
         id: r.id,
         title: r.title,
         content: r.content,
         labels: r.labels,
-        pageId: getPageIdFromRecord(r) || r.pageId,
+        pageId: pageId,
+        page_id: page_id, // ★★★ MIGRATION: page_idを確実に保持 ★★★
         isChunked: r.isChunked,
         url: r.url,
         space_key: r.space_key,
@@ -1147,6 +1184,8 @@ async function executeBM25Search(
 /**
  * タイトルキーワードマッチングを計算（共通関数）
  * ベクトル・BM25両方で使用
+ * 改善: クエリ全体の一致を優先（例：「教室削除」が「教室削除機能」に含まれる場合）
+ * 改善: 余分な単語が含まれる場合はペナルティ（例：「教室グループ削除機能」は「教室削除」に対して余分な「グループ」が含まれる）
  */
 function calculateTitleMatch(title: string, keywords: string[]): {
   matchedKeywords: string[];
@@ -1154,7 +1193,99 @@ function calculateTitleMatch(title: string, keywords: string[]): {
 } {
   const titleLower = String(title || '').toLowerCase();
   const matchedKeywords = keywords.filter(kw => titleLower.includes(kw.toLowerCase()));
-  const titleMatchRatio = keywords.length > 0 ? matchedKeywords.length / keywords.length : 0;
+  
+  // 基本マッチ比率
+  let titleMatchRatio = keywords.length > 0 ? matchedKeywords.length / keywords.length : 0;
+  
+  // 改善: クエリ全体（キーワードを結合）がタイトルに含まれる場合はブースト
+  if (keywords.length > 1) {
+    const queryLower = keywords.join(' ').toLowerCase();
+    const queryLowerNoSpace = keywords.join('').toLowerCase();
+    const queryLowerReversed = keywords.slice().reverse().join('').toLowerCase();
+    
+    // クエリ全体がタイトルに完全に含まれるかチェック（順序・空白を考慮）
+    const isFullQueryMatch = titleLower.includes(queryLower) || 
+                             titleLower.includes(queryLowerNoSpace) ||
+                             titleLower.includes(queryLowerReversed);
+    
+    if (isFullQueryMatch) {
+      // クエリ全体がタイトルに含まれる場合、マッチ比率を1.0に近づける
+      // 例：「教室削除」が「教室削除機能」に含まれる場合
+      titleMatchRatio = Math.max(titleMatchRatio, 0.95);
+      
+      // 改善: 余分な単語が含まれる場合はペナルティ
+      // タイトルからクエリを除去して残った文字数をチェック
+      // 例：「教室グループ削除機能」から「教室削除」を除去すると「グループ機能」が残る
+      const titleWithoutQuery = titleLower
+        .replace(queryLower, '')
+        .replace(queryLowerNoSpace, '')
+        .replace(queryLowerReversed, '');
+      
+      // 余分な文字数が多すぎる場合はペナルティ
+      // ただし、「機能」のような汎用語は除外
+      // 一元化: common-terms-config.ts の GENERIC_FUNCTION_TERMS を使用
+      const genericTerms = [...GENERIC_FUNCTION_TERMS, '【fix】', '【FIX】', '_', '【', '】'];
+      const extraChars = titleWithoutQuery
+        .split('')
+        .filter((char, idx) => {
+          // 汎用語を除外
+          const remaining = titleWithoutQuery.substring(idx);
+          return !genericTerms.some(term => remaining.startsWith(term.toLowerCase()));
+        })
+        .join('')
+        .trim();
+      
+      // 余分な文字がある場合、ペナルティを適用
+      if (extraChars.length > 2) {
+        // 余分な文字が多いほどペナルティ（最大20%減）
+        const penalty = Math.min(extraChars.length * 0.05, 0.20);
+        titleMatchRatio = Math.max(titleMatchRatio - penalty, 0.75);
+      }
+    } else {
+      // 改善: クエリ全体がタイトルに含まれていない場合でも、
+      // キーワードが順序通りに含まれているかチェック（順序は問わない）
+      // 例：「教室グループ削除機能」は「教室」「削除」を含んでいるが、「グループ」が間に挟まっている
+      const keywordsInOrder = keywords.map(kw => kw.toLowerCase());
+      
+      // すべてのキーワードがタイトルに含まれているかチェック
+      const allKeywordsFound = keywordsInOrder.every(kw => titleLower.includes(kw));
+      
+      if (allKeywordsFound && keywords.length > 1) {
+        // すべてのキーワードが含まれている場合、キーワードの位置を取得
+        const keywordPositions = keywordsInOrder.map(kw => ({
+          keyword: kw,
+          firstIndex: titleLower.indexOf(kw),
+          lastIndex: titleLower.lastIndexOf(kw) + kw.length
+        })).sort((a, b) => a.firstIndex - b.firstIndex);
+        
+        // 最初と最後のキーワードの間の文字をチェック
+        const firstKeyword = keywordPositions[0];
+        const lastKeyword = keywordPositions[keywordPositions.length - 1];
+        const betweenChars = titleLower.substring(firstKeyword.lastIndex, lastKeyword.firstIndex);
+        
+        // 余分な文字がある場合、ペナルティを適用
+        if (betweenChars.trim().length > 2) {
+          // 汎用語を除外して、余分な文字数をカウント
+          // 一元化: common-terms-config.ts の GENERIC_FUNCTION_TERMS を使用
+          const genericTerms = [...GENERIC_FUNCTION_TERMS, '【fix】', '【FIX】', '_', '【', '】', 'fix'];
+          let extraCharsCount = 0;
+          let remaining = betweenChars.trim();
+          
+          for (const term of genericTerms) {
+            remaining = remaining.replace(new RegExp(term, 'gi'), '');
+          }
+          
+          extraCharsCount = remaining.trim().length;
+          
+          if (extraCharsCount > 2) {
+            // 余分な文字が多いほどペナルティ（最大30%減）
+            const penalty = Math.min(extraCharsCount * 0.08, 0.30);
+            titleMatchRatio = Math.max(titleMatchRatio - penalty, 0.60);
+          }
+        }
+      }
+    }
+  }
   
   return { matchedKeywords, titleMatchRatio };
 }

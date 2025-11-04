@@ -6,6 +6,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { DynamicPriorityManager } from './dynamic-priority-manager';
+import { GENERIC_FUNCTION_TERMS, DOMAIN_SPECIFIC_KEYWORDS } from './common-terms-config';
 
 export interface KeywordLists {
   metadata: {
@@ -366,8 +367,8 @@ export class KeywordListsLoader {
         continue;
       }
       
-      // 4. 教室管理に関連するキーワードのみ追加マッチング
-      if (this.isClassroomRelated(keyword) && this.isRelatedKeyword(keyword, query)) {
+      // 4. 汎用語に関連するキーワードのみ追加マッチング（一元化: common-terms-config.ts を使用）
+      if (this.isGenericRelatedKeyword(keyword) && this.isRelatedKeyword(keyword, query)) {
         matchedKeywords.push(keyword);
         continue;
       }
@@ -377,16 +378,24 @@ export class KeywordListsLoader {
   }
 
   /**
-   * 教室管理に関連するキーワードかどうかを判定
+   * 汎用語に関連するキーワードかどうかを判定（一元化: common-terms-config.ts を使用）
+   * 教室管理特有の用語は削除し、汎用語判定のみを使用
    */
-  private isClassroomRelated(keyword: string): boolean {
-    const classroomTerms = [
-      '教室', '管理', '一覧', '登録', '編集', '削除', 'コピー', '詳細',
-      'スクール', '校舎', '事業所', 'マネジメント', '運用', 'オペレーション',
-      '設定', '機能', '仕様', '要件', '画面', 'データ', '情報'
-    ];
+  private isGenericRelatedKeyword(keyword: string): boolean {
+    // 一元化: common-terms-config.ts の定義を使用
+    const keywordLower = keyword.toLowerCase();
     
-    return classroomTerms.some(term => keyword.includes(term));
+    // 汎用機能用語をチェック
+    if (GENERIC_FUNCTION_TERMS.some(term => keywordLower.includes(term.toLowerCase()))) {
+      return true;
+    }
+    
+    // ドメイン固有キーワード（教室、コピーなど）をチェック
+    if (DOMAIN_SPECIFIC_KEYWORDS.some(term => keywordLower.includes(term.toLowerCase()))) {
+      return true;
+    }
+    
+    return false;
   }
 
   /**

@@ -28,6 +28,8 @@ export const GENERIC_FUNCTION_TERMS = [
   '新規',
   '作成',
   '更新',
+  '設定',  // 一元化: keyword-lists-loader.ts から追加
+  '要件',  // 一元化: keyword-lists-loader.ts から追加
   
   // データ・帳票関連
   '帳票',

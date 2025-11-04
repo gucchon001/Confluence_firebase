@@ -65,6 +65,7 @@ export class LanceDBClient {
         console.log(`[LanceDBClient] Table '${this.config.tableName}' not found. Creating new table...`);
         
         // 空のデータでテーブルを作成（LanceDBの正しいスキーマ形式）
+        // ★★★ EXTENDED SCHEMA: StructuredLabelフィールドを含む ★★★
         const emptyData = [{
           id: 'dummy',
           vector: new Array(768).fill(0.0), // float32の配列
@@ -75,10 +76,24 @@ export class LanceDBClient {
           page_id: 0,  // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
           chunkIndex: 0,
           url: 'dummy',
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
+          isChunked: true,
+          totalChunks: 1,
+          // StructuredLabelフィールド（nullable）
+          structured_category: null,
+          structured_domain: null,
+          structured_feature: null,
+          structured_priority: null,
+          structured_status: null,
+          structured_version: null,
+          structured_tags: null,
+          structured_confidence: null,
+          structured_content_length: null,
+          structured_is_valid: null
         }];
         
-        // LanceDB Arrow形式のスキーマ定義（完全版）
+        // LanceDB Arrow形式のスキーマ定義（完全版 + StructuredLabel）
+        // ★★★ EXTENDED SCHEMA: StructuredLabelフィールドを含む ★★★
         const lanceSchema = {
           id: 'utf8',
           vector: { 
@@ -96,7 +111,23 @@ export class LanceDBClient {
           page_id: 'int64',  // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
           chunkIndex: 'int32',
           url: 'utf8',
-          lastUpdated: 'utf8'
+          lastUpdated: 'utf8',
+          isChunked: 'bool',
+          totalChunks: 'int32',
+          // StructuredLabelフィールド（nullable）
+          structured_category: 'utf8',
+          structured_domain: 'utf8',
+          structured_feature: 'utf8',
+          structured_priority: 'utf8',
+          structured_status: 'utf8',
+          structured_version: 'utf8',
+          structured_tags: { 
+            type: 'list', 
+            field: { type: 'utf8' } 
+          },
+          structured_confidence: 'float32',
+          structured_content_length: 'int32',
+          structured_is_valid: 'bool'
         };
         
         try {

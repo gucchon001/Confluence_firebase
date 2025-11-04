@@ -187,13 +187,21 @@ async function lancedbRetrieverTool(
     }
 
     // UIが期待する形へ最小変換（scoreText, source を保持）
-    // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+    // ★★★ MIGRATION: page_idフィールドのみを使用（フォールバックなし） ★★★
     const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
     const mapped = unifiedResults.slice(0, 12).map(r => {
-      const pageId = getPageIdFromRecord(r) ?? r.id ?? '';
+      // page_idフィールドのみを使用（唯一の信頼できる情報源）
+      const pageId = getPageIdFromRecord(r);
+      if (!pageId) {
+        console.error(`[lancedbRetrieverTool] ❌ page_id not found for result: ${r.title}. This is a data integrity issue.`);
+        // page_idが存在しない場合はエラーとして扱う（フォールバックしない）
+      }
+      // page_idを数値として使用（データベース形式）
+      const pageIdValue = pageId ? String(pageId) : '';
       return {
-        id: String(pageId),
-        pageId: String(pageId), // Phase 0A-1.5: チャンク統合用
+        id: pageIdValue, // API互換性のため、idフィールドも設定（page_idから生成）
+        pageId: pageIdValue, // Phase 0A-1.5: チャンク統合用（page_idから生成）
+        page_id: r.page_id, // データベース形式（内部処理用、唯一の信頼できる情報源）
         content: r.content || '',
         url: r.url || '',
         lastUpdated: (r as any).lastUpdated || null,
@@ -306,11 +314,11 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
     results.map(async (result, index) => {
       try {
         const pageStartTime = Date.now();
-        // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+        // ★★★ MIGRATION: page_idフィールドのみを使用（フォールバックなし） ★★★
         const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
-        const pageId = getPageIdFromRecord(result) || result.id;
+        const pageId = getPageIdFromRecord(result);
         if (!pageId) {
-          console.warn(`[ChunkMerger] Skipping result without pageId`);
+          console.error(`[ChunkMerger] ❌ page_id not found for result: ${result.title}. Skipping chunk enrichment.`);
           return result;
         }
 
@@ -433,9 +441,18 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     // テスト結果では .query().where() の方が正しく動作することが確認されました
     // スカラーインデックス（pageId）が作成されていれば、.query().where() でも高速です
     
-    const numericPageId = Number(pageId);
+    // ★★★ FIX: pageIdが "718373062-0" のような形式の場合、"-0"を削除して数値としてパース ★★★
+    // APIレスポンスのidフィールドが `${pageId}-0` という形式になっているため
+    let cleanedPageId = pageId;
+    if (pageId.includes('-')) {
+      // "718373062-0" のような形式の場合、最初の部分（数値部分）を抽出
+      const parts = pageId.split('-');
+      cleanedPageId = parts[0];
+    }
+    
+    const numericPageId = Number(cleanedPageId);
     if (isNaN(numericPageId)) {
-      console.error(`[getAllChunksByPageIdInternal] Invalid pageId (not a number): ${pageId}`);
+      console.error(`[getAllChunksByPageIdInternal] Invalid pageId (not a number): ${pageId} (cleaned: ${cleanedPageId})`);
       return [];
     }
     

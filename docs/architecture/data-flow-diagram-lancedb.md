@@ -3,6 +3,13 @@
 このドキュメントでは、LanceDBを使用したConfluence Vector Search システムのコンポーネント図、データフロー図、シーケンス図を示します。
 
 ## 更新履歴
+- **2025年11月**: page_idマイグレーション完了 - パフォーマンス最適化
+  - pageId → page_id マイグレーション完了: スカラーインデックス対応のためフィールド名を変更
+  - スカラーインデックス作成: `page_id`フィールドにスカラーインデックスを設定
+  - パフォーマンス向上: `getAllChunksByPageId`が14秒 → 5msに高速化（99.96%改善）
+  - API互換性: 変換レイヤー（pageid-migration-helper.ts）によりAPIレスポンスでは`pageId`を維持
+  - アーカイブ整理: 未使用ファイルを`src/lib/archive/`と`scripts/archive/`に移動
+  - 型チェック・ビルド: すべての型エラーを解消、ビルドが正常に完了
 - **2025年10月**: Phase 5完了 - パフォーマンス最適化と品質強化
   - 並列検索実装: ベクトル検索とBM25検索の並列実行（品質維持100%）
   - ハイブリッド検索強化: RRF融合 + Composite Scoring実装
@@ -12,6 +19,7 @@
   - ドメイン知識: 9,126個のキーワードに拡大（+1,004個）
   - Genkit部分統合: 3つのFlows実装（auto-label, retrieve-docs, streaming-summarize）
   - LanceDB接続プーリング、検索キャッシュ拡大（TTL 15分、maxSize 5000）
+  - startup-optimizerによるウォームアップ処理
 
 - **2025年1月**: 現在の実装に合わせて最新化
   - ストリーミング機能: リアルタイム回答生成とプログレス表示

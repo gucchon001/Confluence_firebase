@@ -30,6 +30,7 @@ export interface BaseSearchResult {
   _sourceType?: 'vector' | 'bm25' | 'keyword' | 'hybrid';
   _rrfScore?: number;
   _crossScore?: number;
+  _compositeScore?: number; // 最新の計算ロジック（Composite Score）
 }
 
 export interface FormattedSearchResult {
@@ -117,8 +118,9 @@ export function formatSearchResult(
     scoreRaw = distance;
   }
 
-  // スコアテキスト生成
-  const scoreText = generateScoreText(scoreKind, scoreRaw, distance);
+  // スコアテキスト生成（最新の計算ロジック: Composite Score を優先的に使用）
+  const compositeScore = result._compositeScore; // 最新の計算ロジック（Composite Score）
+  const scoreText = generateScoreText(scoreKind, scoreRaw, distance, compositeScore);
 
   return {
     id: result.id,
