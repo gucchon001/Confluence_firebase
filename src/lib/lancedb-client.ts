@@ -79,17 +79,17 @@ export class LanceDBClient {
           lastUpdated: new Date().toISOString(),
           isChunked: true,
           totalChunks: 1,
-          // StructuredLabelフィールド（nullable）
-          structured_category: null,
-          structured_domain: null,
-          structured_feature: null,
-          structured_priority: null,
-          structured_status: null,
-          structured_version: null,
-          structured_tags: null,
-          structured_confidence: null,
-          structured_content_length: null,
-          structured_is_valid: null
+          // StructuredLabelフィールド（非nullデフォルト値でスキーマ推論を補助）
+          structured_category: '',
+          structured_domain: '',
+          structured_feature: '',
+          structured_priority: '',
+          structured_status: '',
+          structured_version: '',
+          structured_tags: ['dummy'], // 空配列では推論できないためダミー要素を追加
+          structured_confidence: 0.0,
+          structured_content_length: 0,
+          structured_is_valid: false
         }];
         
         // LanceDB Arrow形式のスキーマ定義（完全版 + StructuredLabel）

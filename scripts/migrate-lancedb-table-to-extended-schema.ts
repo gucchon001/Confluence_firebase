@@ -11,9 +11,45 @@
 import * as lancedb from '@lancedb/lancedb';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as admin from 'firebase-admin';
 
 const BACKUP_DIR = '.lancedb-backup';
 const BACKUP_FILE = path.join(BACKUP_DIR, 'confluence-backup.json');
+
+// Firebase Admin SDK初期化
+if (!admin.apps.length) {
+  try {
+    // 本番環境では環境変数から認証情報を取得
+    if (process.env.NODE_ENV === 'production') {
+      admin.initializeApp();
+    } else {
+      // 開発環境ではローカルキーファイルを使用
+      try {
+        admin.initializeApp({
+          credential: admin.credential.cert(
+            require('../keys/firebase-adminsdk-key.json')
+          )
+        });
+      } catch (error) {
+        // キーファイルが見つからない場合はデフォルト認証を試行
+        admin.initializeApp();
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Firebase Admin SDK初期化エラー（デフォルト認証を試行）:', error);
+    admin.initializeApp();
+  }
+}
+
+const firestoreDb = admin.firestore();
+const STRUCTURED_LABELS_COLLECTION = 'structured_labels';
+
+interface StructuredLabelDocument {
+  pageId: string;
+  structuredLabel: any;
+  generatedAt: admin.firestore.Timestamp;
+  generatedBy: 'rule-based' | 'llm-based';
+}
 
 async function main() {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
@@ -290,7 +326,6 @@ async function main() {
     console.log('🔄 Step 7: FirestoreからStructuredLabelを同期中...\n');
     
     try {
-      const { getStructuredLabels } = await import('../src/lib/structured-label-service-admin');
       const { flattenStructuredLabel } = await import('../src/lib/lancedb-schema-extended');
       
       // LanceDBの全データを取得（データが存在する場合のみ）
@@ -303,30 +338,29 @@ async function main() {
       
       console.log(`   📊 LanceDBデータ件数: ${rowCount}件\n`);
       
-      const allLanceData = await newTable.search(new Array(768).fill(0)).limit(100000).toArray();
+      // Firestoreから全StructuredLabelを取得
+      console.log('   📥 FirestoreからStructuredLabelを取得中...');
+      const snapshot = await firestoreDb.collection(STRUCTURED_LABELS_COLLECTION).get();
+      console.log(`   ✅ 取得完了: ${snapshot.size}件\n`);
       
-      // ユニークなpage_idのリストを作成
-      const uniquePageIds = new Set<string>();
-      for (const lanceRecord of allLanceData) {
-        const pageId = String(lanceRecord.page_id || '');
-        if (pageId && pageId !== '0' && pageId !== '') {
-          uniquePageIds.add(pageId);
-        }
-      }
-      
-      const pageIdArray = Array.from(uniquePageIds);
-      console.log(`   📥 FirestoreからStructuredLabelを取得中（${pageIdArray.length}件のページID）...`);
-      
-      // FirestoreからStructuredLabelを取得
-      const labelsByPageId = await getStructuredLabels(pageIdArray);
-      console.log(`   ✅ 取得完了: ${labelsByPageId.size}件\n`);
-      
-      if (labelsByPageId.size === 0) {
+      if (snapshot.size === 0) {
         console.log('   ⚠️ FirestoreにStructuredLabelが存在しません\n');
+        console.log('   → ラベル生成スクリプトを実行してから、再度マイグレーションを実行してください\n');
         return;
       }
       
+      // pageId → StructuredLabel のマップを作成
+      const labelsByPageId = new Map<string, any>();
+      for (const doc of snapshot.docs) {
+        const data = doc.data() as StructuredLabelDocument;
+        if (data.pageId) {
+          labelsByPageId.set(String(data.pageId), data.structuredLabel);
+        }
+      }
+      
       console.log(`   🔄 ${labelsByPageId.size}件のページIDにStructuredLabelを適用中...`);
+      
+      const allLanceData = await newTable.search(new Array(768).fill(0)).limit(100000).toArray();
       
       // 更新対象のデータを準備
       const updates: any[] = [];

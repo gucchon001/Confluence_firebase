@@ -924,16 +924,30 @@ export class ConfluenceSyncService {
     const dummyVector = new Array(768).fill(0);
     const allData = await table.search(dummyVector).limit(10000).toArray();
     
-    const uniquePageIds = new Set<string>();
-    allData.forEach((row: any) => uniquePageIds.add(row.pageId));
-
+    // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
+    const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+    
+    const uniquePageIds = new Set<number>();
+    allData.forEach((row: any) => {
+      const pageId = getPageIdFromRecord(row);
+      if (pageId !== null && pageId !== undefined) {
+        uniquePageIds.add(Number(pageId));
+      }
+    });
+    
     console.log(`📊 データベースの状態:`);
     console.log(`  総チャンク数: ${allData.length}`);
     console.log(`  ユニークページ数: ${uniquePageIds.size}`);
     
     console.log('\n📋 ページ一覧（最初の10件）:');
     allData.slice(0, 10).forEach((row: any, i: number) => {
-      console.log(`  PageID: ${row.pageId}, タイトル: ${row.title}, チャンク数: ${allData.filter((d: any) => d.pageId === row.pageId).length}`);
+      const pageId = getPageIdFromRecord(row);
+      const pageIdStr = pageId !== null && pageId !== undefined ? String(pageId) : 'undefined';
+      const matchingChunks = allData.filter((d: any) => {
+        const dPageId = getPageIdFromRecord(d);
+        return dPageId !== null && dPageId !== undefined && Number(dPageId) === Number(pageId);
+      });
+      console.log(`  PageID: ${pageIdStr}, タイトル: ${row.title || 'N/A'}, チャンク数: ${matchingChunks.length}`);
     });
   }
 }

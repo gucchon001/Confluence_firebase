@@ -155,6 +155,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     }
     
     // 最適化されたLunr初期化を使用（重複初期化を防止）
+    // ★★★ PERF LOG: Lunr初期化の時間計測 ★★★
+    const lunrInitStartTime = Date.now();
     try {
       // optimized-lunr-initializerはアーカイブに移動済み。代わりにlunr-initializerを使用
       const { lunrInitializer } = await import('./lunr-initializer');
@@ -163,13 +165,19 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       // Phase 6修正: 初期化完了を確実に待つ（並列検索前）
       await new Promise(resolve => setTimeout(resolve, 100));
       
+      const lunrInitDuration = Date.now() - lunrInitStartTime;
+      if (lunrInitDuration > 1000) {
+        console.warn(`⚠️ [PERF] Slow Lunr initialization: ${lunrInitDuration}ms (${(lunrInitDuration / 1000).toFixed(2)}s)`);
+      }
+      
       // 開発環境のみログ
       if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Optimized Lunr initialization completed in searchLanceDB');
+        console.log(`[PERF] ✅ Lunr initialization completed in ${lunrInitDuration}ms`);
       }
     } catch (error) {
+      const lunrInitDuration = Date.now() - lunrInitStartTime;
       // エラー時のみログ（本番環境でも出力）
-      console.error('⚠️ Optimized Lunr initialization failed in searchLanceDB:', error);
+      console.error(`⚠️ [PERF] Lunr initialization failed after ${lunrInitDuration}ms:`, error);
     }
     
     // デフォルト値の設定
@@ -217,9 +225,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     ]);
     const parallelDuration = Date.now() - parallelStartTime;
     
+    // ★★★ PERF LOG: 並列初期化の詳細な時間計測 ★★★
+    console.log(`[PERF] ⏱️ Parallel initialization completed in ${parallelDuration}ms (${(parallelDuration / 1000).toFixed(2)}s)`);
+    
     // 5秒以上かかった場合のみログ（パフォーマンス問題の検知）
     if (parallelDuration > 5000) {
-      console.warn(`⚠️ [searchLanceDB] Slow parallel initialization: ${parallelDuration}ms (${(parallelDuration / 1000).toFixed(2)}s)`);
+      console.warn(`⚠️ [PERF] Slow parallel initialization: ${parallelDuration}ms (${(parallelDuration / 1000).toFixed(2)}s)`);
+      console.warn(`⚠️ [PERF] Breakdown: Embedding=${Date.now() - embeddingStartTime}ms, Keywords=${Date.now() - keywordStartTime}ms, Connection=${Date.now() - connectionStartTime}ms`);
     }
     
     // 開発環境のみ詳細ログ
@@ -291,8 +303,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // Phase 5: ベクトル検索とBM25検索の並列実行（品質影響なし）
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
+    // ★★★ PERF LOG: 並列検索の開始時間を記録 ★★★
     console.log('[Phase 5] 🚀 並列検索開始: ベクトル検索 + BM25検索\n');
     const parallelSearchStart = Date.now();
+    const phase5StartTime = Date.now();
     
     // Promise.allSettledで並列実行（一方が失敗しても継続）
     const [vectorSearchResult, bm25SearchResult] = await Promise.allSettled([
@@ -305,6 +319,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     bm25Results = bm25SearchResult.status === 'fulfilled' ? bm25SearchResult.value : [];
     
     const parallelSearchTime = Date.now() - parallelSearchStart;
+    
+    // ★★★ PERF LOG: 並列検索の詳細な時間計測 ★★★
+    console.log(`[PERF] ⏱️ Phase 5 parallel search completed in ${parallelSearchTime}ms (${(parallelSearchTime / 1000).toFixed(2)}s)`);
     
     // 詳細なパフォーマンス計測ログ
     if (vectorSearchResult.status === 'rejected') {

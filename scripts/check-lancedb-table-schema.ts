@@ -70,6 +70,35 @@ async function main() {
     console.log(`📊 データ件数: ${count}件`);
     console.log('');
     
+    // サンプルデータを取得してフィールドの存在を確認
+    if (count > 0) {
+      console.log('🔍 サンプルデータでStructuredLabelフィールドを確認中...');
+      console.log('');
+      
+      const dummyVector = new Array(768).fill(0);
+      const sampleData = await table.search(dummyVector).limit(1).toArray();
+      
+      if (sampleData.length > 0) {
+        const sample = sampleData[0];
+        const sampleKeys = Object.keys(sample);
+        
+        const hasStructuredFieldsInData = structuredFields.filter(field => sampleKeys.includes(field));
+        
+        if (hasStructuredFieldsInData.length > 0) {
+          console.log(`  ✅ サンプルデータにStructuredLabelフィールドが存在します: ${hasStructuredFieldsInData.length}件`);
+          hasStructuredFieldsInData.forEach(field => {
+            const value = sample[field as keyof typeof sample];
+            console.log(`    - ${field}: ${value !== undefined && value !== null ? (Array.isArray(value) ? `[${value.length}件]` : String(value)) : 'null'}`);
+          });
+        } else {
+          console.log('  ❌ サンプルデータにStructuredLabelフィールドが存在しません');
+          console.log('  ⚠️ マイグレーションが必要です');
+        }
+        
+        console.log('');
+      }
+    }
+    
     console.log('✅ 確認完了\n');
     
   } catch (error) {

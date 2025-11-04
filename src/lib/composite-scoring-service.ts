@@ -386,11 +386,30 @@ export class CompositeScoringService {
     }
     
     // カテゴリマッチング（補助）
+    // 機能仕様に関する質問の場合は、メールテンプレート（template）のスコアを下げる
     if (structuredLabel.category) {
       totalChecks++;
       const categoryLower = structuredLabel.category.toLowerCase();
+      
+      // 機能仕様に関する質問のキーワード（「どうなりますか」「可能ですか」など）
+      const functionalQueryKeywords = ['どうなりますか', 'どうなる', '可能ですか', '可能', '方法', '仕様', '機能', '条件', '原因', '理由'];
+      const isFunctionalQuery = lowerKeywords.some(k => 
+        functionalQueryKeywords.some(fqk => k.includes(fqk) || fqk.includes(k))
+      );
+      
       if (lowerKeywords.some(k => categoryLower.includes(k) || k.includes(categoryLower))) {
-        structuredMatchCount += 0.3;
+        // メールテンプレート（template）カテゴリの場合、スコアを大幅に下げる
+        if (categoryLower === 'template') {
+          // 機能仕様に関する質問の場合は、スコアをほぼゼロに
+          if (isFunctionalQuery) {
+            structuredMatchCount += 0.05; // ほぼゼロ（機能仕様質問ではメールテンプレートを優先しない）
+          } else {
+            structuredMatchCount += 0.1; // 通常のメール質問でも低めに
+          }
+        } else {
+          // その他のカテゴリは通常通り
+          structuredMatchCount += 0.3;
+        }
       }
     }
     

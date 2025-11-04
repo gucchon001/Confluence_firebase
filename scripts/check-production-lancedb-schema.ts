@@ -18,12 +18,28 @@ const storage = new Storage({
 const bucketName = process.env.STORAGE_BUCKET || 'confluence-copilot-data';
 const bucket = storage.bucket(bucketName);
 
-async function downloadProductionData(): Promise<string> {
-  console.log('📥 本番環境のデータをダウンロード中...\n');
-  
+async function downloadProductionData(skipDownload: boolean = false): Promise<string> {
   const localBasePath = '.lancedb-production-check';
   const localLancePath = path.join(localBasePath, '.lancedb', 'confluence.lance');
   const remotePath = 'lancedb/confluence.lance';
+  
+  // 既存のダウンロードファイルがあるか確認
+  if (fs.existsSync(localLancePath)) {
+    const existingFiles: string[] = [];
+    try {
+      const files = fs.readdirSync(localLancePath, { recursive: true });
+      existingFiles.push(...files);
+    } catch (error) {
+      // ディレクトリが存在しない、または空の場合
+    }
+    
+    if (existingFiles.length > 0) {
+      console.log(`📋 既存のダウンロードファイルを使用: ${existingFiles.length}ファイル\n`);
+      return path.join(localBasePath, '.lancedb');
+    }
+  }
+  
+  console.log('📥 本番環境のデータをダウンロード中...\n');
   
   // ローカルディレクトリをクリーンアップ
   if (fs.existsSync(localBasePath)) {
