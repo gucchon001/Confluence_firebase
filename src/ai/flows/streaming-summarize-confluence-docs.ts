@@ -378,7 +378,8 @@ ${truncatedContent}`;
       return;
     }
 
-    // 参照元の準備（元のコードに戻す）
+    // 参照元の準備（LLMに渡されたcontextのみを参照元として表示）
+    // 注意: contextは既にMAX_CONTEXT_DOCS件に制限されているため、全てを参照元として表示
     const references = context.map((doc, index) => ({
       id: doc.id || `${doc.pageId}-${index}`,
       title: doc.title || 'タイトル不明',

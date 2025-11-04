@@ -833,6 +833,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // 10秒以上かかった場合のみログ（パフォーマンス問題の検知）
     if (searchFunctionDuration > 10000) {
       console.warn(`⚠️ [searchLanceDB] Slow search: ${searchFunctionDuration}ms (${(searchFunctionDuration / 1000).toFixed(2)}s) for query: "${params.query}"`);
+      
+      // 詳細な時間計測を出力（ボトルネック特定のため）
+      console.warn(`📊 [PERF] Search breakdown:`);
+      console.warn(`   - Total duration: ${searchFunctionDuration}ms`);
+      console.warn(`   - Parallel init: ${parallelDuration}ms`);
+      console.warn(`   - Phase 5 parallel search: ${parallelSearchTime}ms`);
+      console.warn(`   - Post-processing: ${searchFunctionDuration - parallelSearchTime - parallelDuration}ms`);
     }
     
     // 開発環境のみ詳細ログ
@@ -1115,8 +1122,11 @@ async function executeBM25Search(
   const bm25SearchStart = Date.now();
   try {
     // Phase 6修正: lunrSearchClientの状態を直接チェック（lunrInitializerの間接チェックは信頼性が低い）
-    if (!params.useLunrIndex || !lunrSearchClient.isReady()) {
-      console.log(`[BM25 Search] Lunr not ready (lunrSearchClient.isReady()=${lunrSearchClient.isReady()}), skipping`);
+    const isLunrIndexEnabled = params.useLunrIndex !== false; // デフォルトはtrue
+    const isLunrReady = lunrSearchClient.isReady();
+    
+    if (!isLunrIndexEnabled || !isLunrReady) {
+      console.log(`[BM25 Search] Skipping BM25 search: useLunrIndex=${params.useLunrIndex}, isLunrIndexEnabled=${isLunrIndexEnabled}, isLunrReady=${isLunrReady}`);
       return [];
     }
     

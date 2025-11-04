@@ -448,10 +448,16 @@ export const POST = async (req: NextRequest) => {
           // Phase 0A-4 FIX: AI生成時間は検索完了時刻から計測
           const aiStartTime = searchEndTime;
 
+          // LLMに渡すcontextの件数を制限（実際に使用される参照元のみを表示）
+          const MAX_CONTEXT_DOCS = 10; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
+          const contextDocsForLLM = relevantDocs.slice(0, MAX_CONTEXT_DOCS);
+          
+          console.log(`[Streaming Process] Using ${contextDocsForLLM.length} documents for LLM context (out of ${relevantDocs.length} search results)`);
+          
           try {
             for await (const result of streamingSummarizeConfluenceDocs({
               question,
-              context: relevantDocs,
+              context: contextDocsForLLM, // LLMに渡す件数を制限
               chatHistory
             })) {
             

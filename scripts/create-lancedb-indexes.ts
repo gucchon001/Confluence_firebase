@@ -89,18 +89,16 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
       console.log('🔧 スカラーインデックス作成中...');
       const scalarStart = Date.now();
       
-      // pageIdインデックスの作成を試行
-      // 注意: LanceDBの内部でSQLパースする際にフィールド名が小文字に変換される問題がある可能性
+      // page_idインデックスの作成を試行（pageId → page_id マイグレーション対応）
       try {
-        // 方法1: 通常の方法（フィールド名のみ）
-        await table.createIndex('pageId');
-        console.log(`   ✅ pageIdインデックス作成完了`);
+        await table.createIndex('page_id');
+        console.log(`   ✅ page_idインデックス作成完了`);
       } catch (pageIdError: any) {
         const errorMessage = pageIdError?.message || String(pageIdError);
         if (errorMessage.includes('already exists') || errorMessage.includes('既に存在')) {
-          console.log(`   ✅ pageIdインデックスは既に存在します`);
+          console.log(`   ✅ page_idインデックスは既に存在します`);
         } else {
-          console.warn(`   ⚠️ pageIdインデックス作成失敗: ${errorMessage.substring(0, 150)}`);
+          console.warn(`   ⚠️ page_idインデックス作成失敗: ${errorMessage.substring(0, 150)}`);
           console.warn(`   💡 スカラーインデックスがなくても、.query().where()は十分高速です（ローカル: 3-8ms）`);
           console.warn(`   💡 本番環境での遅延は、コールドスタート時のI/O遅延が主な原因の可能性があります`);
         }

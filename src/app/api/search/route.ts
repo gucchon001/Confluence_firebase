@@ -26,7 +26,7 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
 
     const body = await req.json();
     const query: string = body?.query || '';
-    const topK: number = body?.topK || 5;
+    const topK: number = body?.topK || 10; // 参照元を10件に統一
     const tableName: string = body?.tableName || 'confluence';
     const useHybridSearch: boolean = body?.useHybridSearch !== false; // デフォルトで有効
     
@@ -56,20 +56,34 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         const searchEndTime = performance.now();
         const searchTime = searchEndTime - searchStartTime;
 
-        // 結果を整形
-        const formattedResults = hybridResults.map(result => ({
-          id: `${result.pageId}-0`, // 互換性のため
-          title: result.title,
-          content: result.content,
-          distance: result.scoreRaw,
-          space_key: '',
-          labels: result.labels,
-          url: result.url,
-          lastUpdated: null,
-          source: result.source,
-          scoreKind: result.scoreKind,
-          scoreText: result.scoreText
-        }));
+        // URLを再構築するヘルパー関数
+        const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string => {
+          const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
+          if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
+            return existingUrl;
+          }
+          if (pageId && spaceKey) {
+            return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
+          }
+          return existingUrl || '#';
+        };
+        
+        // 結果を整形（10件に制限）
+        const formattedResults = hybridResults
+          .slice(0, 10) // 参照元を10件に統一
+          .map(result => ({
+            id: `${result.pageId}-0`, // 互換性のため
+            title: result.title,
+            content: result.content,
+            distance: result.scoreRaw,
+            space_key: result.space_key || '',
+            labels: result.labels,
+            url: buildUrl(result.pageId, result.space_key, result.url), // URLを再構築
+            lastUpdated: null,
+            source: result.source,
+            scoreKind: result.scoreKind,
+            scoreText: result.scoreText
+          }));
 
         // パフォーマンスログを記録
         screenTestLogger.logSearchPerformance(query, searchTime, formattedResults.length, {
@@ -128,20 +142,38 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         .toArray();
       console.log(`Found ${results.length} results`);
       
-      // 6. 結果を整形
-      const formattedResults = results.map(result => ({
-        id: result.id,
-        title: result.title || 'No Title',
-        content: result.content || '',
-        distance: result._distance,
-        space_key: result.space_key || '',
-        labels: result.labels || [],
-        url: result.url || '',
-        lastUpdated: result.lastUpdated || null,
-        source: 'vector',
-        scoreKind: 'vector',
-        scoreText: `Vector ${calculateSimilarityScore(result._distance).toFixed(1)}%`
-      }));
+      // URLを再構築するヘルパー関数
+      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string => {
+        const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
+        if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
+          return existingUrl;
+        }
+        if (pageId && spaceKey) {
+          return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
+        }
+        return existingUrl || '#';
+      };
+      
+      // 6. 結果を整形（10件に制限）
+      const formattedResults = results
+        .slice(0, 10) // 参照元を10件に統一
+        .map(result => {
+          const pageId = result.page_id || result.pageId;
+          const spaceKey = result.space_key || result.spaceKey;
+          return {
+            id: result.id,
+            title: result.title || 'No Title',
+            content: result.content || '',
+            distance: result._distance,
+            space_key: spaceKey || '',
+            labels: result.labels || [],
+            url: buildUrl(pageId, spaceKey, result.url), // URLを再構築
+            lastUpdated: result.lastUpdated || null,
+            source: 'vector',
+            scoreKind: 'vector',
+            scoreText: `Vector ${calculateSimilarityScore(result._distance).toFixed(1)}%`
+          };
+        });
 
       // 7. レスポンス返却
       return NextResponse.json({ results: formattedResults });

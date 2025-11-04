@@ -361,69 +361,69 @@ async function main() {
       console.log(`   🔄 ${labelsByPageId.size}件のページIDにStructuredLabelを適用中...`);
       
       const allLanceData = await newTable.search(new Array(768).fill(0)).limit(100000).toArray();
-      
-      // 更新対象のデータを準備
-      const updates: any[] = [];
-      let updatedCount = 0;
-      
-      for (const lanceRecord of allLanceData) {
-        const pageId = String(lanceRecord.page_id || '');
-        if (labelsByPageId.has(pageId)) {
-          const structuredLabel = labelsByPageId.get(pageId)!;
+        
+        // 更新対象のデータを準備
+        const updates: any[] = [];
+        let updatedCount = 0;
+        
+        for (const lanceRecord of allLanceData) {
+          const pageId = String(lanceRecord.page_id || '');
+          if (labelsByPageId.has(pageId)) {
+            const structuredLabel = labelsByPageId.get(pageId)!;
           const structuredLabelFlat = flattenStructuredLabel(structuredLabel);
-          
-          // 更新データを作成
-          const updateData = {
-            id: String(lanceRecord.id),
-            page_id: Number(lanceRecord.page_id),
-            title: String(lanceRecord.title),
-            content: String(lanceRecord.content),
-            chunkIndex: Number(lanceRecord.chunkIndex),
-            lastUpdated: String(lanceRecord.lastUpdated),
-            space_key: String(lanceRecord.space_key),
-            url: String(lanceRecord.url || ''),
-            labels: Array.isArray(lanceRecord.labels) ? lanceRecord.labels.map(String) : [],
-            vector: Array.isArray(lanceRecord.vector) ? lanceRecord.vector.map(Number) : new Array(768).fill(0.0),
-            isChunked: Boolean(lanceRecord.isChunked),
-            totalChunks: Number(lanceRecord.totalChunks),
-            // StructuredLabelを統合
-            structured_category: structuredLabelFlat.structured_category || '',
-            structured_domain: structuredLabelFlat.structured_domain || '',
-            structured_feature: structuredLabelFlat.structured_feature || '',
-            structured_priority: structuredLabelFlat.structured_priority || '',
-            structured_status: structuredLabelFlat.structured_status || '',
-            structured_version: structuredLabelFlat.structured_version || '',
-            structured_tags: Array.isArray(structuredLabelFlat.structured_tags) && structuredLabelFlat.structured_tags.length > 0 ? structuredLabelFlat.structured_tags.map(String) : ['dummy'],
-            structured_confidence: structuredLabelFlat.structured_confidence !== undefined && structuredLabelFlat.structured_confidence !== null ? Number(structuredLabelFlat.structured_confidence) : 0.0,
-            structured_content_length: structuredLabelFlat.structured_content_length !== undefined && structuredLabelFlat.structured_content_length !== null ? Number(structuredLabelFlat.structured_content_length) : 0,
-            structured_is_valid: structuredLabelFlat.structured_is_valid !== undefined && structuredLabelFlat.structured_is_valid !== null ? Boolean(structuredLabelFlat.structured_is_valid) : false
-          };
-          
-          updates.push(updateData);
-          updatedCount++;
-          
-          // バッチ処理（100件ずつ）
-          if (updates.length >= 100) {
-            // 既存レコードを削除
-            for (const update of updates) {
-              await newTable.delete(`page_id = ${update.page_id} AND chunkIndex = ${update.chunkIndex}`);
+            
+            // 更新データを作成
+            const updateData = {
+              id: String(lanceRecord.id),
+              page_id: Number(lanceRecord.page_id),
+              title: String(lanceRecord.title),
+              content: String(lanceRecord.content),
+              chunkIndex: Number(lanceRecord.chunkIndex),
+              lastUpdated: String(lanceRecord.lastUpdated),
+              space_key: String(lanceRecord.space_key),
+              url: String(lanceRecord.url || ''),
+              labels: Array.isArray(lanceRecord.labels) ? lanceRecord.labels.map(String) : [],
+              vector: Array.isArray(lanceRecord.vector) ? lanceRecord.vector.map(Number) : new Array(768).fill(0.0),
+              isChunked: Boolean(lanceRecord.isChunked),
+              totalChunks: Number(lanceRecord.totalChunks),
+              // StructuredLabelを統合
+              structured_category: structuredLabelFlat.structured_category || '',
+              structured_domain: structuredLabelFlat.structured_domain || '',
+              structured_feature: structuredLabelFlat.structured_feature || '',
+              structured_priority: structuredLabelFlat.structured_priority || '',
+              structured_status: structuredLabelFlat.structured_status || '',
+              structured_version: structuredLabelFlat.structured_version || '',
+              structured_tags: Array.isArray(structuredLabelFlat.structured_tags) && structuredLabelFlat.structured_tags.length > 0 ? structuredLabelFlat.structured_tags.map(String) : ['dummy'],
+              structured_confidence: structuredLabelFlat.structured_confidence !== undefined && structuredLabelFlat.structured_confidence !== null ? Number(structuredLabelFlat.structured_confidence) : 0.0,
+              structured_content_length: structuredLabelFlat.structured_content_length !== undefined && structuredLabelFlat.structured_content_length !== null ? Number(structuredLabelFlat.structured_content_length) : 0,
+              structured_is_valid: structuredLabelFlat.structured_is_valid !== undefined && structuredLabelFlat.structured_is_valid !== null ? Boolean(structuredLabelFlat.structured_is_valid) : false
+            };
+            
+            updates.push(updateData);
+            updatedCount++;
+            
+            // バッチ処理（100件ずつ）
+            if (updates.length >= 100) {
+              // 既存レコードを削除
+              for (const update of updates) {
+                await newTable.delete(`page_id = ${update.page_id} AND chunkIndex = ${update.chunkIndex}`);
+              }
+              // 新しいデータを追加
+              await newTable.add(updates);
+              updates.length = 0;
             }
-            // 新しいデータを追加
-            await newTable.add(updates);
-            updates.length = 0;
           }
         }
-      }
-      
-      // 残りの更新を処理
-      if (updates.length > 0) {
-        for (const update of updates) {
-          await newTable.delete(`page_id = ${update.page_id} AND chunkIndex = ${update.chunkIndex}`);
+        
+        // 残りの更新を処理
+        if (updates.length > 0) {
+          for (const update of updates) {
+            await newTable.delete(`page_id = ${update.page_id} AND chunkIndex = ${update.chunkIndex}`);
+          }
+          await newTable.add(updates);
         }
-        await newTable.add(updates);
-      }
-      
-      console.log(`   ✅ ${updatedCount}件のレコードにStructuredLabelを適用しました\n`);
+        
+        console.log(`   ✅ ${updatedCount}件のレコードにStructuredLabelを適用しました\n`);
     } catch (syncError: any) {
       console.warn(`   ⚠️ StructuredLabel同期中にエラーが発生しました: ${syncError.message}`);
       console.warn(`   → マイグレーションは完了していますが、ラベル同期は後で手動実行してください\n`);

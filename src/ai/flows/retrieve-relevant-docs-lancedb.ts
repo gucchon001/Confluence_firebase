@@ -158,7 +158,7 @@ async function lancedbRetrieverTool(
     const searchLanceDBStartTime = Date.now();
     const unifiedResults = await searchLanceDB({
       query: optimizedQuery, // 最適化されたクエリを使用
-      topK: 8,
+      topK: 10, // 参照元を10件に統一
       useLunrIndex: true, // Phase 6修正: BM25検索を有効化（品質向上）
       titleWeight: 3.0, // Phase 0A-3 FIX: タイトルマッチングを有効化
       labelFilters: filters?.labelFilters || {
@@ -188,8 +188,10 @@ async function lancedbRetrieverTool(
 
     // UIが期待する形へ最小変換（scoreText, source を保持）
     // ★★★ MIGRATION: page_idフィールドのみを使用（フォールバックなし） ★★★
+    // LLMに渡すcontextの件数を制限（実際に使用される参照元のみを表示）
+    const MAX_CONTEXT_DOCS = 10; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
     const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
-    const mapped = unifiedResults.slice(0, 12).map(r => {
+    const mapped = unifiedResults.slice(0, MAX_CONTEXT_DOCS).map(r => {
       // page_idフィールドのみを使用（唯一の信頼できる情報源）
       const pageId = getPageIdFromRecord(r);
       if (!pageId) {

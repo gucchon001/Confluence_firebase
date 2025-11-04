@@ -55,7 +55,7 @@ export class HybridSearchEngine {
   async search(params: HybridSearchParams): Promise<HybridSearchResult[]> {
     const {
       query,
-      topK = 8,
+      topK = 10, // 参照元を10件に統一
       useLunrIndex = true,
       labelFilters = { includeMeetingNotes: false },
       tableName = 'confluence'
@@ -102,17 +102,33 @@ export class HybridSearchEngine {
         tableName
       });
 
-      return vectorResults.map(result => ({
-        pageId: result.pageId,
-        title: result.title,
-        content: result.content,
-        labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
-        url: result.url,
-        source: 'vector' as const,
-        scoreKind: 'vector' as const,
-        scoreRaw: result.distance,
-        scoreText: `Vector ${this.calculateSimilarityScore(result.distance).toFixed(1)}%`
-      }));
+      // URLを再構築するヘルパー関数
+      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string => {
+        const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
+        if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
+          return existingUrl;
+        }
+        if (pageId && spaceKey) {
+          return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
+        }
+        return existingUrl || '#';
+      };
+      
+      return vectorResults.map(result => {
+        const pageId = result.pageId || result.page_id;
+        const spaceKey = result.space_key;
+        return {
+          pageId: pageId,
+          title: result.title,
+          content: result.content,
+          labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
+          url: buildUrl(pageId, spaceKey, result.url), // URLを再構築
+          source: 'vector' as const,
+          scoreKind: 'vector' as const,
+          scoreRaw: result.distance,
+          scoreText: `Vector ${this.calculateSimilarityScore(result.distance).toFixed(1)}%`
+        };
+      });
     } catch (error) {
       console.error('[HybridSearchEngine] Vector search failed:', error);
       return [];
@@ -149,12 +165,25 @@ export class HybridSearchEngine {
       }, limit);
 
       console.log(`[HybridSearchEngine] BM25 search returned ${bm25Results.length} results`);
+      
+      // URLを再構築するヘルパー関数
+      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string => {
+        const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
+        if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
+          return existingUrl;
+        }
+        if (pageId && spaceKey) {
+          return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
+        }
+        return '#';
+      };
+      
       return bm25Results.map(result => ({
         pageId: result.pageId,
         title: result.title,
         content: result.content,
         labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
-        url: result.url || '#', // BM25検索結果のURLを使用
+        url: buildUrl(result.pageId, result.space_key, result.url), // URLを再構築
         source: 'bm25' as const,
         scoreKind: 'bm25' as const,
         scoreRaw: result.score,
@@ -235,47 +264,36 @@ export class HybridSearchEngine {
   }
 
   /**
-   * Lunrクライアントを直接初期化（キャッシュから読み込み）
+   * Lunrクライアントを初期化（lunrInitializerを使用）
    */
   private async initializeLunrClient(lunrSearchClient: any): Promise<void> {
     try {
-      console.log('[HybridSearchEngine] Starting direct Lunr client initialization...');
+      console.log('[HybridSearchEngine] Starting Lunr client initialization via lunrInitializer...');
       
-      // キャッシュから読み込みを試行
+      // lunrInitializerを使用して初期化（統一された初期化処理）
+      const { lunrInitializer } = await import('./lunr-initializer');
+      await lunrInitializer.initializeAsync();
+      
+      // Lunrクライアントが初期化済みか確認
+      if (lunrSearchClient.isReady()) {
+        console.log('[HybridSearchEngine] Lunr client initialized successfully via lunrInitializer');
+        return;
+      }
+      
+      // 初期化が完了していない場合は、直接キャッシュから読み込みを試行
+      console.log('[HybridSearchEngine] Lunr client not ready after initialization, trying direct cache load...');
       const loaded = await lunrSearchClient.loadFromCache();
       if (loaded) {
         console.log('[HybridSearchEngine] Lunr client loaded from cache successfully');
         return;
       }
       
-      // キャッシュがない場合はLanceDBから取得
-      console.log('[HybridSearchEngine] Cache not found, loading from LanceDB...');
-      
-      // LanceDBからドキュメントを取得
-      const connection = await lancedbClient.getConnection();
-      const tbl = connection.table;
-      
-      // 全データを取得（正しいLanceDB APIを使用）
-      const dummyVector = new Array(768).fill(0.1);
-      const allData = await tbl.search(dummyVector).limit(10000).toArray();
-      console.log(`[HybridSearchEngine] Retrieved ${allData.length} documents from LanceDB`);
-      
-      // Lunrドキュメントに変換
-      const lunrDocs = allData.map((row: any) => ({
-        pageId: row.pageId,
-        title: row.title || '',
-        content: row.content || '',
-        labels: getLabelsAsArray(row.labels), // Arrow Vector型を配列に変換
-        url: row.url || '#'
-      }));
-      
-      // Lunrクライアントを初期化
-      await lunrSearchClient.initialize(lunrDocs);
-      console.log('[HybridSearchEngine] Lunr client initialized successfully');
+      console.warn('[HybridSearchEngine] Lunr client initialization failed - cache not found and initialization not ready');
       
     } catch (error) {
       console.error('[HybridSearchEngine] Failed to initialize Lunr client:', error);
-      throw error;
+      // エラーを再スローせず、BM25検索をスキップするだけにする（ベクトル検索は継続）
+      console.warn('[HybridSearchEngine] Continuing without BM25 search due to initialization error');
     }
   }
 

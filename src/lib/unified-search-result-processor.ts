@@ -118,6 +118,27 @@ export class UnifiedSearchResultProcessor {
     }
     return UnifiedSearchResultProcessor.instance;
   }
+  
+  /**
+   * URLを再構築するヘルパーメソッド
+   * page_idとspace_keyから正しいURLを生成
+   */
+  private buildUrl(pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string {
+    const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
+    
+    // 既存のURLが有効な場合はそのまま使用
+    if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
+      return existingUrl;
+    }
+    
+    // page_idとspace_keyからURLを構築
+    if (pageId && spaceKey) {
+      return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
+    }
+    
+    // フォールバック
+    return existingUrl || '#';
+  }
 
   /**
    * 検索結果を処理・フォーマット
@@ -310,7 +331,7 @@ export class UnifiedSearchResultProcessor {
         score: finalScore,
         space_key: result.space_key,
         labels: this.getLabelsAsArray(result.labels),
-        url: result.url || '',
+        url: this.buildUrl(result.pageId || result.page_id, result.space_key, result.url),
         lastUpdated: result.lastUpdated || '',
         source: sourceType,
         matchDetails: result._matchDetails || {},

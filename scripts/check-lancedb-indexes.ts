@@ -80,24 +80,24 @@ async function checkLanceDBIndexes() {
       }
     }
     
-    // 方法2: スカラーインデックスの確認
+    // 方法2: スカラーインデックスの確認（pageId → page_id マイグレーション対応）
     console.log('\n   方法2: スカラーインデックスの確認...');
     let pageIdIndexExists = false;
     let idIndexExists = false;
     
     try {
-      await table.createIndex('pageId');
-      console.log('   ⚠️  pageIdインデックスが存在しませんでした → 作成しました');
+      await table.createIndex('page_id');
+      console.log('   ⚠️  page_idインデックスが存在しませんでした → 作成しました');
       pageIdIndexExists = false;
     } catch (error: any) {
       const errorMessage = error.message || String(error);
       if (errorMessage.includes('already exists') || 
           errorMessage.includes('既に存在') ||
           errorMessage.includes('duplicate')) {
-        console.log('   ✅ pageIdインデックスが既に存在します');
+        console.log('   ✅ page_idインデックスが既に存在します');
         pageIdIndexExists = true;
       } else {
-        console.log(`   ⚠️  pageIdインデックス確認エラー: ${errorMessage}`);
+        console.log(`   ⚠️  page_idインデックス確認エラー: ${errorMessage}`);
       }
     }
     
@@ -122,7 +122,7 @@ async function checkLanceDBIndexes() {
     console.log('📊 インデックス確認結果サマリー');
     console.log('━'.repeat(60));
     console.log(`ベクトルインデックス (vector):  ${vectorIndexExists ? '✅ 存在' : '❌ 不在'}`);
-    console.log(`スカラーインデックス (pageId):   ${pageIdIndexExists ? '✅ 存在' : '⚠️  不在'}`);
+    console.log(`スカラーインデックス (page_id): ${pageIdIndexExists ? '✅ 存在' : '⚠️  不在'}`);
     console.log(`スカラーインデックス (id):      ${idIndexExists ? '✅ 存在' : '⚠️  不在'}`);
     console.log('━'.repeat(60));
     
