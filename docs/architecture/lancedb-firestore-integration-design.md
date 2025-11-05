@@ -113,7 +113,7 @@ LanceDBとFirestoreの両方で管理されているラベル情報を統合し�
 │  │                                                           │
 │  └── structured_labels/                                      │
 │      └── {pageId}/                                          │
-│          ├── pageId: string                                 │
+│          ├── pageId: string  // API側では文字列型（Firestore側）
 │          ├── structuredLabel: StructuredLabel               │
 │          ├── generatedAt: timestamp                         │
 │          ├── generatedBy: 'rule-based' | 'llm-based'        │
@@ -134,7 +134,7 @@ LanceDBとFirestoreの両方で管理されているラベル情報を統合し�
 │  table: confluence                                           │
 │  ├── id: string                                             │
 │  ├── vector: float32[768]                                   │
-│  ├── pageId: int64                                          │
+│  ├── page_id: int64                                         │
 │  ├── title: string                                          │
 │  ├── content: string                                        │
 │  ├── labels: string[]              (旧形式・互換性用)       │
@@ -335,7 +335,8 @@ npm run lancedb:verify
 
 ```typescript
 interface PageDocument {
-  pageId: string;                    // Confluenceページ ID
+  pageId: string;                    // Confluenceページ ID（Firestore側、文字列型）
+  // 注意: LanceDB側では page_id (int64型) を使用
   title: string;                     // ページタイトル
   content: string;                   // ページ内容（プレーンテキスト）
   spaceKey: string;                  // スペースキー
@@ -351,7 +352,8 @@ interface PageDocument {
 
 ```typescript
 interface StructuredLabelDocument {
-  pageId: string;                    // Confluenceページ ID
+  pageId: string;                    // Confluenceページ ID（Firestore側、文字列型）
+  // 注意: LanceDB側では page_id (int64型) を使用
   structuredLabel: StructuredLabel;  // 構造化ラベル
   generatedAt: Timestamp;            // 生成日時
   generatedBy: 'rule-based' | 'llm-based';  // 生成方法
@@ -388,7 +390,7 @@ export const ExtendedLanceDBSchema = {
   space_key: 'string',
   title: 'string',
   content: 'string',
-  pageId: 'int64',
+  page_id: 'int64',  // pageIdから変更（スカラーインデックス対応）
   chunkIndex: 'int32',
   url: 'string',
   lastUpdated: 'string',

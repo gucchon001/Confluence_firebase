@@ -66,7 +66,7 @@ const labels: string[] = (page.metadata?.labels?.results || [])
 // LanceDBレコードに保存
 const record = {
   id: pageId,
-  pageId: pageId,
+  page_id: parseInt(pageId),  // ← pageIdから変更（スカラーインデックス対応、int64型）
   title: title,
   content: plainText,
   vector: embedding,
@@ -348,7 +348,7 @@ new arrow.Field(
 ```typescript
 interface LanceDBRecord {
   id: string;
-  pageId: string;
+  page_id: number;      // ← pageIdから変更（スカラーインデックス対応、int64型）
   title: string;
   content: string;
   vector: number[];
@@ -510,7 +510,7 @@ verifyRecords.forEach((r, i) => {
 // ページ1: ラベルあり
 {
   id: "666927116",
-  pageId: "666927116",
+  page_id: 666927116,  // ← pageIdから変更（スカラーインデックス対応、int64型）
   title: "ワード・ディフィニション",
   labels: ["ワード・ディフィニション"],  // ← 1件
   // ...
@@ -519,7 +519,7 @@ verifyRecords.forEach((r, i) => {
 // ページ2: 複数ラベル
 {
   id: "123456789",
-  pageId: "123456789",
+  page_id: 123456789,  // ← pageIdから変更（スカラーインデックス対応、int64型）
   title: "会員退会機能",
   labels: ["会員管理", "退会", "機能要件"],  // ← 3件
   // ...
@@ -528,7 +528,7 @@ verifyRecords.forEach((r, i) => {
 // ページ3: ラベルなし
 {
   id: "640450787",
-  pageId: "640450787",
+  page_id: 640450787,  // ← pageIdから変更（スカラーインデックス対応、int64型）
   title: "client-tomonokai-juku Home",
   labels: [],  // ← 空配列（undefined ではない）
   // ...

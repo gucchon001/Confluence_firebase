@@ -36,6 +36,8 @@
     "test:page-id-in-search-results": "tsx scripts/test-page-id-in-search-results.ts",
     "test:search-ranking-classroom-deletion": "tsx scripts/test-search-ranking-classroom-deletion.ts",
     "test:label-and-title-matching": "tsx scripts/test-label-and-title-matching.ts",
+    "test:search-integrated": "tsx tests/test-search-integrated.ts",
+    "test:search-hybrid": "tsx tests/test-hybrid-search-direct.ts",
     "debug:search-logger": "tsx scripts/debug-search-logger.ts",
     "ingest:confluence": "tsx src/scripts/ingest-confluence.ts",
     "sync:confluence:batch": "tsx src/scripts/batch-sync-confluence.ts",

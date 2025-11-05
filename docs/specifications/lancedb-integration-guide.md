@@ -53,7 +53,7 @@ export const FullLanceDBSchema: SchemaDefinition = {
   title: { type: 'string', nullable: false },                // ページタイトル
   labels: { type: 'list', valueType: 'string', nullable: false }, // ラベル配列
   content: { type: 'string', nullable: false },              // チャンク内容
-  pageId: { type: 'int64', nullable: false },                // ページID（数値型）
+  page_id: { type: 'int64', nullable: false },                // ページID（数値型）- pageIdから変更（スカラーインデックス対応）
   chunkIndex: { type: 'int32', nullable: false },            // チャンクインデックス
   url: { type: 'string', nullable: false },                  // ページURL
   lastUpdated: { type: 'string', nullable: false }           // 最終更新日時
@@ -62,10 +62,12 @@ export const FullLanceDBSchema: SchemaDefinition = {
 
 ### 3.2 重要なデータ型の仕様
 
-#### 3.2.1 ページID（pageId）
+#### 3.2.1 ページID（page_id）
 - **型**: `number`（int64）
+- **フィールド名**: `page_id`（pageIdから変更、スカラーインデックス対応）
 - **変換**: `parseInt(pageId)` で文字列から数値に変換
 - **例**: `"123456789"` → `123456789`
+- **注意**: APIレスポンスでは`pageId`（string型）を維持（変換レイヤーで処理）
 
 #### 3.2.2 更新日時（lastUpdated）
 - **型**: `string`（ISO 8601形式）

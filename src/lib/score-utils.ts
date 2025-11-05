@@ -9,7 +9,14 @@
  * @returns 類似度パーセンテージ（0-100%）
  */
 export function calculateSimilarityPercentage(distance: number): number {
-  return Math.max(0, Math.min(100, Math.round((1 - distance) * 1000) / 10));
+  // 距離が負の値やNaNの場合も安全に処理
+  const safeDistance = (typeof distance === 'number' && !isNaN(distance) && isFinite(distance))
+    ? Math.max(0, distance) // 負の値を0にクランプ
+    : 1.0; // デフォルト値
+  
+  // 類似度計算（1 - distance）を0-100%に変換
+  const similarity = 1 - Math.min(1, safeDistance); // distanceが1を超える場合は1に制限
+  return Math.max(0, Math.min(100, Math.round(similarity * 1000) / 10));
 }
 
 /**

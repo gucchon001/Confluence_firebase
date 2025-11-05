@@ -277,11 +277,15 @@ export class LunrSearchClient {
     }
 
     try {
-      // 日本語クエリをトークン化
+      // ★★★ 修正: kuromojiを確実に使用する（軽量トークン化による問題を回避） ★★★
+      // 理由: インデックス構築時と検索時で同じトークン化方法を使用する
+      // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
+      // 日本語クエリをトークン化（kuromojiを使用）
       const tokenizedQuery = await tokenizeJapaneseText(query);
       console.log(`[LunrSearchClient] Searching with tokenized query: '${tokenizedQuery}'`);
 
       // Phase 2最適化: 動的閾値とフィールド重みの調整
+      // ★★★ 修正: thresholdとlimitを調整して、自動オファー関連ドキュメントの検出精度向上 ★★★
       const searchOptions = {
         fields: {
           tokenizedTitle: { boost: 3.0 }, // タイトル重みを強化
@@ -289,9 +293,12 @@ export class LunrSearchClient {
           labels: { boost: 2.0 } // ラベル重みを強化
         },
         // 検索結果数を事前に制限（パフォーマンス向上）
-        limit: Math.min(limit * 2, 50), // 必要数の2倍、最大50件に制限（Phase 2最適化）
+        // 修正: 最大50件 → 100件に増加（自動オファー関連ドキュメントの検出精度向上）
+        limit: Math.min(limit * 2, 100), // 必要数の2倍、最大100件に制限
         // 動的スコア閾値（クエリの長さに応じて調整）
-        threshold: query.length > 10 ? 0.15 : 0.25 // 長いクエリは緩く、短いクエリは厳しく
+        // 修正: thresholdを下げて、関連性の高い結果が除外されないようにする
+        // 短いクエリ（「自動オファー」など）でも関連性の高い結果を含めるため、0.25 → 0.1に下げる
+        threshold: query.length > 10 ? 0.1 : 0.1 // すべてのクエリで0.1に統一（検出精度向上）
       };
 
       const searchResults = this.index.search(tokenizedQuery, searchOptions);

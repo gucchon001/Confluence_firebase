@@ -167,7 +167,8 @@ interface ConfluenceSpace {
 
 ```typescript
 interface ExtractedKnowledge {
-  pageId: string;
+  pageId: string;  // API側では文字列型（変換レイヤーで処理）
+  // 注意: データベース側では page_id (int64型) を使用
   pageTitle: string;
   extractedAt: string;
   functions: {

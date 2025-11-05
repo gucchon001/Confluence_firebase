@@ -1146,7 +1146,11 @@ async function executeVectorSearch(
       vectorQuery = vectorQuery.where(params.filter);
     }
     
-    let vectorResults = await vectorQuery.limit(topK * 10).toArray();
+    // ★★★ 近似検索（IVF_PQ）の誤差を考慮して、より多くの結果を取得 ★★★
+    // 理由: 距離が100位以内に入るはずのドキュメントが検索結果に含まれない問題に対処
+    // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
+    // 修正: 20倍 → 30倍に増加（自動オファー関連ドキュメントの検出精度向上）
+    let vectorResults = await vectorQuery.limit(topK * 30).toArray(); // 20倍 → 30倍に増加（topK=10の場合、200件→300件）
     const vectorSearchDuration = Date.now() - vectorSearchStart;
     
     console.log(`[PERF] 🔍 Vector search completed in ${vectorSearchDuration}ms`);
@@ -1241,7 +1245,9 @@ async function executeBM25Search(
       return [];
     }
     
-    const kwCap = Math.max(100, Math.floor(topK * 2));
+    // ★★★ 修正: BM25検索のlimitを増やして、自動オファー関連ドキュメントの検出精度向上 ★★★
+    // 修正: kwCapを増やして、より多くの結果を取得（100 → 200）
+    const kwCap = Math.max(200, Math.floor(topK * 3)); // 100 → 200に増加、topK * 2 → topK * 3に増加
     const searchKeywords = finalKeywords.slice(0, 5);
     
     console.log(`[BM25 Search] Starting search for keywords: ${searchKeywords.join(', ')}`);
@@ -1249,8 +1255,11 @@ async function executeBM25Search(
     const allLunrResults: any[] = [];
     const processedIds = new Set<string>();
     
+    // ★★★ 修正: kuromojiを確実に使用する（軽量トークン化による問題を回避） ★★★
+    // 理由: インデックス構築時と検索時で同じトークン化方法を使用する
+    // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
     for (const keyword of searchKeywords) {
-      const tokenizedQuery = await tokenizeJapaneseText(keyword);
+      const tokenizedQuery = await tokenizeJapaneseText(keyword); // kuromojiを使用
       console.log(`[BM25 Search] Searching '${keyword}' -> '${tokenizedQuery}'`);
       
       const keywordResults = await lunrSearchClient.searchCandidates(tokenizedQuery, kwCap);

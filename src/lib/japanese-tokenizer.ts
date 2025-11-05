@@ -17,18 +17,26 @@ let tokenizerPromise: Promise<kuromoji.Tokenizer<kuromoji.IpadicFeatures>> | nul
 /**
  * kuromojiトークナイザーを事前初期化
  * ⚡ 最適化: 永続化キャッシュで超高速起動を実現
+ * ★★★ 修正: キャッシュ状態に関わらず、実際にトークナイザーを初期化 ★★★
+ * 理由: キャッシュ状態だけでは、実際のトークナイザーインスタンスが保持されない
  */
 export async function preInitializeTokenizer(): Promise<void> {
-  // キャッシュから初期化状態を確認
-  const cachedState = loadTokenizerState();
-  if (cachedState?.isInitialized) {
-    console.log('[JapaneseTokenizer] 🚀 Fast startup: Using cached tokenizer state');
+  // 既に初期化されている場合は早期リターン
+  if (tokenizer) {
+    console.log('[JapaneseTokenizer] 🚀 Tokenizer already initialized');
     return;
   }
   
-  console.log('[JapaneseTokenizer] Initializing fresh tokenizer...');
+  // キャッシュから初期化状態を確認（ログ出力用）
+  const cachedState = loadTokenizerState();
+  if (cachedState?.isInitialized) {
+    console.log('[JapaneseTokenizer] 🚀 Fast startup: Using cached tokenizer state');
+    // キャッシュ状態があっても、実際にトークナイザーを初期化する
+  }
+  
+  console.log('[JapaneseTokenizer] Initializing tokenizer...');
   const startTime = Date.now();
-  await getTokenizer();
+  await getTokenizer(); // 実際にトークナイザーを初期化
   const initTime = Date.now() - startTime;
   
   // 初期化状態をキャッシュに保存
@@ -92,7 +100,9 @@ async function getTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.IpadicFeature
 
 /**
  * 日本語のテキストを分かち書きされた文字列に変換する
- * ⚡ 最適化: トークナイザーが初期化されていない場合は軽量な代替処理を使用
+ * ★★★ 修正: kuromojiを確実に使用する（軽量トークン化による問題を回避） ★★★
+ * 理由: 軽量トークン化が「自動オファー」を「】自動オファー設定機能」のように長いトークンにし、
+ *       検索クエリ「自動オファー」と完全一致しない問題を解決
  * @param text 元のテキスト
  * @returns スペースで区切られた単語の文字列 (例: "教室 管理 の 仕様")
  */
@@ -102,13 +112,11 @@ export async function tokenizeJapaneseText(text: string): Promise<string> {
   }
 
   try {
-    // ⚡ 最適化: トークナイザーが初期化されていない場合は軽量な処理を使用
-    if (!tokenizer) {
-      console.log('[JapaneseTokenizer] ⚡ Using lightweight tokenization (kuromoji not ready)');
-      return performLightweightTokenization(text);
-    }
-
-    const tokenizerInstance = await getTokenizer();
+    // ★★★ 修正: kuromojiが初期化されるまで待つ（軽量トークン化を使わない） ★★★
+    // 理由: 軽量トークン化が長いトークンを生成し、Lunrの完全一致検索と互換性がない
+    // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
+    const tokenizerInstance = await getTokenizer(); // 初期化されるまで待つ
+    
     const tokens = tokenizerInstance.tokenize(text);
     
     // 全ての単語（名詞、動詞、助詞など）をそのままスペースで連結
@@ -117,9 +125,10 @@ export async function tokenizeJapaneseText(text: string): Promise<string> {
     console.log(`[JapaneseTokenizer] Tokenized: "${text}" -> "${tokenizedText}"`);
     return tokenizedText;
   } catch (error) {
-    console.error('[JapaneseTokenizer] Tokenization failed, using lightweight fallback:', error);
-    // エラー時は軽量な代替処理を使用
-    return performLightweightTokenization(text);
+    console.error('[JapaneseTokenizer] Tokenization failed:', error);
+    // ★★★ 修正: エラー時も軽量トークン化を使わず、エラーを投げる ★★★
+    // 理由: 軽量トークン化によるトークン不一致の問題を回避
+    throw new Error(`Failed to tokenize Japanese text: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

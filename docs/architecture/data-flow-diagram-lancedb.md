@@ -2,6 +2,9 @@
 
 このドキュメントでは、LanceDBを使用したConfluence Vector Search システムのコンポーネント図、データフロー図、シーケンス図を示します。
 
+**最終更新**: 2025年1月  
+**ステータス**: ✅ 最新仕様に更新済み（`page_id`マイグレーション完了、Gemini Embeddings API使用）
+
 ## 更新履歴
 - **2025年11月**: page_idマイグレーション完了 - パフォーマンス最適化
   - pageId → page_id マイグレーション完了: スカラーインデックス対応のためフィールド名を変更
@@ -27,10 +30,12 @@
   - マークダウン表示: 高度な正規化とテーブル表示機能
   - 会話履歴: Firestore統合による永続化
   - 技術スタック: Next.js 15.3.3, React 18.3.1, Firebase 11.9.1
-  - 埋め込みモデル: paraphrase-multilingual-mpnet-base-v2（768次元）
+  - 埋め込みモデル: Gemini Embeddings API (text-embedding-004、768次元)
   - LLM: Gemini API（用途別使い分け）
   - ハイブリッド検索: ベクトル検索 + BM25検索 + タイトル救済検索
   - 日本語対応: Kuromojiトークナイザー使用
+  - スキーマ: `page_id` (int64型) を使用（スカラーインデックス対応）
+  - API互換性: 変換レイヤーによりAPIレスポンスでは`pageId` (string型)を維持
 
 - **2024年12月**: 初期実装完了
   - 基本検索機能の実装
@@ -66,7 +71,7 @@ graph TB
     end
     
     subgraph "ローカル処理"
-        S[Xenova Transformers] --- T[埋め込み生成]
+        S[Gemini Embeddings API] --- T[埋め込み生成]
         N2[Lunr.js] --- N3[BM25検索]
         U[ドメイン知識DB] --- V[動的キーワード抽出器]
     end
@@ -109,7 +114,7 @@ graph TD
     Z[Firestore] -->|1a. 同期ログ記録| B
     B -->|1b. 差分更新| A
     B -->|2. テキスト分割| C[チャンク処理]
-    C -->|3. 埋め込みベクトル生成| D[Xenova Transformers]
+    C -->|3. 埋め込みベクトル生成| D[Gemini Embeddings API]
     D -->|4. ベクトル返却| C
     C -->|5. ベクトルとメタデータ保存| E[LanceDB]
     B -->|6. 同期ログ保存| Z
@@ -146,7 +151,7 @@ sequenceDiagram
     participant User as ユーザー
     participant Batch as バッチ同期処理
     participant Confluence as Confluence API
-    participant Embed as Xenova Transformers
+    participant Embed as Gemini Embeddings API
     participant LDB as LanceDB
     participant FS as Firestore
     participant RAG as RAGフロー
@@ -162,7 +167,7 @@ sequenceDiagram
     loop 各ページ
         Batch->>Batch: テキスト分割
         loop 各チャンク
-            Batch->>Embed: テキスト埋め込み生成（768次元、L2正規化）
+            Batch->>Embed: テキスト埋め込み生成（768次元）
             Embed-->>Batch: 埋め込みベクトル返却
             Batch->>LDB: ベクトルとメタデータ保存
             LDB-->>Batch: 保存完了
@@ -184,7 +189,7 @@ sequenceDiagram
     RAG->>Auth: Firebase認証チェック
     Auth->>Auth: @tomonokai-corp.com ドメイン検証
     Auth-->>RAG: 認証成功
-    RAG->>Embed: クエリテキスト埋め込み生成（768次元、L2正規化）
+    RAG->>Embed: クエリテキスト埋め込み生成（768次元）
     Embed-->>RAG: クエリベクトル返却
     RAG->>KW: 動的キーワード抽出要求
     KW->>DK: ドメイン知識参照
@@ -227,8 +232,10 @@ sequenceDiagram
 - Confluenceから全ページデータを取得（約1000ページ）
   - 差分更新モード（`--differential`）では前回の同期以降に更新されたページのみを取得
 - テキストをチャンクに分割（合計約2500チャンク）
-- 各チャンクの埋め込みベクトルを生成（Xenova Transformersライブラリ使用、768次元、L2正規化）
+  - スマートチャンキング（1600文字、200文字オーバーラップ）
+- 各チャンクの埋め込みベクトルを生成（Gemini Embeddings API使用、768次元）
 - 生成したベクトルとメタデータをLanceDBに直接保存
+  - スキーマ: `page_id` (int64型) を使用（スカラーインデックス対応）
 
 ### 2. データ保存
 - LanceDBにベクトルとメタデータを保存（`.lancedb/`ディレクトリ）
@@ -240,7 +247,7 @@ sequenceDiagram
 
 ### 3. ストリーミング検索と回答生成
 - **認証・認可**: Firebase Authenticationでユーザー認証（@tomonokai-corp.com ドメイン制限）
-- **クエリ処理**: ユーザーの質問をベクトル化（Xenova Transformersライブラリ使用、768次元、L2正規化）
+- **クエリ処理**: ユーザーの質問をベクトル化（Gemini Embeddings API使用、768次元）
 - **動的キーワード抽出**: ドメイン知識データベースから関連キーワードを抽出・分類
 - **並列検索実行**: 複数検索ソースの組み合わせ：
   - **ベクトル検索**: LanceDBで類似ベクトル検索（意味的類似性）
@@ -281,10 +288,10 @@ sequenceDiagram
     - 超強力スコアブースト（titleMatchRatio ≥ 0.9）
   - **スコアリング**: RRF融合 + Composite Scoring
     - 複合スコア = BM25(50%) + タイトル(25%) + ラベル(15%) + ベクトル(5%)
-    - 早期ラベルフィルタリング、pageId単位での重複除去
+    - 早期ラベルフィルタリング、page_id単位での重複除去（DB側は`page_id`、API側は`pageId`を維持）
   - **並列検索実行**: ベクトル検索とBM25検索の並列処理（Phase 5）
 - **ストリーミング**: リアルタイム回答生成とプログレス表示（4段階）
-- **ベクトル生成**: Xenova Transformersライブラリ（paraphrase-multilingual-mpnet-base-v2、768次元）
+- **ベクトル生成**: Gemini Embeddings API (text-embedding-004、768次元)
 - **LLM**: Google AI Gemini API（用途別使い分け）
   - **gemini-2.5-flash**: メイン処理（ストリーミング回答生成）
     - temperature: 0.1, maxOutputTokens: 4096
@@ -317,6 +324,8 @@ sequenceDiagram
   - セキュリティルールによる適切なアクセス制御
 - **LanceDB 0.22.0**: ローカルベクトルデータベース（埋め込みベクトルとメタデータを保存）
   - ベクトル検索と検索結果表示に必要なすべてのデータを一元管理
+  - スキーマ: `page_id` (int64型) を使用（スカラーインデックス対応）
+  - パフォーマンス: `getAllChunksByPageId`が14秒 → 5msに高速化（99.96%改善）
 
 ### 外部サービス
 - **Confluence API**: ドキュメントのソースデータを提供
@@ -325,9 +334,10 @@ sequenceDiagram
 - **Gemini LLM**: 質問応答と要約生成のための大規模言語モデル（gemini-2.5-flash）
 
 ### ローカル処理
-- **Xenova Transformers**: ローカルでの埋め込みベクトル生成
-  - paraphrase-multilingual-mpnet-base-v2モデル使用（768次元）
-  - 外部APIに依存せず、コスト削減とプライバシー保護を実現
+- **Gemini Embeddings API**: 埋め込みベクトル生成
+  - text-embedding-004モデル使用（768次元）
+  - Google AI APIによる高品質な埋め込み生成
+  - キャッシュ機能により効率的な利用
 - **Lunr.js**: ローカルでのBM25全文検索
   - 軽量なJavaScript検索ライブラリ
   - インデックス構築とBM25アルゴリズムによる関連性スコアリング

@@ -309,14 +309,58 @@ export class UnifiedSearchResultProcessor {
       // スコア計算
       // 注意: Composite Scoreが利用可能な場合は、それを優先的に使用（0-1の範囲を0-100に変換）
       const compositeScore = (result as any)._compositeScore; // 最新の計算ロジック（Composite Score）
+      
+      // まず、compositeScoreが有効な数値かチェック
+      const hasValidCompositeScore = typeof compositeScore === 'number' && 
+                                      !isNaN(compositeScore) && 
+                                      isFinite(compositeScore) && 
+                                      compositeScore >= 0;
+      
+      // distanceを安全に処理（undefined、null、NaN、負の値を考慮）
+      const safeDistance = (typeof distance === 'number' && !isNaN(distance) && isFinite(distance))
+        ? Math.max(0, distance) // 負の値を0にクランプ（距離は非負であるべき）
+        : 1.0; // デフォルト値
+      
+      // bm25Scoreを安全に処理
+      const safeBm25Score = (typeof bm25Score === 'number' && !isNaN(bm25Score) && isFinite(bm25Score))
+        ? Math.max(0, bm25Score)
+        : 0;
+      
       let finalScore: number;
-      if (compositeScore !== undefined && compositeScore !== null) {
+      
+      if (hasValidCompositeScore) {
         // Composite Scoreを使用（0-1の範囲を0-100に変換）
         finalScore = Math.round(Math.max(0, Math.min(100, compositeScore * 100)));
       } else if (sourceType === 'bm25' || sourceType === 'keyword') {
-        finalScore = Math.min(100, Math.max(0, bm25Score * 10));
+        // BM25/キーワード検索の場合
+        finalScore = Math.min(100, Math.max(0, safeBm25Score * 10));
       } else {
-        finalScore = calculateSimilarityPercentage(distance);
+        // ベクトル検索の場合
+        finalScore = calculateSimilarityPercentage(safeDistance);
+      }
+      
+      // 最終的な安全チェック（NaNやundefined、Infinityを防ぐ）
+      if (typeof finalScore !== 'number' || isNaN(finalScore) || !isFinite(finalScore)) {
+        // フォールバック: 距離ベースの計算（安全な値を使用）
+        finalScore = calculateSimilarityPercentage(safeDistance);
+      }
+      
+      // 最終的な範囲チェック（0-100の範囲に制限）
+      finalScore = Math.max(0, Math.min(100, finalScore));
+      
+      // デバッグログ（本番環境での問題を診断するため）
+      if (process.env.NODE_ENV === 'development' && (finalScore === undefined || finalScore === null || isNaN(finalScore))) {
+        console.warn(`[UnifiedSearchResultProcessor] Invalid finalScore:`, {
+          finalScore,
+          compositeScore,
+          hasValidCompositeScore,
+          sourceType,
+          distance,
+          safeDistance,
+          bm25Score,
+          safeBm25Score,
+          title: result.title?.substring(0, 50)
+        });
       }
 
       // スコア情報生成（最新の計算ロジック: Composite Score を優先的に使用）
