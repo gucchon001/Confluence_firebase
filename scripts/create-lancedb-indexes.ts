@@ -117,6 +117,21 @@ async function createLanceDBIndexes(options: IndexCreationOptions = DEFAULT_OPTI
         }
       }
       
+      // ★★★ 改善案2: titleフィールドにインデックスを作成（効果は限定的だが追加） ★★★
+      // 注意: LIKE '%...%'パターンでは効果が限定的だが、完全一致検索には有効
+      try {
+        await table.createIndex('title');
+        console.log(`   ✅ titleインデックス作成完了`);
+      } catch (titleError: any) {
+        const errorMessage = titleError?.message || String(titleError);
+        if (errorMessage.includes('already exists') || errorMessage.includes('既に存在')) {
+          console.log(`   ✅ titleインデックスは既に存在します`);
+        } else {
+          console.warn(`   ⚠️ titleインデックス作成失敗: ${errorMessage.substring(0, 150)}`);
+          console.warn(`   💡 LIKE '%...%'パターンでは効果が限定的ですが、完全一致検索には有効です`);
+        }
+      }
+      
       const scalarDuration = Date.now() - scalarStart;
       console.log(`   ⏱️ スカラーインデックス作成時間: ${(scalarDuration / 1000).toFixed(2)}秒\n`);
     } catch (scalarError: any) {

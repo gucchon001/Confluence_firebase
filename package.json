@@ -74,6 +74,8 @@
     "verify:extended-schema": "tsx scripts/verify-extended-schema.ts",
     "check:url-issues": "tsx scripts/check-url-issues.ts",
     "check:local-performance": "tsx scripts/check-local-performance.ts",
+    "test:local-search-performance": "tsx scripts/test-local-search-performance.ts",
+    "debug:lancedb-index-status": "tsx scripts/debug-lancedb-index-status.ts",
     "analyze:lancedb-structure": "tsx scripts/analyze-lancedb-data-structure.ts",
     "cleanup:duplicate-chunks": "tsx scripts/cleanup-duplicate-chunks.ts",
     "analyze:duplicate-impact": "tsx scripts/analyze-duplicate-impact.ts",
