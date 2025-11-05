@@ -1329,9 +1329,11 @@ function calculateTitleMatch(title: string, keywords: string[]): {
   
   // 改善: 複合語（DOMAIN_SPECIFIC_KEYWORDS）が含まれている場合は部分的マッチでもブースト
   // 例：「自動オファー」がタイトルに含まれている場合、クエリに「パーソナルオファーと自動オファー」が含まれていてもブースト
+  // 注意: DOMAIN_SPECIFIC_KEYWORDS_SET と DOMAIN_SPECIFIC_KEYWORDS は初期化後は動的に更新される
+  // keyword-lists-loader が初期化されると、これらの変数は keyword-lists-v2.json から動的に読み込まれたキーワードに更新される
   const hasCompoundDomainKeyword = matchedKeywords.some(kw => 
-    DOMAIN_SPECIFIC_KEYWORDS_SET.has(kw as any) || 
-    DOMAIN_SPECIFIC_KEYWORDS.some(dsk => kw.includes(dsk) || dsk.includes(kw))
+    DOMAIN_SPECIFIC_KEYWORDS_SET.has(kw) || 
+    DOMAIN_SPECIFIC_KEYWORDS.some((dsk: string) => kw.includes(dsk) || dsk.includes(kw))
   );
   
   if (hasCompoundDomainKeyword && matchedKeywords.length > 0) {

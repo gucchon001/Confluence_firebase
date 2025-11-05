@@ -145,10 +145,12 @@ export const PENALTY_TERMS_SET = new Set(PENALTY_TERMS);
 /**
  * ドメイン固有キーワード（重要キーワード）
  * タイトルにこれらが含まれる場合、スコアをブーストする
+ * 
+ * 注意: この配列は最小限のコアキーワードのみ（フォールバック用）
+ * 実際のドメイン固有キーワードは `keyword-lists-v2.json` の `domainNames` と `functionNames` から動的に読み込む
  */
-export const DOMAIN_SPECIFIC_KEYWORDS = [
-  // 主要ドメイン
-  '急募',
+export const DOMAIN_SPECIFIC_KEYWORDS_CORE = [
+  // コアドメイン（最小限のハードコーディング - フォールバック用）
   '教室',
   '求人',
   '会員',
@@ -156,27 +158,93 @@ export const DOMAIN_SPECIFIC_KEYWORDS = [
   '契約',
   '請求',
   '採用',
-  
-  // 重要機能
-  '退会',
-  '削除',
-  'コピー',
-  '教室コピー',  // 複合語として追加（「教室コピー」を一つの機能名として認識）
   'オファー',
-  'パーソナルオファー',  // 複合語として追加
-  '自動オファー',  // 複合語として追加
-  '口コミ',
-  'Q&A',
-  'Q＆A',
-  
-  // 重要な操作・状態
-  '応募不可',
-  '重複',
-  '自動更新',
-  'バッチ',
 ] as const;
 
-export const DOMAIN_SPECIFIC_KEYWORDS_SET = new Set(DOMAIN_SPECIFIC_KEYWORDS);
+/**
+ * ドメイン固有キーワードを動的に取得する
+ * keyword-lists-v2.json の domainNames と functionNames から読み込む
+ * フォールバックとして、コアキーワードを使用
+ */
+let cachedDomainKeywords: string[] | null = null;
+let cachedDomainKeywordsSet: Set<string> | null = null;
+
+/**
+ * ドメイン固有キーワードを初期化（keyword-lists-loader から動的に読み込む）
+ * この関数は keyword-lists-loader が初期化された後に呼び出す必要がある
+ */
+export function initializeDomainSpecificKeywords(keywordCategories: { domainNames: string[]; functionNames: string[] } | null): void {
+  if (cachedDomainKeywords) {
+    return; // 既に初期化済み
+  }
+
+  const domainKeywords = new Set<string>(DOMAIN_SPECIFIC_KEYWORDS_CORE);
+
+  if (keywordCategories) {
+    // domainNames から抽出（例: "教室管理", "求人管理" → "教室", "求人"）
+    for (const domainName of keywordCategories.domainNames) {
+      // 単語単位で抽出（"管理"などの汎用語を除外）
+      const words = domainName.split(/[管理機能情報画面設定登録編集削除一覧詳細閲覧作成更新]/);
+      for (const word of words) {
+        if (word.length >= 2 && !GENERIC_FUNCTION_TERMS_SET.has(word as any)) {
+          domainKeywords.add(word);
+        }
+      }
+      // 複合語も追加（例: "教室コピー", "パーソナルオファー"）
+      if (domainName.length >= 4 && !domainName.includes('管理') && !domainName.includes('機能')) {
+        domainKeywords.add(domainName);
+      }
+    }
+
+    // functionNames から抽出（複合語を優先）
+    for (const functionName of keywordCategories.functionNames) {
+      // 複合語を追加（例: "教室コピー機能", "パーソナルオファー登録機能"）
+      if (functionName.length >= 4 && !functionName.includes('管理')) {
+        // "機能"などの汎用語を除去
+        const cleanName = functionName.replace(/[機能管理情報画面設定登録編集削除一覧詳細閲覧作成更新]/g, '').trim();
+        if (cleanName.length >= 2) {
+          domainKeywords.add(cleanName);
+        }
+      }
+    }
+  }
+
+  cachedDomainKeywords = Array.from(domainKeywords);
+  cachedDomainKeywordsSet = new Set(cachedDomainKeywords);
+  
+  console.log(`[CommonTermsConfig] ドメイン固有キーワードを動的に読み込みました: ${cachedDomainKeywords.length}個`);
+}
+
+/**
+ * ドメイン固有キーワードを取得（初期化済みの場合）
+ * 初期化されていない場合はコアキーワードを返す
+ */
+export function getDomainSpecificKeywords(): string[] {
+  return cachedDomainKeywords || Array.from(DOMAIN_SPECIFIC_KEYWORDS_CORE);
+}
+
+/**
+ * ドメイン固有キーワードのSetを取得（初期化済みの場合）
+ * 初期化されていない場合はコアキーワードのSetを返す
+ */
+export function getDomainSpecificKeywordsSet(): Set<string> {
+  return cachedDomainKeywordsSet || new Set(DOMAIN_SPECIFIC_KEYWORDS_CORE);
+}
+
+/**
+ * 同期版: ドメイン固有キーワード（初期化済みの場合は動的キーワード、未初期化の場合はコアキーワード）
+ * 既存コードとの互換性のため、この変数は使用可能
+ */
+export let DOMAIN_SPECIFIC_KEYWORDS: readonly string[] = DOMAIN_SPECIFIC_KEYWORDS_CORE;
+export let DOMAIN_SPECIFIC_KEYWORDS_SET: Set<string> = new Set(DOMAIN_SPECIFIC_KEYWORDS_CORE);
+
+// 初期化関数が呼ばれたら、エクスポート変数も更新するラッパー関数
+export function initializeDomainSpecificKeywordsWithUpdate(keywordCategories: { domainNames: string[]; functionNames: string[] } | null): void {
+  initializeDomainSpecificKeywords(keywordCategories);
+  // エクスポート変数を更新
+  DOMAIN_SPECIFIC_KEYWORDS = cachedDomainKeywords || DOMAIN_SPECIFIC_KEYWORDS_CORE;
+  DOMAIN_SPECIFIC_KEYWORDS_SET = cachedDomainKeywordsSet || new Set(DOMAIN_SPECIFIC_KEYWORDS_CORE);
+}
 
 /**
  * 汎用用語判定ヘルパー関数
@@ -229,20 +297,24 @@ export const CommonTermsHelper = {
   
   /**
    * タイトルにドメイン固有キーワードが含まれるか判定
+   * 注意: 動的キーワードが初期化されている場合はそれを使用、未初期化の場合はコアキーワードを使用
    */
   containsDomainSpecificKeyword(title: string): boolean {
     const titleLower = title.toLowerCase();
-    return Array.from(DOMAIN_SPECIFIC_KEYWORDS_SET).some(keyword => 
+    const keywordsSet = getDomainSpecificKeywordsSet();
+    return Array.from(keywordsSet).some(keyword => 
       titleLower.includes(keyword.toLowerCase())
     );
   },
   
   /**
    * タイトルに含まれるドメイン固有キーワード数を取得
+   * 注意: 動的キーワードが初期化されている場合はそれを使用、未初期化の場合はコアキーワードを使用
    */
   countDomainSpecificKeywords(title: string): number {
     const titleLower = title.toLowerCase();
-    return Array.from(DOMAIN_SPECIFIC_KEYWORDS_SET).filter(keyword => 
+    const keywordsSet = getDomainSpecificKeywordsSet();
+    return Array.from(keywordsSet).filter(keyword => 
       titleLower.includes(keyword.toLowerCase())
     ).length;
   },
@@ -250,12 +322,14 @@ export const CommonTermsHelper = {
   /**
    * クエリとタイトルの両方に含まれるドメイン固有キーワード数を取得
    * Phase 5改善: クエリに関連するキーワードのみをブースト対象とする
+   * 注意: 動的キーワードが初期化されている場合はそれを使用、未初期化の場合はコアキーワードを使用
    */
   countMatchingDomainKeywords(query: string, title: string): number {
     const queryLower = query.toLowerCase();
     const titleLower = title.toLowerCase();
+    const keywordsSet = getDomainSpecificKeywordsSet();
     
-    return Array.from(DOMAIN_SPECIFIC_KEYWORDS_SET).filter(keyword => {
+    return Array.from(keywordsSet).filter(keyword => {
       const keywordLower = keyword.toLowerCase();
       return queryLower.includes(keywordLower) && titleLower.includes(keywordLower);
     }).length;

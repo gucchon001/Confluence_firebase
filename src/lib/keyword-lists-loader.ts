@@ -74,6 +74,19 @@ export class KeywordListsLoader {
       // カテゴリ別に整理
       this.keywordCategories = this.organizeByCategory(this.keywordLists);
       
+      // ドメイン固有キーワードを動的に初期化（keyword-lists-v2.jsonから読み込む）
+      try {
+        const { initializeDomainSpecificKeywordsWithUpdate } = await import('./common-terms-config');
+        if (initializeDomainSpecificKeywordsWithUpdate && this.keywordCategories) {
+          initializeDomainSpecificKeywordsWithUpdate({
+            domainNames: this.keywordCategories.domainNames,
+            functionNames: this.keywordCategories.functionNames
+          });
+        }
+      } catch (error) {
+        console.warn('[KeywordListsLoader] ドメイン固有キーワードの初期化に失敗:', error);
+      }
+      
       console.log(`[KeywordListsLoader] キーワードリストを読み込みました: ${path}`);
       console.log(`[KeywordListsLoader] 総キーワード数: ${this.keywordLists.statistics.totalKeywords}個`);
       console.log(`[KeywordListsLoader] ドメイン名: ${this.keywordLists.statistics.categories.domainNames}個`);
