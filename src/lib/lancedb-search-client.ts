@@ -14,7 +14,7 @@ import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
-import { GENERIC_DOCUMENT_TERMS, GENERIC_FUNCTION_TERMS, CommonTermsHelper } from './common-terms-config';
+import { GENERIC_DOCUMENT_TERMS, GENERIC_FUNCTION_TERMS, DOMAIN_SPECIFIC_KEYWORDS, DOMAIN_SPECIFIC_KEYWORDS_SET, CommonTermsHelper } from './common-terms-config';
 import { GenericCache } from './generic-cache';
 import { kgSearchService } from './kg-search-service';
 import { searchLogger } from './search-logger';
@@ -1326,6 +1326,19 @@ function calculateTitleMatch(title: string, keywords: string[]): {
   
   // 基本マッチ比率
   let titleMatchRatio = keywords.length > 0 ? matchedKeywords.length / keywords.length : 0;
+  
+  // 改善: 複合語（DOMAIN_SPECIFIC_KEYWORDS）が含まれている場合は部分的マッチでもブースト
+  // 例：「自動オファー」がタイトルに含まれている場合、クエリに「パーソナルオファーと自動オファー」が含まれていてもブースト
+  const hasCompoundDomainKeyword = matchedKeywords.some(kw => 
+    DOMAIN_SPECIFIC_KEYWORDS_SET.has(kw as any) || 
+    DOMAIN_SPECIFIC_KEYWORDS.some(dsk => kw.includes(dsk) || dsk.includes(kw))
+  );
+  
+  if (hasCompoundDomainKeyword && matchedKeywords.length > 0) {
+    // 複合語が含まれている場合、部分的マッチでも最低0.7を保証
+    // 例：「自動オファー」が含まれている場合、最低70%のマッチ比率
+    titleMatchRatio = Math.max(titleMatchRatio, 0.7);
+  }
   
   // 改善: クエリ全体（キーワードを結合）がタイトルに含まれる場合はブースト
   if (keywords.length > 1) {
