@@ -852,12 +852,20 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const scored50 = compositeScoringService.scoreAndRankResults(top50, finalKeywords, params.query);
         
         // 残りは簡易スコア（RRFスコアを50%に減衰して維持）
-        const remainingWithSimpleScore = remaining.map(r => ({
-          ...r,
-          _compositeScore: (r._rrfScore || 0) * 0.5,  // 簡易スコア
-          _scoreBreakdown: null,  // 簡易版のため詳細なし
-          _scoringType: 'simple-rrf'  // デバッグ用
-        }));
+        // BM25結果にも_compositeScoreを設定（未設定の場合のみ）
+        const remainingWithSimpleScore = remaining.map(r => {
+          // 既に_compositeScoreが設定されている場合は保持
+          if (r._compositeScore !== undefined && r._compositeScore !== null) {
+            return r;
+          }
+          // 未設定の場合は簡易スコアを設定
+          return {
+            ...r,
+            _compositeScore: (r._rrfScore || 0) * 0.5,  // 簡易スコア
+            _scoreBreakdown: null,  // 簡易版のため詳細なし
+            _scoringType: 'simple-rrf'  // デバッグ用
+          };
+        });
         
         // マージして最終ソート
         vectorResults = [...scored50, ...remainingWithSimpleScore]

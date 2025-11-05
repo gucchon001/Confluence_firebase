@@ -307,8 +307,13 @@ export class UnifiedSearchResultProcessor {
       const bm25Score = result._bm25Score ?? result._keywordScore ?? 0;
 
       // スコア計算
+      // 注意: Composite Scoreが利用可能な場合は、それを優先的に使用（0-1の範囲を0-100に変換）
+      const compositeScore = (result as any)._compositeScore; // 最新の計算ロジック（Composite Score）
       let finalScore: number;
-      if (sourceType === 'bm25' || sourceType === 'keyword') {
+      if (compositeScore !== undefined && compositeScore !== null) {
+        // Composite Scoreを使用（0-1の範囲を0-100に変換）
+        finalScore = Math.round(Math.max(0, Math.min(100, compositeScore * 100)));
+      } else if (sourceType === 'bm25' || sourceType === 'keyword') {
         finalScore = Math.min(100, Math.max(0, bm25Score * 10));
       } else {
         finalScore = calculateSimilarityPercentage(distance);
@@ -317,7 +322,6 @@ export class UnifiedSearchResultProcessor {
       // スコア情報生成（最新の計算ロジック: Composite Score を優先的に使用）
       const scoreKind = sourceType;
       const scoreRaw = sourceType === 'bm25' || sourceType === 'keyword' ? bm25Score : distance;
-      const compositeScore = (result as any)._compositeScore; // 最新の計算ロジック（Composite Score）
       const scoreText = generateScoreText(sourceType, bm25Score, distance, compositeScore);
 
       return {
@@ -328,7 +332,7 @@ export class UnifiedSearchResultProcessor {
         content: result.content || '',
         isChunked: result.isChunked,  // Phase 0A-3: チャンク統合判定フラグ
         distance: distance,
-        score: finalScore,
+        score: finalScore, // Composite Scoreが利用可能な場合はそれを使用、それ以外は従来の計算
         space_key: result.space_key,
         labels: this.getLabelsAsArray(result.labels),
         url: this.buildUrl(result.pageId || result.page_id, result.space_key, result.url),
