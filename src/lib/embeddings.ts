@@ -18,6 +18,9 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     throw new Error('テキストが空または文字列ではありません');
   }
   
+  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+  text = text.replace(/\uFEFF/g, '');
+  
   // 空のテキストの場合はデフォルトテキストを使用
   if (text.trim().length === 0) {
     text = 'No content available';
@@ -87,8 +90,11 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
   }
   
+  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+  const cleanText = text.replace(/\uFEFF/g, '');
+  
   try {
-    const result = await embeddingModel.embedContent(text);
+    const result = await embeddingModel.embedContent(cleanText);
     
     // Gemini Embeddings API のレスポンス形式に応じて取得
     // text-embedding-004 の場合は result.embedding.values を返す
