@@ -368,12 +368,16 @@ export class UnifiedSearchResultProcessor {
       const scoreRaw = sourceType === 'bm25' || sourceType === 'keyword' ? bm25Score : distance;
       const scoreText = generateScoreText(sourceType, bm25Score, distance, compositeScore);
 
+      // 🔧 BOM文字（U+FEFF）を削除（データベースからのデータにBOM文字が含まれている可能性を考慮）
+      const cleanTitle = (result.title || 'No Title').replace(/\uFEFF/g, '');
+      const cleanContent = (result.content || '').replace(/\uFEFF/g, '');
+      
       return {
         id: result.id,
         pageId: result.pageId ?? result.page_id, // ★★★ MIGRATION: page_idをフォールバックとして使用 ★★★
         page_id: result.page_id ?? result.pageId, // ★★★ MIGRATION: page_idを保持 ★★★
-        title: result.title || 'No Title',
-        content: result.content || '',
+        title: cleanTitle,
+        content: cleanContent,
         isChunked: result.isChunked,  // Phase 0A-3: チャンク統合判定フラグ
         distance: distance,
         score: finalScore, // Composite Scoreが利用可能な場合はそれを使用、それ以外は従来の計算
