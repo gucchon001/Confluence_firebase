@@ -25,6 +25,9 @@ export function preprocessQuery(query: string): ProcessedQuery {
     };
   }
 
+  // 0. BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+  query = query.replace(/\uFEFF/g, '');
+
   // 1. 基本的な正規化
   let processedQuery = query.trim();
   
