@@ -68,12 +68,18 @@ function estimateTokens(text: string): number {
  * HTMLタグを削除
  */
 function stripHtml(html: string): string {
-  return html
+  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+  let text = html.replace(/\uFEFF/g, '');
+  
+  text = text
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  
+  // 念のため再度BOM文字を削除
+  return text.replace(/\uFEFF/g, '');
 }
 
 /**
@@ -182,10 +188,13 @@ async function fetchAllPages(): Promise<any[]> {
  * 埋め込みベクトルを生成
  */
 async function generateEmbedding(text: string): Promise<number[]> {
+  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+  const cleanText = text.replace(/\uFEFF/g, '');
+  
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
   
-  const result = await model.embedContent(text);
+  const result = await model.embedContent(cleanText);
   return result.embedding.values;
 }
 
@@ -216,11 +225,15 @@ async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
       const weightedText = `${title}\n\n`.repeat(TITLE_WEIGHT) + plainText;
       const embedding = await generateEmbedding(weightedText);
       
+      // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+      const cleanTitle = title.replace(/\uFEFF/g, '');
+      const cleanContent = plainText.replace(/\uFEFF/g, '');
+      
       records.push({
         id: pageId,
         pageId: pageId, // WHERE句用
-        title: title,
-        content: plainText,
+        title: cleanTitle,
+        content: cleanContent,
         vector: embedding,
         isChunked: false, // チャンク統合不要フラグ
         tokenCount: estimatedTokens,
@@ -258,11 +271,15 @@ async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
         const weightedChunk = `${title}\n\n`.repeat(TITLE_WEIGHT) + chunk;
         const embedding = await generateEmbedding(weightedChunk);
         
+        // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+        const cleanTitle = title.replace(/\uFEFF/g, '');
+        const cleanChunk = chunk.replace(/\uFEFF/g, '');
+        
         records.push({
           id: `${pageId}-${i}`,
           pageId: pageId, // WHERE句用
-          title: title,
-          content: chunk,
+          title: cleanTitle,
+          content: cleanChunk,
           vector: embedding,
           isChunked: true, // チャンク統合が必要
           tokenCount: estimateTokens(chunk),

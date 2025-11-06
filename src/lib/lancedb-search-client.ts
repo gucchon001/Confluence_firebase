@@ -613,8 +613,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         const resultWithScore = { ...originalResult };
         
         // キーワードマッチングスコアを計算
-        const title = originalResult.title || '';
-        const content = originalResult.content || '';
+        // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
+        const title = (originalResult.title || '').replace(/\uFEFF/g, '');
+        const content = (originalResult.content || '').replace(/\uFEFF/g, '');
         const labels = getLabelsAsArray(originalResult.labels);
         
         // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
@@ -710,9 +711,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
                 ? row.labels 
                 : (typeof row.labels === 'string' ? [row.labels] : []);
               
+              // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
+              const cleanTitle = String(row.title || '').replace(/\uFEFF/g, '');
+              const cleanContent = String(row.content || '').replace(/\uFEFF/g, '');
+              
               const keywordScoreResult = calculateKeywordScore(
-                String(row.title || ''),
-                String(row.content || ''),
+                cleanTitle,
+                cleanContent,
                 normalizedLabels,
                 keywords,
                 { highPriority, lowPriority }
@@ -1113,7 +1118,8 @@ function filterMeetingNotesByCategory(results: any[], includeMeetingNotes: boole
   let filteredByTitle = 0;
   
   for (const result of results) {
-    const title = result.title || '';
+    // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
+    const title = (result.title || '').replace(/\uFEFF/g, '');
     const category = result.structured_category || (result as any).category;
     
     // 方法1: structured_categoryで判定
@@ -1317,10 +1323,11 @@ async function executeBM25Search(
       
       const pageId = getPageIdFromRecord(r) || r.pageId;
       const page_id = r.page_id ?? pageId; // ★★★ MIGRATION: page_idを確実に保持 ★★★
+      // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
       return {
         id: r.id,
-        title: r.title,
-        content: r.content,
+        title: (r.title || '').replace(/\uFEFF/g, ''),
+        content: (r.content || '').replace(/\uFEFF/g, ''),
         labels: r.labels,
         pageId: pageId,
         page_id: page_id, // ★★★ MIGRATION: page_idを確実に保持 ★★★
@@ -1365,7 +1372,9 @@ function calculateTitleMatch(title: string, keywords: string[]): {
   matchedKeywords: string[];
   titleMatchRatio: number;
 } {
-  const titleLower = String(title || '').toLowerCase();
+  // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
+  const cleanTitle = String(title || '').replace(/\uFEFF/g, '');
+  const titleLower = cleanTitle.toLowerCase();
   const matchedKeywords = keywords.filter(kw => titleLower.includes(kw.toLowerCase()));
   
   // 基本マッチ比率

@@ -12,19 +12,29 @@
 export function mapLanceDBRecordToAPI(record: any): any {
   if (!record) return record;
   
+  // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
+  const cleanTitle = (record.title || '').replace(/\uFEFF/g, '');
+  const cleanContent = (record.content || '').replace(/\uFEFF/g, '');
+  
   // page_idが存在する場合は、pageIdに変換
   if (record.page_id !== undefined) {
     const { page_id, ...rest } = record;
     return {
       ...rest,
+      title: cleanTitle,
+      content: cleanContent,
       pageId: page_id,  // page_idをpageIdに変換
       // page_idも残す（内部処理用）
       page_id: page_id
     };
   }
   
-  // 既にpageIdがある場合はそのまま
-  return record;
+  // 既にpageIdがある場合はそのまま（BOM除去処理は適用）
+  return {
+    ...record,
+    title: cleanTitle,
+    content: cleanContent
+  };
 }
 
 /**

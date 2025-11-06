@@ -244,10 +244,11 @@ export class ConfluenceSyncService {
     console.log(`📄 取得したページ数: ${data.results?.length || 0}`);
     
     // ConfluencePage形式に変換
+    // 🔧 BOM文字（U+FEFF）を削除（Confluence APIから取得したデータにBOM文字が含まれている可能性を考慮）
     const pages: ConfluencePage[] = (data.results || []).map((item: any) => ({
       id: item.id,
-      title: item.title,
-      content: item.body?.storage?.value || '',
+      title: (item.title || '').replace(/\uFEFF/g, ''),
+      content: (item.body?.storage?.value || '').replace(/\uFEFF/g, ''),
       lastModified: item.version?.when || new Date().toISOString(),
       spaceKey: item.space?.key || '',
       url: `${this.baseUrl}/wiki/spaces/${item.space?.key}/pages/${item.id}`,
