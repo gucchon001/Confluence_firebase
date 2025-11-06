@@ -91,7 +91,21 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   }
   
   // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-  const cleanText = text.replace(/\uFEFF/g, '');
+  // 複数の方法でBOM文字を削除（確実に削除するため）
+  let cleanText = text;
+  // 方法1: 正規表現で削除
+  cleanText = cleanText.replace(/\uFEFF/g, '');
+  // 方法2: 先頭のBOM文字を直接削除
+  if (cleanText.charCodeAt(0) === 0xFEFF) {
+    cleanText = cleanText.slice(1);
+  }
+  // 方法3: trim()で削除（BOM文字が含まれる場合）
+  cleanText = cleanText.trim();
+  
+  // デバッグログ（BOM文字が含まれていた場合）
+  if (text !== cleanText) {
+    console.warn(`⚠️ [Embedding] BOM characters removed from text: "${text.substring(0, 50)}..." -> "${cleanText.substring(0, 50)}..."`);
+  }
   
   try {
     const result = await embeddingModel.embedContent(cleanText);
