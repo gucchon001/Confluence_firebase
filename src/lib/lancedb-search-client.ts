@@ -204,8 +204,31 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const parallelStartTime = Date.now();
     const embeddingStartTime = Date.now();
     
+    // 🔍 原因特定: searchLanceDBに渡されるクエリを確認
+    const originalFirstCharCode = params.query.charCodeAt(0);
+    const originalHasBOM = params.query.includes('\uFEFF') || originalFirstCharCode === 0xFEFF;
+    if (originalHasBOM) {
+      console.error(`🚨 [BOM DETECTED] searchLanceDB received query with BOM:`, {
+        firstCharCode: originalFirstCharCode,
+        firstChar: params.query.charAt(0),
+        queryLength: params.query.length,
+        queryPreview: params.query.substring(0, 50),
+        charCodes: Array.from(params.query.substring(0, 10)).map(c => c.charCodeAt(0))
+      });
+    }
+    
     // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
     const cleanQuery = params.query.replace(/\uFEFF/g, '');
+    
+    // 🔍 原因特定: 削除後の確認
+    if (params.query !== cleanQuery) {
+      console.warn(`🔍 [BOM REMOVED] searchLanceDB removed BOM from query:`, {
+        beforeFirstCharCode: params.query.charCodeAt(0),
+        afterFirstCharCode: cleanQuery.charCodeAt(0),
+        beforeLength: params.query.length,
+        afterLength: cleanQuery.length
+      });
+    }
     
     const vectorPromise = getEmbeddings(cleanQuery).then(v => {
       const embeddingDuration = Date.now() - embeddingStartTime;
