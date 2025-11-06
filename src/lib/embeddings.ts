@@ -174,8 +174,21 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   try {
     // 🔍 原因特定: embedContent呼び出し直前の最終チェック
     // Gemini APIのembedContentはByteStringを期待しているため、BOM文字を確実に削除
-    // また、文字列をUTF-8バイト列に変換してから渡す必要がある可能性がある
-    const finalCleanText = cleanText.replace(/^\uFEFF+/, '').replace(/\uFEFF/g, '');
+    // Buffer経由で処理することで、BOM文字を確実に除去
+    let finalCleanText = cleanText.replace(/^\uFEFF+/, '').replace(/\uFEFF/g, '');
+    
+    // Buffer経由でBOM文字を確実に除去（UTF-8バイト列として処理）
+    // BOM文字はUTF-8でEF BB BF (3バイト)として表現される
+    const textBuffer = Buffer.from(finalCleanText, 'utf8');
+    // BOM文字のUTF-8表現（EF BB BF）を削除
+    const bomBytes = Buffer.from([0xEF, 0xBB, 0xBF]);
+    let cleanedBuffer = textBuffer;
+    if (textBuffer.subarray(0, 3).equals(bomBytes)) {
+      cleanedBuffer = textBuffer.subarray(3);
+      console.warn(`🔍 [BOM REMOVED] Removed BOM bytes (EF BB BF) from buffer`);
+    }
+    // Bufferから再度文字列に変換（BOM文字が確実に除去されている）
+    finalCleanText = cleanedBuffer.toString('utf8');
     
     // 🔍 原因特定: embedContent呼び出し時のテキストをログ
     console.log(`🔍 [embedContent CALL] Calling embedContent with text:`, {
@@ -183,7 +196,9 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
       firstCharCode: finalCleanText.charCodeAt(0),
       preview: finalCleanText.substring(0, 50),
       hasBOM: finalCleanText.includes('\uFEFF'),
-      bomIndex: finalCleanText.indexOf('\uFEFF')
+      bomIndex: finalCleanText.indexOf('\uFEFF'),
+      bufferLength: cleanedBuffer.length,
+      bufferFirstBytes: Array.from(cleanedBuffer.subarray(0, 10))
     });
     
     // 最終チェック: BOM文字が残っていないことを確認
