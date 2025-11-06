@@ -228,7 +228,33 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
       console.warn(`🔍 [FINAL BUFFER CLEAN] Removed BOM bytes from final buffer`);
     }
     
-    const result = await embeddingModel.embedContent(finalCleanText);
+    // 🔧 最終手段: TextEncoder/TextDecoder経由で完全にクリーンアップ
+    // embedContentが文字列をByteStringに変換する際に、ライブラリ内部でBOM文字が混入する可能性があるため
+    // TextEncoder/TextDecoderを使用して、完全にクリーンな文字列を作成
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: false });
+    const utf8Bytes = encoder.encode(finalCleanText);
+    // BOMバイト（EF BB BF）を明示的に削除
+    let cleanedBytes = utf8Bytes;
+    if (cleanedBytes.length >= 3 && cleanedBytes[0] === 0xEF && cleanedBytes[1] === 0xBB && cleanedBytes[2] === 0xBF) {
+      cleanedBytes = cleanedBytes.slice(3);
+      console.warn(`🔍 [TEXTENCODER CLEAN] Removed BOM bytes via TextEncoder/TextDecoder`);
+    }
+    // TextDecoderでBOMを無視してデコード（完全にクリーンな文字列を作成）
+    const finalText = decoder.decode(cleanedBytes);
+    
+    // 🔍 最終チェック: 完全にクリーンな文字列であることを確認
+    console.log(`🔍 [FINAL TEXT] Final text before embedContent:`, {
+      length: finalText.length,
+      firstCharCode: finalText.charCodeAt(0),
+      preview: finalText.substring(0, 50),
+      hasBOM: finalText.includes('\uFEFF'),
+      bomIndex: finalText.indexOf('\uFEFF'),
+      utf8BytesLength: cleanedBytes.length,
+      utf8BytesFirst: Array.from(cleanedBytes.slice(0, Math.min(10, cleanedBytes.length)))
+    });
+    
+    const result = await embeddingModel.embedContent(finalText);
     
     // Gemini Embeddings API のレスポンス形式に応じて取得
     // text-embedding-004 の場合は result.embedding.values を返す
