@@ -3,6 +3,7 @@
  * キャッシュ機能付きで最適化
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { checkStringForBOM, removeBOM } from './bom-utils';
 // embedding-cacheはアーカイブに移動済み。簡易キャッシュ実装を使用
 
 // 簡易キャッシュ（メモリ内のみ）
@@ -228,31 +229,45 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
       console.warn(`🔍 [FINAL BUFFER CLEAN] Removed BOM bytes from final buffer`);
     }
     
-    // 🔧 最終手段: TextEncoder/TextDecoder経由で完全にクリーンアップ
+    // 🔧 最終手段: BOMユーティリティ関数を使用して完全にクリーンアップ
     // embedContentが文字列をByteStringに変換する際に、ライブラリ内部でBOM文字が混入する可能性があるため
-    // TextEncoder/TextDecoderを使用して、完全にクリーンな文字列を作成
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: false });
-    const utf8Bytes = encoder.encode(finalCleanText);
-    // BOMバイト（EF BB BF）を明示的に削除
-    let cleanedBytes = utf8Bytes;
-    if (cleanedBytes.length >= 3 && cleanedBytes[0] === 0xEF && cleanedBytes[1] === 0xBB && cleanedBytes[2] === 0xBF) {
-      cleanedBytes = cleanedBytes.slice(3);
-      console.warn(`🔍 [TEXTENCODER CLEAN] Removed BOM bytes via TextEncoder/TextDecoder`);
+    // BOMユーティリティ関数を使用して、完全にクリーンな文字列を作成
+    const bomCheckBeforeFinal = checkStringForBOM(finalCleanText);
+    if (bomCheckBeforeFinal.hasBOM) {
+      console.warn(`🔍 [BOM UTILS] BOM detected before final cleanup:`, {
+        bomType: bomCheckBeforeFinal.bomType,
+        bomIndex: bomCheckBeforeFinal.bomIndex,
+        utf8BytesFirst: bomCheckBeforeFinal.utf8BytesFirst
+      });
     }
-    // TextDecoderでBOMを無視してデコード（完全にクリーンな文字列を作成）
-    const finalText = decoder.decode(cleanedBytes);
+    
+    // BOMユーティリティ関数を使用して除去
+    const finalText = removeBOM(finalCleanText);
     
     // 🔍 最終チェック: 完全にクリーンな文字列であることを確認
+    const bomCheckAfterFinal = checkStringForBOM(finalText);
     console.log(`🔍 [FINAL TEXT] Final text before embedContent:`, {
       length: finalText.length,
       firstCharCode: finalText.charCodeAt(0),
       preview: finalText.substring(0, 50),
-      hasBOM: finalText.includes('\uFEFF'),
-      bomIndex: finalText.indexOf('\uFEFF'),
-      utf8BytesLength: cleanedBytes.length,
-      utf8BytesFirst: Array.from(cleanedBytes.slice(0, Math.min(10, cleanedBytes.length)))
+      hasBOM: bomCheckAfterFinal.hasBOM,
+      bomIndex: bomCheckAfterFinal.bomIndex,
+      bomType: bomCheckAfterFinal.bomType,
+      utf8BytesLength: bomCheckAfterFinal.utf8BytesLength,
+      utf8BytesFirst: bomCheckAfterFinal.utf8BytesFirst,
+      // 以前の状態との比較
+      beforeHasBOM: bomCheckBeforeFinal.hasBOM,
+      beforeBomType: bomCheckBeforeFinal.bomType
     });
+    
+    // 最終的なBOMチェック: まだBOMが残っている場合は警告
+    if (bomCheckAfterFinal.hasBOM) {
+      console.error(`🚨 [FINAL BOM CHECK] BOM still present after all cleanup!`, {
+        bomType: bomCheckAfterFinal.bomType,
+        bomIndex: bomCheckAfterFinal.bomIndex,
+        utf8BytesFirst: bomCheckAfterFinal.utf8BytesFirst
+      });
+    }
     
     const result = await embeddingModel.embedContent(finalText);
     
