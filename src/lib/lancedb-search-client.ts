@@ -203,7 +203,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // Phase 0A-4: 各処理の詳細なタイミングを計測
     const parallelStartTime = Date.now();
     const embeddingStartTime = Date.now();
-    const vectorPromise = getEmbeddings(params.query).then(v => {
+    
+    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+    const cleanQuery = params.query.replace(/\uFEFF/g, '');
+    
+    const vectorPromise = getEmbeddings(cleanQuery).then(v => {
       const embeddingDuration = Date.now() - embeddingStartTime;
       if (embeddingDuration > 5000) {
         console.warn(`⚠️ [searchLanceDB] Slow embedding generation: ${embeddingDuration}ms (${(embeddingDuration / 1000).toFixed(2)}s)`);
