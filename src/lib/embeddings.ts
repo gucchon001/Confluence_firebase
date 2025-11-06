@@ -156,28 +156,48 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     });
   }
   
-  // 🔍 原因特定: embedContent呼び出し直前の最終確認
-  if (cleanText.charCodeAt(0) === 0xFEFF || cleanText.charCodeAt(0) > 255) {
+  // 🔍 原因特定: embedContent呼び出し直前の最終確認（BOM文字のみをチェック）
+  // 注意: 日本語文字（>255）は正常なので、BOM文字（65279）のみをチェック
+  if (cleanText.charCodeAt(0) === 0xFEFF || cleanText.includes('\uFEFF')) {
     console.error(`🚨 [CRITICAL] BOM still present before embedContent!`, {
       firstCharCode: cleanText.charCodeAt(0),
       firstChar: cleanText.charAt(0),
       textLength: cleanText.length,
       textPreview: cleanText.substring(0, 50),
-      charCodes: Array.from(cleanText.substring(0, 10)).map(c => c.charCodeAt(0))
+      charCodes: Array.from(cleanText.substring(0, 10)).map(c => c.charCodeAt(0)),
+      bomIndex: cleanText.indexOf('\uFEFF')
     });
-    // 強制的にBOM文字を削除
-    cleanText = cleanText.replace(/^\uFEFF+/, '');
+    // 強制的にBOM文字を削除（先頭と全体）
+    cleanText = cleanText.replace(/^\uFEFF+/, '').replace(/\uFEFF/g, '');
   }
   
   try {
+    // 🔍 原因特定: embedContent呼び出し直前の最終チェック
+    // Gemini APIのembedContentはByteStringを期待しているため、BOM文字を確実に削除
+    // また、文字列をUTF-8バイト列に変換してから渡す必要がある可能性がある
+    const finalCleanText = cleanText.replace(/^\uFEFF+/, '').replace(/\uFEFF/g, '');
+    
     // 🔍 原因特定: embedContent呼び出し時のテキストをログ
     console.log(`🔍 [embedContent CALL] Calling embedContent with text:`, {
-      length: cleanText.length,
-      firstCharCode: cleanText.charCodeAt(0),
-      preview: cleanText.substring(0, 50)
+      length: finalCleanText.length,
+      firstCharCode: finalCleanText.charCodeAt(0),
+      preview: finalCleanText.substring(0, 50),
+      hasBOM: finalCleanText.includes('\uFEFF'),
+      bomIndex: finalCleanText.indexOf('\uFEFF')
     });
     
-    const result = await embeddingModel.embedContent(cleanText);
+    // 最終チェック: BOM文字が残っていないことを確認
+    if (finalCleanText.includes('\uFEFF')) {
+      console.error(`🚨 [FINAL CHECK] BOM still present! Forcing removal...`, {
+        bomIndex: finalCleanText.indexOf('\uFEFF'),
+        textLength: finalCleanText.length
+      });
+      // 強制的に全BOM文字を削除
+      const forceCleaned = finalCleanText.replace(/\uFEFF/g, '');
+      return await embeddingModel.embedContent(forceCleaned);
+    }
+    
+    const result = await embeddingModel.embedContent(finalCleanText);
     
     // Gemini Embeddings API のレスポンス形式に応じて取得
     // text-embedding-004 の場合は result.embedding.values を返す
