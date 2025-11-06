@@ -200,7 +200,12 @@ export const POST = async (req: NextRequest) => {
     const serverStartupTime = await ensureServerInitialized();
 
     const body = await req.json();
-    const { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
+    let { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
+    
+    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+    if (question && typeof question === 'string') {
+      question = question.replace(/\uFEFF/g, '');
+    }
     
     // リクエストデータログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {

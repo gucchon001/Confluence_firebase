@@ -619,11 +619,15 @@ export class ConfluenceSyncService {
         }
         
         // チャンクデータを作成（LanceDBのスキーマに合わせる）
+        // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+        const cleanTitle = (chunk.title || '').replace(/\uFEFF/g, '');
+        const cleanContent = (chunk.content || '').replace(/\uFEFF/g, '');
+        
         const chunkData = {
           id: `${chunk.pageId}-${chunk.chunkIndex}`,
           pageId: chunk.pageId,
-          title: chunk.title,
-          content: chunk.content,
+          title: cleanTitle,
+          content: cleanContent,
           chunkIndex: chunk.chunkIndex,
           lastUpdated: chunk.lastUpdated,
           space_key: chunk.spaceKey,
@@ -637,8 +641,8 @@ export class ConfluenceSyncService {
         const lanceData = {
           id: String(chunkData.id),
           page_id: Number(chunkData.pageId),  // データベースフィールド名はpage_id
-          title: String(chunkData.title),
-          content: String(chunkData.content),
+          title: String(chunkData.title).replace(/\uFEFF/g, ''),  // 念のため再度BOM削除
+          content: String(chunkData.content).replace(/\uFEFF/g, ''),  // 念のため再度BOM削除
           chunkIndex: Number(chunkData.chunkIndex),
           lastUpdated: String(chunkData.lastUpdated),
           space_key: String(chunkData.space_key),
@@ -865,6 +869,9 @@ export class ConfluenceSyncService {
   private extractTextFromHtml(html: string): string {
     if (!html) return '';
     
+    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+    let text = html.replace(/\uFEFF/g, '');
+    
     // HTML特殊文字をデコード
     const htmlEntities: { [key: string]: string } = {
       '&amp;': '&',
@@ -876,7 +883,6 @@ export class ConfluenceSyncService {
       '&apos;': "'"
     };
     
-    let text = html;
     for (const [entity, char] of Object.entries(htmlEntities)) {
       text = text.replace(new RegExp(entity, 'g'), char);
     }
@@ -887,8 +893,8 @@ export class ConfluenceSyncService {
     // 連続する空白を1つにまとめる
     const normalizedSpaces = withoutTags.replace(/\s+/g, ' ');
     
-    // 前後の空白を削除
-    return normalizedSpaces.trim();
+    // 前後の空白を削除（BOM文字も含めて削除）
+    return normalizedSpaces.trim().replace(/\uFEFF/g, '');
   }
 
   /**
