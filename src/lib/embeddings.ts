@@ -174,23 +174,32 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   try {
     // 🔍 原因特定: embedContent呼び出し直前の最終チェック
     // Gemini APIのembedContentはByteStringを期待しているため、BOM文字を確実に削除
-    // Buffer経由で処理することで、BOM文字を確実に除去
-    let finalCleanText = cleanText.replace(/^\uFEFF+/, '').replace(/\uFEFF/g, '');
+    // 複数の方法でBOM文字を完全に除去（文字列レベルとバイトレベルの両方で）
     
-    // Buffer経由でBOM文字を確実に除去（UTF-8バイト列として処理）
+    // ステップ1: 文字列レベルのBOM文字削除（複数回実行して確実に）
+    let finalCleanText = cleanText;
+    for (let i = 0; i < 3; i++) {
+      finalCleanText = finalCleanText.replace(/^\uFEFF+/, '').replace(/\uFEFF/g, '');
+    }
+    
+    // ステップ2: Buffer経由でBOM文字を確実に除去（UTF-8バイト列として処理）
     // BOM文字はUTF-8でEF BB BF (3バイト)として表現される
     const textBuffer = Buffer.from(finalCleanText, 'utf8');
-    // BOM文字のUTF-8表現（EF BB BF）を削除
     const bomBytes = Buffer.from([0xEF, 0xBB, 0xBF]);
     let cleanedBuffer = textBuffer;
-    if (textBuffer.subarray(0, 3).equals(bomBytes)) {
-      cleanedBuffer = textBuffer.subarray(3);
-      console.warn(`🔍 [BOM REMOVED] Removed BOM bytes (EF BB BF) from buffer`);
+    
+    // 先頭のBOMバイト列を削除（複数回チェック）
+    while (cleanedBuffer.length >= 3 && cleanedBuffer.subarray(0, 3).equals(bomBytes)) {
+      cleanedBuffer = cleanedBuffer.subarray(3);
     }
-    // Bufferから再度文字列に変換（BOM文字が確実に除去されている）
+    
+    // ステップ3: Bufferから再度文字列に変換（BOM文字が確実に除去されている）
     finalCleanText = cleanedBuffer.toString('utf8');
     
-    // 🔍 原因特定: embedContent呼び出し時のテキストをログ
+    // ステップ4: 再度文字列レベルのBOM文字を削除（念のため）
+    finalCleanText = finalCleanText.replace(/^\uFEFF+/, '').replace(/\uFEFF/g, '');
+    
+    // 🔍 原因特定: embedContent呼び出し時のテキストをログ（本番環境でも出力）
     console.log(`🔍 [embedContent CALL] Calling embedContent with text:`, {
       length: finalCleanText.length,
       firstCharCode: finalCleanText.charCodeAt(0),
@@ -198,18 +207,25 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
       hasBOM: finalCleanText.includes('\uFEFF'),
       bomIndex: finalCleanText.indexOf('\uFEFF'),
       bufferLength: cleanedBuffer.length,
-      bufferFirstBytes: Array.from(cleanedBuffer.subarray(0, 10))
+      bufferFirstBytes: Array.from(cleanedBuffer.subarray(0, Math.min(10, cleanedBuffer.length)))
     });
     
     // 最終チェック: BOM文字が残っていないことを確認
     if (finalCleanText.includes('\uFEFF')) {
       console.error(`🚨 [FINAL CHECK] BOM still present! Forcing removal...`, {
         bomIndex: finalCleanText.indexOf('\uFEFF'),
-        textLength: finalCleanText.length
+        textLength: finalCleanText.length,
+        bufferFirstBytes: Array.from(cleanedBuffer.subarray(0, Math.min(10, cleanedBuffer.length)))
       });
-      // 強制的に全BOM文字を削除
-      const forceCleaned = finalCleanText.replace(/\uFEFF/g, '');
-      return await embeddingModel.embedContent(forceCleaned);
+      // 強制的に全BOM文字を削除（最後の手段）
+      finalCleanText = finalCleanText.replace(/\uFEFF/g, '');
+    }
+    
+    // さらに念のため、Buffer経由で再度処理
+    const finalBuffer = Buffer.from(finalCleanText, 'utf8');
+    if (finalBuffer.length >= 3 && finalBuffer.subarray(0, 3).equals(bomBytes)) {
+      finalCleanText = finalBuffer.subarray(3).toString('utf8');
+      console.warn(`🔍 [FINAL BUFFER CLEAN] Removed BOM bytes from final buffer`);
     }
     
     const result = await embeddingModel.embedContent(finalCleanText);
