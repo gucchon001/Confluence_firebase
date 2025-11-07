@@ -116,19 +116,14 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     }
   }
 
-  // 🔧 最終的なBOM除去: getGeminiEmbeddingsに渡す直前に、すべての255を超える文字を削除
-  // 理由: BOMが何らかの理由で再導入される可能性があるため、最終的な安全策として追加
+  // 🔧 最終的なBOM除去: getGeminiEmbeddingsに渡す直前に、BOM文字（0xFEFF）のみを削除
+  // 注意: 255を超える文字（日本語など）は削除しない
   let finalTextForEmbedding = text;
-  // 先頭から255を超える文字をすべて削除
-  while (finalTextForEmbedding.length > 0 && finalTextForEmbedding.charCodeAt(0) > 255) {
-    const removedChar = finalTextForEmbedding.charCodeAt(0);
-    console.error(`🚨 [FINAL BOM REMOVAL IN getEmbeddings] Removing character with code ${removedChar} (> 255) from start of text`);
-    finalTextForEmbedding = finalTextForEmbedding.slice(1).trim();
+  // BOM文字（0xFEFF）のみを削除
+  if (finalTextForEmbedding.length > 0 && finalTextForEmbedding.charCodeAt(0) === 0xFEFF) {
+    console.error(`🚨 [FINAL BOM REMOVAL IN getEmbeddings] Removing BOM character (0xFEFF) from start of text`);
+    finalTextForEmbedding = finalTextForEmbedding.replace(/\uFEFF/g, '').trim();
   }
-  // 文字列全体から255を超える文字を削除（念のため）
-  finalTextForEmbedding = Array.from(finalTextForEmbedding)
-    .filter(char => char.charCodeAt(0) <= 255)
-    .join('');
   
   if (finalTextForEmbedding.length === 0) {
     finalTextForEmbedding = 'No content available';
@@ -136,10 +131,10 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   
   // 🔍 最終確認ログ: getGeminiEmbeddingsに渡す直前のテキストを確認
   const finalFirstCharCodeForEmbedding = finalTextForEmbedding.length > 0 ? finalTextForEmbedding.charCodeAt(0) : -1;
-  if (finalFirstCharCodeForEmbedding > 255) {
-    console.error(`🚨 [FINAL CHECK FAILED IN getEmbeddings] Text still has invalid first character code: ${finalFirstCharCodeForEmbedding}`);
-    // 最後の手段: 先頭文字を削除
-    finalTextForEmbedding = finalTextForEmbedding.slice(1).trim();
+  if (finalFirstCharCodeForEmbedding === 0xFEFF) {
+    console.error(`🚨 [FINAL CHECK FAILED IN getEmbeddings] Text still has BOM character (0xFEFF) at start`);
+    // 最後の手段: BOM文字を削除
+    finalTextForEmbedding = finalTextForEmbedding.replace(/\uFEFF/g, '').trim();
     if (finalTextForEmbedding.length === 0) {
       finalTextForEmbedding = 'No content available';
     }
@@ -302,10 +297,10 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
       cleanText = cleanText.slice(1);
     }
     cleanText = cleanText.replace(/^\uFEFF+|\uFEFF+$/g, '').trim();
-    // 先頭文字が255を超える場合は削除（BOMの可能性）
-    if (cleanText.length > 0 && cleanText.charCodeAt(0) > 255) {
-      console.error(`🚨 [INVALID FIRST CHAR] First character code is > 255: ${cleanText.charCodeAt(0)}, removing...`);
-      cleanText = cleanText.slice(1).trim();
+    // BOM文字（0xFEFF）のみを削除（255を超える文字は日本語など正常な文字なので削除しない）
+    if (cleanText.length > 0 && cleanText.charCodeAt(0) === 0xFEFF) {
+      console.error(`🚨 [BOM FIRST CHAR] First character is BOM (0xFEFF), removing...`);
+      cleanText = cleanText.replace(/\uFEFF/g, '').trim();
     }
     if (cleanText.length === 0) {
       cleanText = 'No content available';
@@ -319,28 +314,23 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   
   // 🔧 最終確認: embedContentに渡す直前に再度BOMをチェック
   const veryFinalFirstCharCode = cleanText.length > 0 ? cleanText.charCodeAt(0) : -1;
-  if (veryFinalFirstCharCode > 255) {
-    console.error(`🚨 [CRITICAL] First character code is still > 255 before embedContent: ${veryFinalFirstCharCode}`);
-    // 先頭文字を強制的に削除
-    cleanText = cleanText.slice(1).trim();
+  if (veryFinalFirstCharCode === 0xFEFF) {
+    console.error(`🚨 [CRITICAL] First character is still BOM (0xFEFF) before embedContent`);
+    // BOM文字を強制的に削除
+    cleanText = cleanText.replace(/\uFEFF/g, '').trim();
     if (cleanText.length === 0) {
       cleanText = 'No content available';
     }
   }
   
-  // 🔧 最終的なBOM除去: embedContentに渡す直前に、すべての255を超える文字を削除
-  // 理由: BOMが何らかの理由で再導入される可能性があるため、最終的な安全策として追加
+  // 🔧 最終的なBOM除去: embedContentに渡す直前に、BOM文字（0xFEFF）のみを削除
+  // 注意: 255を超える文字（日本語など）は削除しない
   let finalText = cleanText;
-  // 先頭から255を超える文字をすべて削除
-  while (finalText.length > 0 && finalText.charCodeAt(0) > 255) {
-    const removedChar = finalText.charCodeAt(0);
-    console.error(`🚨 [FINAL BOM REMOVAL] Removing character with code ${removedChar} (> 255) from start of text`);
-    finalText = finalText.slice(1).trim();
+  // BOM文字（0xFEFF）のみを削除
+  if (finalText.length > 0 && finalText.charCodeAt(0) === 0xFEFF) {
+    console.error(`🚨 [FINAL BOM REMOVAL] Removing BOM character (0xFEFF) from start of text`);
+    finalText = finalText.replace(/\uFEFF/g, '').trim();
   }
-  // 文字列全体から255を超える文字を削除（念のため）
-  finalText = Array.from(finalText)
-    .filter(char => char.charCodeAt(0) <= 255)
-    .join('');
   
   if (finalText.length === 0) {
     finalText = 'No content available';
@@ -348,10 +338,10 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   
   // 🔍 最終確認ログ: embedContentに渡す直前のテキストを確認
   const lastCheckFirstCharCode = finalText.length > 0 ? finalText.charCodeAt(0) : -1;
-  if (lastCheckFirstCharCode > 255) {
-    console.error(`🚨 [FINAL CHECK FAILED] Text still has invalid first character code: ${lastCheckFirstCharCode}`);
-    // 最後の手段: 先頭文字を削除
-    finalText = finalText.slice(1).trim();
+  if (lastCheckFirstCharCode === 0xFEFF) {
+    console.error(`🚨 [FINAL CHECK FAILED] Text still has BOM character (0xFEFF) at start`);
+    // 最後の手段: BOM文字を削除
+    finalText = finalText.replace(/\uFEFF/g, '').trim();
     if (finalText.length === 0) {
       finalText = 'No content available';
     }

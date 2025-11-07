@@ -301,18 +301,17 @@ export const POST = async (req: NextRequest) => {
         });
       }
       
-      // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため・念のため再度実行）
+      // BOM文字（U+FEFF）のみを削除（埋め込み生成エラーを防ぐため・念のため再度実行）
+      // 注意: 255を超える文字（日本語など）は削除しない
       question = question.replace(/\uFEFF/g, '');
       
-      // 255を超える文字を削除（念のため）
-      if (question.length > 0 && question.charCodeAt(0) > 255) {
-        console.error(`🚨 [REMOVING INVALID CHAR FROM QUESTION] question変数から255を超える文字を削除します:`, {
+      // BOM文字（0xFEFF）のみを削除（255を超える文字は日本語など正常な文字なので削除しない）
+      if (question.length > 0 && question.charCodeAt(0) === 0xFEFF) {
+        console.error(`🚨 [REMOVING BOM FROM QUESTION] question変数からBOM文字（0xFEFF）を削除します:`, {
           removedCharCode: question.charCodeAt(0),
           beforeLength: question.length
         });
-        question = question.split('')
-          .filter(char => char.charCodeAt(0) <= 255)
-          .join('');
+        question = question.replace(/\uFEFF/g, '');
         console.warn(`🔍 [QUESTION MODIFIED] question変数が変更されました:`, {
           afterLength: question.length,
           afterPreview: question.substring(0, 50)
