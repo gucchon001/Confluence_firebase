@@ -8,6 +8,37 @@ import * as admin from 'firebase-admin';
 import { getStructuredLabels } from '@/lib/structured-label-service-admin';
 import { optimizedLanceDBClient } from '@/lib/optimized-lancedb-client';
 import { getLanceDBCache } from '@/lib/lancedb-cache';
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * ログファイルへの書き込みヘルパー関数
+ */
+function writeLogToFile(level: 'info' | 'warn' | 'error', category: string, message: string, data?: any): void {
+  try {
+    const logsDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+    const logFile = path.join(logsDir, `retrieve-docs-${timestamp}.jsonl`);
+    
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      category,
+      message,
+      data,
+    };
+    
+    const logLine = JSON.stringify(logEntry) + '\n';
+    fs.appendFileSync(logFile, logLine, 'utf8');
+  } catch (error) {
+    // ログファイルへの書き込みに失敗しても処理は継続
+    console.error('[writeLogToFile] Failed to write log:', error);
+  }
+}
 
 /**
  * BOM文字（U+FEFF）を確実に削除するヘルパー関数
@@ -124,6 +155,13 @@ async function lancedbRetrieverTool(
 ): Promise<any[]> {
   const searchStartTime = Date.now();
   try {
+    // ログファイルに検索開始を記録
+    writeLogToFile('info', 'search_start', 'Search started', {
+      query,
+      filters,
+      timestamp: new Date().toISOString(),
+    });
+    
     // 開発環境のみログ
     if (process.env.NODE_ENV === 'development') {
       console.log(`[lancedbRetrieverTool] 🔍 Search started for query: "${query}"`);
@@ -171,6 +209,11 @@ async function lancedbRetrieverTool(
     // Phase 0A-4 ROLLBACK: ログ出力を開発環境のみに制限（前のバージョンと同じ）
     if (process.env.NODE_ENV === 'development' && searchLanceDBDuration > 10000) {
       console.warn(`⚠️ [lancedbRetrieverTool] SLOW searchLanceDB: ${searchLanceDBDuration}ms for query: "${query}"`);
+      writeLogToFile('warn', 'slow_search', 'Slow searchLanceDB detected', {
+        query,
+        duration: searchLanceDBDuration,
+        threshold: 10000,
+      });
     }
     
     // 検索結果ログ（開発環境のみ）
@@ -180,12 +223,21 @@ async function lancedbRetrieverTool(
     }
     
     // 検索処理時間の計測（開発環境のみ）
+    const searchDuration = Date.now() - searchStartTime;
     if (process.env.NODE_ENV === 'development') {
-      const searchDuration = Date.now() - searchStartTime;
       if (searchDuration > 10000) {
         console.warn(`⚠️ [lancedbRetrieverTool] SLOW TOTAL search: ${searchDuration}ms for query: "${query}"`);
       }
     }
+    
+    // ログファイルに検索結果を記録
+    writeLogToFile('info', 'search_results', 'Search completed', {
+      query,
+      resultCount: unifiedResults.length,
+      searchLanceDBDuration,
+      totalDuration: searchDuration,
+      titles: unifiedResults.slice(0, 10).map(r => r.title),
+    });
 
     // UIが期待する形へ最小変換（scoreText, source を保持）
     // ★★★ MIGRATION: page_idフィールドのみを使用（フォールバックなし） ★★★
@@ -201,6 +253,21 @@ async function lancedbRetrieverTool(
       }
       // page_idを数値として使用（データベース形式）
       const pageIdValue = pageId ? String(pageId) : '';
+      // 🔍 原因特定: LanceDBから取得したデータにBOMが含まれているか確認
+      const originalContentHasBOM = (r.content || '').includes('\uFEFF') || ((r.content || '').length > 0 && (r.content || '').charCodeAt(0) === 0xFEFF);
+      const originalTitleHasBOM = (r.title || '').includes('\uFEFF') || ((r.title || '').length > 0 && (r.title || '').charCodeAt(0) === 0xFEFF);
+      
+      if (originalContentHasBOM || originalTitleHasBOM) {
+        console.error(`🚨 [BOM DETECTED IN LANCEDB DATA] LanceDBから取得したデータにBOMが含まれています:`, {
+          pageId: pageIdValue,
+          title: r.title?.substring(0, 50),
+          contentHasBOM: originalContentHasBOM,
+          titleHasBOM: originalTitleHasBOM,
+          contentFirstCharCode: (r.content || '').length > 0 ? (r.content || '').charCodeAt(0) : -1,
+          titleFirstCharCode: (r.title || '').length > 0 ? (r.title || '').charCodeAt(0) : -1,
+        });
+      }
+      
       return {
         id: pageIdValue, // API互換性のため、idフィールドも設定（page_idから生成）
         pageId: pageIdValue, // Phase 0A-1.5: チャンク統合用（page_idから生成）
@@ -228,10 +295,33 @@ async function lancedbRetrieverTool(
     // 2秒以上かかった場合のみログ（パフォーマンス問題の検知）
     if (filterDuration > 2000) {
       console.warn(`⚠️ [lancedbRetrieverTool] Slow filterInvalidPagesServer: ${filterDuration}ms (${(filterDuration / 1000).toFixed(2)}s) for ${enriched.length} results`);
+      writeLogToFile('warn', 'slow_filter', 'Slow filterInvalidPagesServer detected', {
+        duration: filterDuration,
+        resultCount: enriched.length,
+        filteredCount: filtered.length,
+      });
     }
+
+    // ログファイルに最終結果を記録
+    const totalDuration = Date.now() - searchStartTime;
+    writeLogToFile('info', 'search_complete', 'Search completed successfully', {
+      query,
+      totalDuration,
+      finalResultCount: filtered.length,
+      enrichedCount: enriched.length,
+      rawResultCount: unifiedResults.length,
+    });
 
     return filtered;
   } catch (error: any) {
+    // エラーログをファイルに記録
+    writeLogToFile('error', 'search_error', 'Error retrieving documents', {
+      query,
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+    });
+    
     console.error(`[lancedbRetrieverTool] Error retrieving documents: ${error.message}`);
     throw new Error(`Failed to retrieve documents: ${error.message}`);
   }
@@ -311,6 +401,11 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
   // ★★★ PERF LOG: ドキュメント取得全体の時間計測 ★★★
   const enrichStartTime = Date.now();
   console.log(`[PERF] 📚 enrichWithAllChunks started for ${results.length} results`);
+  
+  // ログファイルにチャンク統合開始を記録
+  writeLogToFile('info', 'enrich_start', 'Enriching chunks started', {
+    resultCount: results.length,
+  });
 
   // Phase 0A-4 ROLLBACK: ログ削除（前のバージョンと同じ）
   let skippedCount = 0;
@@ -421,8 +516,20 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
   console.log(`[PERF]    - Skipped (not chunked): ${skippedCount}`);
   console.log(`[PERF]    - Merged: ${mergedCount}`);
   
+  // ログファイルにチャンク統合完了を記録
+  writeLogToFile('info', 'enrich_complete', 'Enriching chunks completed', {
+    duration: enrichDuration,
+    totalResults: results.length,
+    skippedCount,
+    mergedCount,
+  });
+  
   if (enrichDuration > 10000) {
     console.warn(`[PERF] ⚠️ Slow enrichment detected: ${enrichDuration}ms`);
+    writeLogToFile('warn', 'slow_enrich', 'Slow enrichment detected', {
+      duration: enrichDuration,
+      threshold: 10000,
+    });
   }
 
   // Phase 0A-4 ROLLBACK: サマリーログを開発環境のみに

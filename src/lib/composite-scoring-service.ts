@@ -9,7 +9,7 @@
 
 import { calculateLabelMatchScore } from './structured-label-scorer';
 import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
-import { searchLogger } from './search-logger';
+// Phase 7最適化: searchLoggerのインポートを削除（ログ出力を削減したため不要）
 
 export interface SearchSignals {
   vectorDistance: number;      // ベクトル距離（小さいほど良い）
@@ -186,12 +186,8 @@ export class CompositeScoringService {
       !record.structured_domain &&
       !record.structured_feature
     ) {
-      // DEBUG: StructuredLabelがない場合もログ出力
-      if (process.env.NODE_ENV === 'development' && record.title) {
-        const logMessage = `[CompositeScoring] ❌ No StructuredLabel for: "${record.title}"`;
-        console.log(logMessage);
-        searchLogger.addDebugLog(logMessage);
-      }
+      // Phase 7最適化: ログ出力を削減（パフォーマンス改善）
+      // DEBUG: StructuredLabelがない場合のログは削除（大量出力による遅延を防止）
       return null;
     }
     
@@ -208,12 +204,8 @@ export class CompositeScoringService {
       is_valid: record.structured_is_valid,
     };
     
-    // DEBUG: StructuredLabelが抽出された場合もログ出力
-    if (process.env.NODE_ENV === 'development' && record.title) {
-      const logMessage = `[CompositeScoring] ✅ StructuredLabel extracted for: "${record.title}" - feature: ${structuredLabel.feature}, domain: ${structuredLabel.domain}, category: ${structuredLabel.category}`;
-      console.log(logMessage);
-      searchLogger.addDebugLog(logMessage);
-    }
+    // Phase 7最適化: ログ出力を削減（パフォーマンス改善）
+    // DEBUG: StructuredLabelが抽出された場合のログは削除（大量出力による遅延を防止）
     
     return structuredLabel;
   }
@@ -299,12 +291,8 @@ export class CompositeScoringService {
       return Math.min(score, 1.0);
     }
     
-    // DEBUG: StructuredLabelの内容をログ出力
-    if (process.env.NODE_ENV === 'development') {
-      const logMessage = `[CompositeScoring] StructuredLabel found: feature=${structuredLabel.feature}, domain=${structuredLabel.domain}, category=${structuredLabel.category}, keywords=${lowerKeywords.join(',')}`;
-      console.log(logMessage);
-      searchLogger.addDebugLog(logMessage);
-    }
+    // Phase 7最適化: ログ出力を削減（パフォーマンス改善）
+    // DEBUG: StructuredLabelの内容のログは削除（大量出力による遅延を防止）
     
     // StructuredLabel処理（lowerKeywordsは既に上で定義済み）
     let structuredMatchCount = 0;
@@ -316,11 +304,7 @@ export class CompositeScoringService {
       const domainLower = structuredLabel.domain.toLowerCase();
       if (lowerKeywords.some(k => domainLower.includes(k) || k.includes(domainLower))) {
         structuredMatchCount += 2; // ドメインは2倍重要
-        if (process.env.NODE_ENV === 'development') {
-          const logMessage = `[CompositeScoring] ✅ Domain match: "${structuredLabel.domain}" with keywords`;
-          console.log(logMessage);
-          searchLogger.addDebugLog(logMessage);
-        }
+        // Phase 7最適化: ログ出力を削減（パフォーマンス改善）
       }
     }
     
@@ -348,29 +332,13 @@ export class CompositeScoringService {
       if (isFullMatch) {
         // 完全一致またはクエリが機能名に含まれる場合：3倍重要
         structuredMatchCount += 3;
-        // 本番環境以外でログ出力
-        if (process.env.NODE_ENV !== 'production') {
-          const logMessage = `[CompositeScoring] ✅✅✅ Feature FULL match: "${structuredLabel.feature}" with query "${queryLowerWithoutSpace}" (score: +3)`;
-          console.log(logMessage);
-          searchLogger.addDebugLog(logMessage);
-        }
+        // Phase 7最適化: ログ出力を削減（パフォーマンス改善）
       } else if (lowerKeywords.some(k => featureLower.includes(k) || k.includes(featureLower))) {
         // 部分一致の場合：1.5倍重要
         structuredMatchCount += 1.5;
-        // 本番環境以外でログ出力
-        if (process.env.NODE_ENV !== 'production') {
-          const logMessage = `[CompositeScoring] ✅ Feature partial match: "${structuredLabel.feature}" with keywords (score: +1.5)`;
-          console.log(logMessage);
-          searchLogger.addDebugLog(logMessage);
-        }
-      } else {
-        // 本番環境以外でログ出力
-        if (process.env.NODE_ENV !== 'production') {
-          const logMessage = `[CompositeScoring] ❌ Feature NO match: "${structuredLabel.feature}" with query "${queryLowerWithoutSpace}"`;
-          console.log(logMessage);
-          searchLogger.addDebugLog(logMessage);
-        }
+        // Phase 7最適化: ログ出力を削減（パフォーマンス改善）
       }
+      // Phase 7最適化: 不一致のログも削除（パフォーマンス改善）
     }
     
     // タグマッチング
@@ -424,12 +392,8 @@ export class CompositeScoringService {
       const structuredScore = Math.min(structuredMatchCount / maxPossibleScore, 1.0) * 0.8; // 80%の重み
       score += structuredScore;
       
-      // DEBUG: スコア計算の詳細をログ出力
-      if (process.env.NODE_ENV === 'development') {
-        const logMessage = `[CompositeScoring] Label score breakdown: structuredMatchCount=${structuredMatchCount}, maxPossibleScore=${maxPossibleScore}, structuredScore=${structuredScore.toFixed(4)}, totalScore=${Math.min(score, 1.0).toFixed(4)}`;
-        console.log(logMessage);
-        searchLogger.addDebugLog(logMessage);
-      }
+      // Phase 7最適化: ログ出力を削減（パフォーマンス改善）
+      // DEBUG: スコア計算の詳細ログは削除（大量出力による遅延を防止）
     }
     
     return Math.min(score, 1.0); // 最大1.0に制限
