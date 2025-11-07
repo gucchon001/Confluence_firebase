@@ -61,7 +61,9 @@ debug.log
 /.lancedb/
 .lancedb.backup.*/
 .lancedb-production-check/
+.lancedb-bom-check/
 .cache/
+bom-check-results.json
 
 # Embedding models (downloaded at build time)
 /models/
