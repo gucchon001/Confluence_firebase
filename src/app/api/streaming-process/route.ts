@@ -234,6 +234,16 @@ export const POST = async (req: NextRequest) => {
     // ReadableStream作成開始
     const stream = new ReadableStream({
         async start(controller) {
+          // Phase 8最適化: ストリームの状態を追跡（postLogId送信エラー対策）
+          let isStreamClosed = false;
+          
+          // ストリームが閉じられたときにフラグを設定するためのラッパー
+          const originalClose = controller.close.bind(controller);
+          controller.close = function() {
+            isStreamClosed = true;
+            return originalClose();
+          };
+          
           try {
             // 【最優先】即座に最初のステップを送信してユーザーに応答を見せる
             await updateStep(controller, encoder, 0, 'search', '処理を開始しています...');
@@ -581,6 +591,15 @@ export const POST = async (req: NextRequest) => {
                   }
                   
                   // postLogIdが取得された後に更新メッセージを送信
+                  // Phase 8最適化: ストリームが閉じられている場合は送信をスキップ
+                  if (isStreamClosed) {
+                    // ストリームが既に閉じられている場合は送信をスキップ（エラーを防ぐ）
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log('⏭️ postLogId更新メッセージをスキップ（ストリームは既に閉じられています）:', logId);
+                    }
+                    return;
+                  }
+                  
                   const postLogIdUpdateMessage = {
                     type: 'post_log_id_update',
                     postLogId: logId
@@ -592,7 +611,7 @@ export const POST = async (req: NextRequest) => {
                     );
                     console.log('✅ postLogId更新メッセージを送信:', logId);
                   } catch (enqueueError) {
-                    // ストリームが既に閉じられている場合は無視
+                    // ストリームが既に閉じられている場合は無視（フォールバック）
                     console.warn('⚠️ postLogId更新メッセージの送信に失敗（ストリームが閉じられている可能性）:', enqueueError);
                   }
                 })

@@ -18,6 +18,19 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     throw new Error('テキストが空または文字列ではありません');
   }
   
+  // 🔍 原因特定: BOM検出ログを追加
+  const originalFirstCharCode = text.length > 0 ? text.charCodeAt(0) : -1;
+  const originalHasBOM = text.includes('\uFEFF') || originalFirstCharCode === 0xFEFF;
+  if (originalHasBOM) {
+    console.error(`🚨 [BOM DETECTED IN getEmbeddings] Input text has BOM:`, {
+      firstCharCode: originalFirstCharCode,
+      firstChar: text.charAt(0),
+      textLength: text.length,
+      textPreview: text.substring(0, 50),
+      charCodes: Array.from(text.substring(0, 10)).map(c => c.charCodeAt(0))
+    });
+  }
+  
   // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
   // 複数の方法でBOMを除去して確実性を高める
   // 1. 文字列全体からBOMを削除
@@ -28,6 +41,17 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   }
   // 3. trim()の前に再度BOMを削除
   text = text.replace(/^\uFEFF+|\uFEFF+$/g, '').trim();
+  
+  // 🔍 原因特定: 削除後の確認
+  const afterFirstCharCode = text.length > 0 ? text.charCodeAt(0) : -1;
+  if (originalHasBOM) {
+    console.warn(`🔍 [BOM REMOVED IN getEmbeddings] BOM removed:`, {
+      beforeFirstCharCode: originalFirstCharCode,
+      afterFirstCharCode: afterFirstCharCode,
+      beforeLength: text.length,
+      afterLength: text.length
+    });
+  }
   
   // 空のテキストの場合はデフォルトテキストを使用
   if (text.length === 0) {
@@ -98,6 +122,19 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
   }
   
+  // 🔍 原因特定: BOM検出ログを追加
+  const originalFirstCharCode = text.length > 0 ? text.charCodeAt(0) : -1;
+  const originalHasBOM = text.includes('\uFEFF') || originalFirstCharCode === 0xFEFF;
+  if (originalHasBOM) {
+    console.error(`🚨 [BOM DETECTED IN getGeminiEmbeddings] Input text has BOM:`, {
+      firstCharCode: originalFirstCharCode,
+      firstChar: text.charAt(0),
+      textLength: text.length,
+      textPreview: text.substring(0, 50),
+      charCodes: Array.from(text.substring(0, 10)).map(c => c.charCodeAt(0))
+    });
+  }
+  
   // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
   // 複数の方法でBOMを除去して確実性を高める
   let cleanText = text;
@@ -110,9 +147,36 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   // 3. trim()の前に再度BOMを削除
   cleanText = cleanText.replace(/^\uFEFF+|\uFEFF+$/g, '').trim();
   
+  // 🔍 原因特定: 削除後の確認
+  const afterFirstCharCode = cleanText.length > 0 ? cleanText.charCodeAt(0) : -1;
+  if (originalHasBOM) {
+    console.warn(`🔍 [BOM REMOVED IN getGeminiEmbeddings] BOM removed:`, {
+      beforeFirstCharCode: originalFirstCharCode,
+      afterFirstCharCode: afterFirstCharCode,
+      beforeLength: text.length,
+      afterLength: cleanText.length,
+      textPreview: cleanText.substring(0, 50)
+    });
+  }
+  
   // 空文字列の場合はデフォルトテキストを使用
   if (cleanText.length === 0) {
     cleanText = 'No content available';
+  }
+  
+  // 🔍 最終確認: embedContentに渡す直前にBOMを再チェック
+  const finalFirstCharCode = cleanText.length > 0 ? cleanText.charCodeAt(0) : -1;
+  if (finalFirstCharCode === 0xFEFF) {
+    console.error(`🚨 [BOM STILL PRESENT] BOM still present after removal!`, {
+      firstCharCode: finalFirstCharCode,
+      textLength: cleanText.length,
+      textPreview: cleanText.substring(0, 50)
+    });
+    // 強制的にBOMを削除
+    cleanText = cleanText.replace(/\uFEFF/g, '').trim();
+    if (cleanText.length === 0) {
+      cleanText = 'No content available';
+    }
   }
   
   try {
