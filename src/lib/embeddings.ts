@@ -3,6 +3,7 @@
  * キャッシュ機能付きで最適化
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getDeploymentInfo } from './deployment-info';
 // embedding-cacheはアーカイブに移動済み。簡易キャッシュ実装を使用
 
 // 簡易キャッシュ（メモリ内のみ）
@@ -31,7 +32,11 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   
   // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
   if (originalHasInvalidChar) {
+    const deploymentInfo = getDeploymentInfo();
     console.error(`🚨 [INVALID CHAR DETECTED IN getEmbeddings] Input text has invalid character (> 255):`, {
+      deploymentTime: deploymentInfo.deploymentTime,
+      deploymentTimestamp: deploymentInfo.deploymentTimestamp,
+      uptime: deploymentInfo.uptime,
       firstCharCode: originalFirstCharCode,
       firstChar: text.charAt(0),
       isBOM: originalFirstCharCode === 0xFEFF,
@@ -224,7 +229,11 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   
   // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
   if (originalHasInvalidChar) {
+    const deploymentInfo = getDeploymentInfo();
     console.error(`🚨 [INVALID CHAR DETECTED IN getGeminiEmbeddings] Input text has invalid character (> 255):`, {
+      deploymentTime: deploymentInfo.deploymentTime,
+      deploymentTimestamp: deploymentInfo.deploymentTimestamp,
+      uptime: deploymentInfo.uptime,
       firstCharCode: originalFirstCharCode,
       firstChar: text.charAt(0),
       isBOM: originalFirstCharCode === 0xFEFF,
@@ -338,9 +347,9 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   }
   
   // 🔍 最終確認ログ: embedContentに渡す直前のテキストを確認
-  const finalFirstCharCode = finalText.length > 0 ? finalText.charCodeAt(0) : -1;
-  if (finalFirstCharCode > 255) {
-    console.error(`🚨 [FINAL CHECK FAILED] Text still has invalid first character code: ${finalFirstCharCode}`);
+  const lastCheckFirstCharCode = finalText.length > 0 ? finalText.charCodeAt(0) : -1;
+  if (lastCheckFirstCharCode > 255) {
+    console.error(`🚨 [FINAL CHECK FAILED] Text still has invalid first character code: ${lastCheckFirstCharCode}`);
     // 最後の手段: 先頭文字を削除
     finalText = finalText.slice(1).trim();
     if (finalText.length === 0) {
@@ -354,7 +363,7 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
       originalLength: cleanText.length,
       finalLength: finalText.length,
       originalFirstCharCode: cleanText.length > 0 ? cleanText.charCodeAt(0) : -1,
-      finalFirstCharCode: finalText.length > 0 ? finalText.charCodeAt(0) : -1,
+      finalTextFirstCharCode: finalText.length > 0 ? finalText.charCodeAt(0) : -1,
       originalPreview: cleanText.substring(0, 50),
       finalPreview: finalText.substring(0, 50)
     });

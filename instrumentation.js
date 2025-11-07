@@ -13,6 +13,20 @@ export async function register() {
     console.log(`⚠️  [Instrumentation] NEXT_RUNTIME=${process.env.NEXT_RUNTIME} - 初期化スキップ`);
     return;
   }
+  
+  // 🔍 デプロイ時刻を記録（BOM検出ログで使用）
+  const deploymentTime = new Date().toISOString();
+  const deploymentTimestamp = Date.now();
+  
+  // グローバル変数として保持（すべてのモジュールからアクセス可能）
+  if (typeof globalThis !== 'undefined') {
+    globalThis.__DEPLOYMENT_TIME__ = deploymentTime;
+    globalThis.__DEPLOYMENT_TIMESTAMP__ = deploymentTimestamp;
+  }
+  
+  // デプロイ時刻をログに出力
+  console.log(`📅 [DEPLOYMENT] デプロイ時刻: ${deploymentTime} (${deploymentTimestamp})`);
+  console.log(`📅 [DEPLOYMENT] このインスタンスは ${deploymentTime} にデプロイされました`);
     
     const startTime = Date.now();
     

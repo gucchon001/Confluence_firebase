@@ -207,7 +207,11 @@ export const POST = async (req: NextRequest) => {
     
     // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
     if (bodyHasInvalidChar) {
+      const deploymentInfo = getDeploymentInfo();
       console.error(`🚨 [INVALID CHAR DETECTED IN REQUEST BODY] HTTPリクエストボディに255を超える文字が含まれています:`, {
+        deploymentTime: deploymentInfo.deploymentTime,
+        deploymentTimestamp: deploymentInfo.deploymentTimestamp,
+        uptime: deploymentInfo.uptime,
         firstCharCode: bodyFirstCharCode,
         firstChar: bodyText.charAt(0),
         isBOM: bodyFirstCharCode === 0xFEFF,
@@ -237,7 +241,23 @@ export const POST = async (req: NextRequest) => {
       });
     }
     
-    const body = JSON.parse(cleanBodyText);
+    // JSONパースのエラーハンドリング
+    let body: any;
+    try {
+      body = JSON.parse(cleanBodyText);
+    } catch (parseError) {
+      console.error('❌ [JSON PARSE ERROR] リクエストボディのパースに失敗しました:', parseError);
+      console.error('❌ [JSON PARSE ERROR] リクエストボディの内容:', {
+        bodyTextLength: cleanBodyText.length,
+        bodyTextPreview: cleanBodyText.substring(0, 200),
+        firstCharCode: cleanBodyText.length > 0 ? cleanBodyText.charCodeAt(0) : -1
+      });
+      return NextResponse.json({ 
+        error: 'Invalid JSON in request body',
+        message: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+      }, { status: 400 });
+    }
+    
     let { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
     
     // 🔍 原因特定: question変数に255を超える文字が含まれているかチェック
@@ -248,7 +268,11 @@ export const POST = async (req: NextRequest) => {
       
       // 🔍 255を超える文字のチェックを最初に実行
       if (questionHasInvalidChar) {
+        const deploymentInfo = getDeploymentInfo();
         console.error(`🚨 [INVALID CHAR DETECTED IN QUESTION] question変数に255を超える文字が含まれています:`, {
+          deploymentTime: deploymentInfo.deploymentTime,
+          deploymentTimestamp: deploymentInfo.deploymentTimestamp,
+          uptime: deploymentInfo.uptime,
           firstCharCode: questionFirstCharCode,
           firstChar: question.charAt(0),
           isBOM: questionFirstCharCode === 0xFEFF,
@@ -285,6 +309,15 @@ export const POST = async (req: NextRequest) => {
           afterPreview: question.substring(0, 50)
         });
       }
+      
+      // questionが空文字列になった場合はエラー
+      if (question.trim().length === 0) {
+        console.error('❌ [EMPTY QUESTION] question変数が空文字列になりました');
+        return NextResponse.json({ 
+          error: 'question cannot be empty after cleaning',
+          message: 'The question became empty after removing invalid characters'
+        }, { status: 400 });
+      }
     }
     
     // リクエストデータログ（開発環境のみ）
@@ -296,8 +329,10 @@ export const POST = async (req: NextRequest) => {
       });
     }
 
-    if (!question) {
-      return NextResponse.json({ error: 'question is required' }, { status: 400 });
+    if (!question || typeof question !== 'string' || question.trim().length === 0) {
+      return NextResponse.json({ 
+        error: 'question is required and must be a non-empty string'
+      }, { status: 400 });
     }
 
     // ストリーミング開始ログ（開発環境のみ）

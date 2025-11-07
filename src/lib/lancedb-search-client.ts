@@ -8,6 +8,7 @@ import { getEmbeddings } from './embeddings';
 import { calculateKeywordScore, LabelFilterOptions } from './search-weights';
 import { calculateHybridScore } from './score-utils';
 import { unifiedKeywordExtractionService } from './unified-keyword-extraction-service';
+import { getDeploymentInfo } from './deployment-info';
 import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
@@ -211,7 +212,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
     if (originalHasInvalidChar) {
+      const deploymentInfo = getDeploymentInfo();
       console.error(`🚨 [INVALID CHAR DETECTED IN searchLanceDB] searchLanceDB received query with invalid character (> 255):`, {
+        deploymentTime: deploymentInfo.deploymentTime,
+        deploymentTimestamp: deploymentInfo.deploymentTimestamp,
+        uptime: deploymentInfo.uptime,
         firstCharCode: originalFirstCharCode,
         firstChar: params.query.charAt(0),
         isBOM: originalFirstCharCode === 0xFEFF,
