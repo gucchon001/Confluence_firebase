@@ -1,32 +1,33 @@
 # Operations ドキュメント
 
-**最終更新**: 2025年10月20日  
-**現在のPhase**: Phase 5完了
+**最終更新**: 2025年11月6日  
+**現在のPhase**: Phase 5完了 + BOM除去処理・トークン化修正完了
 
 Confluence Firebase RAGシステムの運用に関する**現行有効な**ドキュメントです。
 
 ---
 
-## ✨ 最新情報（2025-10-20）
+## ✨ 最新情報（2025-11-06）
 
-🎉 **Phase 5完了！** 並列検索実装とパフォーマンス最適化により、**検索発見率100%を維持しつつ高速化を達成**しました。
+🎉 **BOM除去処理とトークン化修正完了！** データベース再構築後の本番環境デプロイが完了しました。
 
 ### 主な成果
+- ✅ **BOM除去処理の実装**: すべてのデータ処理パスでBOM文字（U+FEFF）を除去
+- ✅ **トークン化修正**: kuromojiを使用する統一トークン化処理を実装
+- ✅ **データベース再構築**: BOM除去処理を含むデータベース再構築完了（2,088行）
+- ✅ **インデックス再構築**: Lunrインデックスとベクトルインデックスの再構築完了
+- ✅ **本番環境デプロイ**: データベースアップロードとコードデプロイ完了
+
+### 以前の成果（Phase 5）
 - ✅ 並列検索実装（ベクトル検索 + BM25検索）
 - ✅ ハイブリッド検索強化（RRF融合 + Composite Scoring）
 - ✅ 検索重み配分最適化（BM25 50% + タイトル 25% + ラベル 15% + ベクトル 5%）
 - ✅ LanceDB接続プーリング
 - ✅ 検索キャッシュ拡大（TTL 15分、maxSize 5000）
 
-### Knowledge Graph について
-- **実装**: 完了（ノード679件、エッジ24,208件）
-- **ステータス**: 🔴 **無効化済み**
-- **理由**: パフォーマンス悪化（9.2秒オーバーヘッド）に対して品質向上なし
-- **将来計画**: デュアルモード検索（高速モード/詳細分析モード）
-
 詳細は以下をご覧ください：
+- [データベース再構築後の本番環境デプロイ手順](./production-deployment-after-db-rebuild.md)
 - [Phase 5 Week 2完了レポート](../architecture/phase5-week2-completion-report.md)
-- [Knowledge Graph README](../architecture/KNOWLEDGE_GRAPH_README.md)
 
 ---
 
@@ -45,6 +46,7 @@ Confluence Firebase RAGシステムの運用に関する**現行有効な**ド�
 | ドキュメント | 説明 | 重要度 |
 |------------|------|--------|
 | [deployment-guide.md](./deployment-guide.md) | **包括的デプロイガイド**<br>環境変数設定、データ準備、デプロイ手順、トラブルシューティング | ⭐⭐⭐ |
+| [production-deployment-after-db-rebuild.md](./production-deployment-after-db-rebuild.md) | **データベース再構築後の本番環境デプロイ手順**<br>BOM除去処理・トークン化修正後のデプロイ手順<br>データベースアップロード、インデックス再構築 | ⭐⭐⭐ |
 | [production-deployment-checklist.md](./production-deployment-checklist.md) | **本番デプロイチェックリスト**<br>デプロイ前の確認事項、本番環境設定 | ⭐⭐⭐ |
 | [firebase-app-hosting-configuration.md](./firebase-app-hosting-configuration.md) | **Firebase App Hosting設定**<br>apphosting.yaml設定（動作確認済み）<br>環境変数の正しい設定方法 | ⭐⭐⭐ |
 | [firebase-app-hosting-troubleshooting.md](./firebase-app-hosting-troubleshooting.md) | **トラブルシューティング**<br>よくあるエラーと解決方法、ビルド失敗の対応 | ⭐⭐ |
@@ -76,6 +78,15 @@ npm run sync:confluence:diff-no-delete
 
 ---
 
+### 🗄️ データベース・スキーマ
+
+| ドキュメント | 説明 | 重要度 |
+|------------|------|--------|
+| [extended-schema-operation-guide.md](./extended-schema-operation-guide.md) | **拡張スキーマ運用ガイド**<br>LanceDB拡張スキーマ（StructuredLabel統合版）の運用<br>日常的な同期処理、インデックス管理 | ⭐⭐⭐ |
+| [production-schema-verification-guide.md](./production-schema-verification-guide.md) | **本番環境スキーマ確認ガイド**<br>本番環境（Cloud Storage）のLanceDBスキーマ確認<br>StructuredLabel統合状況の確認 | ⭐⭐ |
+
+---
+
 ### 🌐 開発環境・ブランチ戦略
 
 | ドキュメント | 説明 | 重要度 |
@@ -83,17 +94,6 @@ npm run sync:confluence:diff-no-delete
 | [branch-strategy-guide.md](./branch-strategy-guide.md) | **ブランチ戦略ガイド**<br>mainブランチ（本番）とphase-0aブランチ（開発）の運用<br>ポート分離（9003/9004） | ⭐⭐⭐ |
 | [network-sharing-guide.md](./network-sharing-guide.md) | **ネットワーク共有ガイド**<br>ローカル開発環境の共有方法 | ⭐ |
 | [migration-guide.md](./migration-guide.md) | **リポジトリ移管ガイド**<br>必要ファイルのチェックリスト | ⭐ |
-
----
-
-### ☁️ Cloud Storage・リージョン
-
-| ドキュメント | 説明 | 重要度 |
-|------------|------|--------|
-| [cloud-storage-region-analysis.md](./cloud-storage-region-analysis.md) | **リージョン分析レポート**<br>Cloud Storage: US-CENTRAL1<br>Firestore: asia-northeast1<br>リージョン不整合の影響分析 | ⭐⭐ |
-| [latest-bucket-status.md](./latest-bucket-status.md) | **バケット状態の最新情報**<br>データ配布戦略 | ⭐⭐ |
-
-**注意**: Cloud StorageとFirestoreのリージョン不整合により、潜在的なレイテンシ影響があります。
 
 ---
 
@@ -126,7 +126,7 @@ npm run sync:confluence:diff-no-delete
 
 3. **パフォーマンス最適化**
    - [ビルド最適化ガイド](./build-optimization-guide.md)
-   - [リージョン分析](./cloud-storage-region-analysis.md)
+   - [拡張スキーマ運用ガイド](./extended-schema-operation-guide.md)
 
 ### 🐛 トラブルシューティング
 
@@ -177,14 +177,24 @@ npm run sync:confluence:diff-no-delete
 
 ## 🗄️ アーカイブされたドキュメント
 
-以下のドキュメントは完了したプロジェクトや古い情報のため、`docs/archive/` に移動されました：
+以下のドキュメントは完了したプロジェクトや古い情報のため、`docs/archive/operations/` に移動されました：
 
-### operations-legacy
-- `phase-0a-4-96s-search-issue.md` - Phase 0A-4緊急対応（解決済み）
-- `phase-0a-4-next-steps.md` - Phase 0A-4次のステップ（完了）
-- `phase-0a-4-search-performance-emergency.md` - 緊急対応（解決済み）
+### 緊急対応レポート (`docs/archive/operations/emergency-reports/`)
+- `production-performance-emergency-2025-10-20.md` - 本番環境パフォーマンス緊急対応（2025-10-20、解決済み）
+- `huggingface-rate-limit-emergency.md` - Hugging Faceレートリミット緊急対応（2025-10-20、解決済み）
+
+### 完了レポート (`docs/archive/operations/completed-reports/`)
+- `production-index-rebuild-completed.md` - 本番環境インデックス再構築完了報告（2025-11-05）
+- `production-index-rebuild-instructions.md` - 本番環境インデックス再構築手順（2025-11-05）
+- `phase2-performance-optimization-guide.md` - Phase 2パフォーマンス最適化ガイド（2025-10-20、完了）
+- `lunr-performance-verification-guide.md` - Lunrパフォーマンス検証ガイド（2025-10-20、完了）
+
+### 分析レポート (`docs/archive/operations/analysis-reports/`)
+- `latest-bucket-status.md` - バケット状態の最新情報（2025-10-19、古い状態情報）
+- `cloud-storage-region-analysis.md` - Cloud Storageリージョン分析（2025-10-19、分析完了）
 
 ### その他のアーカイブ
+- `docs/archive/operations-legacy/` - 旧operationsドキュメント
 - `docs/archive/deprecated/` - 非推奨ドキュメント
 - `docs/archive/deployment-projects/` - 完了したデプロイプロジェクト
 - `docs/archive/architecture-legacy/` - 旧アーキテクチャドキュメント
@@ -217,7 +227,10 @@ npm run sync:confluence:diff-no-delete
 3. 大きな変更の場合はこのREADMEも更新
 
 ### ドキュメントをアーカイブする場合
-1. `docs/archive/operations-legacy/` に移動
+1. 適切なアーカイブフォルダに移動（`docs/archive/operations/`配下）
+   - 緊急対応レポート → `emergency-reports/`
+   - 完了レポート → `completed-reports/`
+   - 分析レポート → `analysis-reports/`
 2. このREADMEから削除
 3. アーカイブREADMEに追加
 

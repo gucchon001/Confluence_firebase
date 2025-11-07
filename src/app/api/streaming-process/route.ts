@@ -579,6 +579,22 @@ export const POST = async (req: NextRequest) => {
                       question: logData.question.substring(0, 50) + '...'
                     });
                   }
+                  
+                  // postLogIdが取得された後に更新メッセージを送信
+                  const postLogIdUpdateMessage = {
+                    type: 'post_log_id_update',
+                    postLogId: logId
+                  };
+                  
+                  try {
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify(postLogIdUpdateMessage)}\n\n`)
+                    );
+                    console.log('✅ postLogId更新メッセージを送信:', logId);
+                  } catch (enqueueError) {
+                    // ストリームが既に閉じられている場合は無視
+                    console.warn('⚠️ postLogId更新メッセージの送信に失敗（ストリームが閉じられている可能性）:', enqueueError);
+                  }
                 })
                 .catch(logError => {
                   console.error('❌ 投稿ログの保存に失敗しました（非同期）:', logError);
@@ -595,7 +611,7 @@ export const POST = async (req: NextRequest) => {
                 totalChunks: result.totalChunks,
                 references: result.references,
                 fullAnswer: fullAnswer,
-                postLogId: savedPostLogId
+                postLogId: savedPostLogId // この時点ではundefinedの可能性が高い
               };
               
               controller.enqueue(

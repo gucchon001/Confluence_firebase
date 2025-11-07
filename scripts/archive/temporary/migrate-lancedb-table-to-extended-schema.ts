@@ -13,7 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as admin from 'firebase-admin';
 
-const BACKUP_DIR = '.lancedb-backup';
+const BACKUP_DIR = 'backups/lancedb';
 const BACKUP_FILE = path.join(BACKUP_DIR, 'confluence-backup.json');
 
 // Firebase Admin SDK初期化

@@ -18,12 +18,19 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     throw new Error('テキストが空または文字列ではありません');
   }
   
-  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-  // 動いていた時点（2025/11/5 16:46:45）のコードに最小限のBOM除去処理を追加
+  // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
+  // 複数の方法でBOMを除去して確実性を高める
+  // 1. 文字列全体からBOMを削除
   text = text.replace(/\uFEFF/g, '');
+  // 2. 文字列の先頭からBOMを削除（念のため）
+  if (text.length > 0 && text.charCodeAt(0) === 0xFEFF) {
+    text = text.slice(1);
+  }
+  // 3. trim()の前に再度BOMを削除
+  text = text.replace(/^\uFEFF+|\uFEFF+$/g, '').trim();
   
   // 空のテキストの場合はデフォルトテキストを使用
-  if (text.trim().length === 0) {
+  if (text.length === 0) {
     text = 'No content available';
   }
 
@@ -91,9 +98,22 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
   }
   
-  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-  // 動いていた時点（2025/11/5 16:46:45）のコードに最小限のBOM除去処理を追加
-  const cleanText = text.replace(/\uFEFF/g, '');
+  // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
+  // 複数の方法でBOMを除去して確実性を高める
+  let cleanText = text;
+  // 1. 文字列全体からBOMを削除
+  cleanText = cleanText.replace(/\uFEFF/g, '');
+  // 2. 文字列の先頭からBOMを削除（念のため）
+  if (cleanText.length > 0 && cleanText.charCodeAt(0) === 0xFEFF) {
+    cleanText = cleanText.slice(1);
+  }
+  // 3. trim()の前に再度BOMを削除
+  cleanText = cleanText.replace(/^\uFEFF+|\uFEFF+$/g, '').trim();
+  
+  // 空文字列の場合はデフォルトテキストを使用
+  if (cleanText.length === 0) {
+    cleanText = 'No content available';
+  }
   
   try {
     const result = await embeddingModel.embedContent(cleanText);

@@ -13,7 +13,7 @@ export interface ProcessingStep {
 }
 
 export interface StreamingMessage {
-  type: 'step_update' | 'chunk' | 'completion' | 'error';
+  type: 'step_update' | 'chunk' | 'completion' | 'error' | 'post_log_id_update';
   step?: number;
   stepId?: string;
   title?: string;
@@ -53,6 +53,7 @@ export class StreamingProcessClient {
     onChunk: (chunk: string, chunkIndex: number) => void,
     onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
     onError: (error: string) => void,
+    onPostLogIdUpdate?: (postLogId: string) => void,
     chatHistory: any[] = [],
     labelFilters: any = { includeMeetingNotes: false },
     userId?: string,
@@ -119,28 +120,28 @@ export class StreamingProcessClient {
 
         // ストリームが終了したらループを抜ける
         if (done) {
-          // Phase 0A-4 FIX: 残りのバッファを処理
-          if (this.buffer.trim()) {
-            this.processLine(this.buffer.trim(), onStepUpdate, onChunk, onCompletion, onError);
-          }
-          console.log('Stream finished.');
-          break;
+        // Phase 0A-4 FIX: 残りのバッファを処理
+        if (this.buffer.trim()) {
+          this.processLine(this.buffer.trim(), onStepUpdate, onChunk, onCompletion, onError, onPostLogIdUpdate);
         }
-        
-        // Phase 0A-4 FIX: 受け取ったデータをバッファに追加
-        const chunk = decoder.decode(value, { stream: true });
-        this.buffer += chunk;
-        
-        // Phase 0A-4 FIX: 完全な行のみを処理（不完全なJSONを避ける）
-        const lines = this.buffer.split('\n');
-        
-        // 最後の行は不完全な可能性があるのでバッファに戻す
-        this.buffer = lines.pop() || '';
-        
-        // 完全な行のみを処理
-        for (const line of lines) {
-          this.processLine(line, onStepUpdate, onChunk, onCompletion, onError);
-        }
+        console.log('Stream finished.');
+        break;
+      }
+      
+      // Phase 0A-4 FIX: 受け取ったデータをバッファに追加
+      const chunk = decoder.decode(value, { stream: true });
+      this.buffer += chunk;
+      
+      // Phase 0A-4 FIX: 完全な行のみを処理（不完全なJSONを避ける）
+      const lines = this.buffer.split('\n');
+      
+      // 最後の行は不完全な可能性があるのでバッファに戻す
+      this.buffer = lines.pop() || '';
+      
+      // 完全な行のみを処理
+      for (const line of lines) {
+        this.processLine(line, onStepUpdate, onChunk, onCompletion, onError, onPostLogIdUpdate);
+      }
       }
 
     } catch (error) {
@@ -165,7 +166,8 @@ export class StreamingProcessClient {
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
     onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    onPostLogIdUpdate?: (postLogId: string) => void
   ): void {
     if (line.startsWith('data: ')) {
       try {
@@ -173,7 +175,7 @@ export class StreamingProcessClient {
         if (!jsonStr) return; // 空行はスキップ
         
         const data = JSON.parse(jsonStr) as StreamingMessage;
-        this.handleMessage(data, onStepUpdate, onChunk, onCompletion, onError);
+        this.handleMessage(data, onStepUpdate, onChunk, onCompletion, onError, onPostLogIdUpdate);
       } catch (parseError) {
         // Phase 0A-4 FIX: パースエラーの詳細をログ出力（開発環境のみ）
         if (process.env.NODE_ENV === 'development') {
@@ -202,7 +204,8 @@ export class StreamingProcessClient {
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
     onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    onPostLogIdUpdate?: (postLogId: string) => void
   ): void {
     switch (message.type) {
       case 'step_update':
@@ -287,6 +290,13 @@ export class StreamingProcessClient {
       case 'error':
         const errorMessage = message.message || message.error || 'Unknown error';
         onError(errorMessage);
+        break;
+
+      case 'post_log_id_update':
+        if (message.postLogId && onPostLogIdUpdate) {
+          console.log('🔍 [DEBUG] postLogId更新メッセージを受信:', message.postLogId);
+          onPostLogIdUpdate(message.postLogId);
+        }
         break;
 
       default:

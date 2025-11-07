@@ -1,7 +1,10 @@
 # Firestoreラベル統合実装サマリー
 
 **実装日**: 2025年11月2日  
-**目的**: 通常の同期プロセスでFirestoreの`structured_labels`をLanceDBに含める
+**最終更新**: 2025年11月6日  
+**統合元**: `firestore-labels-integration-plan.md`, `firestore-labels-integration-test-results.md`, `firestore-labels-integration-code-review.md`, `firestore-labels-integration-improvements-summary.md`  
+**目的**: 通常の同期プロセスでFirestoreの`structured_labels`をLanceDBに含める  
+**ステータス**: ✅ 実装完了
 
 ## ✅ 実装完了
 

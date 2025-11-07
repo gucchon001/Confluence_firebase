@@ -12,7 +12,8 @@ export type Message = {
   user?: {
     displayName: string | null;
     photoURL: string | null;
-  }
+  };
+  postLogId?: string; // フィードバック用の投稿ログID
 };
 
 // roleが'ai'ではなく'assistant'であることを保証する

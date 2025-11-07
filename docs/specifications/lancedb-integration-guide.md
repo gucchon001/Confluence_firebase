@@ -18,7 +18,7 @@ Confluence API → データ取得 → テキスト抽出 → チャンク分割
 
 1. **データ同期**: Confluenceからページデータを取得
 2. **前処理**: HTMLからテキスト抽出、チャンク分割（1800文字、オーバーラップなし）
-3. **埋め込み生成**: @xenova/transformersで768次元ベクトル生成
+3. **埋め込み生成**: Gemini Embeddings API (text-embedding-004) で768次元ベクトル生成
 4. **保存**: LanceDBにベクトルとメタデータを保存
 5. **検索**: ユーザークエリをベクトル化してLanceDBで検索
 
@@ -29,10 +29,13 @@ Confluence API → データ取得 → テキスト抽出 → チャンク分割
 #### 3.1.1 TypeScriptインターフェース
 
 ```typescript
+// 注意: これはAPIレスポンス形式の型定義です
+// データベース（LanceDB）では`page_id`（int64型）を使用します
 interface ConfluenceRecord {
   id: string;                    // チャンクID (pageId-chunkIndex)
   vector: number[];              // 768次元の埋め込みベクトル
-  pageId: number;                // ConfluenceページID（数値型）
+  pageId: string;                // ConfluenceページID（APIレスポンスでは文字列型）
+  // 注意: データベースフィールド名は`page_id`（int64型）、変換レイヤーでpageIdに変換
   chunkIndex: number;            // チャンク番号
   space_key: string;             // スペースキー
   title: string;                 // ページタイトル

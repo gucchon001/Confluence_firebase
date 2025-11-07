@@ -7,7 +7,8 @@ runConfig:
   minInstances: 2  # 1→2に増強（冗長性とパフォーマンス向上）
   maxInstances: 4
   
-  # メモリ設定（埋め込みモデル + 複数同時リクエスト対応）
+  # メモリ設定（Gemini Embeddings API使用 + 複数同時リクエスト対応）
+  # 注意: Xenova Transformersは使用していないため、メモリ要件は低減済み
   memoryMiB: 4096
   
   # CPU設定
@@ -46,28 +47,12 @@ env:
       - BUILD
       - RUNTIME
   
-  # ★★★ Xenova Transformers.js完全オフラインモード設定 ★★★
-  # 問題: Cloud Run環境からHugging Face Hubへの通信が失敗
-  # 原因: ネットワーク制限、ファイアウォール、一時的障害
-  # 解決: HF_HUB_OFFLINE=1で一切の外部通信を無効化
-  - variable: HF_HUB_OFFLINE
-    value: "1"
-    availability:
-      - BUILD
-      - RUNTIME
-  
-  # ★★★ 追加のオフライン設定 ★★★
-  # transformers.jsの内部設定を強制的にオフラインモードに
-  - variable: TRANSFORMERS_CACHE
-    value: "/tmp/transformers_cache"
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: HF_HUB_DISABLE_TELEMETRY
-    value: "1"
-    availability:
-      - BUILD
-      - RUNTIME
+  # 注意: Xenova Transformers関連の環境変数は削除済み（2025-10-28移行）
+  # 現在はGemini Embeddings API (text-embedding-004) を使用
+  # 削除した環境変数:
+  # - HF_HUB_OFFLINE (Xenova Transformers用)
+  # - TRANSFORMERS_CACHE (Xenova Transformers用)
+  # - HF_HUB_DISABLE_TELEMETRY (Xenova Transformers用)
   
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     value: confluence-copilot-ppjye.firebasestorage.app
@@ -128,11 +113,9 @@ env:
       - BUILD
       - RUNTIME
   
-  # その他（ランタイムのみ）
-  - variable: EMBEDDINGS_PROVIDER
-    value: local
-    availability:
-      - RUNTIME
+  # 注意: EMBEDDINGS_PROVIDERは削除済み（2025-10-28移行）
+  # 現在はGemini Embeddings API (text-embedding-004) を直接使用
+  # 設定は src/config/ai-models-config.ts で一元管理（provider: 'api'）
   
   - variable: USE_LLM_EXPANSION
     value: "true"

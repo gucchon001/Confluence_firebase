@@ -56,13 +56,18 @@ export const GeminiConfig = {
 
 テキストのベクトル埋め込みを生成するモデルの設定です。
 
+**重要**: 2025-10-28に`@xenova/transformers`から`@google/generative-ai`に移行しました。
+
 ```typescript
 export const EmbeddingConfig = {
-  /** プロバイダー（local または api） */
-  provider: 'local' as 'local' | 'api',
+  /** プロバイダー（api - Gemini Embeddings API使用） */
+  provider: 'api' as const,
   
-  /** モデルID */
-  modelId: 'Xenova/paraphrase-multilingual-mpnet-base-v2',
+  /** モデルID
+   * text-embedding-004: Gemini Embeddings API（768次元）
+   * 参考: https://ai.google.dev/models/gemini#embedding
+   */
+  modelId: 'text-embedding-004',
   
   /** 埋め込みベクトルの次元数 */
   dimensions: 768,
@@ -73,9 +78,9 @@ export const EmbeddingConfig = {
 
 | パラメータ | 説明 |
 |:---|:---|
-| `provider` | `local`: ローカル実行、`api`: 外部API使用 |
-| `modelId` | Hugging FaceのモデルID（Xenova transformers対応） |
-| `dimensions` | 生成されるベクトルの次元数 |
+| `provider` | `api`: Gemini Embeddings API使用（2025-10-28移行） |
+| `modelId` | Gemini Embeddings APIのモデルID（`text-embedding-004`） |
+| `dimensions` | 生成されるベクトルの次元数（768次元） |
 
 ## 使用箇所
 
@@ -112,14 +117,16 @@ const result = await ai.generate({
 
 ```typescript
 import { EmbeddingConfig } from '@/config/ai-models-config';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// 使用例
-if (EmbeddingConfig.provider !== 'local') {
-  console.warn('EMBEDDINGS_PROVIDERはlocalのみサポート。');
-}
-
-extractor = await pipeline('feature-extraction', EmbeddingConfig.modelId);
+// 使用例（Gemini Embeddings API）
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const model = genAI.getGenerativeModel({ model: EmbeddingConfig.modelId });
+const result = await model.embedContent(text);
+const embedding = result.embedding.values;
 ```
+
+**実装ファイル**: `src/lib/embeddings.ts`を参照してください。
 
 ## 設定変更手順
 
@@ -174,34 +181,34 @@ config: {
 
 ### 3. Embeddingモデルの変更
 
-別のXenovaモデルに変更する場合：
+**注意**: 現在はGemini Embeddings API (`text-embedding-004`) のみをサポートしています。他のモデルに変更する場合は、`src/lib/embeddings.ts`の実装を確認してください。
 
 ```typescript
 // src/config/ai-models-config.ts
 export const EmbeddingConfig = {
-  provider: 'local' as 'local' | 'api',
-  modelId: 'Xenova/multilingual-e5-base', // ← ここを変更
-  dimensions: 768, // モデルに応じて次元数も変更
+  provider: 'api' as const,
+  modelId: 'text-embedding-004', // Gemini Embeddings API
+  dimensions: 768,
 }
 ```
 
-利用可能なモデル（例）：
-- `Xenova/paraphrase-multilingual-mpnet-base-v2` - 768次元（推奨）
-- `Xenova/multilingual-e5-base` - 768次元
-- `Xenova/all-MiniLM-L6-v2` - 384次元（英語のみ）
+**利用可能なモデル**:
+- `text-embedding-004` - 768次元（現在使用中）
+  - 参考: https://ai.google.dev/models/gemini#embedding
+
+**移行履歴**:
+- 2025-10-28: `@xenova/transformers`から`@google/generative-ai`に移行
+- 詳細: `docs/troubleshooting/embeddings-migration-summary.md`
 
 ## 環境変数による設定
 
-一部の設定は環境変数でオーバーライドできます：
+**注意**: 現在の実装では、環境変数による設定は使用されていません。設定は`src/config/ai-models-config.ts`で一元管理されています。
 
 ```env
 # .env ファイル
 
-# Embeddingプロバイダー（デフォルト: local）
-EMBEDDINGS_PROVIDER=local
-
-# EmbeddingモデルID（デフォルト: Xenova/paraphrase-multilingual-mpnet-base-v2）
-EMBEDDINGS_MODEL=Xenova/paraphrase-multilingual-mpnet-base-v2
+# Gemini API Key（必須）
+GEMINI_API_KEY=your-api-key-here
 ```
 
 ## ベストプラクティス
@@ -257,23 +264,26 @@ config: {
 
 ### Embeddingが遅い
 
-- モデルを軽量なものに変更
-- キャッシュ設定を確認（`src/lib/embedding-cache.ts`）
+- キャッシュ設定を確認（`src/lib/embeddings.ts`の簡易メモリキャッシュ）
+- Gemini Embeddings APIのレート制限を確認
+- ネットワーク接続を確認
 
 ## 参考資料
 
 ### Gemini API
 - [Gemini API Documentation](https://ai.google.dev/docs)
 - [モデル一覧](https://ai.google.dev/models/gemini)
+- [Gemini Embeddings API](https://ai.google.dev/models/gemini#embedding)
 
-### Xenova Transformers
-- [Xenova Transformers GitHub](https://github.com/xenova/transformers.js)
-- [サポートされているモデル](https://huggingface.co/models?library=transformers.js)
+### 移行関連ドキュメント
+- [エンベディング生成の移行サマリー](../troubleshooting/embeddings-migration-summary.md)
+- [BOM文字エラーの根本原因](../analysis/bom-error-root-cause-final.md)
 
 ## 更新履歴
 
 | 日付 | 変更内容 |
 |:---|:---|
+| 2025-11-06 | Gemini Embeddings API移行を反映（2025-10-28移行） |
 | 2025-10-08 | 初版作成 - AIモデル設定を一元化 |
 
 ## 関連ドキュメント

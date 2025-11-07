@@ -66,5 +66,14 @@ service cloud.firestore {
       allow read: if isAllowedUser();
       allow write: if isAllowedUser() && request.auth.uid == request.resource.data.userId;
     }
+
+    // 評価フィードバック（feedbackRatingsコレクション）
+    match /feedbackRatings/{feedbackId} {
+      // 認証済みユーザーは自分のフィードバックを読み書き可能
+      allow read: if isAllowedUser();
+      allow create: if isAllowedUser() && request.auth.uid == request.resource.data.userId;
+      // 管理者は全フィードバックを読み取り可能
+      allow read: if isAdmin();
+    }
   }
 }

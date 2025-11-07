@@ -28,7 +28,11 @@ async function rebuildLanceDB() {
 
     // 3. 古いデータベースをバックアップ
     console.log('💾 古いデータベースをバックアップ中...');
-    const backupDir = `lancedb_backup_${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    const backupBaseDir = 'backups/lancedb';
+    if (!fs.existsSync(backupBaseDir)) {
+      fs.mkdirSync(backupBaseDir, { recursive: true });
+    }
+    const backupDir = path.join(backupBaseDir, `lancedb_backup_${new Date().toISOString().replace(/[:.]/g, '-')}`);
     await copyDirectory('.lancedb', backupDir);
     console.log(`バックアップ完了: ${backupDir}`);
 

@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EXTENDED_LANCEDB_SCHEMA } from '../src/lib/lancedb-schema-extended';
 
-const BACKUP_DIR = '.lancedb-backup';
+const BACKUP_DIR = 'backups/lancedb';
 const BACKUP_FILE = path.join(BACKUP_DIR, 'confluence-backup.json');
 
 async function main() {

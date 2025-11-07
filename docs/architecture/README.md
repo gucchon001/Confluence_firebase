@@ -2,8 +2,8 @@
 
 このディレクトリには、Confluence Firebase RAGシステムのアーキテクチャ設計書を格納しています。
 
-**最終更新**: 2025年11月2日  
-**現在のPhase**: Phase 5完了 + page_idマイグレーション完了
+**最終更新**: 2025年11月6日  
+**現在のPhase**: Phase 5完了 + page_idマイグレーション完了 + BOM除去処理・トークン化修正完了
 
 ---
 
@@ -24,10 +24,8 @@
 | ドキュメント | 説明 | 最終更新 |
 |------------|------|---------|
 | [hybrid-search-quick-reference.md](./hybrid-search-quick-reference.md) | **クイックリファレンス**<br>検索コンポーネント、スコアリング、重み配分 | 2025-10-17 |
-| [hybrid-search-specification-latest.md](./hybrid-search-specification-latest.md) | **最新仕様書**<br>Phase 4完成版の詳細仕様 | 2025-10-17 |
-| [hybrid-search-logic-current.md](./hybrid-search-logic-current.md) | 現在の検索ロジック詳細<br>実装コードベース | 2025-10-16 |
-| [hybrid-search-contract.md](./hybrid-search-contract.md) | 検索APIの契約インターフェース | 2025-10 |
-| [search-system-comprehensive-guide.md](./search-system-comprehensive-guide.md) | 検索システム総合ガイド | 2025-10 |
+| [hybrid-search-specification-latest.md](./hybrid-search-specification-latest.md) | **最新仕様書**<br>Phase 4完成版の詳細仕様（契約・包括ガイド統合済み） | 2025-11-06 |
+| [hybrid-search-logic-current.md](./hybrid-search-logic-current.md) | 現在の検索ロジック詳細<br>実装コードベース | 2025-11-06 |
 
 **検索システムの構成**:
 - **ベクトル検索** (5%): Gemini Embedding 768次元、コサイン類似度
@@ -66,8 +64,6 @@
 | ドキュメント | 説明 | ステータス | 最終更新 |
 |------------|------|---------|---------|
 | [structured-label-design.md](./structured-label-design.md) | **Structured Label System**<br>自動ラベル付けシステム | 🟡 部分実装 | 2025-10-14 |
-| [KNOWLEDGE_GRAPH_README.md](./KNOWLEDGE_GRAPH_README.md) | **Knowledge Graph README**<br>概要、実装状況、将来計画 | 🔴 無効化済み | 2025-10-19 |
-| [KG_DOCUMENTATION_SUMMARY.md](./KG_DOCUMENTATION_SUMMARY.md) | Knowledge Graphドキュメント集約 | 🔴 無効化済み | 2025-10-19 |
 
 **Phase 0A機能の状況**:
 
@@ -83,18 +79,17 @@
 
 ---
 
-### 📈 Phase 5完了レポート
-
-| ドキュメント | 説明 | 最終更新 |
-|------------|------|---------|
-| [phase5-week2-completion-report.md](./phase5-week2-completion-report.md) | **Phase 5 Week 2完了レポート**<br>パフォーマンス最適化と品質強化の最終成果 | 2025-10-17 |
-
 **Phase 5の主な成果**:
 - ✅ 並列検索実装（品質維持100%）
 - ✅ ハイブリッド検索強化（RRF融合 + Composite Scoring）
 - ✅ 検索重み配分最適化
 - ✅ LanceDB接続プーリング
 - ✅ 検索キャッシュ拡大（TTL 15分、maxSize 5000）
+
+**最新の改善** (2025年11月):
+- ✅ BOM除去処理の実装（すべてのデータ処理パス）
+- ✅ トークン化修正（kuromoji統一使用）
+- ✅ データベース再構築（2,088行）
 
 ---
 
@@ -110,19 +105,28 @@
 
 古いバージョンの仕様書や完了したPhaseのドキュメントは、以下に移動されています：
 
-- `docs/archive/architecture-legacy/`: 旧バージョンの設計書
-  - hybrid-search-specification-v5.md
-  - hybrid-search-optimization-proposals.md
-  - hybrid-search-flow-and-parallelization-analysis.md
-  - enhanced-hybrid-search-design.md
-  - phase5-week1-completion-report.md
-  - phase-5-improvement-plan.md
-  - phase5-parallel-search-risk-analysis.md
-  - phase5-code-quality-check.md
-  - knowledge-graph-comprehensive-overview.md
-  - label-domain-kg-integration.md
-  - genkit-migration-and-expansion-roadmap.md
-  - foundation-first-strategy.md
+### 完了レポート (`docs/archive/architecture/completed-reports/`)
+- `phase5-week2-completion-report.md` - Phase 5 Week 2完了レポート（2025-10-17、完了）
+
+### 非推奨 (`docs/archive/architecture/deprecated/`)
+- `KNOWLEDGE_GRAPH_README.md` - Knowledge Graph README（無効化済み）
+- `KG_DOCUMENTATION_SUMMARY.md` - Knowledge Graphドキュメント集約（無効化済み）
+- `hybrid-search-contract.md` - 検索API契約（`hybrid-search-specification-latest.md`に統合済み）
+- `search-system-comprehensive-guide.md` - 検索システム包括ガイド（`hybrid-search-specification-latest.md`に統合済み）
+
+### その他のアーカイブ (`docs/archive/architecture-legacy/`)
+- hybrid-search-specification-v5.md
+- hybrid-search-optimization-proposals.md
+- hybrid-search-flow-and-parallelization-analysis.md
+- enhanced-hybrid-search-design.md
+- phase5-week1-completion-report.md
+- phase-5-improvement-plan.md
+- phase5-parallel-search-risk-analysis.md
+- phase5-code-quality-check.md
+- knowledge-graph-comprehensive-overview.md
+- label-domain-kg-integration.md
+- genkit-migration-and-expansion-roadmap.md
+- foundation-first-strategy.md
 
 ---
 
@@ -146,7 +150,7 @@
 
 - **検索改善**: `hybrid-search-logic-current.md` → 実装コード
 - **新機能開発**: `data-flow-diagram-lancedb.md` → システム設計
-- **パフォーマンス最適化**: `phase5-week2-completion-report.md` → 最新の最適化手法
+- **検索仕様**: `hybrid-search-specification-latest.md` → 最新の検索仕様（契約・包括ガイド統合済み）
 
 ---
 
@@ -157,10 +161,10 @@
 - **データベース**: 
   - Firestore 11.9.1（ユーザーデータ、会話履歴）
   - LanceDB 0.22.0（ベクトルデータ）
-- **検索エンジン**: ハイブリッド（Xenova Transformers + Lunr.js + LanceDB）
+- **検索エンジン**: ハイブリッド（Gemini Embeddings API + Lunr.js + LanceDB）
 - **LLM**: Gemini API（2.5-flash / 2.0-flash）
 - **AI Framework**: Genkit 1.19.2（部分統合）
-- **埋め込みモデル**: paraphrase-multilingual-mpnet-base-v2（768次元）
+- **埋め込みモデル**: Gemini Embeddings API (text-embedding-004、768次元)
 
 ---
 

@@ -1,6 +1,7 @@
 # Architecture ドキュメント実装検証レポート
 
 **作成日**: 2025年10月11日  
+**最終更新**: 2025年11月6日（Gemini Embeddings API移行を反映）  
 **検証対象**: `docs/architecture/` 全9ファイル
 
 ---
@@ -34,7 +35,7 @@ architectureフォルダ内の9つのドキュメントを実装と照合した�
 | **Streaming Response** | リアルタイム回答生成 | ✅ `/api/streaming-process` | ✅ |
 | **Hybrid Search** | LanceDB + Lunr.js | ✅ ハイブリッド検索実装 | ✅ |
 | **AI Model** | Gemini 2.5 Flash | ✅ 実装済み | ✅ |
-| **Vector Embeddings** | 768次元 | ✅ Xenova Transformers | ✅ |
+| **Vector Embeddings** | 768次元 | ✅ Gemini Embeddings API (text-embedding-004) | ✅ |
 | **Frontend** | Next.js 15.3.3 | ✅ package.json確認 | ✅ |
 | **Database** | Firestore 11.9.1 | ✅ 実装確認 | ✅ |
 | **Vector DB** | LanceDB 0.22.0 | ✅ 実装確認 | ✅ |
@@ -122,7 +123,7 @@ export interface LanceDBSearchParams {
 
 **ドキュメント**:
 ```markdown
-- `pageId: number`
+- `pageId: string` (APIレスポンス) / `page_id: number` (int64型、データベース)
 - `title: string`
 - `content: string`
 - `labels: string[]`
@@ -138,7 +139,8 @@ export interface LanceDBSearchParams {
 // src/lib/lancedb-search-client.ts (行94-116)
 export interface LanceDBSearchResult {
   id: string;
-  pageId?: number;
+  pageId?: string;  // APIレスポンス（変換レイヤーでpage_idから変換）
+  page_id?: number;  // データベースフィールド（int64型）
   title: string;
   content: string;
   labels: string[];
@@ -202,7 +204,7 @@ export async function searchLanceDB(params: LanceDBSearchParams) {
 - Next.js 15.3.3 UI ✅
 - Firestore 11.9.1 ✅
 - LanceDB 0.22.0 ✅
-- Xenova Transformers ✅
+- Gemini Embeddings API (text-embedding-004) ✅
 - Lunr.js (BM25検索) ✅
 - ドメイン知識DB ✅
 - 動的キーワード抽出器 ✅
@@ -213,7 +215,7 @@ export async function searchLanceDB(params: LanceDBSearchParams) {
 "next": "15.3.3" ✅
 "@lancedb/lancedb": "^0.22.0" ✅
 "firebase": "^11.9.1" ✅
-"@xenova/transformers": "^2.17.2" ✅
+"@google/generative-ai": "^0.21.0" ✅
 "lunr": "^2.3.9" ✅
 ```
 

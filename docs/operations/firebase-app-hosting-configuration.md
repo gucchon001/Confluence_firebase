@@ -93,11 +93,9 @@ env:
       - BUILD
       - RUNTIME
   
-  # その他（ランタイムのみ）
-  - variable: EMBEDDINGS_PROVIDER
-    value: local
-    availability:
-      - RUNTIME
+  # 注意: EMBEDDINGS_PROVIDERは削除済み（2025-10-28移行）
+  # 現在はGemini Embeddings API (text-embedding-004) を直接使用
+  # 設定は src/config/ai-models-config.ts で一元管理（provider: 'api'）
   
   - variable: USE_LLM_EXPANSION
     value: "true"

@@ -106,7 +106,7 @@ graph TD
         H["Firebase Cloud Functions(Scheduler)"] -- 1日1回実行 --> I["Node.js Scripts(データ同期バッチ)"]
         I --> J["Atlassian API"]
         J -- Confluenceデータ --> I
-        I --> K["@xenova/transformers(768次元)"]
+        I --> K["Gemini Embeddings API(text-embedding-004, 768次元)"]
         K -- 埋め込みベクトル --> I
         I --> G
         
@@ -199,11 +199,11 @@ graph TD
    - Confluenceからページデータを取得
    - HTMLからテキストを抽出
    - テキストをチャンク分割（1800文字、オーバーラップなし）
-   - @xenova/transformersによる埋め込みベクトル生成（768次元、L2正規化）
+   - Gemini Embeddings API (text-embedding-004) による埋め込みベクトル生成（768次元）
    - LanceDBにベクトルとメタデータを保存
 
 2. **ハイブリッド検索フロー**
-   - ユーザークエリを@xenova/transformersで埋め込みベクトルに変換（768次元、L2正規化）
+   - ユーザークエリをGemini Embeddings API (text-embedding-004) で埋め込みベクトルに変換（768次元）
    - 並列実行による複数検索ソースの組み合わせ：
      - **ベクトル検索**: LanceDBで類似ベクトル検索（意味的類似性）
      - **キーワード検索**: LanceDBのLIKE句によるタイトル・コンテンツ検索

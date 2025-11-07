@@ -1,8 +1,9 @@
 # ハイブリッド検索システム 最新仕様書 (Phase 4完了版)
 
-**最終更新**: 2025-10-17  
-**バージョン**: Phase 4 完了  
-**ステータス**: ✅ 本番稼働中
+**最終更新**: 2025年11月6日  
+**バージョン**: Phase 4 完了 + BOM除去処理・トークン化修正完了  
+**ステータス**: ✅ 本番稼働中  
+**統合元**: `hybrid-search-contract.md`, `search-system-comprehensive-guide.md`
 
 ---
 
@@ -368,12 +369,14 @@ async function expandTitleResultsWithKG(
 }
 ```
 
-#### pageId検索の実装（重要）
+#### page_id検索の実装（重要）
 ```typescript
 // ⚠️ LanceDBのSQL方言ではバッククォート（`）が必須
+// 注意: データベースフィールド名は`page_id`（int64型）、関数パラメータは`pageId`（string型）
 async function fetchPageFromLanceDB(tbl: any, pageId: string): Promise<any | null> {
+  const numericPageId = parseInt(pageId);  // string → number変換
   const results = await tbl.query()
-    .where(`\`pageId\` = '${pageId}'`)  // バッククォート使用
+    .where(`\`page_id\` = ${numericPageId}`)  // データベースフィールド名はpage_id
     .limit(1)
     .toArray();
   
@@ -546,11 +549,11 @@ function generateCacheKey(query: string, params: any): string {
 - **影響**: WHERE句でのpageId検索時に注意が必要
 
 ```typescript
-// ❌ 動作しない
-.where('"pageId" = \'123\'')
+// ❌ 動作しない（ダブルクォートは使用不可）
+.where('"page_id" = 123')
 
-// ✅ 正常動作
-.where('`pageId` = \'123\'')
+// ✅ 正常動作（データベースフィールド名はpage_id、int64型）
+.where('`page_id` = 123')
 ```
 
 #### 2. KGデータの不整合
@@ -624,6 +627,105 @@ function generateCacheKey(query: string, params: any): string {
 - [Phase 0A-2 ロードマップ](./phase-0a-roadmap-final.md)
 - [テスト実行ガイド](../test-execution-guide.md)
 - [LanceDB統合ガイド](../specifications/lancedb-integration-guide.md)
+
+---
+
+## 補足: 検索API契約（統合元: hybrid-search-contract.md）
+
+### 入力（SearchParams）
+- `query: string` - 検索クエリ
+- `topK?: number`（既定: 12） - 返却件数
+- `useLunrIndex?: boolean`（既定: false） - Lunrインデックス使用フラグ
+- `labelFilters?: { includeMeetingNotes: boolean; includeArchived: boolean }` - ラベルフィルタ
+- `tableName?: string`（既定: `confluence`） - テーブル名
+
+### 出力（SearchResult）必須項目
+- `pageId: string` - ページID（APIレスポンス形式、変換レイヤーで`page_id`から変換）
+  - 注意: データベースフィールド名は`page_id`（int64型）、APIレスポンスでは`pageId`（string型）を維持
+- `title: string` - ページタイトル
+- `content: string` - ページコンテンツ
+- `labels: string[]` - ラベル配列
+- `url: string` - ページURL
+- `source: 'vector' | 'bm25' | 'hybrid' | 'title'` - 検索ソース
+- `scoreKind: 'vector' | 'bm25' | 'hybrid' | 'title'` - スコア種別
+- `scoreRaw: number` - 生スコア
+- `scoreText: string`（表示用: 例 `BM25 8.20` / `Vector 83.1%`） - 表示用スコア
+
+### 規約
+- フィールド名・型は厳守（特に `pageId`（APIレスポンス）と`page_id`（データベース）の使い分け）
+- `scoreText` は 0 なら `BM25 0.00` のように明示
+- 既定値は単一点管理（`defaultSearchParams`）
+- ストリーミングAPIとの統合を考慮した設計
+
+---
+
+## 補足: 検索システム包括ガイド（統合元: search-system-comprehensive-guide.md）
+
+### 目的
+- 質問に本質的に関連する一次情報を安定して取得し、UIには簡潔な要約と確実にクリック可能な参照（タイトル/URL）を返す
+- メール通知/議事録などノイズ文書の混入を抑え、仕様・設計ドキュメントを優先する
+- ストリーミング機能により、リアルタイムで検索結果と回答を提供する
+
+### アーキテクチャ方針（ベストプラクティス）
+
+#### クエリ前処理
+- 正規化（全角/半角、空白、記号）
+- 動的キーワード抽出（DynamicKeywordExtractor）
+- ドメイン知識データベースからの関連キーワード抽出
+- 安全な拡張：
+  - 同義語はドメイン限定語にのみ付与（例: ログイン→認証/login/サインイン）
+  - 汎用語（仕様/spec/要件/requirement/detail）はスコア計算から除外 or 重み極小
+  - 否定語（-メール/-通知 など）はフィルタにのみ適用し、採点から除外
+
+#### 検索（並列）
+- 空間制約: `space_key=CLIENTTOMO` で基本絞り込み
+- 並列実行と候補拡大：
+  - Vector 検索 topK=100（768次元、LanceDB 0.22.0）
+  - BM25検索 topK=100（Lunr.js 2.3.9、Kuromojiトークナイザー）
+  - キーワード検索 topK=100（SQL LIKE句）
+  - タイトル厳格一致検索 topK=20
+- ストリーミング対応: 検索結果をリアルタイムで段階的に表示
+- フィルタリング：
+  - 除外ラベル: `Meeting`, `Archive`, `Low`, `メール`, `通知`
+  - 優先ラベル: `High`, `Medium`, `Spec`, `Design`
+  - ドメイン減衰: メール/帳票/請求/アーカイブ/議事録を0.9倍、汎用文書を0.8倍
+
+#### スコアリング・統合
+- 重み付け: Vector 0.5, BM25 0.5（ハイブリッド検索エンジン）
+- RRF（Reciprocal Rank Fusion）による統合:
+  - Vector: 1.0, Keyword: 0.8, Title-exact: 1.2, BM25: 0.6
+- ドメイン減衰: メール/帳票/請求/アーカイブ/議事録を0.9倍、汎用文書を0.8倍
+- 重複除去: `pageId` ベースで統合、最高スコアを採用
+- 最終ソート: 統合スコア降順、同点時は Vector スコア優先
+
+### BM25 / Lunr 検索仕様
+
+#### インデックス
+- エンジン: `lunr@2.x`
+- 対象フィールド: `tokenizedTitle`(boost 3.0), `tokenizedContent`(boost 1.0), `labels`(boost 2.0)
+  - 備考: boost値はPhase 2最適化で調整済み（タイトル重視を強化）
+- 追加メタ情報: `page_id:number` (int64型), `labels:string[]`, `url:string`, `space_key?:string`
+  - 注意: APIレスポンスでは `pageId` (string型) を維持（変換レイヤーで処理）
+- 日本語対応: Kuromojiトークナイザーによる事前分かち書き
+- 正規化: 全角/半角・空白トリム、ひらがな/カタカナはそのまま
+
+#### クエリ
+- エントリポイント:
+  - `searchCandidates(query: string, limit: number = 50): Promise<LunrSearchResult[]>`
+  - `searchWithFilters(query: string, filters: { labels?: string[]; excludeLabels?: string[] } = {}, limit: number = 50): Promise<LunrSearchResult[]>`
+- 入力: ユーザーの自然文 `query`（Kuromojiトークナイザーで分かち書き処理）
+- フィルタ: `excludeLabels` は Low/Archive/Meeting などを除外、`labels` は特定ラベルのみを含める
+- シングルトンパターン: `LunrSearchClient.getInstance()` でインスタンス管理
+
+#### 返却
+- 候補: `{ pageId, score, title, snippet?, labels, url }[]`（score は BM25 スコア）
+- 実装側で `pageId` により LanceDB 詳細を join して `SearchResult` に整形
+
+#### 留意点
+- インデックス初期化: アプリ起動時に非同期で実施。未初期化時は LIKE 検索にフォールバック可
+- 用語の大文字・小文字: そのまま保持。マッチ判定は小文字化比較
+- 日本語処理: Kuromojiトークナイザーによる分かち書きで検索精度向上
+- API は上記2関数に限定して使用（その他の内部関数は使用禁止）
 
 ---
 

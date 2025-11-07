@@ -240,7 +240,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     const keywordStartTime = Date.now();
     const keywordsPromise = (async () => {
-      const kw = await unifiedKeywordExtractionService.extractKeywordsConfigured(params.query);
+      // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+      const cleanQueryForKeywords = params.query.replace(/\uFEFF/g, '');
+      const kw = await unifiedKeywordExtractionService.extractKeywordsConfigured(cleanQueryForKeywords);
       const keywordDuration = Date.now() - keywordStartTime;
       if (keywordDuration > 2000) {
         console.warn(`⚠️ [searchLanceDB] Slow keyword extraction: ${keywordDuration}ms (${(keywordDuration / 1000).toFixed(2)}s)`);

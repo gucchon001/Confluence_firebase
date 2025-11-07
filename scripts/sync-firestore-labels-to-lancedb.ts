@@ -153,7 +153,12 @@ async function main() {
     console.log('💾 バックアップを作成中...\n');
     
     const fs = await import('fs');
-    const backupPath = `.lancedb.backup.label-sync.${Date.now()}`;
+    const path = await import('path');
+    const backupDir = 'backups/lancedb';
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const backupPath = path.join(backupDir, `.lancedb.backup.label-sync.${Date.now()}`);
     
     if (fs.existsSync('.lancedb')) {
       fs.cpSync('.lancedb', backupPath, { recursive: true });

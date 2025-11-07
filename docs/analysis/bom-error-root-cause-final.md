@@ -1,5 +1,14 @@
 # BOM文字エラーの根本原因（最終確定版）
 
+**最終更新**: 2025年11月6日  
+**統合元**: `bom-character-error-root-cause.md`, `bom-error-trigger-analysis.md`
+
+## エラー概要
+
+```
+TypeError: Cannot convert argument to a ByteString because the character at index 0 has a value of 65279 which is greater than 255.
+```
+
 ## エラー発生のタイムライン
 
 1. **2025-10-28**: `@xenova/transformers`から`@google/generative-ai`に移行（コミット `848cc783`）

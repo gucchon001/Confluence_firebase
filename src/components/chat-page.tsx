@@ -321,6 +321,7 @@ export default function ChatPage({ user }: ChatPageProps) {
         // 完了コールバック
         async (fullAnswer: string, references: any[], postLogId?: string) => {
           console.log('ストリーミング完了:', fullAnswer);
+          console.log('🔍 [DEBUG] postLogId received:', postLogId);
           setStreamingAnswerSafe(fullAnswer);
           setStreamingReferences(references);
           setCurrentPostLogId(postLogId || null);
@@ -330,9 +331,10 @@ export default function ChatPage({ user }: ChatPageProps) {
           
           console.log('🔍 [DEBUG] Final message (no table processing):', processedFullAnswer);
           
-      const assistantMessage: Message = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
+          const messageId = `assistant-${Date.now()}`;
+          const assistantMessage: Message = {
+            id: messageId,
+            role: 'assistant',
             content: processedFullAnswer,
             createdAt: new Date().toISOString(),
             sources: references.map((ref: any) => ({
@@ -340,11 +342,18 @@ export default function ChatPage({ user }: ChatPageProps) {
               url: ref.url || '',
               distance: ref.distance !== undefined ? ref.distance : (ref.score !== undefined ? 1 - ref.score : 0.5),
               source: ref.source
-            }))
+            })),
+            postLogId: postLogId || undefined
           };
 
-      setMessages((prev: Message[]) => [...prev, assistantMessage]);
-      
+          console.log('🔍 [DEBUG] Assistant message created with postLogId:', assistantMessage.postLogId);
+          setMessages((prev: Message[]) => [...prev, assistantMessage]);
+          
+          // postLogIdが未取得の場合、後で更新できるようにメッセージIDを保存
+          if (!postLogId) {
+            console.log('🔍 [DEBUG] postLogId is not available yet, will update later');
+          }
+          
           // 会話にメッセージを追加
           try {
             // デバッグ情報を出力
@@ -355,33 +364,33 @@ export default function ChatPage({ user }: ChatPageProps) {
               emailVerified: user.emailVerified
             });
             
-      if (currentConversationId) {
+            if (currentConversationId) {
               // 既存の会話にメッセージを追加
               console.log(`[Firebase] Adding messages to existing conversation: ${currentConversationId}`);
-        await addMessageToConversation(user.uid, currentConversationId, 
-          { role: 'user', content: userMessage.content, user: userMessage.user }
-        );
-        await addMessageToConversation(user.uid, currentConversationId, 
-          { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-        );
+              await addMessageToConversation(user.uid, currentConversationId, 
+                { role: 'user', content: userMessage.content, user: userMessage.user }
+              );
+              await addMessageToConversation(user.uid, currentConversationId, 
+                { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+              );
               console.log(`[Firebase] Successfully saved messages to conversation: ${currentConversationId}`);
-      } else {
-        // 新しい会話を作成
+            } else {
+              // 新しい会話を作成
               console.log(`[Firebase] Creating new conversation for user: ${user.uid}`);
-          const newConversationId = await createConversation(user.uid, 
-            { role: 'user', content: userMessage.content, user: userMessage.user }
-          );
-          await addMessageToConversation(user.uid, newConversationId, 
-            { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
-          );
-          setCurrentConversationId(newConversationId);
+              const newConversationId = await createConversation(user.uid, 
+                { role: 'user', content: userMessage.content, user: userMessage.user }
+              );
+              await addMessageToConversation(user.uid, newConversationId, 
+                { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+              );
+              setCurrentConversationId(newConversationId);
               console.log(`[Firebase] Successfully created new conversation: ${newConversationId}`);
-          
-          // 会話一覧を更新
+              
+              // 会話一覧を更新
               try {
-          const updatedConversations = await getConversations(user.uid);
-          setConversations(updatedConversations);
-        } catch (error) {
+                const updatedConversations = await getConversations(user.uid);
+                setConversations(updatedConversations);
+              } catch (error) {
                 console.error("Failed to refresh conversations:", error);
               }
             }
@@ -420,6 +429,25 @@ export default function ChatPage({ user }: ChatPageProps) {
           };
           
           setMessages((prev: Message[]) => [...prev, errorMessage]);
+        },
+        // postLogId更新コールバック（エラーコールバックの後）
+        (postLogId: string) => {
+          console.log('🔍 [DEBUG] postLogId更新を受信:', postLogId);
+          setCurrentPostLogId(postLogId);
+          
+          // 最後のアシスタントメッセージを更新
+          setMessages((prev: Message[]) => {
+            const updated = [...prev];
+            // 最後から逆順に検索してアシスタントメッセージを見つける
+            for (let i = updated.length - 1; i >= 0; i--) {
+              if (updated[i].role === 'assistant' && !updated[i].postLogId) {
+                updated[i] = { ...updated[i], postLogId };
+                console.log('🔍 [DEBUG] メッセージを更新:', updated[i].id, 'postLogId:', postLogId);
+                break;
+              }
+            }
+            return updated;
+          });
         },
         // オプションパラメータ
         messages,
@@ -716,16 +744,18 @@ export default function ChatPage({ user }: ChatPageProps) {
                   {messages.map((msg: Message, index: number) => {
                     const isLastMessage = index === messages.length - 1;
                     const isAssistantMessage = msg.role === 'assistant';
-                    const shouldShowFeedback = isLastMessage && isAssistantMessage && currentPostLogId;
+                    // メッセージのpostLogIdで判定（currentPostLogIdは後方互換性のため保持）
+                    const shouldShowFeedback = isLastMessage && isAssistantMessage && (msg.postLogId || currentPostLogId);
+                    const postLogIdForFeedback = msg.postLogId || currentPostLogId;
                     
                     return (
                       <div key={`message-${msg.id || index}`}>
                         <MessageCard msg={msg} />
                         {/* 最後のアシスタントメッセージの後に評価フィードバックを表示 */}
-                        {shouldShowFeedback && (
+                        {shouldShowFeedback && postLogIdForFeedback && (
                           <div className="ml-12 mt-4">
                             <FeedbackRating 
-                              postLogId={currentPostLogId}
+                              postLogId={postLogIdForFeedback}
                               userId={user?.uid}
                               sessionId={currentSessionId}
                               onSubmitted={(rating, comment) => {
@@ -735,9 +765,9 @@ export default function ChatPage({ user }: ChatPageProps) {
                           </div>
                         )}
                         {/* デバッグ用 */}
-                        {process.env.NODE_ENV === 'development' && shouldShowFeedback && (
+                        {process.env.NODE_ENV === 'development' && isLastMessage && isAssistantMessage && (
                           <div className="ml-12 mt-2 text-xs text-gray-500">
-                            Debug: currentPostLogId={currentPostLogId || 'null'}
+                            Debug: msg.postLogId={msg.postLogId || 'null'}, currentPostLogId={currentPostLogId || 'null'}
                           </div>
                         )}
                       </div>

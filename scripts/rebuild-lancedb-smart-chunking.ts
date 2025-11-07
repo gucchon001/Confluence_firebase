@@ -11,6 +11,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
+import * as path from 'path';
 import * as arrow from 'apache-arrow';
 
 dotenv.config();
@@ -412,8 +413,11 @@ async function main() {
   try {
     // 既存のテーブルをバックアップ
     console.log('   既存データをバックアップ中...');
-    const fs = await import('fs');
-    const backupPath = `.lancedb.backup.${Date.now()}`;
+    const backupDir = 'backups/lancedb';
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const backupPath = path.join(backupDir, `.lancedb.backup.${Date.now()}`);
     if (fs.existsSync('.lancedb')) {
       fs.cpSync('.lancedb', backupPath, { recursive: true });
       console.log(`   ✅ バックアップ完了: ${backupPath}`);

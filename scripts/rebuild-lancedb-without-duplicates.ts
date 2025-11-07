@@ -76,7 +76,7 @@ async function main() {
     console.log(`  - 重複除去後のデータ件数: ${uniqueData.length}件\n`);
     
     // バックアップを作成
-    const backupDir = path.resolve(process.cwd(), '.lancedb-backup');
+    const backupDir = path.resolve(process.cwd(), 'backups/lancedb');
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }

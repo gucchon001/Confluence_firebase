@@ -14,6 +14,8 @@ import { getLanceDBCache } from '@/lib/lancedb-cache';
  * LLM拡張に基づいた動的なクエリ拡張
  */
 function expandSearchQuery(query: string): string {
+  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+  query = query.replace(/\uFEFF/g, '');
   // 自動的な否定キーワード追加を無効化（検索精度を向上させるため）
   return query.trim();
 }
@@ -129,35 +131,13 @@ async function lancedbRetrieverTool(
       console.log('[lancedbRetrieverTool] Generated filterQuery:', filterQuery || '(none)');
     }
 
-    // 検索クエリを最適化（オファー関連の検索精度を向上）
-    let optimizedQuery = query;
-    if (query.includes('オファー機能')) {
-      // 「オファー機能の種類は」→「オファー」に最適化
-      optimizedQuery = 'オファー';
-    }
-    
-    const expandedQuery = expandSearchQuery(optimizedQuery);
-    // クエリ最適化ログ（開発環境のみ）
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[lancedbRetrieverTool] Original query: "${query}"`);
-      console.log(`[lancedbRetrieverTool] Optimized query: "${optimizedQuery}"`);
-      console.log(`[lancedbRetrieverTool] Expanded query: "${expandedQuery}"`);
-      console.log(`[lancedbRetrieverTool] Query optimization applied: ${optimizedQuery !== query ? 'YES' : 'NO'}`);
-    }
-
-    // 厳格一致候補（タイトル用）を抽出
-    const strictTitleCandidates: string[] = [];
-    const normalized = (s: string) => s.normalize('NFKC').trim();
-    const base = normalized(query);
-    // 単純ルール: 「ログイン機能」が含まれていれば厳格候補に追加
-    if (base.includes('ログイン機能')) strictTitleCandidates.push('ログイン機能');
-    if (base.includes('会員ログイン')) strictTitleCandidates.push('会員ログイン');
-    if (base.toLowerCase().includes('login')) strictTitleCandidates.push('login');
+    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+    query = query.replace(/\uFEFF/g, '');
 
     // Phase 0A-4: 詳細な検索パフォーマンス計測
     const searchLanceDBStartTime = Date.now();
     const unifiedResults = await searchLanceDB({
-      query: optimizedQuery, // 最適化されたクエリを使用
+      query: query, // 元のクエリを使用
       topK: 10, // 参照元を10件に統一
       useLunrIndex: true, // Phase 6修正: BM25検索を有効化（品質向上）
       titleWeight: 3.0, // Phase 0A-3 FIX: タイトルマッチングを有効化
@@ -169,7 +149,7 @@ async function lancedbRetrieverTool(
     
     // Phase 0A-4 ROLLBACK: ログ出力を開発環境のみに制限（前のバージョンと同じ）
     if (process.env.NODE_ENV === 'development' && searchLanceDBDuration > 10000) {
-      console.warn(`⚠️ [lancedbRetrieverTool] SLOW searchLanceDB: ${searchLanceDBDuration}ms for query: "${optimizedQuery}"`);
+      console.warn(`⚠️ [lancedbRetrieverTool] SLOW searchLanceDB: ${searchLanceDBDuration}ms for query: "${query}"`);
     }
     
     // 検索結果ログ（開発環境のみ）
@@ -275,6 +255,9 @@ export async function retrieveRelevantDocs({
   };
 }): Promise<any[]> {
   try {
+    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+    question = question.replace(/\uFEFF/g, '');
+    
     // 検索処理ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
       console.log(`[retrieveRelevantDocs] Searching for question: ${question}`);

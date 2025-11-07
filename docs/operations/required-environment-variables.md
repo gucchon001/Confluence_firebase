@@ -24,8 +24,11 @@
 - `CONFLUENCE_SPACE_KEY`: `CLIENTTOMO`
 
 ### その他
-- `EMBEDDINGS_PROVIDER`: `local`
 - `USE_LLM_EXPANSION`: `true`
+
+**注意**: `EMBEDDINGS_PROVIDER`は削除済み（2025-10-28移行）
+- 現在はGemini Embeddings API (text-embedding-004) を直接使用
+- 設定は `src/config/ai-models-config.ts` で一元管理（provider: 'api'）
 
 ## シークレット（Secret Manager）
 

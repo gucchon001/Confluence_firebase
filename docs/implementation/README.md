@@ -1,6 +1,6 @@
 # 📁 Implementation ドキュメント
 
-**最終更新**: 2025年10月11日
+**最終更新**: 2025年11月6日
 
 このディレクトリには、Confluence Firebaseプロジェクトの実装に関する**現行有効な**ドキュメントのみが含まれています。
 
@@ -19,7 +19,7 @@
 #### [ai-models-configuration.md](./ai-models-configuration.md)
 AIモデル設定ガイド
 - Gemini 2.5 Flash設定（温度、topK、maxOutputTokensなど）
-- 埋め込みモデル設定（Xenova Transformers、768次元）
+- 埋め込みモデル設定（Gemini Embeddings API (text-embedding-004)、768次元）
 - パラメータ調整ガイド
 
 #### [lancedb-data-structure-specification.md](./lancedb-data-structure-specification.md)
@@ -93,22 +93,34 @@ Firestore統合ガイド
 
 ## 🗄️ アーカイブ済みドキュメント
 
-以下のドキュメントは完了したプロジェクトや古い情報のため、`docs/archive/` に移動されました：
+以下のドキュメントは完了したプロジェクトや古い情報のため、`docs/archive/implementation/` に移動されました：
 
-### 分析レポート (`docs/archive/analysis-reports/`)
-- `scoring-simplification-analysis.md` - スコアリング簡素化分析
-- `scoring-quality-checklist.md` - 品質チェックリスト
+### Phase完了レポート (`docs/archive/implementation/phase-reports/`)
+- `phase-0a-4-completion-report.md` - Phase 0A-4完了レポート
+- `phase-0a-4-gen2-inmemory-implementation.md` - Phase 0A-4実装
+- `phase-0a-4-production-deployment-fixes.md` - Phase 0A-4デプロイ修正
+- `phase-4-kg-integration-completion-report.md` - Phase 4完了レポート
+- `phase-4-kg-integration-plan.md` - Phase 4計画
+- `phase-1-3-spec-compliance.md` - Phase 1-3完了
+- `phase-1-4-implementation-status.md` - Phase 1-4完了
 
-### バグ修正レポート (`docs/archive/bug-fix-reports/`)
-- `markdown-processing-fixes.md` - Markdown処理修正レポート (2025-10-08)
+### バグ修正レポート (`docs/archive/implementation/bug-fixes/`)
+- `bm25-score-propagation-bug-fix.md` - BM25スコア伝播バグ修正 (2025-10-16)
+- `meeting-notes-filtering-fix.md` - ミーティングノートフィルタリング修正
+- `lancedb-label-filtering-fix-report.md` - LanceDBラベルフィルタリング修正
+- `quality-degradation-root-cause-report.md` - 品質劣化根本原因レポート
 
-### パフォーマンス分析 (`docs/archive/performance-analysis/`)
-- `server-startup-analysis.md` - サーバー起動時間分析
-- `nextjs-compile-time-optimization.md` - Next.jsコンパイル時間最適化
+### 分析レポート (`docs/archive/implementation/analysis-reports/`)
+- `vector-space-misconception-clarification.md` - ベクトル空間の誤解の解消
+- `vector-space-stability-analysis.md` - ベクトル空間安定性分析
+- `kg-contribution-analysis-report.md` - KG貢献度分析レポート
+- `current-search-quality-report.md` - 現在の検索品質レポート
 
-### 非推奨 (`docs/archive/deprecated/`)
-- `current-implementation-status.md` - 古い実装状況 (2024-12)
-- `api-design.md` - 古いAPI設計 (2025-09)
+### その他のアーカイブ (`docs/archive/`)
+- 分析レポート (`docs/archive/analysis-reports/`)
+- バグ修正レポート (`docs/archive/bug-fix-reports/`)
+- パフォーマンス分析 (`docs/archive/performance-analysis/`)
+- 非推奨 (`docs/archive/deprecated/`)
 
 ---
 
