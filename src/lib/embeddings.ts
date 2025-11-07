@@ -58,13 +58,22 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     text = 'No content available';
   }
 
-  // 簡易キャッシュ（メモリ内のみ）
+  // 🔧 キャッシュキーをBOM除去後のテキストで生成（BOM除去処理の後にキャッシュキーを生成）
   const cacheKey = `embedding:${text.substring(0, 100)}`;
   const cached = embeddingCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) { // 15分TTL
     const duration = Date.now() - startTime;
     if (duration > 100) {
       console.log(`🚀 埋め込みベクトルをキャッシュから取得 (${duration}ms): ${text.substring(0, 50)}...`);
+    }
+    // 🔧 キャッシュから取得した場合もBOM除去処理を実行（念のため）
+    const cleanText = text.replace(/\uFEFF/g, '');
+    if (cleanText !== text) {
+      console.warn(`🔍 [BOM REMOVED FROM CACHED] キャッシュから取得したテキストからBOMを除去しました:`, {
+        beforeLength: text.length,
+        afterLength: cleanText.length,
+        preview: text.substring(0, 50)
+      });
     }
     return cached.embedding;
   }

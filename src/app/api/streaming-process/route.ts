@@ -199,10 +199,23 @@ export const POST = async (req: NextRequest) => {
     // サーバー起動時に1回だけ初期化（2回目以降は即座にreturn）
     const serverStartupTime = await ensureServerInitialized();
 
-    const body = await req.json();
+    // 🔧 BOM除去処理を強化: req.json()でパースする前に、リクエストボディを文字列として取得してBOMを除去
+    const bodyText = await req.text();
+    const cleanBodyText = bodyText.replace(/\uFEFF/g, '');
+    
+    // 🔍 原因特定: BOM検出ログを追加
+    if (bodyText !== cleanBodyText) {
+      console.error(`🚨 [BOM DETECTED IN REQUEST BODY] HTTPリクエストボディにBOMが含まれています:`, {
+        originalLength: bodyText.length,
+        cleanedLength: cleanBodyText.length,
+        preview: bodyText.substring(0, 100)
+      });
+    }
+    
+    const body = JSON.parse(cleanBodyText);
     let { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
     
-    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
+    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため・念のため再度実行）
     if (question && typeof question === 'string') {
       question = question.replace(/\uFEFF/g, '');
     }
