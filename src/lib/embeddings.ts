@@ -359,6 +359,33 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     });
   }
   
+  // 🔍 最終確認: embedContentに渡す直前に、テキストの先頭にBOMが含まれていないか確認
+  const veryLastCheckFirstCharCode = finalText.length > 0 ? finalText.charCodeAt(0) : -1;
+  if (veryLastCheckFirstCharCode === 0xFEFF || veryLastCheckFirstCharCode > 255) {
+    const deploymentInfo = getDeploymentInfo();
+    console.error(`🚨 [CRITICAL BOM DETECTED BEFORE embedContent] Text still has BOM or invalid character before embedContent call:`, {
+      deploymentTime: deploymentInfo.deploymentTime,
+      deploymentTimestamp: deploymentInfo.deploymentTimestamp,
+      uptime: deploymentInfo.uptime,
+      firstCharCode: veryLastCheckFirstCharCode,
+      isBOM: veryLastCheckFirstCharCode === 0xFEFF,
+      textLength: finalText.length,
+      textPreview: finalText.substring(0, 100),
+      charCodes: Array.from(finalText.substring(0, 10)).map(c => c.charCodeAt(0)),
+      hexCode: `0x${veryLastCheckFirstCharCode.toString(16).toUpperCase()}`
+    });
+    // 最後の手段: BOM文字を強制的に削除
+    finalText = finalText.replace(/\uFEFF/g, '').trim();
+    if (finalText.length === 0) {
+      finalText = 'No content available';
+    }
+    console.warn(`🔧 [FORCE REMOVED BOM] BOM forcefully removed before embedContent:`, {
+      afterFirstCharCode: finalText.length > 0 ? finalText.charCodeAt(0) : -1,
+      afterLength: finalText.length,
+      afterPreview: finalText.substring(0, 50)
+    });
+  }
+  
   try {
     const result = await embeddingModel.embedContent(finalText);
     
