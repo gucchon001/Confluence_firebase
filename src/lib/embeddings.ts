@@ -8,6 +8,12 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 // 簡易キャッシュ（メモリ内のみ）
 const embeddingCache = new Map<string, { embedding: number[]; timestamp: number }>();
 
+// 🔧 キャッシュをクリアする関数（BOM問題のデバッグ用）
+export function clearEmbeddingCache(): void {
+  embeddingCache.clear();
+  console.log('🔧 [Cache] Embedding cache cleared');
+}
+
 let genAI: GoogleGenerativeAI | null = null;
 let embeddingModel: any | null = null;
 
@@ -59,33 +65,86 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   }
 
   // 🔧 キャッシュキーをBOM除去後のテキストで生成（BOM除去処理の後にキャッシュキーを生成）
-  const cacheKey = `embedding:${text.substring(0, 100)}`;
+  // 🔧 キャッシュキー生成前に再度BOMを除去して確実性を高める
+  const cleanTextForCache = text.replace(/\uFEFF/g, '').trim();
+  const cacheKey = `embedding:${cleanTextForCache.substring(0, 100)}`;
   const cached = embeddingCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) { // 15分TTL
     const duration = Date.now() - startTime;
     if (duration > 100) {
-      console.log(`🚀 埋め込みベクトルをキャッシュから取得 (${duration}ms): ${text.substring(0, 50)}...`);
+      console.log(`🚀 埋め込みベクトルをキャッシュから取得 (${duration}ms): ${cleanTextForCache.substring(0, 50)}...`);
     }
     // 🔧 キャッシュから取得した場合もBOM除去処理を実行（念のため）
-    const cleanText = text.replace(/\uFEFF/g, '');
-    if (cleanText !== text) {
+    // キャッシュキーは既にBOM除去後のテキストで生成されているが、念のため再度チェック
+    const finalCleanText = cleanTextForCache.replace(/\uFEFF/g, '');
+    if (finalCleanText !== cleanTextForCache) {
       console.warn(`🔍 [BOM REMOVED FROM CACHED] キャッシュから取得したテキストからBOMを除去しました:`, {
-        beforeLength: text.length,
-        afterLength: cleanText.length,
-        preview: text.substring(0, 50)
+        beforeLength: cleanTextForCache.length,
+        afterLength: finalCleanText.length,
+        preview: cleanTextForCache.substring(0, 50)
       });
     }
-    return cached.embedding;
+    // 🔍 キャッシュから取得した場合でも、テキストにBOMが含まれていないか確認
+    const cacheTextFirstCharCode = cleanTextForCache.length > 0 ? cleanTextForCache.charCodeAt(0) : -1;
+    if (cacheTextFirstCharCode > 255) {
+      console.error(`🚨 [CACHE TEXT HAS INVALID CHAR] キャッシュキーに使用したテキストの先頭文字コードが255を超えています: ${cacheTextFirstCharCode}`);
+      // キャッシュを無効化して再生成
+      embeddingCache.delete(cacheKey);
+      console.warn(`🔧 [Cache] Invalid cache entry deleted, will regenerate`);
+    } else {
+      return cached.embedding;
+    }
   }
 
+  // 🔧 最終的なBOM除去: getGeminiEmbeddingsに渡す直前に、すべての255を超える文字を削除
+  // 理由: BOMが何らかの理由で再導入される可能性があるため、最終的な安全策として追加
+  let finalTextForEmbedding = text;
+  // 先頭から255を超える文字をすべて削除
+  while (finalTextForEmbedding.length > 0 && finalTextForEmbedding.charCodeAt(0) > 255) {
+    const removedChar = finalTextForEmbedding.charCodeAt(0);
+    console.error(`🚨 [FINAL BOM REMOVAL IN getEmbeddings] Removing character with code ${removedChar} (> 255) from start of text`);
+    finalTextForEmbedding = finalTextForEmbedding.slice(1).trim();
+  }
+  // 文字列全体から255を超える文字を削除（念のため）
+  finalTextForEmbedding = Array.from(finalTextForEmbedding)
+    .filter(char => char.charCodeAt(0) <= 255)
+    .join('');
+  
+  if (finalTextForEmbedding.length === 0) {
+    finalTextForEmbedding = 'No content available';
+  }
+  
+  // 🔍 最終確認ログ: getGeminiEmbeddingsに渡す直前のテキストを確認
+  const finalFirstCharCodeForEmbedding = finalTextForEmbedding.length > 0 ? finalTextForEmbedding.charCodeAt(0) : -1;
+  if (finalFirstCharCodeForEmbedding > 255) {
+    console.error(`🚨 [FINAL CHECK FAILED IN getEmbeddings] Text still has invalid first character code: ${finalFirstCharCodeForEmbedding}`);
+    // 最後の手段: 先頭文字を削除
+    finalTextForEmbedding = finalTextForEmbedding.slice(1).trim();
+    if (finalTextForEmbedding.length === 0) {
+      finalTextForEmbedding = 'No content available';
+    }
+  }
+  
+  // 🔍 デバッグログ: getGeminiEmbeddingsに渡す直前のテキストを確認
+  if (text !== finalTextForEmbedding) {
+    console.warn(`🔍 [TEXT MODIFIED IN getEmbeddings] Text was modified before getGeminiEmbeddings:`, {
+      originalLength: text.length,
+      finalLength: finalTextForEmbedding.length,
+      originalFirstCharCode: text.length > 0 ? text.charCodeAt(0) : -1,
+      finalFirstCharCode: finalTextForEmbedding.length > 0 ? finalTextForEmbedding.charCodeAt(0) : -1,
+      originalPreview: text.substring(0, 50),
+      finalPreview: finalTextForEmbedding.substring(0, 50)
+    });
+  }
+  
   // Phase 0A-4: 埋め込み生成の開始ログ（本番環境でも遅延検知のため）
   const generationStartTime = Date.now();
-  console.log(`🔍 埋め込みベクトル生成中: ${text.substring(0, 50)}...`);
+  console.log(`🔍 埋め込みベクトル生成中: ${finalTextForEmbedding.substring(0, 50)}...`);
   
   // Gemini Embeddings APIを使用
   const EMBEDDING_TIMEOUT = 30000; // 30秒
   const embedding = await Promise.race([
-    getGeminiEmbeddings(text),
+    getGeminiEmbeddings(finalTextForEmbedding),
     new Promise<never>((_, reject) => 
       setTimeout(() => reject(new Error(`Embedding generation timeout after ${EMBEDDING_TIMEOUT}ms`)), EMBEDDING_TIMEOUT)
     )
@@ -97,8 +156,20 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     console.warn(`⚠️ [Embedding] Slow generation: ${generationDuration}ms for text: ${text.substring(0, 100)}...`);
   }
   
-  // キャッシュに保存
-  embeddingCache.set(cacheKey, { embedding, timestamp: Date.now() });
+  // キャッシュに保存（BOM除去後のテキストで生成したキャッシュキーを使用）
+  // 🔧 キャッシュに保存する前に、テキストにBOMが含まれていないか確認
+  const textForCache = cleanTextForCache.replace(/\uFEFF/g, '').trim();
+  const finalCacheKey = `embedding:${textForCache.substring(0, 100)}`;
+  const textFirstCharCode = textForCache.length > 0 ? textForCache.charCodeAt(0) : -1;
+  if (textFirstCharCode > 255) {
+    console.error(`🚨 [CACHE KEY TEXT HAS INVALID CHAR] キャッシュキーに使用するテキストの先頭文字コードが255を超えています: ${textFirstCharCode}`);
+    // 先頭文字を削除して再生成
+    const fixedText = textForCache.slice(1).trim();
+    const fixedCacheKey = `embedding:${fixedText.substring(0, 100)}`;
+    embeddingCache.set(fixedCacheKey, { embedding, timestamp: Date.now() });
+  } else {
+    embeddingCache.set(finalCacheKey, { embedding, timestamp: Date.now() });
+  }
   
   // キャッシュサイズが大きくなりすぎないように制限（1000エントリ）
   if (embeddingCache.size > 1000) {
@@ -175,21 +246,92 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   
   // 🔍 最終確認: embedContentに渡す直前にBOMを再チェック
   const finalFirstCharCode = cleanText.length > 0 ? cleanText.charCodeAt(0) : -1;
-  if (finalFirstCharCode === 0xFEFF) {
-    console.error(`🚨 [BOM STILL PRESENT] BOM still present after removal!`, {
+  const finalHasBOM = cleanText.includes('\uFEFF') || finalFirstCharCode === 0xFEFF;
+  
+  // 🔧 常にBOMを除去（検出されなくても念のため）
+  if (finalHasBOM || finalFirstCharCode > 255) {
+    console.error(`🚨 [BOM DETECTED BEFORE embedContent] BOM detected before embedContent call:`, {
       firstCharCode: finalFirstCharCode,
+      hasBOM: finalHasBOM,
       textLength: cleanText.length,
-      textPreview: cleanText.substring(0, 50)
+      textPreview: cleanText.substring(0, 50),
+      charCodes: Array.from(cleanText.substring(0, 10)).map(c => c.charCodeAt(0))
     });
-    // 強制的にBOMを削除
-    cleanText = cleanText.replace(/\uFEFF/g, '').trim();
+    // 強制的にBOMを削除（複数の方法で確実に除去）
+    cleanText = cleanText.replace(/\uFEFF/g, '');
+    if (cleanText.length > 0 && cleanText.charCodeAt(0) === 0xFEFF) {
+      cleanText = cleanText.slice(1);
+    }
+    cleanText = cleanText.replace(/^\uFEFF+|\uFEFF+$/g, '').trim();
+    // 先頭文字が255を超える場合は削除（BOMの可能性）
+    if (cleanText.length > 0 && cleanText.charCodeAt(0) > 255) {
+      console.error(`🚨 [INVALID FIRST CHAR] First character code is > 255: ${cleanText.charCodeAt(0)}, removing...`);
+      cleanText = cleanText.slice(1).trim();
+    }
+    if (cleanText.length === 0) {
+      cleanText = 'No content available';
+    }
+    console.warn(`🔍 [BOM FORCE REMOVED] BOM forcefully removed before embedContent:`, {
+      afterFirstCharCode: cleanText.length > 0 ? cleanText.charCodeAt(0) : -1,
+      afterLength: cleanText.length,
+      afterPreview: cleanText.substring(0, 50)
+    });
+  }
+  
+  // 🔧 最終確認: embedContentに渡す直前に再度BOMをチェック
+  const veryFinalFirstCharCode = cleanText.length > 0 ? cleanText.charCodeAt(0) : -1;
+  if (veryFinalFirstCharCode > 255) {
+    console.error(`🚨 [CRITICAL] First character code is still > 255 before embedContent: ${veryFinalFirstCharCode}`);
+    // 先頭文字を強制的に削除
+    cleanText = cleanText.slice(1).trim();
     if (cleanText.length === 0) {
       cleanText = 'No content available';
     }
   }
   
+  // 🔧 最終的なBOM除去: embedContentに渡す直前に、すべての255を超える文字を削除
+  // 理由: BOMが何らかの理由で再導入される可能性があるため、最終的な安全策として追加
+  let finalText = cleanText;
+  // 先頭から255を超える文字をすべて削除
+  while (finalText.length > 0 && finalText.charCodeAt(0) > 255) {
+    const removedChar = finalText.charCodeAt(0);
+    console.error(`🚨 [FINAL BOM REMOVAL] Removing character with code ${removedChar} (> 255) from start of text`);
+    finalText = finalText.slice(1).trim();
+  }
+  // 文字列全体から255を超える文字を削除（念のため）
+  finalText = Array.from(finalText)
+    .filter(char => char.charCodeAt(0) <= 255)
+    .join('');
+  
+  if (finalText.length === 0) {
+    finalText = 'No content available';
+  }
+  
+  // 🔍 最終確認ログ: embedContentに渡す直前のテキストを確認
+  const finalFirstCharCode = finalText.length > 0 ? finalText.charCodeAt(0) : -1;
+  if (finalFirstCharCode > 255) {
+    console.error(`🚨 [FINAL CHECK FAILED] Text still has invalid first character code: ${finalFirstCharCode}`);
+    // 最後の手段: 先頭文字を削除
+    finalText = finalText.slice(1).trim();
+    if (finalText.length === 0) {
+      finalText = 'No content available';
+    }
+  }
+  
+  // 🔍 デバッグログ: embedContentに渡す直前のテキストを確認
+  if (cleanText !== finalText) {
+    console.warn(`🔍 [TEXT MODIFIED] Text was modified before embedContent:`, {
+      originalLength: cleanText.length,
+      finalLength: finalText.length,
+      originalFirstCharCode: cleanText.length > 0 ? cleanText.charCodeAt(0) : -1,
+      finalFirstCharCode: finalText.length > 0 ? finalText.charCodeAt(0) : -1,
+      originalPreview: cleanText.substring(0, 50),
+      finalPreview: finalText.substring(0, 50)
+    });
+  }
+  
   try {
-    const result = await embeddingModel.embedContent(cleanText);
+    const result = await embeddingModel.embedContent(finalText);
     
     // Gemini Embeddings API のレスポンス形式に応じて取得
     // text-embedding-004 の場合は result.embedding.values を返す
