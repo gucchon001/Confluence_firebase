@@ -13,6 +13,7 @@ import * as admin from 'firebase-admin';
 import { initializeFirebaseAdmin } from '@/lib/firebase-admin-init';
 import { convertPostLogToAdminFirestore } from '@/lib/firestore-data-mapper-admin';
 import { postLogService } from '@/lib/post-log-service';
+import { getDeploymentInfo } from '@/lib/deployment-info';
 import type { PostLog, ProcessingStep } from '@/types';
 import { GeminiConfig } from '@/config/ai-models-config';
 // 重複コード修正をロールバック
@@ -226,7 +227,11 @@ export const POST = async (req: NextRequest) => {
     
     // 🔍 原因特定: BOM検出ログを追加
     if (bodyHasBOM && !bodyHasInvalidChar) {
+      const deploymentInfo = getDeploymentInfo();
       console.error(`🚨 [BOM DETECTED IN REQUEST BODY] HTTPリクエストボディにBOMが含まれています:`, {
+        deploymentTime: deploymentInfo.deploymentTime,
+        deploymentTimestamp: deploymentInfo.deploymentTimestamp,
+        uptime: deploymentInfo.uptime,
         originalLength: bodyText.length,
         cleanedLength: cleanBodyText.length,
         preview: bodyText.substring(0, 100)
@@ -284,7 +289,11 @@ export const POST = async (req: NextRequest) => {
       }
       
       if (questionHasBOM && !questionHasInvalidChar) {
+        const deploymentInfo = getDeploymentInfo();
         console.error(`🚨 [BOM DETECTED IN QUESTION] question変数にBOMが含まれています:`, {
+          deploymentTime: deploymentInfo.deploymentTime,
+          deploymentTimestamp: deploymentInfo.deploymentTimestamp,
+          uptime: deploymentInfo.uptime,
           firstCharCode: questionFirstCharCode,
           firstChar: question.charAt(0),
           questionLength: question.length,
@@ -315,7 +324,7 @@ export const POST = async (req: NextRequest) => {
         console.error('❌ [EMPTY QUESTION] question変数が空文字列になりました');
         return NextResponse.json({ 
           error: 'question cannot be empty after cleaning',
-          message: 'The question became empty after removing invalid characters'
+          message: 'The question became empty after removing BOM characters'
         }, { status: 400 });
       }
     }
