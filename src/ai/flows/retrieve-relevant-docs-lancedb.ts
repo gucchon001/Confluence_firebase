@@ -10,12 +10,33 @@ import { optimizedLanceDBClient } from '@/lib/optimized-lancedb-client';
 import { getLanceDBCache } from '@/lib/lancedb-cache';
 
 /**
+ * BOM文字（U+FEFF）を確実に削除するヘルパー関数
+ * 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
+ */
+function removeBOM(text: string): string {
+  if (!text || typeof text !== 'string') {
+    return text;
+  }
+  // 複数の方法でBOMを除去して確実性を高める
+  let cleanText = text;
+  // 1. 文字列全体からBOMを削除
+  cleanText = cleanText.replace(/\uFEFF/g, '');
+  // 2. 文字列の先頭からBOMを削除（念のため）
+  if (cleanText.length > 0 && cleanText.charCodeAt(0) === 0xFEFF) {
+    cleanText = cleanText.slice(1);
+  }
+  // 3. trim()の前に再度BOMを削除
+  cleanText = cleanText.replace(/^\uFEFF+|\uFEFF+$/g, '').trim();
+  return cleanText;
+}
+
+/**
  * 検索クエリを拡張して、より具体的なキーワードを含める（メモ）
  * LLM拡張に基づいた動的なクエリ拡張
  */
 function expandSearchQuery(query: string): string {
   // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-  query = query.replace(/\uFEFF/g, '');
+  query = removeBOM(query);
   // 自動的な否定キーワード追加を無効化（検索精度を向上させるため）
   return query.trim();
 }
@@ -131,8 +152,8 @@ async function lancedbRetrieverTool(
       console.log('[lancedbRetrieverTool] Generated filterQuery:', filterQuery || '(none)');
     }
 
-    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-    query = query.replace(/\uFEFF/g, '');
+    // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
+    query = removeBOM(query);
 
     // Phase 0A-4: 詳細な検索パフォーマンス計測
     const searchLanceDBStartTime = Date.now();
@@ -184,11 +205,11 @@ async function lancedbRetrieverTool(
         id: pageIdValue, // API互換性のため、idフィールドも設定（page_idから生成）
         pageId: pageIdValue, // Phase 0A-1.5: チャンク統合用（page_idから生成）
         page_id: r.page_id, // データベース形式（内部処理用、唯一の信頼できる情報源）
-        content: r.content || '',
+        content: removeBOM(r.content || ''), // 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
         url: r.url || '',
         lastUpdated: (r as any).lastUpdated || null,
         spaceName: (r as any).space_key || 'Unknown',
-        title: r.title || 'No Title',
+        title: removeBOM(r.title || 'No Title'), // タイトルにもBOMが含まれる可能性がある
         labels: r.labels || [],
         distance: (r as any).distance,
         source: r.source as any,
@@ -255,8 +276,8 @@ export async function retrieveRelevantDocs({
   };
 }): Promise<any[]> {
   try {
-    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-    question = question.replace(/\uFEFF/g, '');
+    // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
+    question = removeBOM(question);
     
     // 検索処理ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
@@ -304,14 +325,24 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
         const pageId = getPageIdFromRecord(result);
         if (!pageId) {
           console.error(`[ChunkMerger] ❌ page_id not found for result: ${result.title}. Skipping chunk enrichment.`);
-          return result;
+          // pageIdが見つからない場合もBOM除去は適用する
+          return {
+            ...result,
+            content: removeBOM(result.content || ''),
+            title: removeBOM(result.title || ''),
+          };
         }
 
         // Phase 0A-3最適化: isChunkedフラグによる条件分岐
         if (result.isChunked === false) {
           // チャンク分割されていないページ → 統合不要（66.3%）
+          // ただし、本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
           skippedCount++;
-          return result;
+          return {
+            ...result,
+            content: removeBOM(result.content || ''),
+            title: removeBOM(result.title || ''),
+          };
         }
 
         // ★★★ PERF LOG: 個別ページのチャンク取得時間 ★★★
@@ -325,7 +356,12 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
 
         if (allChunks.length <= 1) {
           // チャンクが1つ以下の場合は統合不要
-          return result;
+          // ただし、本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
+          return {
+            ...result,
+            content: removeBOM(result.content || ''),
+            title: removeBOM(result.title || ''),
+          };
         }
 
         // Phase 5緊急修正: 大量チャンクの効率的処理（品質維持）
@@ -338,7 +374,8 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
           }
           
           const contentPromises = allChunks.map(async (chunk) => {
-            return chunk.content || '';
+            // 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
+            return removeBOM(chunk.content || '');
           });
           
           const contents = await Promise.all(contentPromises);
@@ -346,7 +383,7 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
         } else {
           // 少量チャンクの場合: 従来の処理
           mergedContent = allChunks
-            .map((chunk) => chunk.content || '')
+            .map((chunk) => removeBOM(chunk.content || ''))
             .filter(Boolean)
             .join('\n\n');
         }
@@ -360,13 +397,19 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
 
         return {
           ...result,
-          content: mergedContent,
+          content: removeBOM(mergedContent), // マージされたコンテンツにもBOM除去を適用（念のため）
+          title: removeBOM(result.title || ''), // タイトルにもBOM除去を適用
           chunkCount: allChunks.length,
           originalContentLength: result.content?.length || 0,
         };
       } catch (error: any) {
         console.error(`[ChunkMerger] Error enriching result "${result.title}":`, error.message);
-        return result; // エラー時は元の結果を返す
+        // エラー時も元の結果を返すが、BOM除去は適用する
+        return {
+          ...result,
+          content: removeBOM(result.content || ''),
+          title: removeBOM(result.title || ''),
+        };
       }
     })
   );
@@ -474,13 +517,21 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
       const { mapLanceDBRecordsToAPI } = await import('../../lib/pageid-migration-helper');
       const mappedResults = mapLanceDBRecordsToAPI(results);
       
+      // 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
+      // チャンクのコンテンツとタイトルにBOM除去を適用
+      const cleanedResults = mappedResults.map((chunk: any) => ({
+        ...chunk,
+        content: removeBOM(chunk.content || ''),
+        title: removeBOM(chunk.title || ''),
+      }));
+      
       if (scanDuration > 100) { // 100ms以上の場合のみログ出力
         console.log(`[getAllChunksByPageId] ⚡ Phase 5最適化: ${results.length} chunks in ${scanDuration}ms for pageId: ${pageId}`);
       } else if (process.env.NODE_ENV === 'development') {
         console.log(`[getAllChunksByPageId] ⚡ Phase 5最適化: ${results.length} chunks in ${scanDuration}ms for pageId: ${pageId}`);
       }
       
-      return mappedResults;
+      return cleanedResults;
     }
     
     // 見つからない場合は空配列を返す

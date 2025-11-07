@@ -72,7 +72,9 @@ export class StreamingProcessClient {
       // Phase 0A-4 FIX: バッファをリセット
       this.buffer = '';
 
-      console.log('🌊 ストリーミング処理開始:', question);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🌊 ストリーミング処理開始:', question);
+      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -124,7 +126,9 @@ export class StreamingProcessClient {
         if (this.buffer.trim()) {
           this.processLine(this.buffer.trim(), onStepUpdate, onChunk, onCompletion, onError, onPostLogIdUpdate);
         }
-        console.log('Stream finished.');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Stream finished.');
+        }
         break;
       }
       
@@ -220,8 +224,8 @@ export class StreamingProcessClient {
           };
           onStepUpdate(step);
           
-          // ハイブリッド検索の詳細情報をログ出力
-          if (message.searchDetails) {
+          // ハイブリッド検索の詳細情報をログ出力（開発環境のみ）
+          if (message.searchDetails && process.env.NODE_ENV === 'development') {
             console.log('🔍 [ハイブリッド検索] 詳細情報:', message.searchDetails);
             console.log('📊 検索ソース別の内訳:');
             Object.entries(message.searchDetails.sourceBreakdown).forEach(([source, count]) => {
@@ -237,10 +241,6 @@ export class StreamingProcessClient {
         break;
 
       case 'chunk':
-        console.log('🔍 [DEBUG] chunk message received:', message);
-        console.log('🔍 [DEBUG] message.chunk:', message.chunk);
-        console.log('🔍 [DEBUG] typeof message.chunk:', typeof message.chunk);
-        
         if (message.chunk && message.chunkIndex !== undefined) {
           // 文字列型チェック
           let safeChunk = '';
@@ -250,22 +250,15 @@ export class StreamingProcessClient {
             safeChunk = String(message.chunk);
           }
           
-          console.log('🔍 [DEBUG] safeChunk:', safeChunk);
-          console.log('🔍 [DEBUG] [object Object]含む:', safeChunk.includes('[object Object]'));
-          
           if (safeChunk && !safeChunk.includes('[object Object]')) {
             onChunk(safeChunk, message.chunkIndex);
-          } else {
+          } else if (process.env.NODE_ENV === 'development') {
             console.warn('🔍 [DEBUG] Invalid chunk detected, skipping:', message.chunk);
           }
         }
         break;
 
       case 'completion':
-        console.log('🔍 [DEBUG] completion message received:', message);
-        console.log('🔍 [DEBUG] message.fullAnswer:', message.fullAnswer);
-        console.log('🔍 [DEBUG] typeof message.fullAnswer:', typeof message.fullAnswer);
-        
         if (message.fullAnswer && message.references) {
           // 文字列型チェック
           let safeAnswer = '';
@@ -275,13 +268,12 @@ export class StreamingProcessClient {
             safeAnswer = String(message.fullAnswer);
           }
           
-          console.log('🔍 [DEBUG] safeAnswer:', safeAnswer);
-          console.log('🔍 [DEBUG] [object Object]含む:', safeAnswer.includes('[object Object]'));
-          
           if (safeAnswer && !safeAnswer.includes('[object Object]')) {
             onCompletion(safeAnswer, message.references, message.postLogId);
           } else {
-            console.warn('🔍 [DEBUG] Invalid fullAnswer detected, using fallback');
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('🔍 [DEBUG] Invalid fullAnswer detected, using fallback');
+            }
             onCompletion('回答の生成中にエラーが発生しました。', message.references);
           }
         }
@@ -294,7 +286,9 @@ export class StreamingProcessClient {
 
       case 'post_log_id_update':
         if (message.postLogId && onPostLogIdUpdate) {
-          console.log('🔍 [DEBUG] postLogId更新メッセージを受信:', message.postLogId);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 [DEBUG] postLogId更新メッセージを受信:', message.postLogId);
+          }
           onPostLogIdUpdate(message.postLogId);
         }
         break;

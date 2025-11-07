@@ -219,7 +219,6 @@ export default function ChatPage({ user }: ChatPageProps) {
         // 既存の会話一覧を取得
         const userConversations = await getConversations(user.uid);
         setConversations(userConversations);
-        console.log('[fetchConversations] Successfully loaded conversations');
         
         // 会話が存在する場合は最新の会話を選択
         if (userConversations.length > 0) {
@@ -228,7 +227,6 @@ export default function ChatPage({ user }: ChatPageProps) {
           // 選択された会話のメッセージを取得
           const conversation = await getConversation(user.uid, userConversations[0].id);
           setMessages(conversation.messages);
-          console.log(`[fetchConversations] Loaded messages for conversation: ${userConversations[0].id}`);
         } else {
           // 会話が存在しない場合は空の配列をセット
           setMessages([]);
@@ -240,7 +238,6 @@ export default function ChatPage({ user }: ChatPageProps) {
         try {
           const history = await getMessages(user.uid);
           setMessages(history);
-          console.log('[fetchHistory] Successfully loaded chat history using legacy method');
         } catch (legacyError) {
           console.error("Failed to fetch chat history using legacy method:", legacyError);
           if (!handleNetworkError(error)) {
@@ -310,26 +307,27 @@ export default function ChatPage({ user }: ChatPageProps) {
         currentInput,
         // ステップ更新コールバック
         (step: ProcessingStep) => {
-          console.log('ステップ更新:', step);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('ステップ更新:', step);
+          }
           setCurrentStep(step);
         },
         // チャンク受信コールバック
         (chunk: string, chunkIndex: number) => {
-          console.log(`チャンク受信 ${chunkIndex}:`, chunk);
           updateStreamingAnswer(chunk);
         },
         // 完了コールバック
         async (fullAnswer: string, references: any[], postLogId?: string) => {
-          console.log('ストリーミング完了:', fullAnswer);
-          console.log('🔍 [DEBUG] postLogId received:', postLogId);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('ストリーミング完了:', fullAnswer);
+            console.log('🔍 [DEBUG] postLogId received:', postLogId);
+          }
           setStreamingAnswerSafe(fullAnswer);
           setStreamingReferences(references);
           setCurrentPostLogId(postLogId || null);
           
           // 最終的なメッセージを作成（テーブル処理を適用）
           let processedFullAnswer = fullAnswer;
-          
-          console.log('🔍 [DEBUG] Final message (no table processing):', processedFullAnswer);
           
           const messageId = `assistant-${Date.now()}`;
           const assistantMessage: Message = {
@@ -346,37 +344,27 @@ export default function ChatPage({ user }: ChatPageProps) {
             postLogId: postLogId || undefined
           };
 
-          console.log('🔍 [DEBUG] Assistant message created with postLogId:', assistantMessage.postLogId);
           setMessages((prev: Message[]) => [...prev, assistantMessage]);
-          
-          // postLogIdが未取得の場合、後で更新できるようにメッセージIDを保存
-          if (!postLogId) {
-            console.log('🔍 [DEBUG] postLogId is not available yet, will update later');
-          }
           
           // 会話にメッセージを追加
           try {
-            // デバッグ情報を出力
-            console.log('[DEBUG] User info:', {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName,
-              emailVerified: user.emailVerified
-            });
             
             if (currentConversationId) {
               // 既存の会話にメッセージを追加
-              console.log(`[Firebase] Adding messages to existing conversation: ${currentConversationId}`);
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`[Firebase] Adding messages to existing conversation: ${currentConversationId}`);
+              }
               await addMessageToConversation(user.uid, currentConversationId, 
                 { role: 'user', content: userMessage.content, user: userMessage.user }
               );
               await addMessageToConversation(user.uid, currentConversationId, 
                 { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
               );
-              console.log(`[Firebase] Successfully saved messages to conversation: ${currentConversationId}`);
             } else {
               // 新しい会話を作成
-              console.log(`[Firebase] Creating new conversation for user: ${user.uid}`);
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`[Firebase] Creating new conversation for user: ${user.uid}`);
+              }
               const newConversationId = await createConversation(user.uid, 
                 { role: 'user', content: userMessage.content, user: userMessage.user }
               );
@@ -384,7 +372,9 @@ export default function ChatPage({ user }: ChatPageProps) {
                 { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
               );
               setCurrentConversationId(newConversationId);
-              console.log(`[Firebase] Successfully created new conversation: ${newConversationId}`);
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`[Firebase] Successfully created new conversation: ${newConversationId}`);
+              }
               
               // 会話一覧を更新
               try {
@@ -400,7 +390,6 @@ export default function ChatPage({ user }: ChatPageProps) {
           }
 
           // ストリーミング完了をマーク
-          console.log('🎯 ストリーミング完了 - isStreamingCompleteをtrueに設定');
           setIsStreamingComplete(true);
           
           // ストリーミング状態をリセット
@@ -432,7 +421,9 @@ export default function ChatPage({ user }: ChatPageProps) {
         },
         // postLogId更新コールバック（エラーコールバックの後）
         (postLogId: string) => {
-          console.log('🔍 [DEBUG] postLogId更新を受信:', postLogId);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 [DEBUG] postLogId更新を受信:', postLogId);
+          }
           setCurrentPostLogId(postLogId);
           
           // 最後のアシスタントメッセージを更新
@@ -442,7 +433,9 @@ export default function ChatPage({ user }: ChatPageProps) {
             for (let i = updated.length - 1; i >= 0; i--) {
               if (updated[i].role === 'assistant' && !updated[i].postLogId) {
                 updated[i] = { ...updated[i], postLogId };
-                console.log('🔍 [DEBUG] メッセージを更新:', updated[i].id, 'postLogId:', postLogId);
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('🔍 [DEBUG] メッセージを更新:', updated[i].id, 'postLogId:', postLogId);
+                }
                 break;
               }
             }
@@ -544,7 +537,6 @@ export default function ChatPage({ user }: ChatPageProps) {
                       // 選択された会話のメッセージを取得
                       const conversation = await getConversation(user.uid, conv.id);
                       setMessages(conversation.messages);
-                      console.log(`[loadConversation] Loaded messages for conversation: ${conv.id}`);
                     } catch (error) {
                       console.error(`Failed to load conversation ${conv.id}:`, error);
                       if (!handleNetworkError(error)) {
@@ -759,7 +751,9 @@ export default function ChatPage({ user }: ChatPageProps) {
                               userId={user?.uid}
                               sessionId={currentSessionId}
                               onSubmitted={(rating, comment) => {
-                                console.log('評価が送信されました:', { rating, comment });
+                                if (process.env.NODE_ENV === 'development') {
+                                  console.log('評価が送信されました:', { rating, comment });
+                                }
                               }}
                             />
                           </div>
