@@ -201,11 +201,36 @@ export const POST = async (req: NextRequest) => {
 
     // 🔧 BOM除去処理を強化: req.json()でパースする前に、リクエストボディを文字列として取得してBOMを除去
     const bodyText = await req.text();
+    const bodyFirstCharCode = bodyText.length > 0 ? bodyText.charCodeAt(0) : -1;
+    const bodyHasBOM = bodyText.includes('\uFEFF') || bodyFirstCharCode === 0xFEFF;
+    const bodyHasInvalidChar = bodyFirstCharCode > 255;
+    
+    // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
+    if (bodyHasInvalidChar) {
+      console.error(`🚨 [INVALID CHAR DETECTED IN REQUEST BODY] HTTPリクエストボディに255を超える文字が含まれています:`, {
+        firstCharCode: bodyFirstCharCode,
+        firstChar: bodyText.charAt(0),
+        isBOM: bodyFirstCharCode === 0xFEFF,
+        originalLength: bodyText.length,
+        preview: bodyText.substring(0, 100),
+        hexCode: `0x${bodyFirstCharCode.toString(16).toUpperCase()}`,
+        charCodes: Array.from(bodyText.substring(0, 10)).map(c => c.charCodeAt(0))
+      });
+    }
+    
     const cleanBodyText = bodyText.replace(/\uFEFF/g, '');
     
     // 🔍 原因特定: BOM検出ログを追加
-    if (bodyText !== cleanBodyText) {
+    if (bodyHasBOM && !bodyHasInvalidChar) {
       console.error(`🚨 [BOM DETECTED IN REQUEST BODY] HTTPリクエストボディにBOMが含まれています:`, {
+        originalLength: bodyText.length,
+        cleanedLength: cleanBodyText.length,
+        preview: bodyText.substring(0, 100)
+      });
+    }
+    
+    if (bodyText !== cleanBodyText) {
+      console.warn(`🔍 [BOM REMOVED FROM REQUEST BODY] HTTPリクエストボディからBOMを除去しました:`, {
         originalLength: bodyText.length,
         cleanedLength: cleanBodyText.length,
         preview: bodyText.substring(0, 100)
@@ -215,9 +240,51 @@ export const POST = async (req: NextRequest) => {
     const body = JSON.parse(cleanBodyText);
     let { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
     
-    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため・念のため再度実行）
+    // 🔍 原因特定: question変数に255を超える文字が含まれているかチェック
     if (question && typeof question === 'string') {
+      const questionFirstCharCode = question.length > 0 ? question.charCodeAt(0) : -1;
+      const questionHasBOM = question.includes('\uFEFF') || questionFirstCharCode === 0xFEFF;
+      const questionHasInvalidChar = questionFirstCharCode > 255;
+      
+      // 🔍 255を超える文字のチェックを最初に実行
+      if (questionHasInvalidChar) {
+        console.error(`🚨 [INVALID CHAR DETECTED IN QUESTION] question変数に255を超える文字が含まれています:`, {
+          firstCharCode: questionFirstCharCode,
+          firstChar: question.charAt(0),
+          isBOM: questionFirstCharCode === 0xFEFF,
+          questionLength: question.length,
+          questionPreview: question.substring(0, 50),
+          hexCode: `0x${questionFirstCharCode.toString(16).toUpperCase()}`,
+          charCodes: Array.from(question.substring(0, 10)).map(c => c.charCodeAt(0))
+        });
+      }
+      
+      if (questionHasBOM && !questionHasInvalidChar) {
+        console.error(`🚨 [BOM DETECTED IN QUESTION] question変数にBOMが含まれています:`, {
+          firstCharCode: questionFirstCharCode,
+          firstChar: question.charAt(0),
+          questionLength: question.length,
+          questionPreview: question.substring(0, 50)
+        });
+      }
+      
+      // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため・念のため再度実行）
       question = question.replace(/\uFEFF/g, '');
+      
+      // 255を超える文字を削除（念のため）
+      if (question.length > 0 && question.charCodeAt(0) > 255) {
+        console.error(`🚨 [REMOVING INVALID CHAR FROM QUESTION] question変数から255を超える文字を削除します:`, {
+          removedCharCode: question.charCodeAt(0),
+          beforeLength: question.length
+        });
+        question = Array.from(question)
+          .filter(char => char.charCodeAt(0) <= 255)
+          .join('');
+        console.warn(`🔍 [QUESTION MODIFIED] question変数が変更されました:`, {
+          afterLength: question.length,
+          afterPreview: question.substring(0, 50)
+        });
+      }
     }
     
     // リクエストデータログ（開発環境のみ）
@@ -359,14 +426,7 @@ export const POST = async (req: NextRequest) => {
             return acc;
           }, {});
           
-          // ハイブリッド検索結果（開発環境のみ）
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🔍 [ハイブリッド検索] 検索結果の内訳:', searchSourceStats);
-            console.log('🔍 [ハイブリッド検索] Top 3 results:');
-            relevantDocs.slice(0, 3).forEach((doc, idx) => {
-              console.log(`  ${idx + 1}. [${doc.source}] ${doc.title?.substring(0, 60)} (score: ${doc.score?.toFixed(4)}, distance: ${doc.distance?.toFixed(4)})`);
-            });
-          }
+          // ハイブリッド検索結果（ログ削減）
           
           processingSteps.push({
             step: 'search',
@@ -479,8 +539,7 @@ export const POST = async (req: NextRequest) => {
           // LLMに渡すcontextの件数を制限（実際に使用される参照元のみを表示）
           const MAX_CONTEXT_DOCS = 10; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
           const contextDocsForLLM = relevantDocs.slice(0, MAX_CONTEXT_DOCS);
-          
-          console.log(`[Streaming Process] Using ${contextDocsForLLM.length} documents for LLM context (out of ${relevantDocs.length} search results)`);
+          // LLMコンテキスト用ドキュメント準備完了（ログ削減）
           
           try {
             for await (const result of streamingSummarizeConfluenceDocs({
@@ -589,48 +648,21 @@ export const POST = async (req: NextRequest) => {
                 }
               };
               
-              // 🚀 パフォーマンス最適化: 非同期でログ保存（await不要）
-              // ユーザーへの応答を待たせない
-              savePostLogToAdminDB(logData)
-                .then(logId => {
-                  savedPostLogId = logId;
-                  if (process.env.NODE_ENV === 'development' && totalTime > 1000) {
-                    console.log('✅ 投稿ログを保存しました（非同期）:', {
-                      postLogId: logId,
-                      userId: logData.userId,
-                      userDisplayName: logData.metadata.userDisplayName,
-                      question: logData.question.substring(0, 50) + '...'
-                    });
-                  }
-                  
-                  // postLogIdが取得された後に更新メッセージを送信
-                  // Phase 8最適化: ストリームが閉じられている場合は送信をスキップ
-                  if (isStreamClosed) {
-                    // ストリームが既に閉じられている場合は送信をスキップ（エラーを防ぐ）
-                    if (process.env.NODE_ENV === 'development') {
-                      console.log('⏭️ postLogId更新メッセージをスキップ（ストリームは既に閉じられています）:', logId);
-                    }
-                    return;
-                  }
-                  
-                  const postLogIdUpdateMessage = {
-                    type: 'post_log_id_update',
-                    postLogId: logId
-                  };
-                  
-                  try {
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify(postLogIdUpdateMessage)}\n\n`)
-                    );
-                    console.log('✅ postLogId更新メッセージを送信:', logId);
-                  } catch (enqueueError) {
-                    // ストリームが既に閉じられている場合は無視（フォールバック）
-                    console.warn('⚠️ postLogId更新メッセージの送信に失敗（ストリームが閉じられている可能性）:', enqueueError);
-                  }
-                })
-                .catch(logError => {
-                  console.error('❌ 投稿ログの保存に失敗しました（非同期）:', logError);
-                });
+              // postLogIdを取得してから完了メッセージを送信
+              try {
+                savedPostLogId = await savePostLogToAdminDB(logData);
+                if (process.env.NODE_ENV === 'development' && totalTime > 1000) {
+                  console.log('✅ 投稿ログを保存しました:', {
+                    postLogId: savedPostLogId,
+                    userId: logData.userId,
+                    userDisplayName: logData.metadata.userDisplayName,
+                    question: logData.question.substring(0, 50) + '...'
+                  });
+                }
+              } catch (logError) {
+                console.error('❌ 投稿ログの保存に失敗しました:', logError);
+                // エラーが発生しても処理は継続（postLogIdはnullのまま）
+              }
 
               // 完了メッセージ（保存されたpostLogIdを含める）
               const completionMessage = {
@@ -643,12 +675,15 @@ export const POST = async (req: NextRequest) => {
                 totalChunks: result.totalChunks,
                 references: result.references,
                 fullAnswer: fullAnswer,
-                postLogId: savedPostLogId // この時点ではundefinedの可能性が高い
+                postLogId: savedPostLogId || null
               };
               
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify(completionMessage)}\n\n`)
-              );
+              // ストリームが閉じられていない場合のみ送信
+              if (!isStreamClosed) {
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify(completionMessage)}\n\n`)
+                );
+              }
               
               // ログ記録
               screenTestLogger.logAIPerformance(question, aiGenerationTime, fullAnswer.length, {
@@ -775,7 +810,7 @@ export const POST = async (req: NextRequest) => {
               };
               
               fallbackPostLogId = await savePostLogToAdminDB(errorLogData);
-              console.log('📝 エラー投稿ログを保存しました:', fallbackPostLogId);
+              // エラー投稿ログ保存完了（ログ削減）
             } catch (logError) {
               console.error('❌ エラー時の投稿ログの保存に失敗しました:', logError);
             }
@@ -908,7 +943,7 @@ export const POST = async (req: NextRequest) => {
         }
       };
       await savePostLogToAdminDB(errorLogData);
-      console.log('📝 システムエラー投稿ログを保存しました:', errorLogData);
+      // システムエラー投稿ログ保存完了（ログ削減）
     } catch (logError) {
       console.error('❌ システムエラー時の投稿ログの保存に失敗しました:', logError);
     }

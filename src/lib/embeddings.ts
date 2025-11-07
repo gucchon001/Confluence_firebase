@@ -24,10 +24,25 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     throw new Error('テキストが空または文字列ではありません');
   }
   
-  // 🔍 原因特定: BOM検出ログを追加
+  // 🔍 原因特定: BOM検出ログを追加（255を超える文字のチェックを最初に実行）
   const originalFirstCharCode = text.length > 0 ? text.charCodeAt(0) : -1;
   const originalHasBOM = text.includes('\uFEFF') || originalFirstCharCode === 0xFEFF;
-  if (originalHasBOM) {
+  const originalHasInvalidChar = originalFirstCharCode > 255;
+  
+  // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
+  if (originalHasInvalidChar) {
+    console.error(`🚨 [INVALID CHAR DETECTED IN getEmbeddings] Input text has invalid character (> 255):`, {
+      firstCharCode: originalFirstCharCode,
+      firstChar: text.charAt(0),
+      isBOM: originalFirstCharCode === 0xFEFF,
+      textLength: text.length,
+      textPreview: text.substring(0, 50),
+      charCodes: Array.from(text.substring(0, 10)).map(c => c.charCodeAt(0)),
+      hexCode: `0x${originalFirstCharCode.toString(16).toUpperCase()}`
+    });
+  }
+  
+  if (originalHasBOM && !originalHasInvalidChar) {
     console.error(`🚨 [BOM DETECTED IN getEmbeddings] Input text has BOM:`, {
       firstCharCode: originalFirstCharCode,
       firstChar: text.charAt(0),
@@ -202,10 +217,25 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
   }
   
-  // 🔍 原因特定: BOM検出ログを追加
+  // 🔍 原因特定: BOM検出ログを追加（255を超える文字のチェックを最初に実行）
   const originalFirstCharCode = text.length > 0 ? text.charCodeAt(0) : -1;
   const originalHasBOM = text.includes('\uFEFF') || originalFirstCharCode === 0xFEFF;
-  if (originalHasBOM) {
+  const originalHasInvalidChar = originalFirstCharCode > 255;
+  
+  // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
+  if (originalHasInvalidChar) {
+    console.error(`🚨 [INVALID CHAR DETECTED IN getGeminiEmbeddings] Input text has invalid character (> 255):`, {
+      firstCharCode: originalFirstCharCode,
+      firstChar: text.charAt(0),
+      isBOM: originalFirstCharCode === 0xFEFF,
+      textLength: text.length,
+      textPreview: text.substring(0, 50),
+      charCodes: Array.from(text.substring(0, 10)).map(c => c.charCodeAt(0)),
+      hexCode: `0x${originalFirstCharCode.toString(16).toUpperCase()}`
+    });
+  }
+  
+  if (originalHasBOM && !originalHasInvalidChar) {
     console.error(`🚨 [BOM DETECTED IN getGeminiEmbeddings] Input text has BOM:`, {
       firstCharCode: originalFirstCharCode,
       firstChar: text.charAt(0),
