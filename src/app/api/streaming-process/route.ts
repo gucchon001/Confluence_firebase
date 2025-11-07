@@ -310,7 +310,7 @@ export const POST = async (req: NextRequest) => {
           removedCharCode: question.charCodeAt(0),
           beforeLength: question.length
         });
-        question = Array.from(question)
+        question = question.split('')
           .filter(char => char.charCodeAt(0) <= 255)
           .join('');
         console.warn(`🔍 [QUESTION MODIFIED] question変数が変更されました:`, {
