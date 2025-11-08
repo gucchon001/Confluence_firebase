@@ -16,6 +16,7 @@ import { postLogService } from '@/lib/post-log-service';
 import { getDeploymentInfo } from '@/lib/deployment-info';
 import type { PostLog, ProcessingStep } from '@/types';
 import { GeminiConfig } from '@/config/ai-models-config';
+import { removeBOM } from '@/lib/bom-utils';
 // 重複コード修正をロールバック
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
@@ -204,40 +205,22 @@ export const POST = async (req: NextRequest) => {
     const bodyText = await req.text();
     const bodyFirstCharCode = bodyText.length > 0 ? bodyText.charCodeAt(0) : -1;
     const bodyHasBOM = bodyText.includes('\uFEFF') || bodyFirstCharCode === 0xFEFF;
-    const bodyHasInvalidChar = bodyFirstCharCode > 255;
     
-    // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
-    if (bodyHasInvalidChar) {
-      const deploymentInfo = getDeploymentInfo();
-      console.error(`🚨 [INVALID CHAR DETECTED IN REQUEST BODY] HTTPリクエストボディに255を超える文字が含まれています:`, {
-        deploymentTime: deploymentInfo.deploymentTime,
-        deploymentTimestamp: deploymentInfo.deploymentTimestamp,
-        uptime: deploymentInfo.uptime,
-        firstCharCode: bodyFirstCharCode,
-        firstChar: bodyText.charAt(0),
-        isBOM: bodyFirstCharCode === 0xFEFF,
-        originalLength: bodyText.length,
-        preview: bodyText.substring(0, 100),
-        hexCode: `0x${bodyFirstCharCode.toString(16).toUpperCase()}`,
-        charCodes: Array.from(bodyText.substring(0, 10)).map(c => c.charCodeAt(0))
-      });
-    }
-    
-    const cleanBodyText = bodyText.replace(/\uFEFF/g, '');
-    
-    // 🔍 原因特定: BOM検出ログを追加
-    if (bodyHasBOM && !bodyHasInvalidChar) {
+    if (bodyHasBOM) {
       const deploymentInfo = getDeploymentInfo();
       console.error(`🚨 [BOM DETECTED IN REQUEST BODY] HTTPリクエストボディにBOMが含まれています:`, {
         deploymentTime: deploymentInfo.deploymentTime,
         deploymentTimestamp: deploymentInfo.deploymentTimestamp,
         uptime: deploymentInfo.uptime,
         originalLength: bodyText.length,
-        cleanedLength: cleanBodyText.length,
-        preview: bodyText.substring(0, 100)
+        preview: bodyText.substring(0, 100),
+        firstCharCode: bodyFirstCharCode
       });
     }
     
+    const cleanBodyText = removeBOM(bodyText);
+    
+    // 🔍 原因特定: BOM検出ログを追加
     if (bodyText !== cleanBodyText) {
       console.warn(`🔍 [BOM REMOVED FROM REQUEST BODY] HTTPリクエストボディからBOMを除去しました:`, {
         originalLength: bodyText.length,
@@ -269,26 +252,8 @@ export const POST = async (req: NextRequest) => {
     if (question && typeof question === 'string') {
       const questionFirstCharCode = question.length > 0 ? question.charCodeAt(0) : -1;
       const questionHasBOM = question.includes('\uFEFF') || questionFirstCharCode === 0xFEFF;
-      const questionHasInvalidChar = questionFirstCharCode > 255;
       
-      // 🔍 255を超える文字のチェックを最初に実行
-      if (questionHasInvalidChar) {
-        const deploymentInfo = getDeploymentInfo();
-        console.error(`🚨 [INVALID CHAR DETECTED IN QUESTION] question変数に255を超える文字が含まれています:`, {
-          deploymentTime: deploymentInfo.deploymentTime,
-          deploymentTimestamp: deploymentInfo.deploymentTimestamp,
-          uptime: deploymentInfo.uptime,
-          firstCharCode: questionFirstCharCode,
-          firstChar: question.charAt(0),
-          isBOM: questionFirstCharCode === 0xFEFF,
-          questionLength: question.length,
-          questionPreview: question.substring(0, 50),
-          hexCode: `0x${questionFirstCharCode.toString(16).toUpperCase()}`,
-          charCodes: Array.from(question.substring(0, 10)).map(c => c.charCodeAt(0))
-        });
-      }
-      
-      if (questionHasBOM && !questionHasInvalidChar) {
+      if (questionHasBOM) {
         const deploymentInfo = getDeploymentInfo();
         console.error(`🚨 [BOM DETECTED IN QUESTION] question変数にBOMが含まれています:`, {
           deploymentTime: deploymentInfo.deploymentTime,
@@ -301,17 +266,15 @@ export const POST = async (req: NextRequest) => {
         });
       }
       
-      // BOM文字（U+FEFF）のみを削除（埋め込み生成エラーを防ぐため・念のため再度実行）
-      // 注意: 255を超える文字（日本語など）は削除しない
-      question = question.replace(/\uFEFF/g, '');
+      // BOM文字（U+FEFF）のみを削除（埋め込み生成エラーを防ぐため）
+      question = removeBOM(question).trim();
       
-      // BOM文字（0xFEFF）のみを削除（255を超える文字は日本語など正常な文字なので削除しない）
       if (question.length > 0 && question.charCodeAt(0) === 0xFEFF) {
         console.error(`🚨 [REMOVING BOM FROM QUESTION] question変数からBOM文字（0xFEFF）を削除します:`, {
           removedCharCode: question.charCodeAt(0),
           beforeLength: question.length
         });
-        question = question.replace(/\uFEFF/g, '');
+        question = removeBOM(question).trim();
         console.warn(`🔍 [QUESTION MODIFIED] question変数が変更されました:`, {
           afterLength: question.length,
           afterPreview: question.substring(0, 50)
