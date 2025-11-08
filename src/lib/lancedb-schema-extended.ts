@@ -101,7 +101,8 @@ export const EXTENDED_LANCEDB_SCHEMA = new arrow.Schema([
 export interface ExtendedLanceDBRecord {
   // 基本フィールド
   id: string;
-  pageId: string;
+  page_id: number;
+  pageId?: string;
   title: string;
   content: string;
   

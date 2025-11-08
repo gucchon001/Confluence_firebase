@@ -9,6 +9,7 @@
 import { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { app } from './firebase';
 import type { StructuredLabel } from '@/types/structured-label';
+import { removeBOM } from './bom-utils';
 
 const db = getFirestore(app);
 const COLLECTION_NAME = 'structured_labels';
@@ -20,6 +21,31 @@ export interface StructuredLabelDocument {
   generatedBy: 'rule-based' | 'llm-based';
 }
 
+function sanitizeString(value: string | undefined | null): string | undefined {
+  if (value === undefined || value === null) {
+    return value as undefined;
+  }
+  const cleaned = removeBOM(value).trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+function sanitizeStructuredLabel(label: StructuredLabel): StructuredLabel {
+  return {
+    ...label,
+    feature: sanitizeString(label.feature) ?? label.feature,
+    domain: (sanitizeString(label.domain) as StructuredLabel['domain']) ?? label.domain,
+    category: (sanitizeString(label.category) as StructuredLabel['category']) ?? label.category,
+    status: (sanitizeString(label.status) as StructuredLabel['status']) ?? label.status,
+    priority: (sanitizeString(label.priority) as StructuredLabel['priority']) ?? label.priority,
+    version: sanitizeString(label.version) ?? label.version,
+    tags: Array.isArray(label.tags)
+      ? label.tags
+          .map(tag => removeBOM(tag).trim())
+          .filter(tag => tag.length > 0)
+      : label.tags
+  };
+}
+
 /**
  * StructuredLabelを保存
  */
@@ -27,11 +53,12 @@ export async function saveStructuredLabel(
   pageId: string,
   label: StructuredLabel
 ): Promise<void> {
+  const sanitizedLabel = sanitizeStructuredLabel(label);
   const docData: StructuredLabelDocument = {
     pageId,
-    structuredLabel: label,
+    structuredLabel: sanitizedLabel,
     generatedAt: new Date(),
-    generatedBy: (label.confidence && label.confidence >= 0.85) ? 'rule-based' : 'llm-based'
+    generatedBy: (sanitizedLabel.confidence && sanitizedLabel.confidence >= 0.85) ? 'rule-based' : 'llm-based'
   };
   
   await setDoc(
@@ -54,7 +81,7 @@ export async function getStructuredLabel(
     }
     
     const data = docSnap.data() as StructuredLabelDocument;
-    return data.structuredLabel;
+    return sanitizeStructuredLabel(data.structuredLabel);
   } catch (error) {
     console.error(`Error getting structured label for ${pageId}:`, error);
     return null;
@@ -84,7 +111,7 @@ export async function getStructuredLabels(
       chunk.map(async (pageId) => {
         const label = await getStructuredLabel(pageId);
         if (label) {
-          labels.set(pageId, label);
+          labels.set(pageId, sanitizeStructuredLabel(label));
         }
       })
     );
@@ -111,7 +138,11 @@ export async function getStructuredLabelsByDomain(
     const results: StructuredLabelDocument[] = [];
     
     snapshot.forEach(doc => {
-      results.push(doc.data() as StructuredLabelDocument);
+      const data = doc.data() as StructuredLabelDocument;
+      results.push({
+        ...data,
+        structuredLabel: sanitizeStructuredLabel(data.structuredLabel)
+      });
     });
     
     return results;
@@ -139,7 +170,11 @@ export async function getStructuredLabelsByCategory(
     const results: StructuredLabelDocument[] = [];
     
     snapshot.forEach(doc => {
-      results.push(doc.data() as StructuredLabelDocument);
+      const data = doc.data() as StructuredLabelDocument;
+      results.push({
+        ...data,
+        structuredLabel: sanitizeStructuredLabel(data.structuredLabel)
+      });
     });
     
     return results;
@@ -174,7 +209,7 @@ export async function getStructuredLabelStats(): Promise<{
     
     snapshot.forEach(doc => {
       const data = doc.data() as StructuredLabelDocument;
-      const label = data.structuredLabel;
+      const label = sanitizeStructuredLabel(data.structuredLabel);
       
       // カテゴリ集計
       stats.byCategory[label.category] = (stats.byCategory[label.category] || 0) + 1;

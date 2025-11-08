@@ -32,6 +32,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const COLLECTION_NAME = 'structured_labels';
+const CLASSROOM_DELETION_PAGE_ID = '718373062'; // タイトル「164__【FIX】教室削除機能」の実際のpageId
 
 interface StructuredLabelDocument {
   pageId: string;
@@ -211,15 +212,15 @@ async function main() {
     // Step 5: ページID「164」のStructuredLabelを確認
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
-    console.log('🔍 ページID「164」のStructuredLabelを確認中...\n');
+    console.log(`🔍 ページID「${CLASSROOM_DELETION_PAGE_ID}」のStructuredLabelを確認中...\n`);
     
-    const page164Doc = await db.collection(COLLECTION_NAME).doc('164').get();
+    const classroomDeletionDoc = await db.collection(COLLECTION_NAME).doc(CLASSROOM_DELETION_PAGE_ID).get();
     
-    if (page164Doc.exists) {
-      const data = page164Doc.data() as StructuredLabelDocument;
+    if (classroomDeletionDoc.exists) {
+      const data = classroomDeletionDoc.data() as StructuredLabelDocument;
       const label = data.structuredLabel;
       
-      console.log('✅ ページID「164」のStructuredLabelが見つかりました:');
+      console.log(`✅ ページID「${CLASSROOM_DELETION_PAGE_ID}」のStructuredLabelが見つかりました:`);
       console.log(`   feature: ${label.feature || 'N/A'}`);
       console.log(`   domain: ${label.domain || 'N/A'}`);
       console.log(`   category: ${label.category || 'N/A'}`);
@@ -231,7 +232,7 @@ async function main() {
       console.log(`   is_valid: ${label.is_valid || 'N/A'}`);
       console.log('');
     } else {
-      console.log('❌ ページID「164」のStructuredLabelが見つかりませんでした\n');
+      console.log(`❌ ページID「${CLASSROOM_DELETION_PAGE_ID}」のStructuredLabelが見つかりませんでした\n`);
     }
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

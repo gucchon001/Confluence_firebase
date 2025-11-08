@@ -101,12 +101,21 @@ async function main() {
     let withLabel = 0;
     let withoutLabel = 0;
     
-    const updatedRecords: ExtendedLanceDBRecord[] = allRecords.map((record: any) => {
-      // pageIdを抽出（チャンクの場合は "-chunk-N" を削除）
-      const pageId = String(record.pageId || record.id).replace(/-chunk-\d+$/, '');
-      
+    const updatedRecords = allRecords.map((record: any) => {
+      // page_idを抽出（チャンクの場合は "-chunk-N" を削除）
+      const rawPageId = record.page_id ?? record.pageId ?? record.id;
+      const pageIdString = String(rawPageId).replace(/-chunk-\d+$/, '');
+      let numericPageId = Number(pageIdString);
+      if (Number.isNaN(numericPageId)) {
+        numericPageId = Number.parseInt(pageIdString, 10);
+      }
+      if (Number.isNaN(numericPageId)) {
+        console.warn(`  ⚠️ 変換不可なページIDを検出: ${rawPageId}`);
+        return null;
+      }
+ 
       // Firestoreからラベルを取得
-      const structuredLabel = labelMap.get(pageId);
+      const structuredLabel = labelMap.get(pageIdString);
       
       if (structuredLabel) {
         withLabel++;
@@ -128,7 +137,7 @@ async function main() {
       // 既存レコードとマージ
       return {
         id: record.id,
-        pageId: String(record.pageId),
+        page_id: numericPageId,
         title: record.title,
         content: record.content,
         vector: Array.from(record.vector),
@@ -139,8 +148,8 @@ async function main() {
         spaceKey: record.spaceKey || '',
         lastUpdated: record.lastUpdated || '',
         ...flatLabel,
-      };
-    });
+      } as ExtendedLanceDBRecord;
+    }).filter((r): r is ExtendedLanceDBRecord => r !== null);
     
     console.log(`📊 統合結果:`);
     console.log(`   ✅ ラベルあり: ${withLabel}件 (${(withLabel / allRecords.length * 100).toFixed(1)}%)`);
@@ -201,7 +210,7 @@ async function main() {
     for (let i = 0; i < Math.min(3, verifyRecords.length); i++) {
       const r = verifyRecords[i];
       console.log(`${i + 1}. ${r.title}`);
-      console.log(`   pageId: ${r.pageId}`);
+      console.log(`   page_id: ${r.page_id ?? r.pageId}`);
       console.log(`   category: ${r.structured_category || 'なし'}`);
       console.log(`   domain: ${r.structured_domain || 'なし'}`);
       console.log(`   feature: ${r.structured_feature || 'なし'}`);

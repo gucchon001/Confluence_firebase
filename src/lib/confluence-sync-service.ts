@@ -13,6 +13,7 @@ import { getEmbeddings } from './embeddings';
 import { convertLabelsToArray, shouldExcludeByLabels } from './label-helper';
 import { getStructuredLabel } from './structured-label-service';
 import { flattenStructuredLabel, type ExtendedLanceDBRecord } from './lancedb-schema-extended';
+import { removeBOM } from './bom-utils';
 import axios from 'axios';
 
 export interface ConfluencePage {
@@ -69,6 +70,40 @@ export class ConfluenceSyncService {
   }
 
   /**
+   * Confluenceから取得した文字列をBOM除去・トリミングして正規化
+   */
+  private sanitizeText(value: string | null | undefined): string {
+    if (!value) {
+      return '';
+    }
+    return removeBOM(value).trim();
+  }
+
+  /**
+   * Confluenceページオブジェクト全体をBOM混入のない状態に正規化
+   */
+  private sanitizePage(page: ConfluencePage): ConfluencePage {
+    const sanitizedLabels = page.metadata?.labels?.results?.map(label => ({
+      ...label,
+      name: this.sanitizeText(label?.name ?? '')
+    })) || [];
+
+    return {
+      ...page,
+      title: this.sanitizeText(page.title),
+      content: this.sanitizeText(page.content),
+      spaceKey: this.sanitizeText(page.spaceKey),
+      url: this.sanitizeText(page.url),
+      lastModified: page.lastModified || new Date().toISOString(),
+      metadata: {
+        labels: {
+          results: sanitizedLabels
+        }
+      }
+    };
+  }
+
+  /**
    * 特定のページIDでConfluenceページを取得
    */
   async getConfluencePageById(pageId: string): Promise<ConfluencePage | null> {
@@ -101,7 +136,7 @@ export class ConfluenceSyncService {
       const data = await response.json();
       
       // ConfluencePage形式に変換
-      const page: ConfluencePage = {
+      const page: ConfluencePage = this.sanitizePage({
         id: data.id,
         title: data.title,
         content: data.body?.storage?.value || '',
@@ -111,7 +146,7 @@ export class ConfluenceSyncService {
         metadata: {
           labels: data.metadata?.labels || { results: [] }
         }
-      };
+      });
 
       console.log(`✅ ページ取得成功: ${page.title} (ID: ${page.id})`);
       return page;
@@ -245,17 +280,19 @@ export class ConfluenceSyncService {
     
     // ConfluencePage形式に変換
     // 🔧 BOM文字（U+FEFF）を削除（Confluence APIから取得したデータにBOM文字が含まれている可能性を考慮）
-    const pages: ConfluencePage[] = (data.results || []).map((item: any) => ({
-      id: item.id,
-      title: (item.title || '').replace(/\uFEFF/g, ''),
-      content: (item.body?.storage?.value || '').replace(/\uFEFF/g, ''),
-      lastModified: item.version?.when || new Date().toISOString(),
-      spaceKey: item.space?.key || '',
-      url: `${this.baseUrl}/wiki/spaces/${item.space?.key}/pages/${item.id}`,
-      metadata: {
-        labels: item.metadata?.labels || { results: [] }
-      }
-    }));
+    const pages: ConfluencePage[] = (data.results || []).map((item: any) =>
+      this.sanitizePage({
+        id: item.id,
+        title: item.title || '',
+        content: item.body?.storage?.value || '',
+        lastModified: item.version?.when || new Date().toISOString(),
+        spaceKey: item.space?.key || '',
+        url: `${this.baseUrl}/wiki/spaces/${item.space?.key}/pages/${item.id}`,
+        metadata: {
+          labels: item.metadata?.labels || { results: [] }
+        }
+      })
+    );
     
     return pages;
   }
@@ -621,8 +658,8 @@ export class ConfluenceSyncService {
         
         // チャンクデータを作成（LanceDBのスキーマに合わせる）
         // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-        const cleanTitle = (chunk.title || '').replace(/\uFEFF/g, '');
-        const cleanContent = (chunk.content || '').replace(/\uFEFF/g, '');
+        const cleanTitle = this.sanitizeText(chunk.title);
+        const cleanContent = this.sanitizeText(chunk.content);
         
         const chunkData = {
           id: `${chunk.pageId}-${chunk.chunkIndex}`,
@@ -640,22 +677,22 @@ export class ConfluenceSyncService {
         // LanceDB公式ドキュメントに基づく正しいデータ形式（型安全性を強化）
         // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
         const lanceData = {
-          id: String(chunkData.id),
+          id: this.sanitizeText(String(chunkData.id)),
           page_id: Number(chunkData.pageId),  // データベースフィールド名はpage_id
-          title: String(chunkData.title).replace(/\uFEFF/g, ''),  // 念のため再度BOM削除
-          content: String(chunkData.content).replace(/\uFEFF/g, ''),  // 念のため再度BOM削除
+          title: this.sanitizeText(String(chunkData.title)),
+          content: this.sanitizeText(String(chunkData.content)),
           chunkIndex: Number(chunkData.chunkIndex),
-          lastUpdated: String(chunkData.lastUpdated),
-          space_key: String(chunkData.space_key),
-          url: String(chunkData.url),
+          lastUpdated: this.sanitizeText(String(chunkData.lastUpdated)),
+          space_key: this.sanitizeText(String(chunkData.space_key)),
+          url: this.sanitizeText(String(chunkData.url)),
           // ラベルを確実に配列として変換（LanceDB Arrow形式対応）
           labels: (() => {
             if (Array.isArray(chunkData.labels)) {
-              return [...chunkData.labels].map(String);
+              return [...chunkData.labels].map(label => this.sanitizeText(String(label)));
             } else if (chunkData.labels && typeof chunkData.labels === 'object') {
               // Arrow Vector型の場合は明示的に配列に変換
               try {
-                const labelsArray = Array.from(chunkData.labels).map(String);
+                const labelsArray = Array.from(chunkData.labels).map((label: any) => this.sanitizeText(String(label)));
                 console.log(`🔍 ラベル変換結果: ${JSON.stringify(labelsArray)}`);
                 return labelsArray;
               } catch (error) {
@@ -747,7 +784,9 @@ export class ConfluenceSyncService {
       return [];
     }
 
-    const labels = page.metadata.labels.results.map(label => label.name);
+    const labels = page.metadata.labels.results
+      .map(label => this.sanitizeText(label.name))
+      .filter(label => label.length > 0);
     console.log(`  ✅ 抽出されたラベル:`, labels);
     return labels;
   }
@@ -871,7 +910,7 @@ export class ConfluenceSyncService {
     if (!html) return '';
     
     // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-    let text = html.replace(/\uFEFF/g, '');
+    let text = removeBOM(html);
     
     // HTML特殊文字をデコード
     const htmlEntities: { [key: string]: string } = {
@@ -895,7 +934,7 @@ export class ConfluenceSyncService {
     const normalizedSpaces = withoutTags.replace(/\s+/g, ' ');
     
     // 前後の空白を削除（BOM文字も含めて削除）
-    return normalizedSpaces.trim().replace(/\uFEFF/g, '');
+    return this.sanitizeText(normalizedSpaces);
   }
 
   /**

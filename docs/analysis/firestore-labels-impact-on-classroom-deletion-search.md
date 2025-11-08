@@ -94,19 +94,19 @@ if (label.feature) {
 
 ### 2. Firestoreに「教室削除機能」のStructuredLabelが含まれているか
 
-**確認が必要**: Firestoreの`structured_labels`コレクションに「164__【FIX】教室削除機能」のStructuredLabelが存在するか
+**確認が必要**: Firestoreの`structured_labels`コレクションに「164__【FIX】教室削除機能」のStructuredLabelが存在するか（実際のpageIdは`718373062`）
 
-**想定されるStructuredLabel**:
+**想定されるStructuredLabel（pageIdは`718373062`）**:
 ```typescript
 {
-  pageId: "164",
+  pageId: "718373062",
   structuredLabel: {
     category: "spec",
     domain: "教室管理",
     feature: "教室削除機能",  // ← 重要: 機能名が含まれている
     priority: "high",
     status: "approved",
-    version: "164",
+    version: "718373062",
     tags: ["教室", "削除", "機能"],
     confidence: 0.9,
     is_valid: true

@@ -204,7 +204,14 @@ async function generateEmbedding(text: string): Promise<number[]> {
  * Phase 4強化: タイトル重複埋め込みでベクトル検索の精度向上
  */
 async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
-  const pageId = page.id;
+  const pageIdRaw = page.id;
+  const pageIdString = String(pageIdRaw);
+  const numericPageId = Number(pageIdString);
+  if (Number.isNaN(numericPageId)) {
+    console.error(`   [エラー] ${page.title}: ページIDが数値に変換できません (${pageIdRaw})`);
+    stats.errors++;
+    return [];
+  }
   const title = page.title || 'Untitled';
   const bodyHtml = page.body?.storage?.value || '';
   const plainText = stripHtml(bodyHtml);
@@ -231,8 +238,8 @@ async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
       const cleanContent = plainText.replace(/\uFEFF/g, '');
       
       records.push({
-        id: pageId,
-        pageId: pageId, // WHERE句用
+        id: pageIdString,
+        page_id: numericPageId,
         title: cleanTitle,
         content: cleanContent,
         vector: embedding,
@@ -277,8 +284,8 @@ async function processPage(page: any, stats: ProcessingStats): Promise<any[]> {
         const cleanChunk = chunk.replace(/\uFEFF/g, '');
         
         records.push({
-          id: `${pageId}-${i}`,
-          pageId: pageId, // WHERE句用
+          id: `${pageIdString}-${i}`,
+          page_id: numericPageId,
           title: cleanTitle,
           content: cleanChunk,
           vector: embedding,
