@@ -9,6 +9,7 @@ import { calculateKeywordScore, LabelFilterOptions } from './search-weights';
 import { calculateHybridScore } from './score-utils';
 import { unifiedKeywordExtractionService } from './unified-keyword-extraction-service';
 import { getDeploymentInfo } from './deployment-info';
+import { removeBOM } from './bom-utils';
 import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
@@ -205,29 +206,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const parallelStartTime = Date.now();
     const embeddingStartTime = Date.now();
     
-    // 🔍 原因特定: searchLanceDBに渡されるクエリを確認（255を超える文字のチェックを最初に実行）
     const originalFirstCharCode = params.query.length > 0 ? params.query.charCodeAt(0) : -1;
     const originalHasBOM = params.query.includes('\uFEFF') || originalFirstCharCode === 0xFEFF;
-    const originalHasInvalidChar = originalFirstCharCode > 255;
     
-    // 🔍 255を超える文字のチェックを最初に実行（エラーメッセージでは「character at index 0 has a value of 65279」と表示されるため）
-    if (originalHasInvalidChar) {
-      const deploymentInfo = getDeploymentInfo();
-      console.error(`🚨 [INVALID CHAR DETECTED IN searchLanceDB] searchLanceDB received query with invalid character (> 255):`, {
-        deploymentTime: deploymentInfo.deploymentTime,
-        deploymentTimestamp: deploymentInfo.deploymentTimestamp,
-        uptime: deploymentInfo.uptime,
-        firstCharCode: originalFirstCharCode,
-        firstChar: params.query.charAt(0),
-        isBOM: originalFirstCharCode === 0xFEFF,
-        queryLength: params.query.length,
-        queryPreview: params.query.substring(0, 50),
-        charCodes: Array.from(params.query.substring(0, 10)).map(c => c.charCodeAt(0)),
-        hexCode: `0x${originalFirstCharCode.toString(16).toUpperCase()}`
-      });
-    }
-    
-    if (originalHasBOM && !originalHasInvalidChar) {
+    if (originalHasBOM) {
       console.error(`🚨 [BOM DETECTED] searchLanceDB received query with BOM:`, {
         firstCharCode: originalFirstCharCode,
         firstChar: params.query.charAt(0),
@@ -237,14 +219,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       });
     }
     
-    // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-    const cleanQuery = params.query.replace(/\uFEFF/g, '');
+    const cleanQuery = removeBOM(params.query).trim();
     
-    // 🔍 原因特定: 削除後の確認
     if (params.query !== cleanQuery) {
       console.warn(`🔍 [BOM REMOVED] searchLanceDB removed BOM from query:`, {
-        beforeFirstCharCode: params.query.charCodeAt(0),
-        afterFirstCharCode: cleanQuery.charCodeAt(0),
+        beforeFirstCharCode: originalFirstCharCode,
+        afterFirstCharCode: cleanQuery.length > 0 ? cleanQuery.charCodeAt(0) : -1,
         beforeLength: params.query.length,
         afterLength: cleanQuery.length
       });
@@ -261,7 +241,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const keywordStartTime = Date.now();
     const keywordsPromise = (async () => {
       // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-      const cleanQueryForKeywords = params.query.replace(/\uFEFF/g, '');
+      const cleanQueryForKeywords = cleanQuery;
       const kw = await unifiedKeywordExtractionService.extractKeywordsConfigured(cleanQueryForKeywords);
       const keywordDuration = Date.now() - keywordStartTime;
       if (keywordDuration > 2000) {
