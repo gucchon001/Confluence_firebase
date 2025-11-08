@@ -216,13 +216,26 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     preview: cleanText.substring(0, 50)
   });
 
+  const requestPayload = {
+    content: {
+      role: 'user',
+      parts: [{ text: cleanText }]
+    }
+  };
+
+  console.log(`ℹ️ [EMBED REQUEST PAYLOAD]`, {
+    role: requestPayload.content.role,
+    partsCount: requestPayload.content.parts.length,
+    partTypes: requestPayload.content.parts.map(part => ({
+      hasText: typeof part.text === 'string',
+      hasInlineData: 'inlineData' in part && part.inlineData !== undefined
+    })),
+    textPartPreview: cleanText.substring(0, 50),
+    textPartLength: cleanText.length
+  });
+
   try {
-    const result = await embeddingModel.embedContent({
-      content: {
-        role: 'user',
-        parts: [{ text: cleanText }]
-      }
-    });
+    const result = await embeddingModel.embedContent(requestPayload);
     
     // text-embedding-004 の場合は result.embedding.values を返す
     if (result.embedding && 'values' in result.embedding) {
@@ -255,7 +268,12 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
 
     console.error(`❌ [Embedding] Failed to generate embedding via Gemini API:`, {
       errorMessage: error instanceof Error ? error.message : String(error),
-      bomDiagnostics
+      bomDiagnostics,
+      requestPayloadSummary: {
+        role: requestPayload.content.role,
+        partsCount: requestPayload.content.parts.length,
+        textPartLength: cleanText.length
+      }
     });
     throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : String(error)}`);
   }
