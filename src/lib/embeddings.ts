@@ -104,6 +104,13 @@ export async function getEmbeddings(text: string): Promise<number[]> {
       finalPreview: finalTextForEmbedding.substring(0, 50)
     });
   }
+
+  console.log(`ℹ️ [EMBED TEXT STATUS]`, {
+    source: 'getEmbeddings',
+    firstCharCode: finalTextForEmbedding.length > 0 ? finalTextForEmbedding.charCodeAt(0) : -1,
+    length: finalTextForEmbedding.length,
+    preview: finalTextForEmbedding.substring(0, 50)
+  });
   
   // Phase 0A-4: 埋め込み生成の開始ログ（本番環境でも遅延検知のため）
   const generationStartTime = Date.now();
@@ -201,6 +208,13 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
       preview: cleanText.substring(0, 50)
     });
   }
+
+  console.log(`ℹ️ [EMBED TEXT STATUS]`, {
+    source: 'getGeminiEmbeddings',
+    firstCharCode: cleanText.length > 0 ? cleanText.charCodeAt(0) : -1,
+    length: cleanText.length,
+    preview: cleanText.substring(0, 50)
+  });
 
   try {
     const result = await embeddingModel.embedContent(cleanText);
