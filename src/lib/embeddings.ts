@@ -217,7 +217,11 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   });
 
   try {
-    const result = await embeddingModel.embedContent(cleanText);
+    const result = await embeddingModel.embedContent({
+      content: {
+        parts: [{ text: cleanText }]
+      }
+    });
     
     // text-embedding-004 の場合は result.embedding.values を返す
     if (result.embedding && 'values' in result.embedding) {
