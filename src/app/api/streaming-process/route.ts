@@ -248,7 +248,7 @@ export const POST = async (req: NextRequest) => {
     
     let { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
     
-    // 🔍 原因特定: question変数に255を超える文字が含まれているかチェック
+    // 🔍 原因特定: question変数にBOMが混入していないかチェック
     if (question && typeof question === 'string') {
       const questionFirstCharCode = question.length > 0 ? question.charCodeAt(0) : -1;
       const questionHasBOM = question.includes('\uFEFF') || questionFirstCharCode === 0xFEFF;
