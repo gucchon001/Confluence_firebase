@@ -157,6 +157,9 @@
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.24.2"
   },
+  "overrides": {
+    "@google/generative-ai": "0.23.0"
+  },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
     "@types/node": "^20.19.16",
