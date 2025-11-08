@@ -4,7 +4,7 @@
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getDeploymentInfo } from './deployment-info';
-import { removeBOM } from './bom-utils';
+import { removeBOM, checkStringForBOM } from './bom-utils';
 // embedding-cacheはアーカイブに移動済み。簡易キャッシュ実装を使用
 
 // 簡易キャッシュ（メモリ内のみ）
@@ -227,7 +227,31 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
       return result.embedding as any;
     }
   } catch (error) {
-    console.error(`❌ [Embedding] Failed to generate embedding via Gemini API:`, error);
+    const bomDiagnostics = (() => {
+      try {
+        const checkResult = checkStringForBOM(cleanText);
+        return {
+          firstCharCode: cleanText.length > 0 ? cleanText.charCodeAt(0) : -1,
+          length: cleanText.length,
+          preview: cleanText.substring(0, 50),
+          charCodes: Array.from(cleanText.substring(0, 10)).map(c => c.charCodeAt(0)),
+          bomCheck: {
+            hasBOM: checkResult.hasBOM,
+            bomType: checkResult.bomType,
+            bomIndex: checkResult.bomIndex,
+            utf8BytesFirst: checkResult.utf8BytesFirst,
+            utf8BytesLength: checkResult.utf8BytesLength
+          }
+        };
+      } catch (diagError) {
+        return { diagnosticsFailed: true, diagnosticsError: String(diagError) };
+      }
+    })();
+
+    console.error(`❌ [Embedding] Failed to generate embedding via Gemini API:`, {
+      errorMessage: error instanceof Error ? error.message : String(error),
+      bomDiagnostics
+    });
     throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
