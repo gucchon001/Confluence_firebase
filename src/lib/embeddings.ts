@@ -219,6 +219,7 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   try {
     const result = await embeddingModel.embedContent({
       content: {
+        role: 'user',
         parts: [{ text: cleanText }]
       }
     });
