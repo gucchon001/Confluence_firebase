@@ -131,18 +131,3 @@ env:
       - BUILD
       - RUNTIME
   
-  # インメモリファイルシステム（Gen1では無効化、Gen2のみで有効）
-  - variable: USE_INMEMORY_FS
-    value: "false"
-    availability:
-      - RUNTIME
-  
-  # Cloud Storage設定（インメモリローダー用）
-  - variable: STORAGE_BUCKET
-    value: confluence-copilot-data
-    availability:
-      - RUNTIME
-  - variable: LANCEDB_PREFIX
-    value: lancedb/confluence.lance
-    availability:
-      - RUNTIME
