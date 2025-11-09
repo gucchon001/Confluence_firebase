@@ -2,7 +2,6 @@
  * 埋め込みベクトル生成のための抽象化レイヤー（Gemini Embeddings API使用）
  * キャッシュ機能付きで最適化
  */
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getDeploymentInfo } from './deployment-info';
 import { removeBOM, checkStringForBOM } from './bom-utils';
 // embedding-cacheはアーカイブに移動済み。簡易キャッシュ実装を使用
@@ -16,8 +15,8 @@ export function clearEmbeddingCache(): void {
   console.log('🔧 [Cache] Embedding cache cleared');
 }
 
-let genAI: GoogleGenerativeAI | null = null;
-let embeddingModel: any | null = null;
+const GEMINI_EMBEDDING_ENDPOINT =
+  'https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent';
 
 export async function getEmbeddings(text: string): Promise<number[]> {
   const startTime = Date.now();
@@ -116,12 +115,19 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   const generationStartTime = Date.now();
   console.log(`🔍 埋め込みベクトル生成中: ${finalTextForEmbedding.substring(0, 50)}...`);
   
-  // Gemini Embeddings APIを使用
   const EMBEDDING_TIMEOUT = 30000; // 30秒
   const embedding = await Promise.race([
     getGeminiEmbeddings(finalTextForEmbedding),
-    new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error(`Embedding generation timeout after ${EMBEDDING_TIMEOUT}ms`)), EMBEDDING_TIMEOUT)
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              `Embedding generation timeout after ${EMBEDDING_TIMEOUT}ms`
+            )
+          ),
+        EMBEDDING_TIMEOUT
+      )
     )
   ]);
   
@@ -152,19 +158,6 @@ export async function getEmbeddings(text: string): Promise<number[]> {
 export default { getEmbeddings };
 
 async function getGeminiEmbeddings(text: string): Promise<number[]> {
-  // Gemini Embeddings API を初期化
-  if (!genAI) {
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY environment variable is not set');
-    }
-    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  }
-  
-  if (!embeddingModel) {
-    embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
-  }
-
   const originalFirstCharCode = text.length > 0 ? text.charCodeAt(0) : -1;
   const originalHasBOM = text.includes('\uFEFF') || originalFirstCharCode === 0xFEFF;
 
@@ -235,15 +228,8 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   });
 
   try {
-    const result = await embeddingModel.embedContent(requestPayload);
-    
-    // text-embedding-004 の場合は result.embedding.values を返す
-    if (result.embedding && 'values' in result.embedding) {
-      return result.embedding.values as number[];
-    } else {
-      // 互換性のため、異なるレスポンス形式にも対応
-      return result.embedding as any;
-    }
+    const embeddingValues = await callGeminiEmbeddingApi(requestPayload);
+    return embeddingValues;
   } catch (error) {
     const bomDiagnostics = (() => {
       try {
@@ -277,4 +263,70 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     });
     throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY environment variable is not set');
+  }
+
+  let response: Response;
+  let responseBody: string | undefined;
+  try {
+    response = await fetch(`${GEMINI_EMBEDDING_ENDPOINT}?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    responseBody = await response.text();
+  } catch (networkError) {
+    console.error('❌ [Embedding] Network error while calling Gemini REST API', {
+      error: networkError instanceof Error ? networkError.message : networkError
+    });
+    throw new Error(
+      `Failed to call Gemini REST API: ${
+        networkError instanceof Error ? networkError.message : String(networkError)
+      }`
+    );
+  }
+
+  let json: any;
+  try {
+    json = responseBody ? JSON.parse(responseBody) : {};
+  } catch (parseError) {
+    console.error('❌ [Embedding] Failed to parse Gemini REST API response as JSON', {
+      responseStatus: response.status,
+      responseBody,
+      parseError: parseError instanceof Error ? parseError.message : parseError
+    });
+    throw new Error(
+      `Failed to parse Gemini REST API response: ${
+        parseError instanceof Error ? parseError.message : String(parseError)
+      }`
+    );
+  }
+
+  if (!response.ok) {
+    console.error('❌ [Embedding] Gemini REST API returned non-OK status', {
+      status: response.status,
+      statusText: response.statusText,
+      responseJson: json
+    });
+    throw new Error(
+      `Gemini REST API error ${response.status}: ${JSON.stringify(json)}`
+    );
+  }
+
+  const embeddingValues = json?.embedding?.values;
+  if (!Array.isArray(embeddingValues)) {
+    console.error('❌ [Embedding] Gemini REST API response missing embedding values', {
+      responseJson: json
+    });
+    throw new Error('Gemini REST API response missing embedding values');
+  }
+
+  return embeddingValues as number[];
 }
