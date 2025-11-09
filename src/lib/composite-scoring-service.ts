@@ -242,7 +242,7 @@ export class CompositeScoringService {
         // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
         // console.log(`[Composite] 🔼 クエリ関連ブースト: "${title.substring(0, 40)}" ${originalScore.toFixed(4)} → ${score.toFixed(4)} (×${actualBoost.toFixed(2)}, matched: ${matchingKeywordCount})`);
       }
-
+      
       // StructuredLabelに基づくカテゴリ減衰（メールテンプレート優先度を大幅に低減）
       const structuredCategory = typeof result.structured_category === 'string'
         ? result.structured_category.toLowerCase()
@@ -251,9 +251,10 @@ export class CompositeScoringService {
         const functionalQuery = this.isFunctionalQuery(query);
         const emailLikeQuery = this.isEmailOrTemplateQuery(query);
 
-        // 機能仕様系の質問で、メールテンプレート以外を期待するケースでは積極的に減衰させる
-        if (functionalQuery && !emailLikeQuery) {
-          score *= 0.35; // 65%減衰（テンプレート文書を下位に押し下げる）
+        // 機能仕様系の質問（挙動確認、原因調査など）はメールテンプレートではなく仕様ドキュメントを期待していることが多い
+        if (functionalQuery) {
+          // メールに言及していても仕様確認であれば強く減衰させる
+          score *= emailLikeQuery ? 0.4 : 0.35; // 60%〜65%減衰
         } else if (!emailLikeQuery) {
           score *= 0.6;  // 通常の質問でも40%減衰
         }
