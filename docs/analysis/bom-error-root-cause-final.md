@@ -1,6 +1,6 @@
 # BOM文字エラーの根本原因（最終確定版）
 
-**最終更新**: 2025年11月6日  
+**最終更新**: 2025年11月9日  
 **統合元**: `bom-character-error-root-cause.md`, `bom-error-trigger-analysis.md`
 
 ## エラー概要
@@ -31,21 +31,42 @@ TypeError: Cannot convert argument to a ByteString because the character at inde
 
 ## 根本原因の特定
 
-### 問題の箇所
+### フェーズ1: データ汚染の是正（2025-11-03〜2025-11-08）
 
-**`scripts/rebuild-lancedb-smart-chunking.ts`でBOM文字の除去処理が不足していた**
+初期調査では LanceDB の再構築スクリプト（`rebuild-lancedb-smart-chunking.ts`）で BOM 除去が不足しており、検索結果に混入したことが原因と判断した。  
+このため以下の修正を実施し、ローカル・本番 LanceDB と Firestore を含むデータソースから BOM を徹底的に排除した。
 
-1. **`generateEmbedding`関数（184-190行目）**
-   - BOM文字の除去処理がなかった
-   - `embedContent`にBOM文字を含むテキストが渡されていた
+1. **`generateEmbedding` 関数（184-190行目）**
+   - 埋め込み生成前に BOM を除去する処理を追加。
 
-2. **`stripHtml`関数（70-77行目）**
-   - BOM文字の除去処理がなかった
-   - HTMLからテキストを抽出する際にBOM文字が残っていた
+2. **`stripHtml` 関数（70-77行目）**
+   - HTML 抽出時に BOM を除去する処理を追加。
 
-3. **`processPage`関数（196-244行目）**
-   - データベースに保存する際にBOM文字の除去処理がなかった
-   - `title`と`content`にBOM文字が含まれていた
+3. **`processPage` 関数（196-244行目）**
+   - `title` / `content` を LanceDB に保存する前に BOM を除去。
+
+これらの対策により、ローカル環境では再現せず、LanceDB・Firestore・ドメイン知識 JSON など全データで BOM 非混入を確認した。
+
+### フェーズ2: それでも発生し続けた ByteString エラー（2025-11-08〜2025-11-09）
+
+データ側の汚染を完全に排除したにもかかわらず、本番環境では `googleai/gemini-*` 呼び出し時に以下のスタックでエラーが継続。
+
+```
+TypeError: Cannot convert argument to a ByteString because the character at index 0 has a value of 65279 which is greater than 255.
+    at webidl.converters.ByteString (...)
+    at _Headers.append (...)
+```
+
+- 直前にログ出力している `sanitizedPrompt` / `context` / `question` では BOM が検出されず、SDK 内部でヘッダー生成時に弾かれていることが判明。
+- ローカル環境では `.env` に保存した API キーを使用しておりエラーが再現しない。
+- Cloud Run（Firebase App Hosting）では Secret Manager 経由の環境変数を使用しており、キー文字列先頭に不可視文字（BOM）が付与されると `Headers.append()` の ByteString 変換で失敗する。
+
+### 最終結論（2025-11-09 04:26Z のログより確定）
+
+**本番環境で利用していた Gemini API キー（`GEMINI_API_KEY` / `GOOGLEAI_API_KEY` / `GOOGLE_GENAI_API_KEY`）に BOM が混入しており、`@google/generative-ai` SDK が HTTP ヘッダーへ設定する際に ByteString 変換で失敗していた。**
+
+- Secret Manager から展開された環境変数は BOM 混入を検知しづらく、値をそのまま `googleAI()` プラグインに渡すとヘッダー生成で例外が発生する。
+- ローカルは BOM 混入のない `.env` を参照していたため、同一データでも再現しなかった。
 
 ## なぜ急にBOM文字が入るようになったのか
 
@@ -130,6 +151,27 @@ function stripHtml(html: string): string {
 
 データベースに保存する際に、`title`と`content`からBOM文字を除去する処理を追加。
 
+### 4. Genkit 初期化時の API キーサニタイズ（最終解決策）
+
+```typescript
+// src/ai/genkit.ts の抜粋
+const sanitizedGeminiApiKey = removeBOM(process.env.GEMINI_API_KEY?.trim() ?? ...);
+
+export const ai = genkit({
+  plugins: [
+    googleAI(
+      sanitizedGeminiApiKey
+        ? { apiKey: sanitizedGeminiApiKey }
+        : undefined,
+    ),
+  ],
+});
+```
+
+- `GEMINI_API_KEY` / `GOOGLEAI_API_KEY` / `GOOGLE_GENAI_API_KEY` のいずれに設定されていても取得。
+- `trim()` と `removeBOM()` を適用し、BOM 検出時には警告ログを出力してサニタイズする。
+- 空文字になった場合はエラーを出し、Secret の値を確認できるようにした。
+
 ## 既存の対策との比較
 
 ### `confluence-sync-service.ts`では既に対策済み
@@ -144,9 +186,17 @@ function stripHtml(html: string): string {
 
 ## 結論
 
-**エラーの根本原因は、`rebuild-lancedb-smart-chunking.ts`でインデックス再構築を行う際に、BOM文字の除去処理が不足していたことです。**
+1. **データ汚染は副次的要因だった。**  
+   LanceDB / Firestore / ドメイン知識などへの BOM 混入は排除済みであり、現時点で再発は確認されていない。
 
-インデックス再構築時に、BOM文字を含むデータがデータベースに保存され、そのデータが検索結果に含まれるようになった際に、埋め込み生成処理でエラーが発生しました。
+2. **最終的な致命的原因は「Gemini API キーの BOM 混入」。**  
+   Secret Manager 由来の環境変数に不可視文字が含まれ、Genkit → `@google/generative-ai` のヘッダー生成で ByteString 変換エラーが発生していた。
+
+3. **Genkit 初期化時に API キーをサニタイズすることで恒久対応済み。**  
+   Cloud Run への再デプロイ後はエラーが発生せず、ログでも正常なレスポンスが得られている。
+
+4. **今後の運用指針。**  
+   Secret を登録・更新する際は BOM を含まない UTF-8 であることを確認し、疑わしい場合は今回の `resolveSanitizedGeminiApiKey` ロジックのように受け側でサニタイズを行う。
 
 ## 完全なBOM除去対策の実装
 
