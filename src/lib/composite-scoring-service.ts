@@ -242,12 +242,83 @@ export class CompositeScoringService {
         // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
         // console.log(`[Composite] 🔼 クエリ関連ブースト: "${title.substring(0, 40)}" ${originalScore.toFixed(4)} → ${score.toFixed(4)} (×${actualBoost.toFixed(2)}, matched: ${matchingKeywordCount})`);
       }
+
+      // StructuredLabelに基づくカテゴリ減衰（メールテンプレート優先度を大幅に低減）
+      const structuredCategory = typeof result.structured_category === 'string'
+        ? result.structured_category.toLowerCase()
+        : '';
+      if (structuredCategory === 'template') {
+        const functionalQuery = this.isFunctionalQuery(query);
+        const emailLikeQuery = this.isEmailOrTemplateQuery(query);
+
+        // 機能仕様系の質問で、メールテンプレート以外を期待するケースでは積極的に減衰させる
+        if (functionalQuery && !emailLikeQuery) {
+          score *= 0.35; // 65%減衰（テンプレート文書を下位に押し下げる）
+        } else if (!emailLikeQuery) {
+          score *= 0.6;  // 通常の質問でも40%減衰
+        }
+      }
       
     } catch (error) {
       console.warn('[CompositeScoringService] Domain penalty/boost calculation failed:', error);
     }
     
     return score;
+  }
+
+  /**
+   * 機能仕様・挙動を問い合わせるクエリかどうかを判定
+   * 例：「どうなりますか」「可能ですか」「条件」「仕様」「エラー」など
+   */
+  private isFunctionalQuery(query: string): boolean {
+    if (!query) {
+      return false;
+    }
+    const normalized = query.toLowerCase();
+    const functionalKeywords = [
+      'どうなりますか',
+      'どうなる',
+      '可能ですか',
+      '可能か',
+      '仕様',
+      '機能',
+      '条件',
+      '理由',
+      '原因',
+      '挙動',
+      '対処',
+      '再登録',
+      '退会',
+      'エラー',
+      '表示され',
+      '制限',
+      'できる',
+    ];
+    return functionalKeywords.some(keyword => normalized.includes(keyword));
+  }
+
+  /**
+   * メールテンプレートや通知系の質問かどうかを判定
+   * 例：「メール」「テンプレート」「通知」「送信」「配信」など
+   */
+  private isEmailOrTemplateQuery(query: string): boolean {
+    if (!query) {
+      return false;
+    }
+    const normalized = query.toLowerCase();
+    const emailTemplateKeywords = [
+      'メール',
+      'email',
+      'テンプレート',
+      'template',
+      '通知',
+      '送信',
+      '配信',
+      '差し込み',
+      '本文',
+      '件名',
+    ];
+    return emailTemplateKeywords.some(keyword => normalized.includes(keyword));
   }
   
   /**

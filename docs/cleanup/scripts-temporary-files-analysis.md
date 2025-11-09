@@ -55,6 +55,7 @@
 - `cleanup-duplicate-chunks.ts` ✅
 
 #### 再構築スクリプト
+- `create-lancedb-indexes.ts` ✅
 - `rebuild-lancedb-smart-chunking.ts` ✅
 - `rebuild-lunr-msgpack.ts` ✅
 - `rebuild-lancedb-without-duplicates.ts` ✅
@@ -191,7 +192,7 @@
 
 ### アーカイブに移動したファイル
 
-#### `scripts/`ディレクトリ（4ファイル）
+#### `scripts/`ディレクトリ（6ファイル）
 1. ✅ **`migrate-lancedb-table-to-extended-schema.ts`** → `scripts/archive/temporary/`
    - 完了済みマイグレーションスクリプト
 2. ✅ **`lancedb-rebuild.ts`** → `scripts/archive/temporary/`
@@ -200,6 +201,10 @@
    - 古いクリーンアップスクリプト（`cleanup-lancedb-completely.ts`に置き換え済み）
 4. ✅ **`test-bom-error-browser.ts`** → `scripts/archive/temporary/`
    - 一時的なテストスクリプト（BOMエラーは解決済み）
+5. ✅ **`check-bom-in-local-lancedb.ts`** → `scripts/archive/bom-investigation/`
+   - BOM混入調査専用のローカル LanceDB チェックスクリプト
+6. ✅ **`check-bom-in-production-data.ts`** → `scripts/archive/bom-investigation/`
+   - BOM混入調査専用の本番データチェックスクリプト
 
 #### `src/scripts/`ディレクトリ（4ファイル）
 5. ✅ **`check-data-basic.ts`** → `scripts/archive/temporary/src-scripts/`

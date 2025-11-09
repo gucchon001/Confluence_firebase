@@ -2,10 +2,15 @@
 
 このドキュメントでは、LanceDBを使用したConfluence Vector Search システムのコンポーネント図、データフロー図、シーケンス図を示します。
 
-**最終更新**: 2025年1月  
-**ステータス**: ✅ 最新仕様に更新済み（`page_id`マイグレーション完了、Gemini Embeddings API使用）
+**最終更新**: 2025年11月9日  
+**ステータス**: ✅ 最新仕様に更新済み（`page_id`マイグレーション完了、Gemini APIキーサニタイズとBOM対策反映）
 
 ## 更新履歴
+- **2025年11月**: BOM/サニタイズ対策とGemini API安定化
+  - Secret Manager 由来のBOM混入対策として、Gemini APIキーを取得時に `trim()` と `removeBOM()` でサニタイズ
+  - Embedding 生成を SDK 経由ではなく Gemini REST API 直接呼び出しに変更し、BOM検知ログとタイムアウトを強化
+  - LLM プロンプト生成時も質問・コンテキスト・プロンプトに対してBOMチェックと除去を全面適用
+  - Streaming API での API キーおよび入力テキストサニタイズを再検証し、本番 Cloud Run での ByteString 変換エラーを完全解消
 - **2025年11月**: page_idマイグレーション完了 - パフォーマンス最適化
   - pageId → page_id マイグレーション完了: スカラーインデックス対応のためフィールド名を変更
   - スカラーインデックス作成: `page_id`フィールドにスカラーインデックスを設定
@@ -277,7 +282,7 @@ sequenceDiagram
   - Firestoreセキュリティルール
 - **検索エンジン**: ハイブリッド検索システム（Phase 5強化版）
   - **ベクトル検索**: LanceDBによる意味的類似性検索（重み: 5%）
-    - Gemini Embedding 768次元、コサイン類似度
+    - Gemini Embedding 768次元、コサイン類似度（REST API 直接呼び出し、BOMサニタイズ済み）
     - タイトル重複埋め込み（3回繰り返し）
     - スマートチャンキング（1600文字、200文字オーバーラップ）
   - **BM25検索**: Lunr.js 2.3.9による全文検索（重み: 50% - 最優先）
@@ -291,8 +296,8 @@ sequenceDiagram
     - 早期ラベルフィルタリング、page_id単位での重複除去（DB側は`page_id`、API側は`pageId`を維持）
   - **並列検索実行**: ベクトル検索とBM25検索の並列処理（Phase 5）
 - **ストリーミング**: リアルタイム回答生成とプログレス表示（4段階）
-- **ベクトル生成**: Gemini Embeddings API (text-embedding-004、768次元)
-- **LLM**: Google AI Gemini API（用途別使い分け）
+- **ベクトル生成**: Gemini Embeddings API (text-embedding-004、768次元・REST API 直接呼び出し)
+- **LLM**: Google AI Gemini API（用途別使い分け・APIキーは取得時にBOMサニタイズ）
   - **gemini-2.5-flash**: メイン処理（ストリーミング回答生成）
     - temperature: 0.1, maxOutputTokens: 4096
   - **gemini-2.0-flash**: ラベル自動生成

@@ -56,7 +56,9 @@ export const GeminiConfig = {
 
 テキストのベクトル埋め込みを生成するモデルの設定です。
 
-**重要**: 2025-10-28に`@xenova/transformers`から`@google/generative-ai`に移行しました。
+**重要**:  
+- 2025-10-28 に `@xenova/transformers` から Gemini Embeddings API（`text-embedding-004`）へ移行しました。  
+- 2025-11-09 以降は `@google/generative-ai` SDK の `embedContent()` を経由せず、**Gemini REST API を直接呼び出す実装**に変更し、BOM サニタイズとタイムアウト制御を強化しています。
 
 ```typescript
 export const EmbeddingConfig = {
@@ -78,7 +80,7 @@ export const EmbeddingConfig = {
 
 | パラメータ | 説明 |
 |:---|:---|
-| `provider` | `api`: Gemini Embeddings API使用（2025-10-28移行） |
+| `provider` | `api`: Gemini Embeddings API使用（2025-10-28移行、2025-11-09以降はREST API直呼び出し） |
 | `modelId` | Gemini Embeddings APIのモデルID（`text-embedding-004`） |
 | `dimensions` | 生成されるベクトルの次元数（768次元） |
 
@@ -116,17 +118,41 @@ const result = await ai.generate({
    - テキストの埋め込みベクトル生成
 
 ```typescript
+import fetch from 'node-fetch';
 import { EmbeddingConfig } from '@/config/ai-models-config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { removeBOM } from '@/lib/bom-utils';
 
-// 使用例（Gemini Embeddings API）
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({ model: EmbeddingConfig.modelId });
-const result = await model.embedContent(text);
-const embedding = result.embedding.values;
+const rawApiKey =
+  process.env.GEMINI_API_KEY ??
+  process.env.GOOGLEAI_API_KEY ??
+  process.env.GOOGLE_GENAI_API_KEY;
+
+if (!rawApiKey) {
+  throw new Error('GEMINI APIキーが設定されていません');
+}
+
+const apiKey = removeBOM(rawApiKey.trim());
+const cleanedText = removeBOM(text).trim();
+
+const response = await fetch(
+  `https://generativelanguage.googleapis.com/v1/models/${EmbeddingConfig.modelId}:embedContent?key=${apiKey}`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content: {
+        role: 'user',
+        parts: [{ text: cleanedText }],
+      },
+    }),
+  },
+);
+
+const data = await response.json();
+const embedding = data?.embedding?.values as number[];
 ```
 
-**実装ファイル**: `src/lib/embeddings.ts`を参照してください。
+**実装ファイル**: `src/lib/embeddings.ts` を参照してください（例では `removeBOM()` と REST API 呼び出しによるサニタイズ済み実装を抜粋）。
 
 ## 設定変更手順
 
@@ -181,7 +207,7 @@ config: {
 
 ### 3. Embeddingモデルの変更
 
-**注意**: 現在はGemini Embeddings API (`text-embedding-004`) のみをサポートしています。他のモデルに変更する場合は、`src/lib/embeddings.ts`の実装を確認してください。
+**注意**: 現在は Gemini Embeddings API (`text-embedding-004`) のみをサポートしています。他のモデルに変更する場合は、`src/lib/embeddings.ts` の REST 呼び出し実装およびサニタイズ処理を合わせて更新してください。
 
 ```typescript
 // src/config/ai-models-config.ts
@@ -198,6 +224,7 @@ export const EmbeddingConfig = {
 
 **移行履歴**:
 - 2025-10-28: `@xenova/transformers`から`@google/generative-ai`に移行
+- 2025-11-09: `@google/generative-ai` SDK の `embedContent()` から REST API 直接呼び出しに変更（BOMサニタイズとタイムアウト強化）
 - 詳細: `docs/troubleshooting/embeddings-migration-summary.md`
 
 ## 環境変数による設定

@@ -274,15 +274,12 @@ export async function summarizeConfluenceDocs({
     const cachedAnswer = answerCache.get(sanitizedQuestion, cacheDocuments);
     
     if (cachedAnswer) {
-      console.log('[Phase 5 Cache] ⚡ 回答キャッシュヒット - 即座に返却');
       return {
         answer: cachedAnswer.answer,
         references: cachedAnswer.references,
       };
     }
     
-    console.log('[Phase 5 Cache] キャッシュミス - Gemini生成開始');
-
     const formattedChatHistory = chatHistory
       .map((msg) => `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`)
       .join('\n\n');
@@ -349,71 +346,50 @@ ${truncatedContent}`;
       });
     }
     
-    console.log('[summarizeConfluenceDocs] Generated prompt preview:', prompt.substring(0, 500) + '...');
-    console.log('[summarizeConfluenceDocs] Question:', sanitizedQuestion);
-    console.log('[summarizeConfluenceDocs] Context text length:', sanitizedContextText.length);
-
     // テスト環境の場合はモックレスポンスを返す
     let answer;
     if (process.env.NODE_ENV === 'test') {
-      console.log('[summarizeConfluenceDocs] Using test mock response');
       answer = `これはテスト環境用のモック回答です。\n\n${sanitizedQuestion}に対する回答として、${documents.length}件の関連ドキュメントから情報を抽出しました。`;
     } else {
-      console.log('[summarizeConfluenceDocs] Sending prompt to LLM...');
-      console.log('[summarizeConfluenceDocs] Prompt length:', prompt.length);
-      console.log('[summarizeConfluenceDocs] Documents for context:', documents.length);
-      
       const llmResponse = await ai.generate({ 
         model: GeminiConfig.model, 
         prompt,
         config: GeminiConfig.config 
       });
-      console.log('[summarizeConfluenceDocs] LLM Response type:', typeof llmResponse);
-      console.log('[summarizeConfluenceDocs] LLM Response keys:', Object.keys(llmResponse || {}));
-      console.log('[summarizeConfluenceDocs] LLM Response preview:', JSON.stringify(llmResponse).substring(0, 500) + '...');
       
       // 応答形式の確認とデバッグ
       if (llmResponse && typeof llmResponse === 'object') {
         // custom.text関数を使用（最新のGenkit形式）
         if ((llmResponse as any).custom && typeof (llmResponse as any).custom.text === 'function') {
           answer = (llmResponse as any).custom.text();
-          console.log('[summarizeConfluenceDocs] Using custom.text() function');
         }
         // raw.text関数を使用（代替形式）
         else if ((llmResponse as any).raw && typeof (llmResponse as any).raw.text === 'function') {
           answer = (llmResponse as any).raw.text();
-          console.log('[summarizeConfluenceDocs] Using raw.text() function');
         }
         // 直接textプロパティを使用（古い形式）
         else if ('text' in llmResponse) {
           answer = typeof (llmResponse as any).text === 'function'
             ? (llmResponse as any).text()
             : (llmResponse as any).text;
-          console.log('[summarizeConfluenceDocs] Using direct text property');
         }
         // outputプロパティを使用（別の形式）
         else if ('output' in llmResponse) {
           answer = typeof (llmResponse as any).output === 'function'
             ? (llmResponse as any).output()
             : (llmResponse as any).output;
-          console.log('[summarizeConfluenceDocs] Using output property');
         }
         // message.content配列を使用（最新の形式の別の場所）
         else if ((llmResponse as any).message && Array.isArray((llmResponse as any).message.content) && (llmResponse as any).message.content.length > 0) {
           const textPart = (llmResponse as any).message.content.find((part: any) => part.type === 'text');
           if (textPart && textPart.text) {
             answer = textPart.text;
-            console.log('[summarizeConfluenceDocs] Using message.content[].text');
           } else {
-            console.warn('[summarizeConfluenceDocs] No text part found in message.content');
             answer = JSON.stringify((llmResponse as any).message.content);
           }
         }
         // フォールバック - より積極的にテキストを探す
         else {
-          console.warn('[summarizeConfluenceDocs] Unexpected response format, trying fallback extraction');
-          console.log('[summarizeConfluenceDocs] Full response:', llmResponse);
-          
           // 文字列として直接使えるかチェック
           if (typeof llmResponse === 'string') {
             answer = llmResponse;
@@ -439,15 +415,8 @@ ${truncatedContent}`;
     }
     
     // 応答の長さをログ出力
-    console.log('[summarizeConfluenceDocs] Final answer length:', answer?.length || 0);
-    console.log('[summarizeConfluenceDocs] Final answer:', answer);
-    
     // 応答が空または非常に短い場合のフォールバック
     if (!answer || answer.trim().length < 20) {
-      console.log('[summarizeConfluenceDocs] Response too short, using fallback');
-      console.log('[summarizeConfluenceDocs] Original answer length:', answer?.length || 0);
-      console.log('[summarizeConfluenceDocs] Original answer:', answer);
-      
       // より適切なフォールバック回答を生成
       answer = `提供された参考情報からは、教室のデータ連携や関連データに関する情報が一部確認できますが、教室の登録・編集・削除といった直接的な管理機能の詳細な仕様は見つかりませんでした。`;
     }
@@ -482,7 +451,6 @@ ${truncatedContent}`;
       
       if (referenceStartIndex !== -1) {
         answer = lines.slice(0, referenceStartIndex).join('\n').trim();
-        console.log('[summarizeConfluenceDocs] Removed reference text from answer at line', referenceStartIndex);
       }
     }
 
@@ -503,7 +471,6 @@ ${truncatedContent}`;
     pageId: doc.url || doc.title || ''
   }));
   answerCache.set(sanitizedQuestion, cacheDocumentsForSet, answer, references);
-  console.log('[Phase 5 Cache] 💾 回答をキャッシュに保存');
 
     return { answer, references, prompt };
   } catch (error: any) {

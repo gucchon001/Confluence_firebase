@@ -1,250 +1,183 @@
 # デプロイガイド
 
-このドキュメントでは、Confluence仕様書要約チャットボットのデプロイ手順について説明します。
+このドキュメントは Confluence 仕様書要約チャットボットの本番デプロイ手順を集約したものです。従来のチェックリストやスキーマ確認ガイド、DB再構築後手順はすべて本ドキュメントに統合しました。
 
-## 前提条件
+---
 
-- Node.js v20以上
-- Firebase CLIがインストールされていること
-- Firebase Projectが設定されていること
-- 必要なデータファイルが準備されていること（後述の「データ準備」セクション参照）
+## 1. 前提条件
 
-## 必要な環境変数
+- Node.js v20 以上
+- Firebase CLI / gcloud CLI が利用可能
+- Firebase Project（`confluence-copilot-ppjye`）へのアクセス権
+- Google Cloud Storage バケット `confluence-copilot-data`
+- サービスアカウントキー（`keys/firebase-adminsdk-key.json`）
+- 必要データ（LanceDB、StructuredLabel、ドメイン知識、Lunrキャッシュ）がローカルに存在
 
-### Firebase関連（必須）
+---
+
+## 2. 必須の環境変数
+
+### Firebase（クライアント）
 ```bash
-# Firebase設定（クライアント側）
-NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=confluence-copilot-ppjye
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-
-# Firebase Admin SDK（サーバー側）
-GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account-key.json
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
+NEXT_PUBLIC_API_BASE_URL=https://confluence-copilot-ppjye.web.app
 ```
 
-### Confluence API関連（必須）
+### Firebase Admin / Google Cloud
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=keys/firebase-adminsdk-key.json
+GOOGLE_CLOUD_PROJECT=confluence-copilot-ppjye
+STORAGE_BUCKET=confluence-copilot-data
+```
+
+### Confluence / Gemini
 ```bash
 CONFLUENCE_BASE_URL=https://your-domain.atlassian.net
 CONFLUENCE_USER_EMAIL=your_email@example.com
 CONFLUENCE_API_TOKEN=your_api_token
 CONFLUENCE_SPACE_KEY=CLIENTTOMO
+
+GEMINI_API_KEY=your_gemini_api_key  # or GOOGLE_API_KEY
 ```
 
-### Google AI API関連（必須）
+---
+
+## 3. 事前準備（データ & スキーマ）
+
+### 3.1 StructuredLabel の更新
 ```bash
-GEMINI_API_KEY=your_gemini_api_key
-# または
-GOOGLE_API_KEY=your_google_api_key
+npx tsx scripts/generate-structured-labels.ts 5000
+npx tsx scripts/sync-firestore-labels-to-lancedb.ts
 ```
 
-### その他
+### 3.2 LanceDB / インデックス
 ```bash
-NEXT_PUBLIC_API_BASE_URL=https://your-deployed-app.web.app
+# ベクトル・スカラーインデックスの状態確認と作成
+npx tsx scripts/check-lancedb-indexes.ts
+npx tsx scripts/create-lancedb-indexes.ts
 ```
 
-## データ準備
+### 3.3 ドメイン知識 & キャッシュ
+- `data/domain-knowledge-v2/*.json` が最新であることを確認
+- Lunr インデックス再生成（必要に応じて）
+  ```bash
+  npx tsx src/scripts/generate-lunr-index.ts
+  ```
 
-### 1. ドメイン知識データの準備
-
-ドメイン知識ファイルは検索機能に必須です：
-
+### 3.4 スキーマ検証（任意）
+本番バケットのスキーマが最新拡張スキーマと一致するかを確認。
 ```bash
-# ドメイン知識ディレクトリの確認
-ls -la data/domain-knowledge-v2/
-# 以下のファイルが必要：
-# - final-domain-knowledge-v2.json
-# - keyword-lists-v2.json
+npm run check:production-lancedb-schema
 ```
 
-### 2. LanceDBデータの準備
+---
 
-LanceDBはベクトル検索の中核となるため、事前準備が重要です：
+## 4. デプロイ前チェックリスト
 
-```bash
-# LanceDBディレクトリの作成
-mkdir -p .lancedb
+| カテゴリ | 項目 | 状態 |
+|----------|------|------|
+| コード品質 | `npx tsc --noEmit` / `npm run build` が通る | ☐ |
+| テスト | 主要動作確認（検索・チャット・ログイン） | ☐ |
+| StructuredLabel | 1233ページ全件ラベル生成（成功件数・失敗0件を確認） | ☐ |
+| LanceDB | ベクトルインデックス (IVF_PQ)・`page_id`/`id`/`title` スカラーインデックス作成済み | ☐ |
+| データ同期 | `.lancedb`, `data/domain-knowledge-v2`, `.cache` が最新 | ☐ |
+| Cloud Storage | `npx tsx scripts/upload-production-data.ts` を実行しアップロード成功 | ☐ |
+| Git | `main` に最新コミットを push（自動デプロイ対象） | ☐ |
 
-# 既存の埋め込みデータをLanceDBに投入
-npx tsx src/scripts/lancedb-load.ts data/embeddings-CLIENTTOMO.json
+---
 
-# または、Confluenceから直接同期
-npm run sync:confluence:batch
-```
+## 5. デプロイフロー
 
-### 3. Lunr検索インデックスの準備
+1. **依存関係のインストール & ビルド**
+   ```bash
+   npm install
+   npm run build
+   ```
 
-```bash
-# キャッシュディレクトリの作成
-mkdir -p .cache
+2. **データ同期**
+   ```bash
+   npx tsx scripts/generate-structured-labels.ts 5000
+   npx tsx scripts/sync-firestore-labels-to-lancedb.ts
+   npx tsx scripts/create-lancedb-indexes.ts
+   npx tsx scripts/upload-production-data.ts
+   ```
+   - アップロード結果（ファイル数と合計サイズ）が期待どおりか確認（最新実績: 40 ファイル / 約 50 MB）
 
-# Lunrインデックスの生成（オプション）
-npx tsx src/scripts/generate-lunr-index.ts
-```
+3. **コードのプッシュ**
+   ```bash
+   git push origin main
+   ```
+   - Firebase App Hosting が自動ビルド・デプロイを開始
 
-## ビルド手順
+4. **ビルド監視**
+   - Firebase Console → App Hosting → `confluence-chat`
+   - 所要時間: ビルド 2〜3 分 / デプロイ 1〜2 分
 
-1. 依存関係をインストール
-```bash
-npm install
-```
+---
 
-2. プロダクションビルドを実行
-```bash
-npm run build
-```
+## 6. デプロイ後の確認
 
-## デプロイ手順
+1. **スモークテスト**
+   - ログイン → チャット表示 → 初期応答が即時ストリーミングされる
+   - 代表クエリ:  
+     - 「退会した会員が同じアドレス使ったらどんな表示がでますか」  
+     - 「教室削除ができないのは何が原因ですか」  
+     - 「自動オファー機能の仕様は？」
+   - 検索結果が仕様書優先で表示され、メールテンプレートが過剰に上位に来ないことを確認
 
-### 1. 環境変数の設定
+2. **スキーマ・インデックス確認**
+   ```bash
+   npm run check:production-lancedb-schema
+   npx tsx scripts/check-lancedb-indexes.ts
+   ```
+   - `StructuredLabel` フィールド存在、`structured_feature` が埋まっていること
+   - ベクトル / スカラー各インデックスの存在
 
-Firebase App Hostingで環境変数を設定：
+3. **ログ監視（初回30分 / 24時間）**
+   - Firebase Console → App Hosting → ログ
+   - 例外、BOM削除ログ、Lunr再構築ログなどを確認
 
-```bash
-# Firebase Console → App Hosting → 環境変数で設定
-# または、firebase functions:config:setコマンド使用
+4. **パフォーマンス指標**
+   - 目標: TTFB < 100ms、総処理 < 30s、エラー率 < 1%
 
-firebase functions:config:set \
-  confluence.base_url="https://your-domain.atlassian.net" \
-  confluence.user_email="your_email@example.com" \
-  confluence.api_token="your_api_token" \
-  confluence.space_key="CLIENTTOMO" \
-  gemini.api_key="your_gemini_api_key"
-```
+---
 
-### 2. デプロイ実行
+## 7. トラブルシューティング
 
-#### App Hostingを使用する場合（推奨）
+| 現象 | 確認ポイント | 対処 |
+|------|--------------|------|
+| デプロイ失敗 | Firebase ビルドログ | `npm run build` で再現 → 修正 |
+| 検索が遅い | インデックス有無 / `.cache` ダウンロード | `check-lancedb-indexes` → `create-lancedb-indexes` |
+| StructuredLabel が反映されない | Firestore / LanceDB 同期 | `generate-structured-labels` → `sync-firestore-labels-to-lancedb` |
+| BOM 関連のエラー | ログで `[BOM REMOVED]` が出ているか | 再同期 → データ再アップロード |
 
-```bash
-# 全体的なデプロイ
-firebase deploy
+ロールバックが必要な場合は、Cloud Storage バックアップを保持しておき、`gsutil cp` で復旧する。
 
-# または、Hostingのみ
-firebase deploy --only hosting
-```
+---
 
-#### 従来のHostingを使用する場合
+## 8. 参考スクリプト一覧
 
-```bash
-firebase deploy --only hosting
-```
+| コマンド | 説明 |
+|----------|------|
+| `npx tsx scripts/generate-structured-labels.ts 5000` | StructuredLabel を全ページ再生成 |
+| `npx tsx scripts/sync-firestore-labels-to-lancedb.ts` | Firestore → LanceDB ラベル同期 |
+| `npx tsx scripts/check-lancedb-indexes.ts` | インデックス状態の確認 |
+| `npx tsx scripts/create-lancedb-indexes.ts` | ベクトル / スカラーインデックス作成 |
+| `npx tsx scripts/upload-production-data.ts` | `.lancedb` / ドメイン知識 / .cache を Cloud Storage へアップロード |
+| `npm run check:production-lancedb-schema` | 本番バケットのスキーマ検証 |
+| `npx tsx src/scripts/lancedb-search.ts "クエリ"` | ローカルでの検索テスト |
 
-**注意**: 現在、Firebase Functionsのデプロイには問題があります。`functions.region is not a function`というエラーが発生します。これはFirebase SDKのバージョンの問題である可能性があります。
+---
 
-## アクセスURL
+## 9. 自動化／GitHub Actions（任意）
+Cloud Storage からデータをダウンロードしてビルドするフローを自動化する場合は `npm run migrate:download` を活用する。詳細は本ファイル末尾の「Cloud Storage への移行自動化」を参照。
 
-デプロイ後、以下のURLでアプリケーションにアクセスできます：
-
-- **本番環境**: https://confluence-copilot-ppjye.web.app
-
-## デプロイ後の確認事項
-
-### 1. データの同期確認
-
-```bash
-# Confluenceデータの同期テスト
-npm run test:confluence
-
-# LanceDB検索のテスト
-npx tsx src/scripts/lancedb-search.ts "テストクエリ" --table confluence
-```
-
-### 2. 認証の確認
-
-- Google認証が正常に動作するか
-- Firestoreへのアクセス権限が正しく設定されているか
-
-### 3. 検索機能の確認
-
-- LanceDBからの検索結果が正常に返されるか
-- 埋め込みベクトルの生成が正常に動作するか
-- ドメイン知識によるキーワード抽出が動作するか
-
-## 重要な注意点
-
-### 1. LanceDBの永続化
-
-- LanceDBはローカルファイルシステムベースのため、Firebase App Hostingでは**一時的なストレージ**として動作
-- 本格運用では、Cloud StorageやCloud SQLへの移行を検討
-
-### 2. メモリ使用量
-
-- 埋め込みモデル（@xenova/transformers）は大量のメモリを使用
-- `apphosting.yaml`で`maxInstances`を適切に設定
-
-### 3. セキュリティ
-
-- APIキーは環境変数で管理し、ソースコードに直接記述しない
-- サービスアカウントキーは適切に保護
-
-## トラブルシューティング
-
-### 1. データファイル関連のエラー
-
-#### ドメイン知識ファイルが見つからない
-```bash
-# エラー: Cannot find module 'data/domain-knowledge-v2/keyword-lists-v2.json'
-# 解決策: データ準備セクションを参照してファイルを準備
-```
-
-#### LanceDBテーブルが見つからない
-```bash
-# エラー: Table 'confluence' not found
-# 解決策: LanceDBデータの準備を実行
-npx tsx src/scripts/lancedb-load.ts data/embeddings-CLIENTTOMO.json
-```
-
-### 2. Next.js 15の動的ルートパラメータの問題
-
-Next.js 15では、動的ルートパラメータの扱い方が変更されました。ルートハンドラーでは、`params`が`Promise`型として扱われるようになり、`await`で非同期に取得する必要があります。
-
-```typescript
-// Before
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { flow: string } }
-) {
-  const flow = params.flow;
-}
-
-// After
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ flow: string }> }
-) {
-  const params = await context.params;
-  const flow = params.flow;
-}
-```
-
-### 3. Firebase Functionsのデプロイエラー
-
-Firebase Functionsのデプロイ時に`functions.region is not a function`というエラーが発生する場合は、以下の点を確認してください：
-
-1. Firebase Admin SDKとFirebase Functionsのバージョンが互換性があるか
-2. `functions/package.json`のFirebase Functionsのバージョンを確認
-3. 必要に応じてFirebase Functionsのバージョンをアップデート
-
-### 4. よくある問題と解決策
-
-1. **認証エラー**: Firebase設定の確認
-2. **権限エラー**: セキュリティルールの確認
-3. **クエリエラー**: インデックスの確認
-4. **接続エラー**: ネットワーク設定の確認
-5. **メモリ不足**: インスタンス数の調整
-
-### 5. ログ確認
-
-```bash
-# Firebase App Hostingのログを確認
-firebase functions:log
-
-# アプリケーションのログを確認
-# Firebase Console → App Hosting → ログ
-```
+---
 
 ## Cloud Storageへの移行自動化
 

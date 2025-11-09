@@ -134,7 +134,6 @@ if (typeof window === 'undefined' && !admin.apps.length) {
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID
     });
     
-    console.log('[Firebase Admin] Successfully initialized with application default credentials');
   } catch (error) {
     console.error('[Firebase Admin] Initialization error:', error);
   }
@@ -162,11 +161,6 @@ async function lancedbRetrieverTool(
       timestamp: new Date().toISOString(),
     });
     
-    // 開発環境のみログ
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[lancedbRetrieverTool] 🔍 Search started for query: "${query}"`);
-    }
-
     // モックデータの使用を無効化（本番データを使用）
     if (false) {
       // この部分は実行されません
@@ -182,12 +176,12 @@ async function lancedbRetrieverTool(
 
     // デバッグ: フィルタ内容を可視化（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
-      console.log('[lancedbRetrieverTool] Filter params:', {
+      writeLogToFile('info', 'filter_params', 'Filter parameters', {
         spaceKey: filters?.spaceKey,
         labels: filters?.labels,
         labelFilters: filters?.labelFilters,
+        filterQuery: filterQuery || '(none)'
       });
-      console.log('[lancedbRetrieverTool] Generated filterQuery:', filterQuery || '(none)');
     }
 
     // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
@@ -218,8 +212,10 @@ async function lancedbRetrieverTool(
     
     // 検索結果ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
-      console.log('[lancedbRetrieverTool] Raw search results count:', unifiedResults.length);
-      console.log('[lancedbRetrieverTool] Raw search results titles:', unifiedResults.map(r => r.title));
+      writeLogToFile('info', 'search_results', 'Raw search results stats', {
+        count: unifiedResults.length,
+        titles: unifiedResults.map(r => r.title)
+      });
     }
     
     // 検索処理時間の計測（開発環境のみ）
@@ -371,11 +367,13 @@ export async function retrieveRelevantDocs({
     
     // 検索処理ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[retrieveRelevantDocs] Searching for question: ${question}`);
+      writeLogToFile('info', 'retrieve_query', 'Searching for question', { question });
     }
     const results = await lancedbRetrieverTool(question, { labels, labelFilters });
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[retrieveRelevantDocs] Found ${results.length} relevant documents`);
+      writeLogToFile('info', 'retrieve_results', 'Retrieve completed', {
+        count: results.length
+      });
     }
     return results;
   } catch (error: any) {
@@ -400,9 +398,6 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
 
   // ★★★ PERF LOG: ドキュメント取得全体の時間計測 ★★★
   const enrichStartTime = Date.now();
-  console.log(`[PERF] 📚 enrichWithAllChunks started for ${results.length} results`);
-  
-  // ログファイルにチャンク統合開始を記録
   writeLogToFile('info', 'enrich_start', 'Enriching chunks started', {
     resultCount: results.length,
   });
@@ -465,7 +460,10 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
         if (allChunks.length > 10) {
           // 大量チャンクの場合: 並列処理で高速化
           if (process.env.NODE_ENV === 'development') {
-            console.log(`[ChunkMerger] Large chunk set detected: ${allChunks.length} chunks, using parallel processing`);
+            writeLogToFile('info', 'chunk_merger', 'Large chunk set detected', {
+              chunkCount: allChunks.length,
+              strategy: 'parallel'
+            });
           }
           
           const contentPromises = allChunks.map(async (chunk) => {
@@ -484,10 +482,13 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
         }
 
         mergedCount++;
-        if (allChunks.length > 1) { // 複数チャンクの場合のみログ出力
-          console.log(
-            `[ChunkMerger] Merged ${allChunks.length} chunks for "${result.title}" (${result.content?.length || 0} → ${mergedContent.length} chars)`
-          );
+        if (process.env.NODE_ENV === 'development' && allChunks.length > 1) {
+          writeLogToFile('info', 'chunk_merger', 'Chunks merged', {
+            title: result.title,
+            chunkCount: allChunks.length,
+            originalLength: result.content?.length || 0,
+            mergedLength: mergedContent.length
+          });
         }
 
         return {
@@ -511,10 +512,6 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
 
   // ★★★ PERF LOG: ドキュメント取得全体の完了時間 ★★★
   const enrichDuration = Date.now() - enrichStartTime;
-  console.log(`[PERF] ✅ enrichWithAllChunks completed in ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s)`);
-  console.log(`[PERF]    - Total results: ${results.length}`);
-  console.log(`[PERF]    - Skipped (not chunked): ${skippedCount}`);
-  console.log(`[PERF]    - Merged: ${mergedCount}`);
   
   // ログファイルにチャンク統合完了を記録
   writeLogToFile('info', 'enrich_complete', 'Enriching chunks completed', {
@@ -532,10 +529,13 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
     });
   }
 
-  // Phase 0A-4 ROLLBACK: サマリーログを開発環境のみに
   if (process.env.NODE_ENV === 'development' && mergedCount > 0) {
     const totalChunks = enriched.reduce((sum, r) => sum + (r.chunkCount || 1), 0);
-    console.log(`[ChunkMerger] ⚡ Enrichment complete. Skipped: ${skippedCount}, Merged: ${mergedCount}, Total chunks: ${totalChunks}`);
+    writeLogToFile('info', 'chunk_merger', 'Enrichment summary', {
+      skipped: skippedCount,
+      merged: mergedCount,
+      totalChunks
+    });
   }
 
   return enriched;
@@ -604,7 +604,11 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
 
     // 詳細ログ: クエリ時間と結果数
     if (scanDuration > 100 || process.env.NODE_ENV === 'development') {
-      console.log(`[getAllChunksByPageIdInternal] ✅ Query completed in ${scanDuration}ms, found ${results.length} results for pageId: ${pageId}`);
+      writeLogToFile('info', 'chunks_query', 'Query completed', {
+        pageId,
+        durationMs: scanDuration,
+        resultCount: results.length
+      });
     }
     
     if (scanDuration > 1000) {
@@ -632,10 +636,12 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
         title: removeBOM(chunk.title || ''),
       }));
       
-      if (scanDuration > 100) { // 100ms以上の場合のみログ出力
-        console.log(`[getAllChunksByPageId] ⚡ Phase 5最適化: ${results.length} chunks in ${scanDuration}ms for pageId: ${pageId}`);
-      } else if (process.env.NODE_ENV === 'development') {
-        console.log(`[getAllChunksByPageId] ⚡ Phase 5最適化: ${results.length} chunks in ${scanDuration}ms for pageId: ${pageId}`);
+      if (scanDuration > 100 || process.env.NODE_ENV === 'development') {
+        writeLogToFile('info', 'chunks_query', 'Chunks fetched', {
+          pageId,
+          durationMs: scanDuration,
+          chunkCount: results.length
+        });
       }
       
       return cleanedResults;
@@ -643,7 +649,10 @@ async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
     
     // 見つからない場合は空配列を返す
     if (scanDuration > 100) {
-      console.log(`[getAllChunksByPageId] ⚠️ No chunks found in ${scanDuration}ms for pageId: ${pageId}`);
+      writeLogToFile('warn', 'chunks_query', 'No chunks found', {
+        pageId,
+        durationMs: scanDuration
+      });
     }
     
     return [];
@@ -685,9 +694,11 @@ export async function filterInvalidPagesServer(results: any[]): Promise<any[]> {
       if (label.is_valid === false) {
         // 無効ページ除外ログ（開発環境のみ）
         if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `[EmptyPageFilter] Excluded: ${result.title} (is_valid: false, content_length: ${label.content_length || 0}chars)`
-          );
+          writeLogToFile('info', 'empty_page_filter', 'Excluded invalid page', {
+            title: result.title,
+            reason: 'is_valid:false',
+            contentLength: label.content_length || 0
+          });
         }
         continue;
       }
@@ -697,9 +708,11 @@ export async function filterInvalidPagesServer(results: any[]): Promise<any[]> {
       if (contentLength < 100) {
         // 短いコンテンツ除外ログ（開発環境のみ）
         if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `[EmptyPageFilter] Excluded: ${result.title} (no label, content too short: ${contentLength}chars)`
-          );
+          writeLogToFile('info', 'empty_page_filter', 'Excluded short content page', {
+            title: result.title,
+            reason: 'content_short',
+            contentLength
+          });
         }
         continue;
       }
@@ -711,9 +724,11 @@ export async function filterInvalidPagesServer(results: any[]): Promise<any[]> {
   if (validResults.length < results.length) {
     // フィルタ結果ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
-      console.log(
-        `[EmptyPageFilter] Filtered: ${results.length} → ${validResults.length} results (removed ${results.length - validResults.length} invalid pages)`
-      );
+      writeLogToFile('info', 'empty_page_filter', 'Filter summary', {
+        before: results.length,
+        after: validResults.length,
+        removed: results.length - validResults.length
+      });
     }
   }
 

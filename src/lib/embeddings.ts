@@ -12,7 +12,6 @@ const embeddingCache = new Map<string, { embedding: number[]; timestamp: number 
 // 🔧 キャッシュをクリアする関数（BOM問題のデバッグ用）
 export function clearEmbeddingCache(): void {
   embeddingCache.clear();
-  console.log('🔧 [Cache] Embedding cache cleared');
 }
 
 const GEMINI_EMBEDDING_ENDPOINT =
@@ -39,14 +38,6 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   }
 
   const cleanedText = removeBOM(text).trim();
-  if (cleanedText !== text) {
-    console.warn(`🔍 [BOM REMOVED IN getEmbeddings] BOM removed from input text`, {
-      beforeLength: text.length,
-      afterLength: cleanedText.length,
-      beforeFirstCharCode: originalFirstCharCode,
-      afterFirstCharCode: cleanedText.length > 0 ? cleanedText.charCodeAt(0) : -1
-    });
-  }
   text = cleanedText;
   
   const afterFirstCharCode = text.length > 0 ? text.charCodeAt(0) : -1;
@@ -61,10 +52,6 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   const cacheKey = `embedding:${cleanTextForCache.substring(0, 100)}`;
   const cached = embeddingCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) { // 15分TTL
-    const duration = Date.now() - startTime;
-    if (duration > 100) {
-      console.log(`🚀 埋め込みベクトルをキャッシュから取得 (${duration}ms): ${cleanTextForCache.substring(0, 50)}...`);
-    }
     return cached.embedding;
   }
 
@@ -92,28 +79,8 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     }
   }
   
-  // 🔍 デバッグログ: getGeminiEmbeddingsに渡す直前のテキストを確認
-  if (text !== finalTextForEmbedding) {
-    console.warn(`🔍 [TEXT MODIFIED IN getEmbeddings] Text was modified before getGeminiEmbeddings:`, {
-      originalLength: text.length,
-      finalLength: finalTextForEmbedding.length,
-      originalFirstCharCode: text.length > 0 ? text.charCodeAt(0) : -1,
-      finalFirstCharCode: finalTextForEmbedding.length > 0 ? finalTextForEmbedding.charCodeAt(0) : -1,
-      originalPreview: text.substring(0, 50),
-      finalPreview: finalTextForEmbedding.substring(0, 50)
-    });
-  }
-
-  console.log(`ℹ️ [EMBED TEXT STATUS]`, {
-    source: 'getEmbeddings',
-    firstCharCode: finalTextForEmbedding.length > 0 ? finalTextForEmbedding.charCodeAt(0) : -1,
-    length: finalTextForEmbedding.length,
-    preview: finalTextForEmbedding.substring(0, 50)
-  });
-  
   // Phase 0A-4: 埋め込み生成の開始ログ（本番環境でも遅延検知のため）
   const generationStartTime = Date.now();
-  console.log(`🔍 埋め込みベクトル生成中: ${finalTextForEmbedding.substring(0, 50)}...`);
   
   const EMBEDDING_TIMEOUT = 30000; // 30秒
   const embedding = await Promise.race([
@@ -146,11 +113,6 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     embeddingCache.delete(firstKey);
   }
   
-  const totalDuration = Date.now() - startTime;
-  if (totalDuration > 1000) {
-    console.log(`✅ [Embedding] Total time: ${totalDuration}ms (generation: ${generationDuration}ms, cache: ${totalDuration - generationDuration}ms)`);
-  }
-  
   return embedding;
 }
 
@@ -172,14 +134,6 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   }
 
   let cleanText = removeBOM(text).trim();
-  if (cleanText !== text) {
-    console.warn(`🔍 [BOM REMOVED IN getGeminiEmbeddings] BOM removed from input text`, {
-      beforeLength: text.length,
-      afterLength: cleanText.length,
-      beforeFirstCharCode: originalFirstCharCode,
-      afterFirstCharCode: cleanText.length > 0 ? cleanText.charCodeAt(0) : -1
-    });
-  }
 
   if (cleanText.length === 0) {
     cleanText = 'No content available';
@@ -193,39 +147,12 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
     }
   }
 
-  const finalFirstCharCode = cleanText.length > 0 ? cleanText.charCodeAt(0) : -1;
-  if (originalHasBOM || finalFirstCharCode === 0xFEFF) {
-    console.warn(`🔍 [TEXT READY FOR embedContent]`, {
-      finalLength: cleanText.length,
-      finalFirstCharCode,
-      preview: cleanText.substring(0, 50)
-    });
-  }
-
-  console.log(`ℹ️ [EMBED TEXT STATUS]`, {
-    source: 'getGeminiEmbeddings',
-    firstCharCode: cleanText.length > 0 ? cleanText.charCodeAt(0) : -1,
-    length: cleanText.length,
-    preview: cleanText.substring(0, 50)
-  });
-
   const requestPayload = {
     content: {
       role: 'user',
       parts: [{ text: cleanText }]
     }
   };
-
-  console.log(`ℹ️ [EMBED REQUEST PAYLOAD]`, {
-    role: requestPayload.content.role,
-    partsCount: requestPayload.content.parts.length,
-    partTypes: requestPayload.content.parts.map(part => ({
-      hasText: typeof part.text === 'string',
-      hasInlineData: 'inlineData' in part && part.inlineData !== undefined
-    })),
-    textPartPreview: cleanText.substring(0, 50),
-    textPartLength: cleanText.length
-  });
 
   try {
     const embeddingValues = await callGeminiEmbeddingApi(requestPayload);

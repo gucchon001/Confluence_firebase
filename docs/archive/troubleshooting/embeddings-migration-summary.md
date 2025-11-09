@@ -3,7 +3,8 @@
 ## 移行内容
 
 **日時**: 2025-10-28  
-**変更内容**: `@xenova/transformers` から Gemini Embeddings API (`text-embedding-004`) に移行
+**変更内容**: `@xenova/transformers` から Gemini Embeddings API (`text-embedding-004`) に移行  
+**追記 (2025-11-09)**: `@google/generative-ai` の `embedContent()` 経由を廃止し、Gemini REST API 直接呼び出し + APIキーサニタイズ（BOM除去）に切り替え
 
 ## 主な変更点
 
@@ -16,6 +17,7 @@
 ### 追加されたもの
 1. ✅ Gemini Embeddings API (`text-embedding-004`) を使用
 2. ✅ シンプルで信頼性の高い実装
+3. ✅ 2025-11-09: REST API 直接呼び出し（`fetch`）に変更し、BOMサニタイズとタイムアウト制御を強化
 
 ## コード変更
 
@@ -27,16 +29,54 @@ import { pipeline } from '@xenova/transformers';
 ```
 
 **変更後**:
-```typescript
-import { GoogleGenerativeAI } from '@google/generative-ai';
+- 2025-10-28 以降（REST呼び出し導入前）:
+  ```typescript
+  import { GoogleGenerativeAI } from '@google/generative-ai';
 
-async function getGeminiEmbeddings(text: string): Promise<number[]> {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
-  const result = await model.embedContent(text);
-  return result.embedding.values;
-}
-```
+  async function getGeminiEmbeddings(text: string): Promise<number[]> {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+    const result = await model.embedContent(text);
+    return result.embedding.values;
+  }
+  ```
+
+- 2025-11-09 以降（現行実装）:
+  ```typescript
+  import fetch from 'node-fetch';
+  import { removeBOM } from '@/lib/bom-utils';
+
+  async function getGeminiEmbeddings(text: string): Promise<number[]> {
+    const rawApiKey =
+      process.env.GEMINI_API_KEY ??
+      process.env.GOOGLEAI_API_KEY ??
+      process.env.GOOGLE_GENAI_API_KEY;
+
+    if (!rawApiKey) {
+      throw new Error('GEMINI APIキーが設定されていません');
+    }
+
+    const apiKey = removeBOM(rawApiKey.trim());
+    const cleaned = removeBOM(text).trim();
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: {
+            role: 'user',
+            parts: [{ text: cleaned }],
+          },
+        }),
+      },
+    );
+
+    const data = await response.json();
+    return data?.embedding?.values as number[];
+  }
+  ```
 
 ### `src/config/ai-models-config.ts`
 **変更前**:

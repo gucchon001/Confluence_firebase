@@ -1,7 +1,7 @@
 # Architecture ドキュメント実装検証レポート
 
 **作成日**: 2025年10月11日  
-**最終更新**: 2025年11月6日（Gemini Embeddings API移行を反映）  
+**最終更新**: 2025年11月9日（Gemini APIキーサニタイズ対応を反映）  
 **検証対象**: `docs/architecture/` 全9ファイル
 
 ---
@@ -215,7 +215,7 @@ export async function searchLanceDB(params: LanceDBSearchParams) {
 "next": "15.3.3" ✅
 "@lancedb/lancedb": "^0.22.0" ✅
 "firebase": "^11.9.1" ✅
-"@google/generative-ai": "^0.21.0" ✅
+"@google/generative-ai": "0.23.0" ✅
 "lunr": "^2.3.9" ✅
 ```
 
@@ -417,7 +417,7 @@ this.field('labels', { boost: 2.0 }); // ⚠️ boost値が異なる
 **実装確認**:
 ```typescript
 // src/app/api/streaming-process/route.ts
-// ✅ ストリーミング実装確認済み
+// ✅ ストリーミング実装確認済み（Gemini APIキーのBOMサニタイズ後も再検証済み）
 
 // src/components/chat-page.tsx
 // ✅ プログレス表示、ストリーミングUI確認済み

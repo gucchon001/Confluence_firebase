@@ -154,18 +154,13 @@ export const autoLabelFlow = ai.defineFlow(
     outputSchema: OutputSchema,
   },
   async (input) => {
-    console.log(`\n🏷️ ラベル生成: ${input.title}`);
-    
     // Step 1: ルールベースで高速判定（80%のケースに対応）
     const ruleBasedLabel = tryRuleBasedLabeling(input);
     if (ruleBasedLabel && ruleBasedLabel.confidence && ruleBasedLabel.confidence >= 0.85) {
-      console.log(`  ✅ ルールベース生成 (信頼度: ${ruleBasedLabel.confidence})`);
       return ruleBasedLabel;
     }
     
     // Step 2: LLMベースでラベル生成（20%のケース）
-    console.log(`  🤖 LLM生成中...`);
-    
     try {
       // Domain Knowledgeを読み込み
       const domainKnowledge = await loadDomainKnowledge();
@@ -203,9 +198,16 @@ export const autoLabelFlow = ai.defineFlow(
       });
       
       // JSONをパース
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
       const jsonText = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : text;
-      const result = JSON.parse(jsonText.trim());
+      let parsed = JSON.parse(jsonText.trim());
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) {
+          throw new Error('LLM output array is empty');
+        }
+        parsed = parsed[0];
+      }
+      const result = parsed;
       
       // 信頼度を設定（LLMベース）
       result.confidence = result.confidence || 0.7;
@@ -221,9 +223,6 @@ export const autoLabelFlow = ai.defineFlow(
       // Phase 0A-1.5: コンテンツ長と有効性を追加
       result.content_length = input.content.length;
       result.is_valid = input.content.length >= 100;
-      
-      console.log(`  ✅ LLM生成完了 (信頼度: ${result.confidence})`);
-      console.log(`     ${result.domain} > ${result.feature}`);
       
       return result;
       

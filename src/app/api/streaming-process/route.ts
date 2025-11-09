@@ -52,16 +52,6 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
     // Timestamp変換ロジックを共通化
     const firestoreData = convertPostLogToAdminFirestore(logData);
     
-    // 開発環境のみログ出力
-    if (process.env.NODE_ENV === 'development' && logData.totalTime > 1000) {
-      console.log('🔍 サーバーサイド投稿ログ保存:', {
-        userId: logData.userId,
-        totalTime: logData.totalTime,
-        searchTime: logData.searchTime,
-        aiGenerationTime: logData.aiGenerationTime
-      });
-    }
-    
     const docRef = await postLogsRef.add(firestoreData);
     return docRef.id;
   } catch (error) {
@@ -72,11 +62,6 @@ async function savePostLogToAdminDB(logData: Omit<PostLog, 'id'>): Promise<strin
 
 // フォールバック回答生成関数
 function generateFallbackAnswer(question: string, context: any[]): string {
-  // フォールバック回答生成ログ（開発環境のみ）
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔄 フォールバック回答生成開始');
-  }
-  
   // 関連文書から主要な情報を抽出
   const relevantDocs = context.slice(0, 3); // 上位3件の文書を使用
   const titles = relevantDocs.map(doc => doc.title || 'タイトル不明').filter(Boolean);
@@ -169,33 +154,18 @@ async function ensureServerInitialized() {
   
   // バックグラウンド初期化が完了済みか確認
   if (isStartupInitialized()) {
-    // 初期化完了ログ（開発環境のみ）
-    if (process.env.NODE_ENV === 'development') {
-      console.log('✅ [API] バックグラウンド初期化完了済み - 即座に処理開始');
-    }
     return 0; // 待ち時間なし
   }
   
   // まだ初期化中の場合は完了を待つ
-  if (process.env.NODE_ENV === 'development') {
-    console.log('⏳ [API] バックグラウンド初期化中 - 完了を待機...');
-  }
   await waitForInitialization();
   const waitTime = Date.now() - startTime;
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`✅ [API] 初期化完了 (待機時間: ${waitTime}ms)`);
-  }
   return waitTime;
 }
 
 export const POST = async (req: NextRequest) => {
   // API呼び出し開始時刻を記録（TTFB計測用）
   const apiStartTime = Date.now();
-  
-  // API呼び出しログ（開発環境のみ）
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🚀 [API] streaming-process route called');
-  }
   
   try {
     // サーバー起動時に1回だけ初期化（2回目以降は即座にreturn）
@@ -219,15 +189,6 @@ export const POST = async (req: NextRequest) => {
     }
     
     const cleanBodyText = removeBOM(bodyText);
-    
-    // 🔍 原因特定: BOM検出ログを追加
-    if (bodyText !== cleanBodyText) {
-      console.warn(`🔍 [BOM REMOVED FROM REQUEST BODY] HTTPリクエストボディからBOMを除去しました:`, {
-        originalLength: bodyText.length,
-        cleanedLength: cleanBodyText.length,
-        preview: bodyText.substring(0, 100)
-      });
-    }
     
     // JSONパースのエラーハンドリング
     let body: any;
@@ -275,10 +236,6 @@ export const POST = async (req: NextRequest) => {
           beforeLength: question.length
         });
         question = removeBOM(question).trim();
-        console.warn(`🔍 [QUESTION MODIFIED] question変数が変更されました:`, {
-          afterLength: question.length,
-          afterPreview: question.substring(0, 50)
-        });
       }
       
       // questionが空文字列になった場合はエラー
@@ -291,25 +248,12 @@ export const POST = async (req: NextRequest) => {
       }
     }
     
-    // リクエストデータログ（開発環境のみ）
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📝 [API] Request data:', {
-        questionLength: question?.length,
-        chatHistoryLength: chatHistory?.length,
-        labelFilters
-      });
-    }
-
     if (!question || typeof question !== 'string' || question.trim().length === 0) {
       return NextResponse.json({ 
         error: 'question is required and must be a non-empty string'
       }, { status: 400 });
     }
 
-    // ストリーミング開始ログ（開発環境のみ）
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🌊 処理ステップストリーミングAPI開始:', question);
-    }
     screenTestLogger.info('ai', `Streaming process request: "${question}"`, { 
       chatHistoryLength: chatHistory.length,
       labelFilters 
@@ -337,7 +281,7 @@ export const POST = async (req: NextRequest) => {
           // TTFB（Time To First Byte）を計測: API呼び出しから最初のストリーミングチャンク送信完了までの時間
           const ttfbTime = Date.now() - apiStartTime;
           if (ttfbTime > 1000) { // 1秒以上の場合のみログ出力（パフォーマンス問題の検知）
-            console.warn('⚠️ [TTFB] Slow initial response:', {
+            screenTestLogger.warn('performance', 'Slow initial response detected', {
               ttfbTime: `${ttfbTime}ms`,
               serverStartupTime: `${serverStartupTime}ms`,
               initWaitTime: `${ttfbTime - serverStartupTime}ms`
@@ -357,12 +301,10 @@ export const POST = async (req: NextRequest) => {
           const clientStartTime = clientStartTimeStr ? parseInt(clientStartTimeStr) : Date.now();
           
           const latency = Date.now() - clientStartTime;
-          // 開発環境のみログ出力
-          if (process.env.NODE_ENV === 'development' && latency > 100) {
-            console.log('⏱️ 処理時間計測開始:', {
+          if (latency > 100) {
+            screenTestLogger.logOverallPerformance(question, latency, {
               clientStartTime: new Date(clientStartTime).toISOString(),
-              serverReceiveTime: new Date().toISOString(),
-              latency: latency
+              serverReceiveTime: new Date().toISOString()
             });
           }
           
@@ -415,16 +357,6 @@ export const POST = async (req: NextRequest) => {
           const searchEndTime = Date.now();
           searchTime = searchEndTime - searchStartTime;
           
-          // 投稿ログ用データ（開発環境のみ）
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🔍 投稿ログ用データ:', {
-              userId,
-              userDisplayName,
-              sessionId,
-              userAgent: userAgent.substring(0, 50) + '...',
-              ipAddress
-            });
-          }
           // 検索ソース別の集計
           const searchSourceStats = relevantDocs.reduce((acc: Record<string, number>, doc) => {
             const source = doc.source || 'unknown';
@@ -526,10 +458,6 @@ export const POST = async (req: NextRequest) => {
             details: processingAnalysis
           });
 
-          // 関連文書取得完了（開発環境のみ）
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`📚 関連文書取得完了: ${relevantDocs.length}件`);
-          }
           screenTestLogger.info('search', `Retrieved ${relevantDocs.length} relevant documents for streaming`);
 
           // ステップ3: AIが回答を生成中...
@@ -861,11 +789,6 @@ export const POST = async (req: NextRequest) => {
             500,
             { requestId: crypto.randomUUID() }
           );
-          
-          // Genkitエラーハンドリングログ（開発環境のみ）
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[GenkitErrorHandler] Streaming error handling applied:', genkitErrorResponse.body);
-          }
           
           // 既存のエラーメッセージ形式を維持
           const errorMessage = {

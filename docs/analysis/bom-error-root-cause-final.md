@@ -117,16 +117,38 @@ BOM文字は以下のいずれかから来ている可能性があります：
 
 ```typescript
 async function generateEmbedding(text: string): Promise<number[]> {
-  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-  const cleanText = text.replace(/\uFEFF/g, '');
-  
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
-  
-  const result = await model.embedContent(cleanText);
-  return result.embedding.values;
+  const rawApiKey =
+    process.env.GEMINI_API_KEY ??
+    process.env.GOOGLEAI_API_KEY ??
+    process.env.GOOGLE_GENAI_API_KEY;
+
+  if (!rawApiKey) {
+    throw new Error('GEMINI APIキーが設定されていません');
+  }
+
+  const apiKey = removeBOM(rawApiKey.trim());
+  const cleanText = removeBOM(text).trim();
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: {
+          role: 'user',
+          parts: [{ text: cleanText }],
+        },
+      }),
+    },
+  );
+
+  const data = await response.json();
+  return data?.embedding?.values as number[];
 }
 ```
+
+- SDK (`@google/generative-ai`) の `embedContent()` ではなく REST API 経由で呼び出し、BOMサニタイズとタイムアウトを実装。
 
 ### 2. `stripHtml`関数の修正
 
