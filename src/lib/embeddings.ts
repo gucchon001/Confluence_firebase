@@ -266,9 +266,13 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
 }
 
 async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const rawApiKey = process.env.GEMINI_API_KEY;
+  if (!rawApiKey) {
     throw new Error('GEMINI_API_KEY environment variable is not set');
+  }
+  const apiKey = rawApiKey.trim();
+  if (apiKey.length === 0) {
+    throw new Error('GEMINI_API_KEY environment variable is empty after trimming');
   }
 
   let response: Response;
