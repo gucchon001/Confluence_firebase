@@ -9,6 +9,7 @@ import Handlebars from 'handlebars';
 import { ai } from '../genkit';
 import { GeminiConfig } from '@/config/ai-models-config';
 import { getAnswerCache } from '@/lib/answer-cache';
+import { removeBOM, checkStringForBOM } from '@/lib/bom-utils';
 // 重複コード修正をロールバック
 
 // フォールバック回答生成関数
@@ -230,9 +231,26 @@ export async function* streamingSummarizeConfluenceDocs(
   references: any[];
 }, void, unknown> {
   
-  const { question, context, chatHistory } = params;
+  const { question: rawQuestion, context, chatHistory } = params;
+
+  const questionBomCheck = checkStringForBOM(rawQuestion);
+  if (questionBomCheck.hasBOM || rawQuestion.charCodeAt(0) === 0xFEFF) {
+    console.warn('🚨 [BOM DETECTED] Incoming question contains BOM characters', {
+      firstCharCode: rawQuestion.charCodeAt(0),
+      preview: rawQuestion.substring(0, 20),
+      bomCheck: questionBomCheck
+    });
+  }
+
+  const sanitizedQuestion = removeBOM(rawQuestion).trim();
+  if (sanitizedQuestion !== rawQuestion) {
+    console.warn('🔧 [BOM REMOVED] Question sanitized for AI generation', {
+      beforeLength: rawQuestion.length,
+      afterLength: sanitizedQuestion.length
+    });
+  }
   
-  console.log('🌊 ストリーミング要約開始:', question);
+  console.log('🌊 ストリーミング要約開始:', sanitizedQuestion);
   console.log('🔍 [DEBUG CONTEXT] context.length:', context.length);
   console.log('🔍 [DEBUG CONTEXT] First 3 context titles:', context.slice(0, 3).map(d => d.title));
   
@@ -245,7 +263,7 @@ export async function* streamingSummarizeConfluenceDocs(
   //   console.log('[Phase 5 Cache] 🗑️ 急募機能のキャッシュをクリアしました');
   // }
   
-  const cachedAnswer = answerCache.get(question, context);
+  const cachedAnswer = answerCache.get(sanitizedQuestion, context);
   
   if (cachedAnswer) {
     console.log('[Phase 5 Streaming Cache] ⚡ キャッシュヒット - 即座に配信');
@@ -315,25 +333,59 @@ ${truncatedContent}`;
 
     // プロンプトの準備
     const template = Handlebars.compile(STREAMING_PROMPT_TEMPLATE);
-    const prompt = template({
-      context: contextText,
-      question: question
+
+    const contextBomCheck = checkStringForBOM(contextText);
+    if (contextBomCheck.hasBOM) {
+      console.warn('🚨 [BOM DETECTED] Context text contains BOM characters', {
+        firstCharCode: contextText.charCodeAt(0),
+        preview: contextText.substring(0, 100),
+        bomCheck: contextBomCheck
+      });
+    }
+    const sanitizedContextText = removeBOM(contextText);
+    if (sanitizedContextText !== contextText) {
+      console.warn('🔧 [BOM REMOVED] Context text sanitized for AI generation', {
+        beforeLength: contextText.length,
+        afterLength: sanitizedContextText.length
+      });
+    }
+
+    const promptRaw = template({
+      context: sanitizedContextText,
+      question: sanitizedQuestion
     });
+
+    const promptBomCheck = checkStringForBOM(promptRaw);
+    if (promptBomCheck.hasBOM) {
+      console.warn('🚨 [BOM DETECTED] Prompt contains BOM characters before AI generate', {
+        firstCharCode: promptRaw.charCodeAt(0),
+        preview: promptRaw.substring(0, 100),
+        bomCheck: promptBomCheck
+      });
+    }
+
+    const sanitizedPrompt = removeBOM(promptRaw);
+    if (sanitizedPrompt !== promptRaw) {
+      console.warn('🔧 [BOM REMOVED] Prompt sanitized before AI generate', {
+        beforeLength: promptRaw.length,
+        afterLength: sanitizedPrompt.length
+      });
+    }
     
-    console.log('🔍 [DEBUG PROMPT] Full prompt:', prompt);
-    console.log('🔍 [DEBUG CONTEXT_TEXT] contextText:', contextText);
+    console.log('🔍 [DEBUG PROMPT] Full prompt:', sanitizedPrompt);
+    console.log('🔍 [DEBUG CONTEXT_TEXT] contextText:', sanitizedContextText);
 
     // ストリーミング生成の実行（Phase 3最適化: タイムアウト付きエラーハンドリング）
     let result;
     try {
       console.log('🔍 [DEBUG] AI generate開始');
-      console.log('🔍 [DEBUG] prompt length:', prompt.length);
+      console.log('🔍 [DEBUG] prompt length:', sanitizedPrompt.length);
       console.log('🔍 [DEBUG] context length:', context.length);
       
       // Phase 3最適化: タイムアウト付きでAI生成を実行
       const generatePromise = ai.generate({
         model: GeminiConfig.model,
-        prompt: prompt,
+        prompt: sanitizedPrompt,
         config: GeminiConfig.config
       });
       
@@ -355,7 +407,7 @@ ${truncatedContent}`;
              });
              
              // Phase 3最適化: 高速フォールバック回答を生成
-             const fallbackAnswer = generateFallbackAnswer(question, context);
+             const fallbackAnswer = generateFallbackAnswer(sanitizedQuestion, context);
              console.log('🔄 フォールバック回答を生成:', fallbackAnswer.substring(0, 100) + '...');
       
       // フォールバック結果を返す
@@ -415,7 +467,7 @@ ${truncatedContent}`;
     }
 
     // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
-    answerCache.set(question, context, answer, references);
+    answerCache.set(sanitizedQuestion, context, answer, references);
     console.log('[Phase 5 Streaming Cache] 💾 回答をキャッシュに保存');
 
     // 完了チャンク

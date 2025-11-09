@@ -7,6 +7,7 @@ import { ai } from '../genkit';
 import { z } from 'zod';
 import { loadDomainKnowledge, findDomainCandidates, findTermCandidates } from '@/lib/domain-knowledge-loader';
 import { StructuredLabelHelper } from '@/types/structured-label';
+import { removeBOM, checkStringForBOM } from '@/lib/bom-utils';
 import type { StructuredLabel, DocumentCategory, DocumentStatus } from '@/types/structured-label';
 
 // 入力スキーマ
@@ -175,7 +176,21 @@ export const autoLabelFlow = ai.defineFlow(
       const topDomains = domainKnowledge.domainNames.slice(0, 30);
       
       // プロンプト生成
-      const prompt = buildLLMPrompt(input, domainCandidates, topDomains);
+      const promptRaw = buildLLMPrompt(input, domainCandidates, topDomains);
+      const promptBomCheck = checkStringForBOM(promptRaw);
+      if (promptBomCheck.hasBOM) {
+        console.warn('  🚨 [auto-label-flow] BOM detected in prompt', {
+          firstCharCode: promptRaw.charCodeAt(0),
+          preview: promptRaw.substring(0, 100)
+        });
+      }
+      const prompt = removeBOM(promptRaw);
+      if (prompt !== promptRaw) {
+        console.warn('  🔧 [auto-label-flow] Prompt sanitized before AI generate', {
+          beforeLength: promptRaw.length,
+          afterLength: prompt.length
+        });
+      }
       
       // Gemini 2.0 Flash実行
       const { text } = await ai.generate({

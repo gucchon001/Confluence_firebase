@@ -8,6 +8,7 @@ import Handlebars from 'handlebars';
 import { ai } from '../genkit';
 import { GeminiConfig } from '@/config/ai-models-config';
 import { getAnswerCache } from '@/lib/answer-cache';
+import { removeBOM, checkStringForBOM } from '@/lib/bom-utils';
 
 // プロンプトテンプレート (変更なし)
 const PROMPT_TEMPLATE = `
@@ -234,7 +235,7 @@ export type SummarizeInput = z.infer<typeof SummarizeInputSchema>;
 export type SummarizeOutput = z.infer<typeof SummarizeOutputSchema>;
 
 export async function summarizeConfluenceDocs({
-  question,
+  question: rawQuestion,
   context: documents,
   chatHistory = [],
 }: SummarizeInput): Promise<SummarizeOutput> {
@@ -246,6 +247,23 @@ export async function summarizeConfluenceDocs({
       };
     }
 
+    const questionBomCheck = checkStringForBOM(rawQuestion);
+    if (questionBomCheck.hasBOM || rawQuestion.charCodeAt(0) === 0xFEFF) {
+      console.warn('[summarizeConfluenceDocs] 🚨 BOM detected in incoming question', {
+        firstCharCode: rawQuestion.charCodeAt(0),
+        preview: rawQuestion.substring(0, 50),
+        bomCheck: questionBomCheck
+      });
+    }
+
+    const sanitizedQuestion = removeBOM(rawQuestion).trim();
+    if (sanitizedQuestion !== rawQuestion) {
+      console.warn('[summarizeConfluenceDocs] 🔧 Question sanitized to remove BOM characters', {
+        beforeLength: rawQuestion.length,
+        afterLength: sanitizedQuestion.length
+      });
+    }
+
     // Phase 5 Week 2: 回答キャッシュチェック（品質影響なし）
     const answerCache = getAnswerCache();
     // ドキュメントをキャッシュ用の形式に変換（urlをIDとして使用）
@@ -253,7 +271,7 @@ export async function summarizeConfluenceDocs({
       id: doc.url || doc.title || '', // urlまたはtitleをIDとして使用
       pageId: doc.url || doc.title || ''
     }));
-    const cachedAnswer = answerCache.get(question, cacheDocuments);
+    const cachedAnswer = answerCache.get(sanitizedQuestion, cacheDocuments);
     
     if (cachedAnswer) {
       console.log('[Phase 5 Cache] ⚡ 回答キャッシュヒット - 即座に返却');
@@ -293,21 +311,53 @@ ${truncatedContent}`;
       )
       .join('\n\n---\n\n');
 
-    const prompt = compiledTemplate({
-      context: contextText,
+    const contextBomCheck = checkStringForBOM(contextText);
+    if (contextBomCheck.hasBOM) {
+      console.warn('[summarizeConfluenceDocs] 🚨 BOM detected in context text', {
+        firstCharCode: contextText.charCodeAt(0),
+        preview: contextText.substring(0, 100),
+        bomCheck: contextBomCheck
+      });
+    }
+
+    const sanitizedContextText = removeBOM(contextText);
+    if (sanitizedContextText !== contextText) {
+      console.warn('[summarizeConfluenceDocs] 🔧 Context text sanitized to remove BOM characters', {
+        beforeLength: contextText.length,
+        afterLength: sanitizedContextText.length
+      });
+    }
+
+    const promptRaw = compiledTemplate({
+      context: sanitizedContextText,
       chat_history: formattedChatHistory,
-      question,
+      question: sanitizedQuestion,
     });
+    const promptBomCheck = checkStringForBOM(promptRaw);
+    if (promptBomCheck.hasBOM) {
+      console.warn('[summarizeConfluenceDocs] 🚨 BOM detected in prompt before AI generate', {
+        firstCharCode: promptRaw.charCodeAt(0),
+        preview: promptRaw.substring(0, 100),
+        bomCheck: promptBomCheck
+      });
+    }
+    const prompt = removeBOM(promptRaw);
+    if (prompt !== promptRaw) {
+      console.warn('[summarizeConfluenceDocs] 🔧 Prompt sanitized before AI generate', {
+        beforeLength: promptRaw.length,
+        afterLength: prompt.length
+      });
+    }
     
     console.log('[summarizeConfluenceDocs] Generated prompt preview:', prompt.substring(0, 500) + '...');
-    console.log('[summarizeConfluenceDocs] Question:', question);
-    console.log('[summarizeConfluenceDocs] Context text length:', contextText.length);
+    console.log('[summarizeConfluenceDocs] Question:', sanitizedQuestion);
+    console.log('[summarizeConfluenceDocs] Context text length:', sanitizedContextText.length);
 
     // テスト環境の場合はモックレスポンスを返す
     let answer;
     if (process.env.NODE_ENV === 'test') {
       console.log('[summarizeConfluenceDocs] Using test mock response');
-      answer = `これはテスト環境用のモック回答です。\n\n${question}に対する回答として、${documents.length}件の関連ドキュメントから情報を抽出しました。`;
+      answer = `これはテスト環境用のモック回答です。\n\n${sanitizedQuestion}に対する回答として、${documents.length}件の関連ドキュメントから情報を抽出しました。`;
     } else {
       console.log('[summarizeConfluenceDocs] Sending prompt to LLM...');
       console.log('[summarizeConfluenceDocs] Prompt length:', prompt.length);
@@ -452,7 +502,7 @@ ${truncatedContent}`;
     id: doc.url || doc.title || '',
     pageId: doc.url || doc.title || ''
   }));
-  answerCache.set(question, cacheDocumentsForSet, answer, references);
+  answerCache.set(sanitizedQuestion, cacheDocumentsForSet, answer, references);
   console.log('[Phase 5 Cache] 💾 回答をキャッシュに保存');
 
     return { answer, references, prompt };
