@@ -13,18 +13,7 @@ npm install
 
 ### 3. 同期の実行
 
-#### Windows の場合:
-```bash
-run-sync.bat
-```
-
-#### Linux/Mac の場合:
-```bash
-chmod +x run-sync.sh
-./run-sync.sh
-```
-
-#### 手動実行の場合:
+#### 実行コマンド例:
 ```bash
 # 軽量同期 (推奨)
 npm run sync:confluence:differential

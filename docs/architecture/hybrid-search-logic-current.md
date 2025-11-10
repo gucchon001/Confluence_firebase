@@ -1,7 +1,7 @@
 # ハイブリッド検索ロジック（最新版）
 
 **作成日**: 2025年10月16日  
-**最終更新**: 2025年11月6日  
+**最終更新**: 2025年11月10日  
 **バージョン**: Phase 0A-4 + BM25スコア伝播バグ修正版 + BOM除去処理・トークン化修正完了  
 **状態**: 本番運用中
 
@@ -152,6 +152,36 @@ score = idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (dl / avgdl))));
 - `k1`: 1.2
 - `b`: 0.75
 - `avgdl`: 12（タイトル）、800（本文）
+
+#### 2-4. StructuredLabel補完（再発防止の要点）
+
+BM25 側の候補は Lunr キャッシュから復元された最小限のフィールドのみを保持します。  
+StructuredLabel を含む LanceDB 拡張スキーマ情報が欠落すると、テンプレート減衰やドメインブーストが効かなくなるため、BM25 マージ前に必ず LanceDB から該当ページのメタデータを再取得して補完します。
+
+```typescript
+// 1. Lunr結果から pageId をユニーク化
+const uniquePageIds = Array.from(new Set(allLunrResults.map(r => Number(r.pageId)).filter(isFinite)));
+
+// 2. LanceDB から chunk 単位でまとめて取得（50件ずつ）
+const rows = await tbl
+  .query()
+  .where(`(${pageIdConditions})`)
+  .limit(chunk.length * 5)
+  .toArray();
+
+// 3. mapLanceDBRecordToAPI() で structured_* を含むAPI形式に正規化
+lanceDbRecordMap.set(pageId, mapLanceDBRecordToAPI(row));
+
+// 4. BM25結果に structured_category などを合流
+const normalizedLabels = getLabelsAsArray(enrichedRecord.labels);
+```
+
+**ポイント:**
+- LanceDB 側の `structured_category` / `structured_domain` / `structured_feature` などを必ず補完する  
+- 取得に失敗したチャンクは警告ログを出しつつスキップ（BM25 結果自体は保持）  
+- `getLabelsAsArray()` を通してラベルの配列化を統一  
+- chunk サイズは 50 件固定とし、LanceDB へのクエリをスロットリングしてパフォーマンスと信頼性を両立  
+- この処理がないとテンプレートカテゴリが undefined になり減衰が無効化 → 再発防止の最重要ポイント
 
 ---
 

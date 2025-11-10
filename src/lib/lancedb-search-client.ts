@@ -1309,6 +1309,48 @@ async function executeBM25Search(
     }
     
     console.log(`[BM25 Search] Total unique results: ${allLunrResults.length}`);
+
+    // LanceDB側の詳細情報を取得してStructuredLabelなどを補完
+    const lanceDbRecordMap = new Map<number, any>();
+    try {
+      const uniquePageIds = Array.from(
+        new Set(
+          allLunrResults
+            .map(result => Number(result.pageId))
+            .filter(id => Number.isFinite(id) && id > 0)
+        )
+      );
+
+      if (uniquePageIds.length > 0) {
+        const { mapLanceDBRecordToAPI } = await import('./pageid-migration-helper');
+        const chunkSize = 50;
+
+        for (let i = 0; i < uniquePageIds.length; i += chunkSize) {
+          const chunk = uniquePageIds.slice(i, i + chunkSize);
+          const pageIdConditions = chunk.map(id => `\`page_id\` = ${id}`).join(' OR ');
+
+          try {
+            const rows = await tbl
+              .query()
+              .where(`(${pageIdConditions})`)
+              .limit(chunk.length * 5)
+              .toArray();
+
+            for (const row of rows) {
+              const mapped = mapLanceDBRecordToAPI(row);
+              const key = Number(mapped.page_id ?? mapped.pageId);
+              if (Number.isFinite(key)) {
+                lanceDbRecordMap.set(key, mapped);
+              }
+            }
+          } catch (fetchError) {
+            console.warn('[BM25 Search] Failed to fetch LanceDB rows for chunk:', fetchError);
+          }
+        }
+      }
+    } catch (enrichError) {
+      console.warn('[BM25 Search] LanceDB enrichment skipped due to error:', enrichError);
+    }
     
     // タイトルブースト適用
     // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
@@ -1324,22 +1366,41 @@ async function executeBM25Search(
       }
       
       const pageId = getPageIdFromRecord(r) || r.pageId;
+      const numericPageId = Number(pageId);
       const page_id = r.page_id ?? pageId; // ★★★ MIGRATION: page_idを確実に保持 ★★★
+      const enrichedRecord = Number.isFinite(numericPageId) ? lanceDbRecordMap.get(numericPageId) : undefined;
+
+      const normalizedLabels = enrichedRecord
+        ? getLabelsAsArray(enrichedRecord.labels)
+        : (Array.isArray(r.labels)
+            ? r.labels
+            : (typeof r.labels === 'string' ? [r.labels] : []));
+
       // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
       return {
         id: r.id,
         title: (r.title || '').replace(/\uFEFF/g, ''),
         content: (r.content || '').replace(/\uFEFF/g, ''),
-        labels: r.labels,
-        pageId: pageId,
+        labels: normalizedLabels,
+        pageId: enrichedRecord?.pageId ?? pageId,
         page_id: page_id, // ★★★ MIGRATION: page_idを確実に保持 ★★★
         isChunked: r.isChunked,
-        url: r.url,
-        space_key: r.space_key,
-        lastUpdated: r.lastUpdated,
+        url: enrichedRecord?.url ?? r.url,
+        space_key: enrichedRecord?.space_key ?? r.space_key,
+        lastUpdated: enrichedRecord?.lastUpdated ?? r.lastUpdated,
         _bm25Score: boostedScore,
         _titleMatchRatio: titleMatchRatio,
-        _titleMatchedKeywords: matchedKeywords.length
+        _titleMatchedKeywords: matchedKeywords.length,
+        structured_category: enrichedRecord?.structured_category,
+        structured_domain: enrichedRecord?.structured_domain,
+        structured_feature: enrichedRecord?.structured_feature,
+        structured_status: enrichedRecord?.structured_status,
+        structured_priority: enrichedRecord?.structured_priority,
+        structured_confidence: enrichedRecord?.structured_confidence,
+        structured_tags: enrichedRecord?.structured_tags,
+        structured_version: enrichedRecord?.structured_version,
+        structured_content_length: enrichedRecord?.structured_content_length,
+        structured_is_valid: enrichedRecord?.structured_is_valid
       };
     });
     

@@ -19,13 +19,14 @@ export function mapLanceDBRecordToAPI(record: any): any {
   // page_idが存在する場合は、pageIdに変換
   if (record.page_id !== undefined) {
     const { page_id, ...rest } = record;
+    const numericPageId = Number(page_id);
     return {
       ...rest,
       title: cleanTitle,
       content: cleanContent,
-      pageId: page_id,  // page_idをpageIdに変換
+      pageId: Number.isFinite(numericPageId) ? numericPageId : page_id,  // page_idをpageIdに変換（Numberへ正規化）
       // page_idも残す（内部処理用）
-      page_id: page_id
+      page_id: Number.isFinite(numericPageId) ? numericPageId : page_id
     };
   }
   
@@ -71,7 +72,8 @@ export function mapAPIToDatabaseRecord(record: any): any {
 export function getPageIdFromRecord(record: any): number | string | undefined {
   // page_idフィールドのみを使用（唯一の信頼できる情報源）
   if (record.page_id !== undefined) {
-    return record.page_id;
+    const numericPageId = Number(record.page_id);
+    return Number.isFinite(numericPageId) ? numericPageId : record.page_id;
   }
   // page_idが存在しない場合はundefinedを返す（フォールバックしない）
   return undefined;
