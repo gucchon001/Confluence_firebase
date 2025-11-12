@@ -6,6 +6,7 @@
 import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText, calculateHybridScore } from './score-utils';
 import { labelManager } from './label-manager';
 import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
+import { getLabelsAsArray } from './label-utils';
 
 /**
  * 検索結果の生データ
@@ -402,7 +403,7 @@ export class UnifiedSearchResultProcessor {
         structured_status: (result as any).structured_status,
         structured_priority: (result as any).structured_priority,
         structured_confidence: (result as any).structured_confidence,
-        structured_tags: (result as any).structured_tags,
+        structured_tags: getLabelsAsArray((result as any).structured_tags),
         structured_version: (result as any).structured_version,
         structured_content_length: (result as any).structured_content_length,
         structured_is_valid: (result as any).structured_is_valid,
