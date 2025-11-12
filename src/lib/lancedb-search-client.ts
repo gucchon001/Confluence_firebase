@@ -529,7 +529,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
                   searchResults = lunrResults
                     .map(result => pageRowsMap.get(result.pageId) || [])
                     .flat()
-                    .slice(0, 20); // 最大20件に制限
+                    .slice(0, 15); // 最大15件に制限（フェーズ3最適化: 20 → 15、25%削減）
                 } catch (e) {
                   console.warn('[searchLanceDB] Failed to batch fetch LanceDB records:', e);
                   // フォールバック: 個別クエリ
@@ -551,7 +551,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             } else {
               // Lunrが利用できない場合はフォールバック（LIKEクエリ）
               const like = `%${t.replace(/'/g, "''")}%`;
-              const exactRows = await tbl.query().where(`title LIKE '${like}'`).limit(20).toArray();
+              const exactRows = await tbl.query().where(`title LIKE '${like}'`).limit(15).toArray(); // フェーズ3最適化: 20 → 15、25%削減
               searchResults = exactRows;
             }
             
@@ -1266,8 +1266,8 @@ async function executeVectorSearch(
     // ★★★ 近似検索（IVF_PQ）の誤差を考慮して、より多くの結果を取得 ★★★
     // 理由: 距離が100位以内に入るはずのドキュメントが検索結果に含まれない問題に対処
     // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
-    // 修正: 20倍 → 30倍に増加（自動オファー関連ドキュメントの検出精度向上）
-    let vectorResults = await vectorQuery.limit(topK * 30).toArray(); // 20倍 → 30倍に増加（topK=10の場合、200件→300件）
+    // 最適化: 30倍 → 15倍に削減（パフォーマンス向上、topK=20の場合、600件→300件、50%削減）
+    let vectorResults = await vectorQuery.limit(topK * 15).toArray(); // 30倍 → 15倍に削減（フェーズ1最適化）
     const vectorSearchDuration = Date.now() - vectorSearchStart;
     
     console.log(`[PERF] 🔍 Vector search completed in ${vectorSearchDuration}ms`);
@@ -1362,9 +1362,9 @@ async function executeBM25Search(
       return [];
     }
     
-    // ★★★ 修正: BM25検索のlimitを増やして、自動オファー関連ドキュメントの検出精度向上 ★★★
-    // 修正: kwCapを増やして、より多くの結果を取得（100 → 200）
-    const kwCap = Math.max(200, Math.floor(topK * 3)); // 100 → 200に増加、topK * 2 → topK * 3に増加
+    // ★★★ 最適化: BM25検索のlimitを調整（パフォーマンス向上） ★★★
+    // 最適化: kwCapを削減して、適切な件数を取得（200 → 150、topK * 3 → topK * 2.5、25%削減）
+    const kwCap = Math.max(150, Math.floor(topK * 2.5)); // フェーズ2最適化: 200 → 150、topK * 3 → topK * 2.5
     const searchKeywords = finalKeywords.slice(0, 5);
     
     console.log(`[BM25 Search] Starting search for keywords: ${searchKeywords.join(', ')}`);

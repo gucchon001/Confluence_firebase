@@ -1,0 +1,46 @@
+[1mdiff --git a/src/lib/lancedb-search-client.ts b/src/lib/lancedb-search-client.ts[m
+[1mindex 07940f3d..6f0ff53b 100644[m
+[1m--- a/src/lib/lancedb-search-client.ts[m
+[1m+++ b/src/lib/lancedb-search-client.ts[m
+[36m@@ -529,7 +529,7 @@[m [mexport async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD[m
+                   searchResults = lunrResults[m
+                     .map(result => pageRowsMap.get(result.pageId) || [])[m
+                     .flat()[m
+[31m-                    .slice(0, 20); // 最大20件に制限[m
+[32m+[m[32m                    .slice(0, 10); // 最大10件に制限（パフォーマンス向上）[m
+                 } catch (e) {[m
+                   console.warn('[searchLanceDB] Failed to batch fetch LanceDB records:', e);[m
+                   // フォールバック: 個別クエリ[m
+[36m@@ -551,7 +551,7 @@[m [mexport async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD[m
+             } else {[m
+               // Lunrが利用できない場合はフォールバック（LIKEクエリ）[m
+               const like = `%${t.replace(/'/g, "''")}%`;[m
+[31m-              const exactRows = await tbl.query().where(`title LIKE '${like}'`).limit(20).toArray();[m
+[32m+[m[32m              const exactRows = await tbl.query().where(`title LIKE '${like}'`).limit(10).toArray(); // 20 → 10に削減（パフォーマンス向上）[m
+               searchResults = exactRows;[m
+             }[m
+             [m
+[36m@@ -1266,8 +1266,8 @@[m [masync function executeVectorSearch([m
+     // ★★★ 近似検索（IVF_PQ）の誤差を考慮して、より多くの結果を取得 ★★★[m
+     // 理由: 距離が100位以内に入るはずのドキュメントが検索結果に含まれない問題に対処[m
+     // 参考: docs/analysis/auto-offer-search-issue-root-cause.md[m
+[31m-    // 修正: 20倍 → 30倍に増加（自動オファー関連ドキュメントの検出精度向上）[m
+[31m-    let vectorResults = await vectorQuery.limit(topK * 30).toArray(); // 20倍 → 30倍に増加（topK=10の場合、200件→300件）[m
+[32m+[m[32m    // 最適化: 30倍 → 10倍に削減（パフォーマンス向上、topK=20の場合、600件→200件）[m
+[32m+[m[32m    let vectorResults = await vectorQuery.limit(topK * 10).toArray(); // 30倍 → 10倍に削減（topK=20の場合、600件→200件）[m
+     const vectorSearchDuration = Date.now() - vectorSearchStart;[m
+     [m
+     console.log(`[PERF] 🔍 Vector search completed in ${vectorSearchDuration}ms`);[m
+[36m@@ -1362,9 +1362,9 @@[m [masync function executeBM25Search([m
+       return [];[m
+     }[m
+     [m
+[31m-    // ★★★ 修正: BM25検索のlimitを増やして、自動オファー関連ドキュメントの検出精度向上 ★★★[m
+[31m-    // 修正: kwCapを増やして、より多くの結果を取得（100 → 200）[m
+[31m-    const kwCap = Math.max(200, Math.floor(topK * 3)); // 100 → 200に増加、topK * 2 → topK * 3に増加[m
+[32m+[m[32m    // ★★★ 最適化: BM25検索のlimitを調整（パフォーマンス向上） ★★★[m
+[32m+[m[32m    // 最適化: kwCapを削減して、適切な件数を取得（200 → 100）[m
+[32m+[m[32m    const kwCap = Math.max(100, Math.floor(topK * 2)); // 200 → 100に削減、topK * 3 → topK * 2に削減[m
+     const searchKeywords = finalKeywords.slice(0, 5);[m
+     [m
+     console.log(`[BM25 Search] Starting search for keywords: ${searchKeywords.join(', ')}`);[m
