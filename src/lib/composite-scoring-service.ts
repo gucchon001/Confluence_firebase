@@ -9,6 +9,7 @@
 
 import { calculateLabelMatchScore } from './structured-label-scorer';
 import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
+import { getLabelsAsArray } from './label-utils';
 // Phase 7最適化: searchLoggerのインポートを削除（ログ出力を削減したため不要）
 
 export interface SearchSignals {
@@ -158,7 +159,31 @@ export class CompositeScoringService {
       
       let compositeScore = this.calculateCompositeScore(signals);
       
-      // Phase 5改善: Composite Scoring段階でも減衰・ブーストを適用
+      // タグマッチングボーナスを先に適用（減衰の前に適用して、減衰が正しく機能するようにする）
+      const tagsArray = getLabelsAsArray((result as any).structured_tags);
+      if (tagsArray.length > 0) {
+        const tagsLower = tagsArray.map((t: string) => String(t).toLowerCase());
+        let matchedTagCount = 0;
+        for (const keyword of keywords) {
+          const keywordLower = keyword.toLowerCase();
+          if (tagsLower.some((tag: string) => tag.includes(keywordLower) || keywordLower.includes(tag))) {
+            matchedTagCount++;
+          }
+        }
+        if (matchedTagCount > 0) {
+          // 1つのタグマッチ: 3.0倍、2つ以上: 6.0倍（Composite Scoreに直接反映、タグマッチングを極めて重視）
+          const tagBoost = matchedTagCount === 1 ? 3.0 : 6.0;
+          const scoreBefore = compositeScore.finalScore;
+          compositeScore.finalScore *= tagBoost;
+          // デバッグログ（対象ページのみ）
+          const pageId = (result as any).page_id ?? (result as any).pageId;
+          if (String(pageId) === '703594590') {
+            console.log(`[Composite Tag Boost] pageId=703594590: ${matchedTagCount} tags matched, Composite Score ${scoreBefore.toFixed(6)} → ${compositeScore.finalScore.toFixed(6)} (x${tagBoost})`);
+          }
+        }
+      }
+      
+      // Phase 5改善: Composite Scoring段階でも減衰・ブーストを適用（タグマッチングボーナスの後に適用）
       compositeScore.finalScore = this.applyDomainPenaltyAndBoost(
         compositeScore.finalScore, 
         result,
@@ -243,20 +268,106 @@ export class CompositeScoringService {
         // console.log(`[Composite] 🔼 クエリ関連ブースト: "${title.substring(0, 40)}" ${originalScore.toFixed(4)} → ${score.toFixed(4)} (×${actualBoost.toFixed(2)}, matched: ${matchingKeywordCount})`);
       }
       
-      // StructuredLabelに基づくカテゴリ減衰（メールテンプレート優先度を大幅に低減）
-      const structuredCategory = typeof result.structured_category === 'string'
+      // StructuredLabelに基づくカテゴリ減衰・ブースト（機能クエリ時はspecを優先）
+      let structuredCategory = typeof result.structured_category === 'string'
         ? result.structured_category.toLowerCase()
         : '';
+      
+      // フォールバック: structured_categoryが未設定の場合、タイトルから推測
+      if (!structuredCategory) {
+        const titleLower = title.toLowerCase();
+        // メール関連のキーワードが含まれている場合はtemplate
+        if (titleLower.includes('メール') || 
+            titleLower.includes('mail') ||
+            titleLower.includes('通知') && (titleLower.includes('宛') || titleLower.includes('送信'))) {
+          structuredCategory = 'template';
+        } else if (titleLower.includes('機能') || 
+                   titleLower.includes('バッチ') ||
+                   titleLower.includes('フロー') && !titleLower.includes('テンプレ')) {
+          // 機能名が含まれている場合はspec
+          structuredCategory = 'spec';
+        } else if (titleLower.includes('フロー') && titleLower.includes('テンプレ')) {
+          structuredCategory = 'workflow';
+        } else if (titleLower.includes('情報') || 
+                   titleLower.includes('データ') ||
+                   titleLower.includes('帳票')) {
+          structuredCategory = 'data';
+        }
+      }
+      
+      const functionalQuery = this.isFunctionalQuery(query);
+      
+      // 機能クエリ時はspecカテゴリをブースト（仕様ドキュメントを優先）
+      if (functionalQuery && structuredCategory === 'spec') {
+        const scoreBefore = score;
+        score *= 1.5; // 50%ブースト（機能クエリ時は仕様ドキュメントを優先）
+        // デバッグログ（上位10件のみ）
+        if (scoreBefore > 1.0) {
+          console.log(`[Spec Boost] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x1.5, functional query)`);
+        }
+      }
+      
+      // templateカテゴリの減衰（メールテンプレート優先度を大幅に低減）
       if (structuredCategory === 'template') {
-        const functionalQuery = this.isFunctionalQuery(query);
         const emailLikeQuery = this.isEmailOrTemplateQuery(query);
+        const scoreBefore = score;
 
         // 機能仕様系の質問（挙動確認、原因調査など）はメールテンプレートではなく仕様ドキュメントを期待していることが多い
         if (functionalQuery) {
-          // メールに言及していても仕様確認であれば強く減衰させる
-          score *= emailLikeQuery ? 0.4 : 0.35; // 60%〜65%減衰
+          // メールに言及していても仕様確認であれば極めて強く減衰させる
+          const decayFactor = emailLikeQuery ? 0.05 : 0.02; // 95%〜98%減衰（極めて強化）
+          score *= decayFactor;
+          // デバッグログ（上位10件のみ）
+          if (scoreBefore > 1.0) {
+            console.log(`[Template Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x${decayFactor}, functional=${functionalQuery}, emailLike=${emailLikeQuery})`);
+          }
         } else if (!emailLikeQuery) {
-          score *= 0.6;  // 通常の質問でも40%減衰
+          score *= 0.15;  // 通常の質問でも85%減衰（強化）
+          // デバッグログ（上位10件のみ）
+          if (scoreBefore > 1.0) {
+            console.log(`[Template Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x0.15, non-email query)`);
+          }
+        }
+      }
+      
+      // dataカテゴリも減衰（データ定義は仕様ドキュメントより優先度を下げる）
+      if (structuredCategory === 'data') {
+        if (functionalQuery) {
+          const scoreBefore = score;
+          // 機能仕様系の質問では、データ定義よりも仕様ドキュメントを優先
+          score *= 0.15; // 85%減衰（強化）
+          // デバッグログ（上位10件のみ）
+          if (scoreBefore > 1.0) {
+            console.log(`[Data Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x0.15, functional query)`);
+          }
+        }
+      }
+      
+      // workflowカテゴリも減衰（ワークフローは仕様ドキュメントより優先度を下げる）
+      if (structuredCategory === 'workflow') {
+        if (functionalQuery) {
+          const scoreBefore = score;
+          // 機能仕様系の質問では、ワークフローよりも仕様ドキュメントを優先
+          score *= 0.3; // 70%減衰
+          // デバッグログ（上位10件のみ）
+          if (scoreBefore > 1.0) {
+            console.log(`[Workflow Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x0.3, functional query)`);
+          }
+        }
+      }
+      
+      // deprecatedステータスの減衰（非推奨ドキュメントを大幅に減衰）
+      // 注意: フィルター段階で除外されるため、ここでは減衰のみ（念のため）
+      const structuredStatus = typeof result.structured_status === 'string'
+        ? result.structured_status.toLowerCase()
+        : '';
+      if (structuredStatus === 'deprecated') {
+        const scoreBefore = score;
+        // 非推奨ドキュメントは95%減衰（ほぼ除外、フィルターで除外される前提）
+        score *= 0.05;
+        // デバッグログ（上位10件のみ）
+        if (scoreBefore > 1.0) {
+          console.log(`[Deprecated Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x0.05, deprecated status)`);
         }
       }
       
@@ -343,11 +454,17 @@ export class CompositeScoringService {
       const lowerLabels = labels.map(l => l.toLowerCase());
       
       let matchCount = 0;
+      const matchedLabelsSet = new Set<string>(); // 重複を避けるためSetを使用
+      
       for (const keyword of lowerKeywords) {
+        // 1つのキーワードに対して複数のラベルがマッチする場合も全てカウント
         for (const label of lowerLabels) {
           if (label.includes(keyword)) {
-            matchCount++;
-            break; // 1つのキーワードにつき1回だけカウント
+            // 重複を避けるため、既にカウントしたラベルはスキップ
+            if (!matchedLabelsSet.has(label)) {
+              matchCount++;
+              matchedLabelsSet.add(label);
+            }
           }
         }
       }
@@ -413,14 +530,18 @@ export class CompositeScoringService {
       // Phase 7最適化: 不一致のログも削除（パフォーマンス改善）
     }
     
-    // タグマッチング
+    // タグマッチング（複数タグマッチでボーナス）
     if (Array.isArray(structuredLabel.tags) && structuredLabel.tags.length > 0) {
       const tagsLower = structuredLabel.tags.map((t: string) => t.toLowerCase());
+      let matchedTagCount = 0;
       for (const keyword of lowerKeywords) {
         if (tagsLower.some((tag: string) => tag.includes(keyword) || keyword.includes(tag))) {
-          structuredMatchCount += 0.5; // タグは0.5倍
-          break;
+          matchedTagCount++;
         }
+      }
+      if (matchedTagCount > 0) {
+        // 1つのタグマッチ: 0.8倍、2つ以上: 2.0倍（複数タグマッチで大幅ボーナス）
+        structuredMatchCount += matchedTagCount === 1 ? 0.8 : 2.0;
       }
       totalChecks++;
     }
@@ -460,7 +581,7 @@ export class CompositeScoringService {
     
     // 正規化して0-1の範囲に
     if (totalChecks > 0) {
-      const maxPossibleScore = 2 + 3 + 0.5 + 0.3 + 0.2; // 6.0（機能名の最大スコアを3に更新）
+      const maxPossibleScore = 2 + 3 + 2.0 + 0.3 + 0.2; // 7.5（タグマッチングの最大スコアを2.0に更新）
       const structuredScore = Math.min(structuredMatchCount / maxPossibleScore, 1.0) * 0.8; // 80%の重み
       score += structuredScore;
       

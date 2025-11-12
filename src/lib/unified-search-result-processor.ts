@@ -388,6 +388,7 @@ export class UnifiedSearchResultProcessor {
         source: sourceType,
         matchDetails: result._matchDetails || {},
         rrfScore: result._rrfScore || 0,
+        _rrfScore: (result as any)._rrfScore, // デバッグ用に保持
         scoreKind,
         scoreRaw,
         scoreText,

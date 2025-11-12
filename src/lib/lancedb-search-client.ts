@@ -803,7 +803,49 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
               rrf *= Math.min(boostFactor, 2.0);
             }
           }
-        } catch {}
+          
+          // タグマッチングボーナス（StructuredLabelのtagsとクエリキーワードの一致）
+          // Vector型を配列に変換（getLabelsAsArrayを使用）
+          const tagsArray = getLabelsAsArray(r.structured_tags);
+          
+          if (tagsArray.length > 0) {
+            const tagsLower = tagsArray.map((t: string) => String(t).toLowerCase());
+            let matchedTagCount = 0;
+            const matchedTagsList: string[] = [];
+            const matchedTagsSet = new Set<string>(); // 重複を避けるためSetを使用
+            
+            for (const keyword of finalKeywords) {
+              const keywordLower = keyword.toLowerCase();
+              // 1つのキーワードに対して複数のタグがマッチする場合も全てカウント
+              const matchedTags = tagsLower.filter((tag: string) => tag.includes(keywordLower) || keywordLower.includes(tag));
+              for (const matchedTag of matchedTags) {
+                // 重複を避けるため、既にカウントしたタグはスキップ
+                if (!matchedTagsSet.has(matchedTag)) {
+                  matchedTagCount++;
+                  matchedTagsSet.add(matchedTag);
+                  matchedTagsList.push(`${keyword}↔${matchedTag}`);
+                }
+              }
+            }
+            if (matchedTagCount > 0) {
+              // 1つのタグマッチ: 2.0倍、2つ以上: 3.0倍（複数タグマッチで大幅ボーナス、タグマッチングを大幅に重視）
+              const tagBoost = matchedTagCount === 1 ? 2.0 : 3.0;
+              const rrfBefore = rrf;
+              rrf *= tagBoost;
+              // デバッグログ（対象ページのみ）
+              const pageId = r.page_id ?? r.pageId;
+              if (String(pageId) === '703594590') {
+                console.log(`[Tag Boost] pageId=703594590: ${matchedTagCount} tags matched (${matchedTagsList.join(', ')}), RRF ${rrfBefore.toFixed(6)} → ${rrf.toFixed(6)} (x${tagBoost})`);
+              }
+            }
+          }
+        } catch (e: any) {
+          // エラーをログに記録（デバッグ用）
+          const pageId = r.page_id ?? r.pageId;
+          if (String(pageId) === '703594590') {
+            console.warn(`[Tag Boost Error] pageId=703594590:`, e.message);
+          }
+        }
 
         r._rrfScore = rrf;
       }
@@ -875,15 +917,15 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         
         console.log(`[Phase 6 Optimization] Total candidates: ${rrfSorted.length}`);
         
-        // 上位50件のみComposite Scoringを実行（-67%計算量削減）
-        const TOP_N_FOR_COMPOSITE = 50;
-        const top50 = rrfSorted.slice(0, TOP_N_FOR_COMPOSITE);
+        // 上位100件のみComposite Scoringを実行（タグマッチング精度向上のため拡大）
+        const TOP_N_FOR_COMPOSITE = 100;
+        const top100 = rrfSorted.slice(0, TOP_N_FOR_COMPOSITE);
         const remaining = rrfSorted.slice(TOP_N_FOR_COMPOSITE);
         
-        console.log(`[Phase 6 Optimization] Applying composite scoring to top ${top50.length} results only`);
+        console.log(`[Phase 6 Optimization] Applying composite scoring to top ${top100.length} results only`);
         
         // Phase 5改善: クエリを渡してクエリ関連ブーストを有効化
-        const scored50 = compositeScoringService.scoreAndRankResults(top50, finalKeywords, params.query);
+        const scored100 = compositeScoringService.scoreAndRankResults(top100, finalKeywords, params.query);
         
         // 残りは簡易スコア（RRFスコアを50%に減衰して維持）
         // BM25結果にも_compositeScoreを設定（未設定の場合のみ）
@@ -902,13 +944,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         });
         
         // マージして最終ソート
-        vectorResults = [...scored50, ...remainingWithSimpleScore]
+        vectorResults = [...scored100, ...remainingWithSimpleScore]
           .sort((a, b) => (b._compositeScore || 0) - (a._compositeScore || 0));
         
         const compositeScoringTime = Date.now() - compositeScoringStart;
         
         console.log(`[Phase 6 Optimization] Composite scoring completed in ${compositeScoringTime}ms`);
-        console.log(`[Phase 6 Optimization]   - Detailed scoring: ${scored50.length} results`);
+        console.log(`[Phase 6 Optimization]   - Detailed scoring: ${scored100.length} results`);
         console.log(`[Phase 6 Optimization]   - Simple scoring: ${remainingWithSimpleScore.length} results`);
         console.log(`[searchLanceDB] Applied composite scoring (optimized)`);
         console.log(`[searchLanceDB] Top 3 results after composite scoring:`);
@@ -959,7 +1001,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // Phase 0A-4: 議事録フィルター（StructuredLabelベース）
     // structured_category = 'meeting' のページを除外
     const includeMeetingNotes = labelFilters?.includeMeetingNotes ?? false;
-    const filtered = filterMeetingNotesByCategory(contentFiltered, includeMeetingNotes);
+    const meetingFiltered = filterMeetingNotesByCategory(contentFiltered, includeMeetingNotes);
+    
+    // Phase 0A-5: 非推奨（deprecated）ドキュメントフィルター
+    // structured_status = 'deprecated' またはタイトルに非推奨キーワードが含まれるページを除外
+    const filtered = filterDeprecatedDocuments(meetingFiltered);
     
     // 統一検索結果処理サービスを使用して結果を処理（RRF無効化で高速化）
     const processedResults = unifiedSearchResultProcessor.processSearchResults(filtered, {
@@ -1157,6 +1203,42 @@ function filterMeetingNotesByCategory(results: any[], includeMeetingNotes: boole
   return validResults;
 }
 
+/**
+ * 非推奨（deprecated）ドキュメントを検索結果から除外
+ * structured_status = 'deprecated' のページのみを除外
+ */
+function filterDeprecatedDocuments(results: any[]): any[] {
+  if (results.length === 0) {
+    return results;
+  }
+  
+  const validResults = [];
+  let filteredCount = 0;
+  
+  for (const result of results) {
+    // 🔧 BOM文字（U+FEFF）を削除
+    const title = (result.title || '').replace(/\uFEFF/g, '');
+    const status = result.structured_status || (result as any).status;
+    
+    // structured_statusで判定
+    if (status && status.toLowerCase() === 'deprecated') {
+      filteredCount++;
+      if (filteredCount <= 5) { // 最初の5件のみログ出力
+        console.log(`[DeprecatedFilter] Excluded: ${title} (status: deprecated)`);
+      }
+      continue;
+    }
+    
+    validResults.push(result);
+  }
+  
+  if (filteredCount > 0) {
+    console.log(`[DeprecatedFilter] Filtered: ${results.length} → ${validResults.length} results (removed ${filteredCount} deprecated documents)`);
+  }
+  
+  return validResults;
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Phase 5: 並列検索のための関数分離（品質影響なし）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1287,26 +1369,57 @@ async function executeBM25Search(
     
     console.log(`[BM25 Search] Starting search for keywords: ${searchKeywords.join(', ')}`);
     
-    const allLunrResults: any[] = [];
-    const processedIds = new Set<string>();
+    // ★★★ 修正: 各キーワードのスコアを個別に取得し、複数キーワードでマッチした場合にスコアを統合する ★★★
+    // 理由: 複数キーワードを同時に検索すると、LunrがOR検索を行うため「会員」だけでマッチしたドキュメントのスコアが高くなる
+    //       各キーワードのスコアを個別に取得し、複数キーワードでマッチした場合にスコアを合計することで、より適切なスコアを計算
+    const resultMap = new Map<string, { result: any; scores: Map<string, number>; matchedKeywords: string[] }>();
     
-    // ★★★ 修正: kuromojiを確実に使用する（軽量トークン化による問題を回避） ★★★
-    // 理由: インデックス構築時と検索時で同じトークン化方法を使用する
-    // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
     for (const keyword of searchKeywords) {
-      const tokenizedQuery = await tokenizeJapaneseText(keyword); // kuromojiを使用
+      const tokenizedQuery = await tokenizeJapaneseText(keyword);
       console.log(`[BM25 Search] Searching '${keyword}' -> '${tokenizedQuery}'`);
       
       const keywordResults = await lunrSearchClient.searchCandidates(tokenizedQuery, kwCap);
-      console.log(`[BM25 Search] Found ${keywordResults.length} results`);
+      console.log(`[BM25 Search] Found ${keywordResults.length} results for '${keyword}'`);
       
       for (const result of keywordResults) {
-        if (!processedIds.has(result.id)) {
-          allLunrResults.push(result);
-          processedIds.add(result.id);
+        const existing = resultMap.get(result.id);
+        if (existing) {
+          // 既に存在する場合、スコアを追加
+          existing.scores.set(keyword, result.score || 0);
+          if (!existing.matchedKeywords.includes(keyword)) {
+            existing.matchedKeywords.push(keyword);
+          }
+        } else {
+          // 新規の場合
+          const scoresMap = new Map<string, number>();
+          scoresMap.set(keyword, result.score || 0);
+          resultMap.set(result.id, {
+            result,
+            scores: scoresMap,
+            matchedKeywords: [keyword]
+          });
         }
       }
     }
+    
+    // スコアを統合（複数キーワードでマッチした場合、スコアを合計）
+    const allLunrResults: any[] = [];
+    for (const [id, data] of resultMap.entries()) {
+      const { result, scores, matchedKeywords } = data;
+      // 複数キーワードでマッチした場合、スコアを合計（BM25スコアの自然な統合）
+      const combinedScore = Array.from(scores.values()).reduce((sum, score) => sum + score, 0);
+      
+      allLunrResults.push({
+        ...result,
+        score: combinedScore,
+        _matchedKeywords: matchedKeywords,
+        _matchCount: matchedKeywords.length,
+        _keywordScores: Object.fromEntries(scores) // デバッグ用
+      });
+    }
+    
+    // スコアでソート（降順）
+    allLunrResults.sort((a, b) => (b.score || 0) - (a.score || 0));
     
     console.log(`[BM25 Search] Total unique results: ${allLunrResults.length}`);
 

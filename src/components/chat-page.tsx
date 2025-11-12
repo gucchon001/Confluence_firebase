@@ -86,14 +86,25 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                                         <span className="truncate flex-1">{source.title}</span>
                                         <span className="text-xs text-muted-foreground ml-1 shrink-0">
                                             ({(() => {
-                                              if (source.distance !== undefined && source.distance !== null) {
-                                                return Math.max(0, Math.min(100, Math.round((1 - source.distance) * 100)));
+                                              // 優先順位1: 既に計算済みのscoreフィールド（0-100の範囲）
+                                              if (typeof source.score === 'number' && !isNaN(source.score) && isFinite(source.score)) {
+                                                return Math.max(0, Math.min(100, Math.round(source.score)));
                                               }
-                                              // フォールバック: ソースタイプに基づく推定値
-                                              if (source.source === 'vector') return 85;
-                                              if (source.source === 'bm25') return 75;
-                                              if (source.source === 'keyword') return 90;
-                                              return 80;
+                                              // 優先順位2: Composite Score（0-1の範囲を0-100に変換）
+                                              if (typeof source._compositeScore === 'number' && !isNaN(source._compositeScore) && isFinite(source._compositeScore)) {
+                                                return Math.max(0, Math.min(100, Math.round(source._compositeScore * 100)));
+                                              }
+                                              // 優先順位3: distanceから計算（ベクトル距離の場合）
+                                              if (typeof source.distance === 'number' && !isNaN(source.distance) && isFinite(source.distance)) {
+                                                // distanceが0-1の範囲の場合
+                                                if (source.distance >= 0 && source.distance <= 1) {
+                                                  return Math.max(0, Math.min(100, Math.round((1 - source.distance) * 100)));
+                                                }
+                                                // distanceが1を超える場合（ユークリッド距離など）
+                                                return Math.max(0, Math.min(100, Math.round((1 / (1 + source.distance)) * 100)));
+                                              }
+                                              // フォールバック: 不明な場合は表示しない（または0%を表示）
+                                              return 0;
                                             })()}% 一致)
                                         </span>
                                         <span className="text-xs ml-1 font-bold shrink-0" style={{color: 'blue'}}>
