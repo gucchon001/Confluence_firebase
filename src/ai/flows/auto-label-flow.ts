@@ -43,14 +43,41 @@ function tryRuleBasedLabeling(input: z.infer<typeof InputSchema>): StructuredLab
     const feature = StructuredLabelHelper.cleanTitle(input.title);
     const priority = StructuredLabelHelper.inferPriority(category, status);
     
-    // タグをコンテンツから抽出（シンプルな方法）
+    // タグをコンテンツから抽出（シンプルな方法） + 退会関連などを拡張
     const tags: string[] = [];
-    if (input.title.includes('コピー')) tags.push('コピー');
-    if (input.title.includes('一括')) tags.push('一括処理');
-    if (input.title.includes('登録')) tags.push('登録');
-    if (input.title.includes('削除')) tags.push('削除');
-    if (input.title.includes('編集')) tags.push('編集');
-    if (input.title.includes('管理画面')) tags.push('管理画面');
+    const tagSearchTargets = [
+      input.title ?? '',
+      input.content.substring(0, 800) ?? ''
+    ];
+    const tagRules: Array<{ tag: string; keywords: string[] }> = [
+      { tag: 'コピー', keywords: ['コピー','教室コピー'] },
+      { tag: '一括処理', keywords: ['一括'] },
+      { tag: '登録', keywords: ['登録'] },
+      { tag: '削除', keywords: ['削除'] },
+      { tag: '編集', keywords: ['編集'] },
+      { tag: '管理画面', keywords: ['管理画面'] },
+      { tag: '退会', keywords: ['退会', '退会済み'] },
+      { tag: '再登録', keywords: ['再登録', '再入会', '再申込'] },
+      { tag: 'メールアドレス', keywords: ['メールアドレス', 'email'] },
+      { tag: 'パスワード再設定', keywords: ['パスワード再設定', 'パスワード再発行','パスワードリセット'] },
+      { tag: 'ログイン', keywords: ['ログイン', 'サインイン'] },
+      { tag: 'アカウント', keywords: ['アカウント','アカウント管理'] },
+    ];
+
+    const pushTag = (tag: string) => {
+      if (tag && !tags.includes(tag)) {
+        tags.push(tag);
+      }
+    };
+
+    for (const rule of tagRules) {
+      const matched = tagSearchTargets.some(target =>
+        rule.keywords.some(keyword => target.includes(keyword))
+      );
+      if (matched) {
+        pushTag(rule.tag);
+      }
+    }
     
     return {
       category,

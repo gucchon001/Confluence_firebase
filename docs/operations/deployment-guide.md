@@ -160,7 +160,44 @@ npm run check:production-lancedb-schema
 
 ---
 
-## 8. 参考スクリプト一覧
+## 8. 運用フロー（StructuredLabel / テンプレート減衰）
+
+テンプレートカテゴリ（`structured_category: template`）の減衰が本番で無効化された場合は、以下の手順で原因調査と復旧を行う。
+
+1. **データバンドルの整合性確認**  
+   - 最新データを取得: `npm run migrate:download`（CI や検証端末で使用）  
+   - ローカルと GCS を比較: `npx tsx scripts/compare-local-production-data.ts`  
+   - 差分があれば `npx tsx scripts/upload-production-data.ts` で再アップロードし、App Hosting の再ビルドを実施
+
+2. **StructuredLabel の確認**  
+   - Firestore の状態確認: `npx tsx scripts/check-firestore-structured-labels.ts --page 814415873`（ページ ID やタイトル指定が可能）  
+   - LanceDB の値確認: `npx tsx scripts/debug-lancedb-data-query.ts --page 814415873 --fields structured_category,structured_label` で `template` 判定を確認  
+   - 不一致がある場合は `npx tsx scripts/sync-firestore-labels-to-lancedb.ts` を実行
+
+3. **本番ログの追跡**  
+   - StructuredLabel 補完が行われているかを Cloud Logging で確認  
+     ```bash
+     gcloud logging read \
+       'resource.type="run_revision" AND resource.labels.service_name="confluence-chat-backend"' \
+       --project=confluence-copilot-ppjye \
+       --limit=50 \
+       --format="value(timestamp,textPayload)" \
+       --freshness=1h
+     ```  
+   - `[StructuredLabel]`, `[CompositeScoring]` などのログに `structured_category: template` が含まれているか、例外が無いかを確認
+
+4. **検索結果の確認**  
+   - ローカル検証: `npx tsx src/scripts/lancedb-search.ts "退会した会員が同じアドレス使ったらどんな表示がでますか"`  
+   - 本番 UI で同一クエリを実施し、テンプレート記事が減衰しているか確認  
+   - 乖離が続く場合は `src/lib/composite-scoring-service.ts` のデプロイバージョンを `git rev-parse HEAD` と `firebase apphosting:releases:list` で確認し、古いリビジョンが残っていないかをチェック
+
+5. **運用ドキュメント更新と自動化**  
+   - 上記手順をチェックリスト化し、`docs/operations/production-schema-verification-guide.md` と連携  
+   - 差分比較やログ取得コマンドを GitHub Actions などの自動化ジョブに組み込み、乖離検知を自動通知化する
+
+---
+
+## 9. 参考スクリプト一覧
 
 | コマンド | 説明 |
 |----------|------|
@@ -174,7 +211,7 @@ npm run check:production-lancedb-schema
 
 ---
 
-## 9. 自動化／GitHub Actions（任意）
+## 10. 自動化／GitHub Actions（任意）
 Cloud Storage からデータをダウンロードしてビルドするフローを自動化する場合は `npm run migrate:download` を活用する。詳細は本ファイル末尾の「Cloud Storage への移行自動化」を参照。
 
 ---
