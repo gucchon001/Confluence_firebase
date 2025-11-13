@@ -79,7 +79,9 @@ interface JiraSearchQueryResult {
   maxResults: number;
 }
 
-interface LanceDbRecord {
+// LanceDBのcreateTableは Record<string, unknown>[] を期待しているため、
+// 型定義を Record<string, unknown> に互換性を持たせる
+type LanceDbRecord = Record<string, unknown> & {
   issue_key: string;
   title: string;
   content: string;
@@ -99,7 +101,6 @@ interface LanceDbRecord {
   dev_validation: string;
   prod_validation: string;
   url: string;
-  [key: string]: unknown; // インデックスシグネチャを追加してRecord<string, unknown>に互換性を持たせる
 }
 
 interface JiraSearchBatchResponse {
