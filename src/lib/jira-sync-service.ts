@@ -99,6 +99,7 @@ interface LanceDbRecord {
   dev_validation: string;
   prod_validation: string;
   url: string;
+  [key: string]: unknown; // インデックスシグネチャを追加してRecord<string, unknown>に互換性を持たせる
 }
 
 interface JiraSearchBatchResponse {

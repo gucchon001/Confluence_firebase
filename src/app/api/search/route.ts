@@ -27,15 +27,17 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
     const body = await req.json();
     const query: string = body?.query || '';
     const topK: number = body?.topK || 10; // 参照元を10件に統一
-    const tableName: string = body?.tableName || 'confluence';
+    const source: string = body?.source || (body?.tableName === 'jira_issues' ? 'jira' : 'confluence'); // sourceパラメータを追加
+    const tableName: string = body?.tableName || (source === 'jira' ? 'jira_issues' : 'confluence');
     const useHybridSearch: boolean = body?.useHybridSearch !== false; // デフォルトで有効
     
     if (!query) {
       return APIErrorHandler.validationError('query is required');
     }
 
-    console.log(`Search query: "${query}", topK: ${topK}, tableName: ${tableName}, hybrid: ${useHybridSearch}`);
-    screenTestLogger.info('search', `Search request received: "${query}"`, { topK, tableName, useHybridSearch });
+    const effectiveSource = source; // sourceを確定
+    console.log(`Search query: "${query}", topK: ${topK}, source: ${effectiveSource}, tableName: ${tableName}, hybrid: ${useHybridSearch}`);
+    screenTestLogger.info('search', `Search request received: "${query}"`, { topK, source: effectiveSource, tableName, useHybridSearch });
 
     // ハイブリッド検索を使用する場合
     if (useHybridSearch) {
@@ -45,7 +47,7 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         const hybridResults = await hybridSearchEngine.search({
           query,
           topK,
-          useLunrIndex: lunrReady, // Lunrの初期化状態に基づく
+          useLunrIndex: effectiveSource === 'jira' ? false : lunrReady, // Jiraの場合はLunrを使用しない（インデックス未作成のため）
           labelFilters: {
             excludeMeetingNotes: true,
             excludeArchived: true
@@ -57,7 +59,13 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         const searchTime = searchEndTime - searchStartTime;
 
         // URLを再構築するヘルパー関数
-        const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string => {
+        const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined, issueKey?: string): string => {
+          // Jiraの場合は既存URLを使用
+          if (effectiveSource === 'jira' && existingUrl && existingUrl.startsWith('http')) {
+            return existingUrl;
+          }
+          
+          // Confluenceの場合
           const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
           if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
             return existingUrl;
@@ -71,19 +79,33 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         // 結果を整形（10件に制限）
         const formattedResults = hybridResults
           .slice(0, 10) // 参照元を10件に統一
-          .map(result => ({
-            id: `${result.pageId}-0`, // 互換性のため
-            title: result.title,
-            content: result.content,
-            distance: result.scoreRaw,
-            space_key: result.space_key || '',
-            labels: result.labels,
-            url: buildUrl(result.pageId, result.space_key, result.url), // URLを再構築
-            lastUpdated: null,
-            source: result.source,
-            scoreKind: result.scoreKind,
-            scoreText: result.scoreText
-          }));
+          .map(result => {
+            // Jiraの場合はissue_keyを使用
+            const id = effectiveSource === 'jira' 
+              ? (result.id || result.pageId?.toString() || '')
+              : `${result.pageId}-0`;
+            
+            const baseResult: any = {
+              id,
+              title: result.title,
+              content: result.content,
+              distance: result.scoreRaw,
+              space_key: result.space_key || '',
+              labels: result.labels,
+              url: buildUrl(result.pageId, result.space_key, result.url, result.id), // URLを再構築
+              lastUpdated: null,
+              source: effectiveSource,
+              scoreKind: result.scoreKind,
+              scoreText: result.scoreText
+            };
+            
+            // Jira特有のフィールドを追加（hybridResultsから取得可能な場合）
+            if (effectiveSource === 'jira' && result.id) {
+              baseResult.issueKey = result.id;
+            }
+            
+            return baseResult;
+          });
 
         // パフォーマンスログを記録
         screenTestLogger.logSearchPerformance(query, searchTime, formattedResults.length, {
@@ -143,7 +165,13 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
       console.log(`Found ${results.length} results`);
       
       // URLを再構築するヘルパー関数
-      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string => {
+      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined, issueKey?: string): string => {
+        // Jiraの場合は既存URLを使用
+        if (effectiveSource === 'jira' && existingUrl && existingUrl.startsWith('http')) {
+          return existingUrl;
+        }
+        
+        // Confluenceの場合
         const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
         if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
           return existingUrl;
@@ -160,19 +188,33 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         .map(result => {
           const pageId = result.page_id || result.pageId;
           const spaceKey = result.space_key || result.spaceKey;
-          return {
-            id: result.id,
+          const issueKey = result.issue_key || result.id; // Jiraの場合はissue_keyを使用
+          
+          const baseResult: any = {
+            id: effectiveSource === 'jira' ? (issueKey || result.id) : result.id,
             title: result.title || 'No Title',
             content: result.content || '',
             distance: result._distance,
             space_key: spaceKey || '',
             labels: result.labels || [],
-            url: buildUrl(pageId, spaceKey, result.url), // URLを再構築
-            lastUpdated: result.lastUpdated || null,
-            source: 'vector',
+            url: buildUrl(pageId, spaceKey, result.url, issueKey), // URLを再構築
+            lastUpdated: result.lastUpdated || result.updated_at || null,
+            source: effectiveSource,
             scoreKind: 'vector',
             scoreText: `Vector ${calculateSimilarityScore(result._distance).toFixed(1)}%`
           };
+          
+          // Jira特有のフィールドを追加
+          if (effectiveSource === 'jira') {
+            baseResult.issueKey = issueKey;
+            baseResult.status = result.status || '';
+            baseResult.statusCategory = result.status_category || '';
+            baseResult.priority = result.priority || '';
+            baseResult.assignee = result.assignee || '';
+            baseResult.issueType = result.issue_type || '';
+          }
+          
+          return baseResult;
         });
 
       // 7. レスポンス返却

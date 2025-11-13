@@ -137,6 +137,14 @@ export interface LanceDBSearchResult {
   scoreRaw?: number;        // ベクトル: 距離(0-1)、BM25: 生スコア
   scoreText?: string;       // 例) "類似度 12.3%" / "BM25 3.42"
   rrfScore?: number;        // RRFスコア（デバッグ用）
+  // Jira特有のフィールド（オプショナル）
+  issue_key?: string;
+  status?: string;
+  status_category?: string;
+  priority?: string;
+  assignee?: string;
+  issue_type?: string;
+  updated_at?: string;
 }
 
 /**

@@ -34,6 +34,14 @@ export interface RawSearchResult {
   labels?: string | string[];
   url?: string;
   lastUpdated?: string;
+  // Jira特有のフィールド（オプショナル）
+  issue_key?: string;
+  status?: string;
+  status_category?: string;
+  priority?: string;
+  assignee?: string;
+  issue_type?: string;
+  updated_at?: string;
 }
 
 /**
@@ -91,6 +99,14 @@ export interface ProcessedSearchResult {
   _distance?: number;
   _hybridScore?: number;
   _sourceType?: string;
+  // Jira特有のフィールド（オプショナル）
+  issue_key?: string;
+  status?: string;
+  status_category?: string;
+  priority?: string;
+  assignee?: string;
+  issue_type?: string;
+  updated_at?: string;
 }
 
 /**
@@ -417,6 +433,14 @@ export class UnifiedSearchResultProcessor {
         _distance: result._distance,
         _hybridScore: result._hybridScore,
         _sourceType: result._sourceType,
+        // Jira特有のフィールドを保持
+        issue_key: result.issue_key,
+        status: result.status,
+        status_category: result.status_category,
+        priority: result.priority,
+        assignee: result.assignee,
+        issue_type: result.issue_type,
+        updated_at: result.updated_at,
       };
     });
   }

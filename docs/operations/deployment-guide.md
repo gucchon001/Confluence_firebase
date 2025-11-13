@@ -49,16 +49,46 @@ GEMINI_API_KEY=your_gemini_api_key  # or GOOGLE_API_KEY
 
 ## 3. 事前準備（データ & スキーマ）
 
-### 3.1 StructuredLabel の更新
+### 3.1 StructuredLabel の更新（⚠️ 全手順を順次実行）
+
+**重要**: 以下の手順は**必ず順番に実行**してください。手順をスキップすると、本番環境にデータが反映されません。
+
 ```bash
+# Step 1: FirestoreにStructuredLabelを生成
 npx tsx scripts/generate-structured-labels.ts 5000
+
+# Step 2: ローカルLanceDBに同期
 npx tsx scripts/sync-firestore-labels-to-lancedb.ts
+
+# Step 3: インデックスを作成（Step 2の後に実行）
+npx tsx scripts/create-lancedb-indexes.ts
+
+# Step 4: GCSにアップロード（Step 2の後に必須で実行）
+npx tsx scripts/upload-production-data.ts
 ```
 
-**⚠️ 重要**: `sync-firestore-labels-to-lancedb.ts`実行後、**必ず**`upload-production-data.ts`を実行してGCSにアップロードしてください。  
-**理由**: ローカル環境のLanceDBに同期しただけでは、本番環境には反映されません。
+**⚠️ 重要な注意事項**:
+- `sync-firestore-labels-to-lancedb.ts`を実行しただけでは、**本番環境には反映されません**
+- **必ず**`upload-production-data.ts`を実行してGCSにアップロードしてください
+- アップロード後、`verify-production-readiness.ts`で検証することを推奨します
+
+**データフロー**:
+```
+Firestore (StructuredLabel)
+    ↓ generate-structured-labels.ts
+Firestore (更新)
+    ↓ sync-firestore-labels-to-lancedb.ts
+ローカルLanceDB (同期)
+    ↓ upload-production-data.ts
+GCS (Cloud Storage)
+    ↓ App Hostingがダウンロード
+本番環境 (反映)
+```
 
 ### 3.2 LanceDB / インデックス
+
+**注意**: インデックス作成は`sync-firestore-labels-to-lancedb.ts`の**後**に実行してください。
+
 ```bash
 # ベクトル・スカラーインデックスの状態確認と作成
 npx tsx scripts/check-lancedb-indexes.ts
@@ -82,17 +112,36 @@ npm run check:production-lancedb-schema
 
 ## 4. デプロイ前チェックリスト
 
-| カテゴリ | 項目 | 状態 |
-|----------|------|------|
-| コード品質 | `npx tsc --noEmit` / `npm run build` が通る | ☐ |
-| テスト | 主要動作確認（検索・チャット・ログイン） | ☐ |
-| StructuredLabel | 1233ページ全件ラベル生成（成功件数・失敗0件を確認） | ☐ |
-| LanceDB | ベクトルインデックス (IVF_PQ)・`page_id`/`id`/`title` スカラーインデックス作成済み | ☐ |
-| データ同期 | `.lancedb`, `data/domain-knowledge-v2`, `.cache` が最新 | ☐ |
-| **LanceDB同期** | **`sync-firestore-labels-to-lancedb.ts`実行後、`upload-production-data.ts`を実行** | ☐ |
-| Cloud Storage | `npx tsx scripts/upload-production-data.ts` を実行しアップロード成功 | ☐ |
-| **本番データ検証** | **`check-production-lancedb-page703594590.ts`でサンプルページの`structured_tags`を確認** | ☐ |
-| Git | `main` に最新コミットを push（自動デプロイ対象） | ☐ |
+### 4.1 必須チェック項目
+
+| カテゴリ | 項目 | 確認方法 | 状態 |
+|----------|------|----------|------|
+| コード品質 | `npx tsc --noEmit` / `npm run build` が通る | ビルドエラーがないことを確認 | ☐ |
+| テスト | 主要動作確認（検索・チャット・ログイン） | ローカル環境で動作確認 | ☐ |
+| StructuredLabel | 1233ページ全件ラベル生成（成功件数・失敗0件を確認） | `generate-structured-labels.ts`の出力を確認 | ☐ |
+| **LanceDB同期** | **`sync-firestore-labels-to-lancedb.ts`を実行** | 同期結果の統計を確認 | ☐ |
+| **GCSアップロード** | **`upload-production-data.ts`を実行しアップロード成功** | ファイル数とサイズを確認 | ☐ |
+| **最終検証** | **`verify-production-readiness.ts`で全項目が合格** | すべての検証項目が✅ OKであることを確認 | ☐ |
+| LanceDB | ベクトルインデックス (IVF_PQ)・`page_id`/`id` スカラーインデックス作成済み | `check-lancedb-indexes.ts`で確認 | ☐ |
+| データ同期 | `.lancedb`, `data/domain-knowledge-v2`, `.cache` が最新 | ファイルの更新日時を確認 | ☐ |
+| Git | `main` に最新コミットを push（自動デプロイ対象） | `git status`で確認 | ☐ |
+
+### 4.2 推奨チェック項目（デプロイ後）
+
+| カテゴリ | 項目 | 確認方法 | 状態 |
+|----------|------|----------|------|
+| **本番データ検証** | **`check-production-lancedb-page703594590.ts`でサンプルページの`structured_tags`を確認** | ローカル環境と本番環境のタグが一致しているか確認 | ☐ |
+| スキーマ確認 | 本番環境のLanceDBスキーマが最新拡張スキーマと一致 | `check-production-lancedb-schema.ts`で確認 | ☐ |
+| 動作確認 | 代表クエリで検索結果が正しく表示される | 本番UIで検索を実行 | ☐ |
+
+### 4.3 よくあるミスと予防策
+
+| ミス | 影響 | 予防策 |
+|------|------|--------|
+| `sync-firestore-labels-to-lancedb.ts`のみ実行 | ローカル環境には反映されるが、本番環境には反映されない | **必ず**`upload-production-data.ts`も実行 |
+| `upload-production-data.ts`をスキップ | 本番環境で`structured_tags`が空になる | チェックリストで確認 |
+| 検証をスキップ | 本番環境で問題が発生する | `verify-production-readiness.ts`を実行 |
+| インデックス作成をスキップ | 検索パフォーマンスが低下 | `create-lancedb-indexes.ts`を実行 |
 
 ---
 
@@ -104,21 +153,37 @@ npm run check:production-lancedb-schema
    npm run build
    ```
 
-2. **データ同期（⚠️ 全手順を順次実行）**
+2. **データ同期（⚠️ 全手順を順次実行、スキップ禁止）**
+
+   **重要**: 以下の手順は**必ず順番に実行**してください。手順をスキップすると、本番環境にデータが反映されません。
+
    ```bash
+   # Step 1: FirestoreにStructuredLabelを生成
    npx tsx scripts/generate-structured-labels.ts 5000
-   npx tsx scripts/sync-firestore-labels-to-lancedb.ts
-   npx tsx scripts/create-lancedb-indexes.ts
-   npx tsx scripts/upload-production-data.ts  # ← 必須: GCSにアップロード
-   ```
-   - アップロード結果（ファイル数と合計サイズ）が期待どおりか確認（最新実績: 12 ファイル / 約 51 MB）
    
-3. **アップロード前の最終検証（推奨）**
+   # Step 2: ローカルLanceDBに同期
+   npx tsx scripts/sync-firestore-labels-to-lancedb.ts
+   
+   # Step 3: インデックスを作成（Step 2の後に実行）
+   npx tsx scripts/create-lancedb-indexes.ts
+   
+   # Step 4: GCSにアップロード（Step 2の後に必須で実行）
+   npx tsx scripts/upload-production-data.ts
+   ```
+   
+   **各手順の確認ポイント**:
+   - Step 1: 生成されたラベル数が期待どおりか確認
+   - Step 2: 同期結果の統計（ラベルあり/なしの件数）を確認
+   - Step 3: インデックスが作成されたことを確認
+   - Step 4: アップロード結果（ファイル数と合計サイズ）が期待どおりか確認（最新実績: 24 ファイル / 約 52 MB）
+   
+3. **アップロード前の最終検証（必須）**
    ```bash
    npx tsx scripts/verify-production-readiness.ts
    ```
    - インデックス、StructuredLabel、Firestore同期の状態を確認
-   - すべての検証項目が合格することを確認
+   - **すべての検証項目が合格することを確認**（不合格の場合は修正してから再実行）
+   - サンプルページ（`pageId=703594590`）の`structured_tags`が正しく同期されていることを確認
 
 4. **コードのプッシュ**
    ```bash
@@ -232,16 +297,49 @@ npx tsx scripts/check-production-lancedb-page703594590.ts
 **原因**: 
 - ローカル環境で`sync-firestore-labels-to-lancedb.ts`を実行したが、その後の`upload-production-data.ts`が実行されていない
 - GCS上のLanceDBバンドルが古い
+- App Hostingが古いLanceDBバンドルをキャッシュしている
 
 **解決方法**:
 1. ローカル環境で`sync-firestore-labels-to-lancedb.ts`を実行
 2. **`upload-production-data.ts`を実行してGCSにアップロード**（必須）
-3. `check-production-lancedb-page703594590.ts`で本番環境のLanceDBデータを確認
-4. 必要に応じてApp Hostingの再デプロイ
+3. `verify-production-readiness.ts`で検証（すべての項目が合格することを確認）
+4. `check-production-lancedb-page703594590.ts`で本番環境のLanceDBデータを確認
+5. 必要に応じてApp Hostingの再デプロイ
 
 **予防策**:
-- デプロイ前チェックリストに「LanceDB同期後、GCSへのアップロードを確認」を追加
-- `sync-firestore-labels-to-lancedb.ts`実行後に自動で`upload-production-data.ts`を実行するスクリプトを作成
+- ✅ デプロイ前チェックリストに「LanceDB同期後、GCSへのアップロードを確認」を追加（完了）
+- ✅ `verify-production-readiness.ts`で検証を必須化（完了）
+- ⏳ `sync-firestore-labels-to-lancedb.ts`実行後に自動で`upload-production-data.ts`を実行するスクリプトを作成（推奨）
+
+### 10.2 データ同期手順の一括実行（推奨）
+
+複数の手順を連続して実行する場合、以下の一括実行スクリプトの使用を推奨します：
+
+```bash
+# 一括実行スクリプト（作成推奨）
+npm run deploy:data
+```
+
+このスクリプトで以下を順次実行：
+1. `generate-structured-labels.ts`
+2. `sync-firestore-labels-to-lancedb.ts`
+3. `create-lancedb-indexes.ts`
+4. `upload-production-data.ts`
+5. `verify-production-readiness.ts`（検証）
+
+**実装済み**（`package.json`に追加済み）:
+```bash
+npm run deploy:data
+```
+
+このコマンドで以下を順次実行します：
+1. `generate-structured-labels.ts 5000`
+2. `sync-firestore-labels-to-lancedb.ts`
+3. `create-lancedb-indexes.ts`
+4. `upload-production-data.ts`
+5. `verify-production-readiness.ts`（検証）
+
+**注意**: 各ステップでエラーが発生した場合は、そのステップを修正してから再実行してください。
 
 ---
 

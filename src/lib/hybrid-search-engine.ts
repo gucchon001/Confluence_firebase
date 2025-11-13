@@ -117,8 +117,11 @@ export class HybridSearchEngine {
       return vectorResults.map(result => {
         const pageId = result.pageId || result.page_id;
         const spaceKey = result.space_key;
+        const issueKey = result.issue_key || result.id; // Jiraの場合はissue_keyを使用
+        
         return {
-          pageId: pageId,
+          pageId: pageId || (issueKey ? 0 : undefined), // Jiraの場合はpageIdが存在しない可能性がある
+          id: issueKey || result.id, // Jiraの場合はissue_keyをidとして使用
           title: result.title,
           content: result.content,
           labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
@@ -126,7 +129,14 @@ export class HybridSearchEngine {
           source: 'vector' as const,
           scoreKind: 'vector' as const,
           scoreRaw: result.distance,
-          scoreText: `Vector ${this.calculateSimilarityScore(result.distance).toFixed(1)}%`
+          scoreText: `Vector ${this.calculateSimilarityScore(result.distance).toFixed(1)}%`,
+          // Jira特有のフィールド
+          issue_key: issueKey,
+          status: result.status,
+          status_category: result.status_category,
+          priority: result.priority,
+          assignee: result.assignee,
+          issue_type: result.issue_type
         };
       });
     } catch (error) {
