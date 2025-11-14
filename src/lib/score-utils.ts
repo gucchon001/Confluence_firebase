@@ -109,12 +109,13 @@ export function calculateHybridSearchScore(
 }
 
 /**
- * スコアテキストを生成（最新の計算ロジック対応）
+ * スコアテキストを生成（デバッグ用、現在は使用されていない）
+ * @deprecated デバッグが終了したため、空文字列を返す
  * @param sourceType ソースタイプ
  * @param score スコア値
  * @param distance 距離値（ベクトル/ハイブリッドの場合）
  * @param compositeScore Composite Score（0-1の範囲、最新の計算ロジック）
- * @returns スコアテキスト
+ * @returns 空文字列（表示しない）
  */
 export function generateScoreText(
   sourceType: 'vector' | 'bm25' | 'keyword' | 'hybrid',
@@ -122,29 +123,6 @@ export function generateScoreText(
   distance?: number,
   compositeScore?: number
 ): string {
-  // Composite Score が提供されている場合は、それを優先的に使用（最新の計算ロジック）
-  if (compositeScore !== undefined && compositeScore !== null) {
-    // Composite Score を0-100%に変換
-    // Composite Score は0-1の範囲なので、100を掛けてパーセンテージに変換
-    const compositePct = Math.round(Math.max(0, Math.min(100, compositeScore * 100)));
-    return `Composite ${compositePct}%`;
-  }
-  
-  // フォールバック: 既存のロジック（Composite Score が提供されていない場合）
-  switch (sourceType) {
-    case 'vector':
-    case 'hybrid':
-      const similarityPct = calculateSimilarityPercentage(distance ?? 1);
-      return `${sourceType === 'hybrid' ? 'Hybrid' : 'Vector'} ${similarityPct}%`;
-    case 'bm25':
-      // BM25スコアをパーセンテージで統一表示
-      const normalizedBM25 = normalizeBM25Score(score ?? 0, 30); // 最大スコアを30に調整
-      return `BM25 ${normalizedBM25}%`;
-    case 'keyword':
-      // キーワードスコアもパーセンテージで統一表示
-      const normalizedKeyword = Math.min(100, Math.max(0, ((score ?? 0) / 20) * 100));
-      return `Keyword ${Math.round(normalizedKeyword)}%`;
-    default:
-      return 'Unknown';
-  }
+  // デバッグが終了したため、空文字列を返す（互換性のため関数は残す）
+  return '';
 }

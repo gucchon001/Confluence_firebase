@@ -10,6 +10,7 @@ import { ai } from '../genkit';
 import { GeminiConfig } from '@/config/ai-models-config';
 import { getAnswerCache } from '@/lib/answer-cache';
 import { removeBOM, checkStringForBOM } from '@/lib/bom-utils';
+import { extractRelevantContentMultiKeyword } from './content-extraction-utils';
 // 重複コード修正をロールバック
 
 // フォールバック回答生成関数
@@ -324,16 +325,20 @@ export async function* streamingSummarizeConfluenceDocs(
   }
   
   try {
-    // コンテキストの準備（パフォーマンス最適化: 品質を維持しつつ削減）
+    // コンテキストの準備（参照元として表示される全件を使用）
+    // MAX_CONTEXT_DOCS=10件すべてをLLMに渡すことで、参照元として表示される情報が回答に反映される
     const contextText = context
-      .slice(0, 5) // 上位5件（品質維持）
+      .slice(0, 10) // 上位10件（参照元として表示される全件）
       .map(
         (doc, index) => {
           // ランキングに基づく動的な文字数制限（1位のドキュメントに十分な文字数を確保）
-          // 1位: 1500文字、2位: 1000文字、3位: 800文字、4位以降: 530文字
-          const maxLength = index === 0 ? 1500 : index === 1 ? 1000 : index === 2 ? 800 : 530;
-          const truncatedContent = doc.content && doc.content.length > maxLength 
-            ? doc.content.substring(0, maxLength) + '...' 
+          // 1位: 1500文字、2位: 1000文字、3位: 800文字、4-6位: 600文字、7-10位: 500文字
+          const maxLength = index === 0 ? 1500 : index === 1 ? 1000 : index === 2 ? 800 : index < 6 ? 600 : 500;
+          
+          // キーワードマッチングに基づいて関連部分を抽出（重要情報が後半にある場合にも対応）
+          // 先頭から切り取るのではなく、クエリに関連する部分を優先的に抽出
+          const truncatedContent = doc.content && doc.content.length > maxLength
+            ? extractRelevantContentMultiKeyword(doc.content, sanitizedQuestion, maxLength)
             : doc.content || '内容なし';
           
           return `**${doc.title}**
