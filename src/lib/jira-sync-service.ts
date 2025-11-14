@@ -6,6 +6,7 @@ import * as path from 'path';
 import fetch from 'node-fetch';
 
 import { initializeFirebaseAdmin } from './firebase-admin-init';
+import { getEmbeddings } from './embeddings';
 
 initializeFirebaseAdmin();
 
@@ -82,9 +83,11 @@ interface JiraSearchQueryResult {
 // LanceDBのcreateTableは Record<string, unknown>[] を期待しているため、
 // 型定義を Record<string, unknown> に互換性を持たせる
 type LanceDbRecord = Record<string, unknown> & {
+  id: string; // issue_keyをidとして使用
   issue_key: string;
   title: string;
   content: string;
+  vector: number[]; // 768次元のベクトル
   status: string;
   status_category: string;
   priority: string;
@@ -319,10 +322,15 @@ export class JiraSyncService {
       sections.push('', `最新コメント:\n${issue.latestComment}`);
     }
 
+    // ベクトル生成用のテキスト（タイトル + コンテンツ）
+    const vectorText = `${issue.summary}\n${sections.join('\n')}`;
+    
     return {
+      id: issue.key, // issue_keyをidとして使用
       issue_key: issue.key,
       title: issue.summary,
       content: sections.join('\n'),
+      vector: [], // 後で生成（writeLanceDbRecordsで）
       status: issue.status,
       status_category: issue.statusCategory,
       priority: issue.priority,
@@ -338,11 +346,12 @@ export class JiraSyncService {
       impact_level: issue.impactLevel,
       dev_validation: issue.devValidation,
       prod_validation: issue.prodValidation,
-      url: this.buildIssueUrl(issue.key)
-    };
+      url: this.buildIssueUrl(issue.key),
+      _vectorText: vectorText // ベクトル生成用テキスト（一時的なフィールド）
+    } as LanceDbRecord & { _vectorText: string };
   }
 
-  private async writeLanceDbRecords(records: LanceDbRecord[]): Promise<number> {
+  private async writeLanceDbRecords(records: (LanceDbRecord & { _vectorText?: string })[]): Promise<number> {
     const dbPath = path.resolve(process.cwd(), '.lancedb');
     const tableName = 'jira_issues';
     const db = await connectLanceDB(dbPath);
@@ -359,8 +368,40 @@ export class JiraSyncService {
     }
 
     console.log(`🗃️ LanceDB テーブル '${tableName}' を作成中 (${records.length}件)`);
-    await db.createTable(tableName, records);
-    return records.length;
+    console.log(`📊 ベクトル生成中... (${records.length}件)`);
+    
+    // ベクトルを生成（並列処理で高速化、進捗ログ付き）
+    let processedCount = 0;
+    const totalRecords = records.length;
+    const progressInterval = Math.max(1, Math.floor(totalRecords / 10)); // 10回に分けて進捗表示
+    
+    const recordsWithVectors = await Promise.all(
+      records.map(async (record, index) => {
+        const vectorText = record._vectorText || `${record.title}\n${record.content}`;
+        const vector = await getEmbeddings(vectorText);
+        
+        // スレッドセーフな進捗カウント
+        const currentCount = ++processedCount;
+        if (currentCount % progressInterval === 0 || currentCount === totalRecords) {
+          console.log(`📊 ベクトル生成進捗: ${currentCount} / ${totalRecords} (${Math.round(currentCount / totalRecords * 100)}%)`);
+        }
+        
+        // _vectorTextフィールドを削除してベクトルを追加
+        const { _vectorText, ...recordWithoutVectorText } = record;
+        return {
+          ...recordWithoutVectorText,
+          vector
+        } as LanceDbRecord;
+      })
+    );
+    
+    console.log(`✅ ベクトル生成完了 (${recordsWithVectors.length}件)`);
+    console.log(`🗃️ LanceDB テーブル '${tableName}' を作成中...`);
+    
+    await db.createTable(tableName, recordsWithVectors);
+    console.log(`✅ LanceDB テーブル '${tableName}' 作成完了`);
+    
+    return recordsWithVectors.length;
   }
 
   private extractTextFromADF(node: any): string {

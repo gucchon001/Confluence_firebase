@@ -4,7 +4,26 @@
 
 このディレクトリには、過去のプロジェクト、完了した分析、修正済みの問題、および非推奨になったドキュメントが保管されています。
 
-## ✨ 最新アーカイブ（2025-10-15）
+## ✨ 最新アーカイブ
+
+### 2025-11-13: デプロイドキュメント統合
+
+🎊 **デプロイ関連ドキュメントを統合！** 以下のドキュメントを`deployment-guide.md`に統合し、アーカイブに移動しました：
+
+- **統合済みデプロイドキュメント** (`operations/deployment-integrated-2025-11-13/`)
+  - `production-deployment-checklist.md` - デプロイチェックリスト
+  - `production-schema-verification-guide.md` - スキーマ確認ガイド
+  - `production-deployment-after-db-rebuild.md` - DB再構築後手順
+  - `firebase-app-hosting-configuration.md` - Firebase App Hosting設定
+  - `firebase-app-hosting-troubleshooting.md` - Firebase App Hostingトラブルシューティング
+  - `required-environment-variables.md` - 必須環境変数一覧
+  - `build-optimization-guide.md` - ビルド最適化ガイド
+
+**統合先**: [deployment-guide.md](../operations/deployment-guide.md)
+
+詳細は [deployment-integrated-2025-11-13/README.md](./operations/deployment-integrated-2025-11-13/README.md) を参照してください。
+
+### 2025-10-15: Phase 0A 完了
 
 🎊 **Phase 0A 完了！** 以下の計画書を完了済みとしてアーカイブしました：
 
@@ -25,6 +44,11 @@ docs/archive/
 ├── performance-analysis/   # パフォーマンス分析レポート
 ├── deployment-projects/    # 完了したデプロイプロジェクト
 ├── deprecated/             # 非推奨・古いドキュメント
+├── operations/             # Operations関連のアーカイブ
+│   ├── deployment-integrated-2025-11-13/  # 統合済みデプロイドキュメント
+│   ├── emergency-reports/  # 緊急対応レポート
+│   ├── completed-reports/  # 完了レポート
+│   └── analysis-reports/   # 分析レポート
 ├── [完了した計画書]        # Phase 0A計画書等（2025-10-15追加）
 └── [その他の履歴データ]
 ```
@@ -95,6 +119,39 @@ Next.jsコンパイル時間の最適化
 - **内容**: Firebase App Hostingへの初回デプロイ計画
 - **状態**: デプロイ完了
 - **成果**: 2025-10-10に安定版v1.0.0リリース
+
+### 📚 Operations関連アーカイブ (`operations/`)
+
+Operations関連のアーカイブドキュメント
+
+#### 統合済みデプロイドキュメント (`operations/deployment-integrated-2025-11-13/`)
+**統合日**: 2025-11-13  
+**統合先**: [deployment-guide.md](../operations/deployment-guide.md)
+
+以下のドキュメントは`deployment-guide.md`に統合され、アーカイブに移動されました：
+- `production-deployment-checklist.md` - デプロイチェックリスト
+- `production-schema-verification-guide.md` - スキーマ確認ガイド
+- `production-deployment-after-db-rebuild.md` - DB再構築後手順
+- `firebase-app-hosting-configuration.md` - Firebase App Hosting設定
+- `firebase-app-hosting-troubleshooting.md` - Firebase App Hostingトラブルシューティング
+- `required-environment-variables.md` - 必須環境変数一覧
+- `build-optimization-guide.md` - ビルド最適化ガイド
+
+詳細は [deployment-integrated-2025-11-13/README.md](./operations/deployment-integrated-2025-11-13/README.md) を参照してください。
+
+#### 緊急対応レポート (`operations/emergency-reports/`)
+- `production-performance-emergency-2025-10-20.md` - 本番環境パフォーマンス緊急対応（2025-10-20、解決済み）
+- `huggingface-rate-limit-emergency.md` - Hugging Faceレートリミット緊急対応（2025-10-20、解決済み）
+
+#### 完了レポート (`operations/completed-reports/`)
+- `production-index-rebuild-completed.md` - 本番環境インデックス再構築完了報告（2025-11-05）
+- `production-index-rebuild-instructions.md` - 本番環境インデックス再構築手順（2025-11-05）
+- `phase2-performance-optimization-guide.md` - Phase 2パフォーマンス最適化ガイド（2025-10-20、完了）
+- `lunr-performance-verification-guide.md` - Lunrパフォーマンス検証ガイド（2025-10-20、完了）
+
+#### 分析レポート (`operations/analysis-reports/`)
+- `latest-bucket-status.md` - バケット状態の最新情報（2025-10-19、古い状態情報）
+- `cloud-storage-region-analysis.md` - Cloud Storageリージョン分析（2025-10-19、分析完了）
 
 ---
 

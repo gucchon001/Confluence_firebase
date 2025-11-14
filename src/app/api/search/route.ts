@@ -44,10 +44,17 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
       try {
         const searchStartTime = performance.now();
         
+        // Jiraの場合はLunrインデックスの初期化状態を確認
+        let jiraLunrReady = false;
+        if (effectiveSource === 'jira') {
+          const { lunrInitializer } = await import('../../../lib/lunr-initializer');
+          jiraLunrReady = lunrInitializer.isReady('jira_issues');
+        }
+        
         const hybridResults = await hybridSearchEngine.search({
           query,
           topK,
-          useLunrIndex: effectiveSource === 'jira' ? false : lunrReady, // Jiraの場合はLunrを使用しない（インデックス未作成のため）
+          useLunrIndex: effectiveSource === 'jira' ? jiraLunrReady : lunrReady, // Jiraの場合はJira用Lunrインデックスの状態を使用
           labelFilters: {
             excludeMeetingNotes: true,
             excludeArchived: true

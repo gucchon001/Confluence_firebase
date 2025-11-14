@@ -12,6 +12,7 @@ import { LunrSearchClient, LunrDocument } from './lunr-search-client';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
 import { lancedbClient } from './lancedb-client';
 import { getLabelsAsArray } from './label-utils';
+import * as path from 'path';
 import crypto from 'crypto';
 
 // インスタンスIDを生成（サーバー起動時に1回のみ）
@@ -62,41 +63,45 @@ export class LunrInitializer {
     initializationCount: 0,
   };
   
-  // Phase 5最適化: Promise保持による競合状態防止
-  private initializationPromise: Promise<void> | null = null;
+  // Phase 5最適化: Promise保持による競合状態防止（テーブルごとに管理）
+  private initializationPromises: Map<string, Promise<void>> = new Map();
+  private initializedTables: Set<string> = new Set(); // 初期化済みテーブル
 
-  async initializeAsync(): Promise<void> {
+  async initializeAsync(tableName: string = 'confluence'): Promise<void> {
     // Phase 5最適化: 既に初期化済みの場合は即座にreturn
-    if (this.status.isInitialized) {
-      console.log(`[LUNR_CACHE_HIT] ✅ Instance ${INSTANCE_ID}: Reusing existing Lunr index (count: ${this.status.initializationCount})`);
+    if (this.initializedTables.has(tableName)) {
+      console.log(`[LUNR_CACHE_HIT] ✅ Instance ${INSTANCE_ID}: Reusing existing Lunr index for ${tableName} (count: ${this.status.initializationCount})`);
       return;
     }
     
     // Phase 5最適化: 初期化中の場合は同じPromiseを返す（競合防止）
-    if (this.status.isInitializing && this.initializationPromise) {
-      console.log(`[LUNR_WAITING] ⏳ Instance ${INSTANCE_ID}: Waiting for ongoing initialization...`);
-      return this.initializationPromise;
+    const existingPromise = this.initializationPromises.get(tableName);
+    if (existingPromise) {
+      console.log(`[LUNR_WAITING] ⏳ Instance ${INSTANCE_ID}: Waiting for ongoing ${tableName} initialization...`);
+      return existingPromise;
     }
 
     // Phase 5最適化: 新しい初期化を開始
-    console.log(`[LUNR_CACHE_MISS] 🚀 Instance ${INSTANCE_ID}: Starting new Lunr initialization...`);
+    console.log(`[LUNR_CACHE_MISS] 🚀 Instance ${INSTANCE_ID}: Starting new Lunr initialization for ${tableName}...`);
     this.status.isInitializing = true;
     this.status.error = null;
     
     // Promiseを保持して、同時リクエストが待機できるようにする
-    this.initializationPromise = this._performInitialization();
+    const promise = this._performInitialization(tableName);
+    this.initializationPromises.set(tableName, promise);
     
     try {
-      await this.initializationPromise;
+      await promise;
+      this.initializedTables.add(tableName);
     } finally {
       this.status.isInitializing = false;
-      this.initializationPromise = null;
+      this.initializationPromises.delete(tableName);
     }
   }
   
-  private async _performInitialization(): Promise<void> {
+  private async _performInitialization(tableName: string = 'confluence'): Promise<void> {
     try {
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Starting Lunr index initialization...`);
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Starting Lunr index initialization for ${tableName}...`);
       const startTime = Date.now();
       
       // Phase 6修正: kuromojiを確実に初期化（品質維持のため）
@@ -107,22 +112,26 @@ export class LunrInitializer {
 
       // まずはキャッシュからロードを試みる（再インデックス回避）
       const lunrSearchClient = LunrSearchClient.getInstance();
-      const loaded = await lunrSearchClient.loadFromCache();
+      const cachePath = tableName === 'confluence' 
+        ? path.join('.cache', 'lunr-index.json')
+        : path.join('.cache', `lunr-index-${tableName}.json`);
+      const loaded = await lunrSearchClient.loadFromCache(cachePath, tableName);
       if (loaded) {
         this.status.isInitialized = true;
         this.status.initializationCount++;
-        this.status.documentCount = await lunrSearchClient.getDocumentCount();
+        this.status.documentCount = await lunrSearchClient.getDocumentCount(tableName);
         this.status.lastUpdated = new Date();
         const duration = Date.now() - startTime;
-        console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Loaded Lunr from cache in ${duration}ms (count: ${this.status.initializationCount})`);
+        console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Loaded ${tableName} Lunr from cache in ${duration}ms (count: ${this.status.initializationCount})`);
         return;
       }
 
-      // LanceDBからドキュメントを取得
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Fetching documents from LanceDB...`);
+      // LanceDBからドキュメントを取得（指定されたテーブルから）
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Fetching documents from LanceDB table: ${tableName}...`);
       const dbStartTime = Date.now();
-      const connection = await lancedbClient.getConnection();
-      const tbl = connection.table;
+      const dbPath = path.resolve(process.cwd(), '.lancedb');
+      const db = await import('@lancedb/lancedb').then(m => m.connect(dbPath));
+      const tbl = await db.openTable(tableName);
       
       // 全ドキュメントを取得
       const docs = await tbl.query().limit(10000).toArray();
@@ -149,12 +158,27 @@ export class LunrInitializer {
             labels = getLabelsAsArray(doc.labels);
           }
 
-          // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
-          const { getPageIdFromRecord } = await import('./pageid-migration-helper');
-          const pageId = getPageIdFromRecord(doc) || doc.pageId || 0;
+          // Jiraテーブルの場合はissue_keyを使用、Confluenceテーブルの場合はpageIdを使用
+          let pageId = 0;
+          let docId = doc.id || '';
+          let spaceKey = doc.space_key || '';
+          
+          if (tableName === 'jira_issues') {
+            // Jiraの場合はissue_keyをidとして使用
+            docId = doc.issue_key || doc.id || '';
+            // pageIdは0に設定（Jiraでは使用しない）
+            pageId = 0;
+            // space_keyは存在しないため空文字列
+            spaceKey = '';
+          } else {
+            // Confluenceの場合はpageIdを使用
+            const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+            pageId = getPageIdFromRecord(doc) || doc.pageId || 0;
+            spaceKey = doc.space_key || '';
+          }
           
           lunrDocs.push({
-            id: doc.id || '',
+            id: docId,
             title: cleanTitle,
             content: cleanContent,
             labels,
@@ -164,8 +188,8 @@ export class LunrInitializer {
             originalTitle: doc.title || '',
             originalContent: doc.content || '',
             url: doc.url || '',
-            space_key: doc.space_key || '',
-            lastUpdated: doc.lastUpdated || '',
+            space_key: spaceKey,
+            lastUpdated: doc.lastUpdated || doc.updated_at || '',
           });
         } catch (error) {
           console.warn(`[LunrInitializer] Instance ${INSTANCE_ID}: Failed to process document ${doc.id}:`, error);
@@ -177,21 +201,21 @@ export class LunrInitializer {
       console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Tokenized ${lunrDocs.length} documents in ${tokenizeDuration}ms`);
 
       // Lunrインデックスを初期化
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Building Lunr index...`);
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Building Lunr index for ${tableName}...`);
       const indexStartTime = Date.now();
-      await lunrSearchClient.initialize(lunrDocs);
+      await lunrSearchClient.initialize(lunrDocs, tableName);
       const indexDuration = Date.now() - indexStartTime;
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Index built in ${indexDuration}ms`);
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ ${tableName} index built in ${indexDuration}ms`);
       
       // キャッシュに保存
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Saving to disk cache...`);
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Saving ${tableName} to disk cache...`);
       const cacheStartTime = Date.now();
-      await lunrSearchClient.saveToDisk(lunrDocs);
+      await lunrSearchClient.saveToDisk(lunrDocs, cachePath, tableName);
       const cacheDuration = Date.now() - cacheStartTime;
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Saved to cache in ${cacheDuration}ms`);
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ ${tableName} saved to cache in ${cacheDuration}ms`);
       
       // 初期化完了を確認
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Lunr client ready: ${lunrSearchClient.isReady()}`);
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ${tableName} Lunr client ready: ${lunrSearchClient.isReady(tableName)}`);
 
       const duration = Date.now() - startTime;
       this.status.isInitialized = true;
@@ -199,10 +223,11 @@ export class LunrInitializer {
       this.status.documentCount = lunrDocs.length;
       this.status.lastUpdated = new Date();
 
-      const totalDocs = await lunrSearchClient.getDocumentCount();
-      const avgdl = await lunrSearchClient.getAverageTitleLength();
+      const totalDocs = await lunrSearchClient.getDocumentCount(tableName);
+      const avgdl = await lunrSearchClient.getAverageTitleLength(tableName);
       
-      console.log(`[LUNR_INITIALIZED] ✅ Instance ${INSTANCE_ID}: Lunr index initialized successfully`);
+      console.log(`[LUNR_INITIALIZED] ✅ Instance ${INSTANCE_ID}: ${tableName} Lunr index initialized successfully`);
+      console.log(`   - Table: ${tableName}`);
       console.log(`   - Total time: ${duration}ms`);
       console.log(`   - DB fetch: ${dbDuration}ms`);
       console.log(`   - Tokenization: ${tokenizeDuration}ms`);
@@ -219,12 +244,12 @@ export class LunrInitializer {
     }
   }
 
-  isReady(): boolean {
+  isReady(tableName: string = 'confluence'): boolean {
     try {
       const { lunrSearchClient } = require('./lunr-search-client');
-      return this.status.isInitialized && lunrSearchClient.isReady();
+      return this.initializedTables.has(tableName) && lunrSearchClient.isReady(tableName);
     } catch (error) {
-      console.warn('[LunrInitializer] Failed to check Lunr readiness:', error);
+      console.warn(`[LunrInitializer] Failed to check ${tableName} Lunr readiness:`, error);
       return false;
     }
   }

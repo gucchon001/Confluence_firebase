@@ -52,10 +52,16 @@ export class LunrSearchClient {
   private static instance: LunrSearchClient | null = null;
   
   // Phase 5 Week 2: 一度構築した索引をメモリに保持（再構築不要）
-  private index: lunr.Index | null = null;
-  private documents: Map<string, LunrDocument> = new Map();
-  private initialized = false;
+  // Jira対応: テーブル名ごとにインデックスを管理
+  private indices: Map<string, lunr.Index> = new Map(); // tableName -> index
+  private documents: Map<string, Map<string, LunrDocument>> = new Map(); // tableName -> (id -> document)
+  private initializedTables: Set<string> = new Set(); // 初期化済みテーブル
   private defaultCachePath = path.join('.cache', 'lunr-index.json');
+  
+  // 後方互換性のため、デフォルトテーブル名を保持
+  private get defaultTableName(): string {
+    return 'confluence';
+  }
 
   /**
    * Phase 5 Week 2: シングルトンパターンでメモリ最適化
@@ -74,8 +80,13 @@ export class LunrSearchClient {
     // プライベートコンストラクタ（シングルトン保証）
   }
 
-  public isInitialized(): boolean {
-    return this.initialized;
+  public isInitialized(tableName?: string): boolean {
+    const targetTable = tableName || this.defaultTableName;
+    return this.initializedTables.has(targetTable);
+  }
+  
+  public isReady(tableName?: string): boolean {
+    return this.isInitialized(tableName);
   }
 
   async initializeFromCache(): Promise<void> {
@@ -100,26 +111,30 @@ export class LunrSearchClient {
     }
   }
 
-  async initialize(documents: LunrDocument[]): Promise<void> {
+  async initialize(documents: LunrDocument[], tableName: string = 'confluence'): Promise<void> {
     try {
-      console.log(`[LunrSearchClient] Initializing with ${documents.length} documents`);
+      console.log(`[LunrSearchClient] Initializing ${tableName} index with ${documents.length} documents`);
       
       // トークナイザーを事前初期化（並列処理）
       const tokenizerInit = import('./japanese-tokenizer').then(({ preInitializeTokenizer }) => 
         preInitializeTokenizer()
       );
       
-      // ドキュメントをMapに保存
-      this.documents.clear();
+      // ドキュメントをMapに保存（テーブルごとに管理）
+      if (!this.documents.has(tableName)) {
+        this.documents.set(tableName, new Map());
+      }
+      const tableDocuments = this.documents.get(tableName)!;
+      tableDocuments.clear();
       for (const doc of documents) {
-        this.documents.set(doc.id, doc);
+        tableDocuments.set(doc.id, doc);
       }
       
       // トークナイザーの初期化完了を待つ
       await tokenizerInit;
 
       // Lunrインデックスを日本語用に正しく構築
-      this.index = lunr(function() {
+      const index = lunr(function() {
         // =================== 日本語対応の重要な修正点 ===================
         
         // 1. 英語用のパイプラインを削除（日本語検索の邪魔になる）
@@ -157,17 +172,20 @@ export class LunrSearchClient {
         });
       });
 
-      this.initialized = true;
-      console.log(`[LunrSearchClient] Initialization complete with ${documents.length} documents`);
-      console.log(`[LunrSearchClient] Index ready: ${this.index !== null}`);
-      console.log(`[Phase 5 LunrCache] ✅ 索引をメモリに永続保持 - 次回以降は再構築不要`);
+      // テーブルごとのインデックスを保存
+      this.indices.set(tableName, index);
+      this.initializedTables.add(tableName);
+      
+      console.log(`[LunrSearchClient] ${tableName} index initialization complete with ${documents.length} documents`);
+      console.log(`[LunrSearchClient] ${tableName} index ready: ${index !== null}`);
+      console.log(`[Phase 5 LunrCache] ✅ ${tableName}索引をメモリに永続保持 - 次回以降は再構築不要`);
     } catch (error) {
-      console.error('[LunrSearchClient] Initialization failed:', error);
+      console.error(`[LunrSearchClient] ${tableName} index initialization failed:`, error);
       throw error;
     }
   }
 
-  async loadFromCache(cachePath: string = this.defaultCachePath): Promise<boolean> {
+  async loadFromCache(cachePath: string = this.defaultCachePath, tableName: string = 'confluence'): Promise<boolean> {
     try {
       const startTime = Date.now();
       
@@ -189,17 +207,22 @@ export class LunrSearchClient {
         console.log(`[Phase 6 LunrCache] MessagePack解析完了: ${parseTime}ms`);
 
         const indexLoadStartTime = Date.now();
-        this.index = lunr.Index.load(data.index);
-        this.documents.clear();
+        const index = lunr.Index.load(data.index);
+        if (!this.documents.has(tableName)) {
+          this.documents.set(tableName, new Map());
+        }
+        const tableDocuments = this.documents.get(tableName)!;
+        tableDocuments.clear();
         for (const doc of data.documents) {
-          this.documents.set(doc.id, doc);
+          tableDocuments.set(doc.id, doc);
         }
         const indexLoadTime = Date.now() - indexLoadStartTime;
         console.log(`[Phase 6 LunrCache] Lunrインデックス復元完了: ${indexLoadTime}ms`);
         
-        this.initialized = true;
+        this.indices.set(tableName, index);
+        this.initializedTables.add(tableName);
         const totalTime = Date.now() - startTime;
-        console.log(`[Phase 6 LunrCache] ✅ MessagePack形式でロード成功: ${msgpackPath} (docs=${this.documents.size}, total=${totalTime}ms)`);
+        console.log(`[Phase 6 LunrCache] ✅ MessagePack形式でロード成功: ${msgpackPath} (table=${tableName}, docs=${tableDocuments.size}, total=${totalTime}ms)`);
         return true;
         
       } catch (msgpackError) {
@@ -213,15 +236,20 @@ export class LunrSearchClient {
         documents: LunrDocument[];
       };
 
-      this.index = lunr.Index.load(json.index);
-      this.documents.clear();
-      for (const doc of json.documents) {
-        this.documents.set(doc.id, doc);
+      const index = lunr.Index.load(json.index);
+      if (!this.documents.has(tableName)) {
+        this.documents.set(tableName, new Map());
       }
-      this.initialized = true;
+      const tableDocuments = this.documents.get(tableName)!;
+      tableDocuments.clear();
+      for (const doc of json.documents) {
+        tableDocuments.set(doc.id, doc);
+      }
+      this.indices.set(tableName, index);
+      this.initializedTables.add(tableName);
       const totalTime = Date.now() - startTime;
-      console.log(`[LunrSearchClient] Loaded index from JSON cache: ${filePath} (docs=${this.documents.size}, ${totalTime}ms)`);
-      console.log(`[Phase 5 LunrCache] ✅ キャッシュから索引をメモリに読み込み - 構築時間0ms`);
+      console.log(`[LunrSearchClient] Loaded ${tableName} index from JSON cache: ${filePath} (docs=${tableDocuments.size}, ${totalTime}ms)`);
+      console.log(`[Phase 5 LunrCache] ✅ ${tableName}キャッシュから索引をメモリに読み込み - 構築時間0ms`);
       return true;
     } catch (error) {
       console.log('[LunrSearchClient] No cache found or failed to load. Will rebuild.');
@@ -229,16 +257,18 @@ export class LunrSearchClient {
     }
   }
 
-  async saveToDisk(documents: LunrDocument[], cachePath: string = this.defaultCachePath): Promise<void> {
-    if (!this.index) return;
+  async saveToDisk(documents: LunrDocument[], cachePath: string = this.defaultCachePath, tableName: string = 'confluence'): Promise<void> {
+    const index = this.indices.get(tableName);
+    if (!index) return;
     
     const dir = path.dirname(path.resolve(cachePath));
     await fs.mkdir(dir, { recursive: true });
     
     const data = {
-      index: this.index.toJSON(),
+      index: index.toJSON(),
       documents: documents,
-      version: '2.0'  // Phase 6: MessagePack形式
+      version: '2.0',  // Phase 6: MessagePack形式
+      tableName: tableName  // テーブル名を保存
     };
     
     // Phase 6最適化: MessagePack形式で保存（10倍高速、50%～70%圧縮）
@@ -270,10 +300,17 @@ export class LunrSearchClient {
 
   async searchCandidates(
     query: string,
-    limit: number = 50
+    limit: number = 50,
+    tableName: string = 'confluence'
   ): Promise<LunrSearchResult[]> {
-    if (!this.index || !this.initialized) {
-      throw new Error('LunrSearchClient not initialized');
+    const index = this.indices.get(tableName);
+    if (!index || !this.isInitialized(tableName)) {
+      throw new Error(`LunrSearchClient not initialized for table: ${tableName}`);
+    }
+    
+    const tableDocuments = this.documents.get(tableName);
+    if (!tableDocuments) {
+      throw new Error(`Documents not found for table: ${tableName}`);
     }
 
     try {
@@ -301,14 +338,14 @@ export class LunrSearchClient {
         threshold: query.length > 10 ? 0.1 : 0.1 // すべてのクエリで0.1に統一（検出精度向上）
       };
 
-      const searchResults = this.index.search(tokenizedQuery, searchOptions);
+      const searchResults = index.search(tokenizedQuery, searchOptions);
 
       // Phase 2最適化: 効率的な結果処理
       const validResults: LunrSearchResult[] = [];
       
       for (let i = 0; i < Math.min(searchResults.length, limit); i++) {
         const result = searchResults[i];
-        const doc = this.documents.get(result.ref);
+        const doc = tableDocuments.get(result.ref);
         
         if (doc) {
           validResults.push({
@@ -334,10 +371,11 @@ export class LunrSearchClient {
 
   async search(
     query: string,
-    limit: number = 50
+    limit: number = 50,
+    tableName: string = 'confluence'
   ): Promise<LunrSearchResult[]> {
     // searchCandidatesメソッドを呼び出す
-    return this.searchCandidates(query, limit);
+    return this.searchCandidates(query, limit, tableName);
   }
 
   async searchWithFilters(
@@ -346,15 +384,22 @@ export class LunrSearchClient {
       labels?: string[];
       excludeLabels?: string[];
     } = {},
-    limit: number = 50
+    limit: number = 50,
+    tableName: string = 'confluence'
   ): Promise<LunrSearchResult[]> {
-    if (!this.index || !this.initialized) {
-      throw new Error('LunrSearchClient not initialized');
+    const index = this.indices.get(tableName);
+    if (!index || !this.isInitialized(tableName)) {
+      throw new Error(`LunrSearchClient not initialized for table: ${tableName}`);
+    }
+    
+    const tableDocuments = this.documents.get(tableName);
+    if (!tableDocuments) {
+      throw new Error(`Documents not found for table: ${tableName}`);
     }
 
     try {
       const tokenizedQuery = await tokenizeJapaneseText(query);
-      const searchResults = this.index.search(tokenizedQuery, {
+      const searchResults = index.search(tokenizedQuery, {
         fields: {
           tokenizedTitle: { boost: 2.0 },
           tokenizedContent: { boost: 1.0 },
@@ -367,7 +412,7 @@ export class LunrSearchClient {
 
       if (filters.labels && filters.labels.length > 0) {
         filteredResults = filteredResults.filter(result => {
-          const doc = this.documents.get(result.ref);
+          const doc = tableDocuments.get(result.ref);
           if (!doc) return false;
           
           return hasIncludedLabel(doc.labels, filters.labels!);
@@ -376,7 +421,7 @@ export class LunrSearchClient {
 
       if (filters.excludeLabels && filters.excludeLabels.length > 0) {
         filteredResults = filteredResults.filter(result => {
-          const doc = this.documents.get(result.ref);
+          const doc = tableDocuments.get(result.ref);
           if (!doc) return false;
           
           return !labelManager.isExcluded(doc.labels, filters.excludeLabels!);
@@ -387,7 +432,7 @@ export class LunrSearchClient {
       return filteredResults
         .slice(0, limit)
         .map(result => {
-          const doc = this.documents.get(result.ref);
+          const doc = tableDocuments.get(result.ref);
           if (!doc) return null;
 
           return {
@@ -409,36 +454,44 @@ export class LunrSearchClient {
     }
   }
 
-  async getDocumentCount(): Promise<number> {
-    return this.documents.size;
+  async getDocumentCount(tableName: string = 'confluence'): Promise<number> {
+    const tableDocuments = this.documents.get(tableName);
+    return tableDocuments ? tableDocuments.size : 0;
   }
 
-  async getAverageTitleLength(): Promise<number> {
-    if (this.documents.size === 0) return 0;
+  async getAverageTitleLength(tableName: string = 'confluence'): Promise<number> {
+    const tableDocuments = this.documents.get(tableName);
+    if (!tableDocuments || tableDocuments.size === 0) return 0;
 
-    const totalLength = Array.from(this.documents.values()).reduce((sum, doc) => {
+    const totalLength = Array.from(tableDocuments.values()).reduce((sum, doc) => {
       return sum + (doc.originalTitle?.length || 0);
     }, 0);
 
-    return totalLength / this.documents.size;
+    return totalLength / tableDocuments.size;
   }
 
-  isReady(): boolean {
-    return this.initialized && this.index !== null;
-  }
-
-  getStatus(): { initialized: boolean; documentCount: number; hasIndex: boolean } {
+  getStatus(tableName: string = 'confluence'): { initialized: boolean; documentCount: number; hasIndex: boolean } {
+    const tableDocuments = this.documents.get(tableName);
+    const index = this.indices.get(tableName);
     return {
-      initialized: this.initialized,
-      documentCount: this.documents.size,
-      hasIndex: this.index !== null
+      initialized: this.isInitialized(tableName),
+      documentCount: tableDocuments ? tableDocuments.size : 0,
+      hasIndex: index !== null && index !== undefined
     };
   }
 
-  async destroy(): Promise<void> {
-    this.index = null;
-    this.documents.clear();
-    this.initialized = false;
+  async destroy(tableName?: string): Promise<void> {
+    if (tableName) {
+      // 特定のテーブルのインデックスを削除
+      this.indices.delete(tableName);
+      this.documents.delete(tableName);
+      this.initializedTables.delete(tableName);
+    } else {
+      // すべてのインデックスを削除
+      this.indices.clear();
+      this.documents.clear();
+      this.initializedTables.clear();
+    }
   }
 }
 

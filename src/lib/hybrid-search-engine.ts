@@ -70,11 +70,11 @@ export class HybridSearchEngine {
 
       // 2. 並列検索実行
       console.log(`[HybridSearchEngine] Starting parallel search: vector=${true}, bm25=${useLunrIndex}`);
-      console.log(`[HybridSearchEngine] Lunr client ready: ${lunrSearchClient.isReady()}`);
+      console.log(`[HybridSearchEngine] ${tableName} Lunr client ready: ${lunrSearchClient.isReady(tableName)}`);
       
       const [vectorResults, bm25Results] = await Promise.all([
         this.performVectorSearch(processedQuery.processedQuery, topK * 2, tableName),
-        useLunrIndex ? this.performBM25Search(processedQuery.processedQuery, topK * 2, labelFilters) : []
+        useLunrIndex ? this.performBM25Search(processedQuery.processedQuery, topK * 2, labelFilters, tableName) : []
       ]);
 
       console.log(`[HybridSearchEngine] Vector results: ${vectorResults.length}, BM25 results: ${bm25Results.length}`);
@@ -148,36 +148,42 @@ export class HybridSearchEngine {
   /**
    * BM25検索を実行
    */
-  private async performBM25Search(query: string, limit: number, labelFilters: any): Promise<HybridSearchResult[]> {
+  private async performBM25Search(query: string, limit: number, labelFilters: any, tableName: string = 'confluence'): Promise<HybridSearchResult[]> {
     try {
       // Lunrクライアントをシングルトンで取得
       const { LunrSearchClient } = await import('./lunr-search-client');
       const lunrSearchClient = LunrSearchClient.getInstance();
       
       // Lunrクライアントが初期化されていない場合は初期化を試行
-      if (!lunrSearchClient.isReady()) {
-        console.log('[HybridSearchEngine] Lunr client not ready, attempting initialization...');
+      if (!lunrSearchClient.isReady(tableName)) {
+        console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready, attempting initialization...`);
         
         // 直接Lunrクライアントを初期化
-        await this.initializeLunrClient(lunrSearchClient);
+        await this.initializeLunrClient(lunrSearchClient, tableName);
         
         // 再確認
-        if (!lunrSearchClient.isReady()) {
-          console.warn('[HybridSearchEngine] Lunr client still not ready after initialization, skipping BM25 search');
-          console.log('[HybridSearchEngine] Lunr status:', lunrSearchClient.getStatus());
+        if (!lunrSearchClient.isReady(tableName)) {
+          console.warn(`[HybridSearchEngine] ${tableName} Lunr client still not ready after initialization, skipping BM25 search`);
+          console.log(`[HybridSearchEngine] ${tableName} Lunr status:`, lunrSearchClient.getStatus(tableName));
           return [];
         }
       }
 
-      console.log(`[HybridSearchEngine] Performing BM25 search for: "${query}"`);
+      console.log(`[HybridSearchEngine] Performing BM25 search for ${tableName}: "${query}"`);
       const bm25Results = await lunrSearchClient.searchWithFilters(query, {
         excludeLabels: this.getExcludeLabels(labelFilters)
-      }, limit);
+      }, limit, tableName);
 
       console.log(`[HybridSearchEngine] BM25 search returned ${bm25Results.length} results`);
       
       // URLを再構築するヘルパー関数
-      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string => {
+      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined, tableName: string): string => {
+        // Jiraの場合は既存URLを使用
+        if (tableName === 'jira_issues' && existingUrl && existingUrl.startsWith('http')) {
+          return existingUrl;
+        }
+        
+        // Confluenceの場合
         const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
         if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
           return existingUrl;
@@ -185,15 +191,16 @@ export class HybridSearchEngine {
         if (pageId && spaceKey) {
           return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
         }
-        return '#';
+        return existingUrl || '#';
       };
       
       return bm25Results.map(result => ({
         pageId: result.pageId,
+        id: result.id, // Jiraの場合はissue_keyが入る
         title: result.title,
         content: result.content,
         labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
-        url: buildUrl(result.pageId, result.space_key, result.url), // URLを再構築
+        url: buildUrl(result.pageId, result.space_key, result.url, tableName), // URLを再構築
         source: 'bm25' as const,
         scoreKind: 'bm25' as const,
         scoreRaw: result.score,
@@ -276,34 +283,37 @@ export class HybridSearchEngine {
   /**
    * Lunrクライアントを初期化（lunrInitializerを使用）
    */
-  private async initializeLunrClient(lunrSearchClient: any): Promise<void> {
+  private async initializeLunrClient(lunrSearchClient: any, tableName: string = 'confluence'): Promise<void> {
     try {
-      console.log('[HybridSearchEngine] Starting Lunr client initialization via lunrInitializer...');
+      console.log(`[HybridSearchEngine] Starting ${tableName} Lunr client initialization via lunrInitializer...`);
       
       // lunrInitializerを使用して初期化（統一された初期化処理）
       const { lunrInitializer } = await import('./lunr-initializer');
-      await lunrInitializer.initializeAsync();
+      await lunrInitializer.initializeAsync(tableName);
       
       // Lunrクライアントが初期化済みか確認
-      if (lunrSearchClient.isReady()) {
-        console.log('[HybridSearchEngine] Lunr client initialized successfully via lunrInitializer');
+      if (lunrSearchClient.isReady(tableName)) {
+        console.log(`[HybridSearchEngine] ${tableName} Lunr client initialized successfully via lunrInitializer`);
         return;
       }
       
       // 初期化が完了していない場合は、直接キャッシュから読み込みを試行
-      console.log('[HybridSearchEngine] Lunr client not ready after initialization, trying direct cache load...');
-      const loaded = await lunrSearchClient.loadFromCache();
+      console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready after initialization, trying direct cache load...`);
+      const cachePath = tableName === 'confluence' 
+        ? path.join('.cache', 'lunr-index.json')
+        : path.join('.cache', `lunr-index-${tableName}.json`);
+      const loaded = await lunrSearchClient.loadFromCache(cachePath, tableName);
       if (loaded) {
-        console.log('[HybridSearchEngine] Lunr client loaded from cache successfully');
+        console.log(`[HybridSearchEngine] ${tableName} Lunr client loaded from cache successfully`);
         return;
       }
       
-      console.warn('[HybridSearchEngine] Lunr client initialization failed - cache not found and initialization not ready');
+      console.warn(`[HybridSearchEngine] ${tableName} Lunr client initialization failed - cache not found and initialization not ready`);
       
     } catch (error) {
-      console.error('[HybridSearchEngine] Failed to initialize Lunr client:', error);
+      console.error(`[HybridSearchEngine] Failed to initialize ${tableName} Lunr client:`, error);
       // エラーを再スローせず、BM25検索をスキップするだけにする（ベクトル検索は継続）
-      console.warn('[HybridSearchEngine] Continuing without BM25 search due to initialization error');
+      console.warn(`[HybridSearchEngine] Continuing without BM25 search for ${tableName} due to initialization error`);
     }
   }
 

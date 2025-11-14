@@ -1,5 +1,9 @@
 # Firebase App Hosting 構成ガイド
 
+> ⚠️ **統合済み（2025-11-13）:** このドキュメントの内容は `deployment-guide.md` に統合されました。  
+> **最新の情報**: [deployment-guide.md](./deployment-guide.md) を参照してください。  
+> このドキュメントは履歴目的で保持されています。
+
 **最終更新日**: 2025-10-10  
 **安定版**: v1.0.0-stable  
 **コミット**: a54662bf

@@ -1,5 +1,8 @@
 /**
  * Production データを Cloud Storage にアップロードするスクリプト
+ * 
+ * 改善: アップロード前に古いLanceDBバージョンを削除して、最新バージョンのみを保持
+ * 環境変数 CLEANUP_OLD_VERSIONS=false でクリーンアップを無効化可能
  */
 
 import { Storage } from '@google-cloud/storage';
@@ -13,6 +16,9 @@ const storage = new Storage({
 
 const bucketName = process.env.STORAGE_BUCKET || 'confluence-copilot-data';
 const bucket = storage.bucket(bucketName);
+
+// クリーンアップを有効化するか（デフォルト: true）
+const CLEANUP_OLD_VERSIONS = process.env.CLEANUP_OLD_VERSIONS !== 'false';
 
 interface UploadStats {
   filesUploaded: number;
@@ -83,6 +89,70 @@ function formatBytes(bytes: number): string {
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
+/**
+ * 古いLanceDBバージョンを削除
+ * アップロード前に実行して、最新バージョンのみを保持
+ */
+async function cleanupOldVersions(): Promise<void> {
+  if (!CLEANUP_OLD_VERSIONS) {
+    console.log('⏩ クリーンアップをスキップします (CLEANUP_OLD_VERSIONS=false)');
+    return;
+  }
+
+  console.log('🧹 古いLanceDBバージョンを削除中...');
+  console.log('   ⚠️  注意: この操作により、過去のバージョンに戻れなくなります');
+  console.log('');
+
+  const prefix = 'lancedb/confluence.lance/';
+  
+  try {
+    const [files] = await bucket.getFiles({ prefix });
+    
+    if (files.length === 0) {
+      console.log('✅ 削除対象のファイルが見つかりませんでした\n');
+      return;
+    }
+
+    console.log(`📊 削除対象: ${files.length}ファイル`);
+    
+    // ファイルサイズを計算
+    let totalSize = 0;
+    for (const file of files) {
+      const size = parseInt(String(file.metadata.size || '0'), 10);
+      totalSize += size;
+    }
+    console.log(`💾 削除サイズ: ${formatBytes(totalSize)}\n`);
+
+    // ファイルを削除
+    let deletedCount = 0;
+    let errorCount = 0;
+    
+    for (const file of files) {
+      try {
+        await file.delete();
+        deletedCount++;
+      } catch (error) {
+        errorCount++;
+        console.error(`❌ 削除失敗: ${file.name}`, error);
+      }
+    }
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📊 削除結果');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`✅ 削除成功: ${deletedCount}ファイル`);
+    if (errorCount > 0) {
+      console.log(`❌ 削除失敗: ${errorCount}ファイル`);
+    }
+    console.log(`💾 削除サイズ: ${formatBytes(totalSize)}`);
+    console.log('✅ 古いバージョンの削除が完了しました\n');
+
+  } catch (error) {
+    console.error('❌ クリーンアップ中にエラーが発生しました:', error);
+    throw error;
+  }
+}
+
 async function main() {
   console.log('🚀 Starting production data upload...');
   console.log(`📦 Bucket: ${bucketName}`);
@@ -98,6 +168,9 @@ async function main() {
   const startTime = Date.now();
 
   try {
+    // アップロード前に古いバージョンを削除（最新バージョンのみを保持）
+    await cleanupOldVersions();
+
     // LanceDB データをアップロード
     console.log('📥 Uploading LanceDB data...');
     await uploadDirectory('.lancedb/confluence.lance', 'lancedb/confluence.lance', stats);

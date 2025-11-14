@@ -83,12 +83,7 @@
 - **[firebase-scheduled-sync-setup.md](./operations/firebase-scheduled-sync-setup.md)** - Firebase Functions自動同期セットアップ
 
 #### デプロイ・設定
-- **[deployment-guide.md](./operations/deployment-guide.md)** - 包括的デプロイガイド
-- **[production-deployment-checklist.md](./operations/production-deployment-checklist.md)** ✅ - 本番デプロイチェックリスト
-- **[build-optimization-guide.md](./operations/build-optimization-guide.md)** 🚀 **NEW** - ビルド最適化ガイド（75-90%高速化）
-- **[firebase-app-hosting-configuration.md](./operations/firebase-app-hosting-configuration.md)** ⭐ - App Hosting設定（動作確認済み）
-- **[firebase-app-hosting-troubleshooting.md](./operations/firebase-app-hosting-troubleshooting.md)** - トラブルシューティング
-- **[required-environment-variables.md](./operations/required-environment-variables.md)** - 必須環境変数一覧
+- **[deployment-guide.md](./operations/deployment-guide.md)** - 包括的デプロイガイド（環境変数設定、Firebase App Hosting設定、データ準備、デプロイ手順を含む）
 
 #### Cloud Storage・データ管理
 - **[latest-bucket-status.md](./operations/latest-bucket-status.md)** 📦 **最新** - 最新バケット状況（更新日時・デプロイ連携確認）
@@ -116,6 +111,22 @@
 - **[chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - チャットボットパフォーマンス改善計画
 - **[phase-0a-4-test-criteria.md](./testing/phase-0a-4-test-criteria.md)** - Phase 0A-4テスト基準
 - **[real-vector-search-testing-guide.md](./testing/real-vector-search-testing-guide.md)** - リアルベクトル検索テストガイド
+
+### 🔧 [troubleshooting/](./troubleshooting/) - トラブルシューティング
+問題解決とデバッグに関するドキュメント
+
+- **[README.md](./troubleshooting/README.md)** 🌟 **NEW** - トラブルシューティングガイド（包括的な問題解決ガイド）
+  - 一般的な問題の解決方法
+  - Firebase App Hosting関連の問題
+  - データ同期・LanceDB関連の問題
+  - 検索・パフォーマンス関連の問題
+  - ビルド・デプロイ関連の問題
+  - デバッグ手順
+  - エラーハンドリング仕様
+  - ログ確認方法
+  - 本番環境確認方法
+- **[cloud-logging-check-commands.md](./troubleshooting/cloud-logging-check-commands.md)** - Cloud Logging確認コマンド集
+- **[production-environment-check-guide.md](./troubleshooting/production-environment-check-guide.md)** - 本番環境確認ガイド
 
 ### 📋 [specifications/](./specifications/) - 仕様書
 システムの詳細仕様と技術仕様に関するドキュメント

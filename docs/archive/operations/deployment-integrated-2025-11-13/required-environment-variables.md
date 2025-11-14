@@ -1,5 +1,9 @@
 # Firebase App Hosting 必須環境変数
 
+> ⚠️ **統合済み（2025-11-13）:** このドキュメントの内容は `deployment-guide.md` に統合されました。  
+> **最新の情報**: [deployment-guide.md](./deployment-guide.md) を参照してください。  
+> このドキュメントは履歴目的で保持されています。
+
 ## ビルド時（BUILD）とランタイム（RUNTIME）の両方で必要
 
 ### Google Cloud
