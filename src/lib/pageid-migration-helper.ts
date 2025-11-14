@@ -8,6 +8,7 @@
 /**
  * データベースから取得したレコードをAPIレスポンス形式に変換
  * page_id → pageId に変換
+ * spaceKey → space_key に変換（LanceDBスキーマはspaceKeyだが、APIではspace_keyを使用）
  */
 export function mapLanceDBRecordToAPI(record: any): any {
   if (!record) return record;
@@ -18,7 +19,7 @@ export function mapLanceDBRecordToAPI(record: any): any {
   
   // page_idが存在する場合は、pageIdに変換
   if (record.page_id !== undefined) {
-    const { page_id, ...rest } = record;
+    const { page_id, spaceKey, ...rest } = record;
     const numericPageId = Number(page_id);
     return {
       ...rest,
@@ -26,15 +27,20 @@ export function mapLanceDBRecordToAPI(record: any): any {
       content: cleanContent,
       pageId: Number.isFinite(numericPageId) ? numericPageId : page_id,  // page_idをpageIdに変換（Numberへ正規化）
       // page_idも残す（内部処理用）
-      page_id: Number.isFinite(numericPageId) ? numericPageId : page_id
+      page_id: Number.isFinite(numericPageId) ? numericPageId : page_id,
+      // spaceKey → space_key に変換（LanceDBスキーマはspaceKeyだが、APIではspace_keyを使用）
+      space_key: record.space_key ?? spaceKey ?? ''
     };
   }
   
   // 既にpageIdがある場合はそのまま（BOM除去処理は適用）
+  // spaceKey → space_key に変換
+  const { spaceKey, ...rest } = record;
   return {
-    ...record,
+    ...rest,
     title: cleanTitle,
-    content: cleanContent
+    content: cleanContent,
+    space_key: record.space_key ?? spaceKey ?? ''
   };
 }
 

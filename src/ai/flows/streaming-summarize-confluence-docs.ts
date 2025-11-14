@@ -412,10 +412,13 @@ ${truncatedContent}`;
              console.warn('⚠️ [Fallback Answer] Gemini呼び出しに失敗したためフォールバック回答を返却します。');
       
       // フォールバック結果を返す
+      // URLを再構築（共通ユーティリティを使用）
+      const { buildConfluenceUrl } = await import('../../lib/url-utils');
+      
       const references = context.map((doc, index) => ({
-        id: doc.id || `${doc.pageId}-${index}`,
+        id: doc.id || `${doc.pageId || doc.page_id}-${index}`,
         title: doc.title || 'タイトル不明',
-        url: doc.url,
+        url: buildConfluenceUrl(doc.page_id || doc.pageId, doc.spaceName || doc.space_key, doc.url),
         distance: doc.distance || 0.5,
         score: doc.score || 0,
         source: doc.source || 'vector'
@@ -433,10 +436,13 @@ ${truncatedContent}`;
 
     // 参照元の準備（LLMに渡されたcontextのみを参照元として表示）
     // 注意: contextは既にMAX_CONTEXT_DOCS件に制限されているため、全てを参照元として表示
+    // URLを再構築（共通ユーティリティを使用）
+    const { buildConfluenceUrl } = await import('../../lib/url-utils');
+    
     const references = context.map((doc, index) => ({
-      id: doc.id || `${doc.pageId}-${index}`,
+      id: doc.id || `${doc.pageId || doc.page_id}-${index}`,
       title: doc.title || 'タイトル不明',
-      url: doc.url,
+      url: buildConfluenceUrl(doc.page_id || doc.pageId, doc.spaceName || doc.space_key, doc.url),
       distance: doc.distance || 0.5,
       score: doc.score || 0,
       source: doc.source || 'vector'

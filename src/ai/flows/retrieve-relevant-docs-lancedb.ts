@@ -240,6 +240,7 @@ async function lancedbRetrieverTool(
     // LLMに渡すcontextの件数を制限（実際に使用される参照元のみを表示）
     const MAX_CONTEXT_DOCS = 10; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
     const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
+    const { buildConfluenceUrl } = await import('../../lib/url-utils');
     const mapped = unifiedResults.slice(0, MAX_CONTEXT_DOCS).map(r => {
       // page_idフィールドのみを使用（唯一の信頼できる情報源）
       const pageId = getPageIdFromRecord(r);
@@ -269,7 +270,7 @@ async function lancedbRetrieverTool(
         pageId: pageIdValue, // Phase 0A-1.5: チャンク統合用（page_idから生成）
         page_id: r.page_id, // データベース形式（内部処理用、唯一の信頼できる情報源）
         content: removeBOM(r.content || ''), // 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
-        url: r.url || '',
+        url: buildConfluenceUrl(r.page_id || (pageId ? Number(pageId) : undefined), (r as any).space_key, r.url),
         lastUpdated: (r as any).lastUpdated || null,
         spaceName: (r as any).space_key || 'Unknown',
         title: removeBOM(r.title || 'No Title'), // タイトルにもBOMが含まれる可能性がある

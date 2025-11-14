@@ -102,22 +102,22 @@ export class HybridSearchEngine {
         tableName
       });
 
-      // URLを再構築するヘルパー関数
-      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string => {
-        const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
-        if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
-          return existingUrl;
-        }
-        if (pageId && spaceKey) {
-          return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
-        }
-        return existingUrl || '#';
-      };
+      // URLを再構築（共通ユーティリティを使用）
+      const { buildConfluenceUrl } = await import('./url-utils');
+      const { buildJiraUrl } = await import('./jira-url-utils');
       
       return vectorResults.map(result => {
         const pageId = result.pageId || result.page_id;
-        const spaceKey = result.space_key;
         const issueKey = result.issue_key || result.id; // Jiraの場合はissue_keyを使用
+        
+        // JiraとConfluenceでURL構築を分離
+        let url: string;
+        if (tableName === 'jira_issues') {
+          url = buildJiraUrl(issueKey, result.url);
+        } else {
+          // page_idだけでURL構築可能（space_keyはオプション）
+          url = buildConfluenceUrl(pageId, result.space_key, result.url);
+        }
         
         return {
           pageId: pageId || (issueKey ? 0 : undefined), // Jiraの場合はpageIdが存在しない可能性がある
@@ -125,7 +125,7 @@ export class HybridSearchEngine {
           title: result.title,
           content: result.content,
           labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
-          url: buildUrl(pageId, spaceKey, result.url), // URLを再構築
+          url: url, // URLを再構築
           source: 'vector' as const,
           scoreKind: 'vector' as const,
           scoreRaw: result.distance,
@@ -176,36 +176,34 @@ export class HybridSearchEngine {
 
       console.log(`[HybridSearchEngine] BM25 search returned ${bm25Results.length} results`);
       
-      // URLを再構築するヘルパー関数
-      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined, tableName: string): string => {
-        // Jiraの場合は既存URLを使用
-        if (tableName === 'jira_issues' && existingUrl && existingUrl.startsWith('http')) {
-          return existingUrl;
+      // URLを再構築（共通ユーティリティを使用）
+      const { buildConfluenceUrl } = await import('./url-utils');
+      const { buildJiraUrl } = await import('./jira-url-utils');
+      
+      return bm25Results.map(result => {
+        // JiraとConfluenceでURL構築を分離
+        const issueKey = (result as any).issue_key || result.id;
+        let url: string;
+        if (tableName === 'jira_issues') {
+          url = buildJiraUrl(issueKey, result.url);
+        } else {
+          // page_idだけでURL構築可能（space_keyはオプション）
+          url = buildConfluenceUrl(result.pageId, result.space_key, result.url);
         }
         
-        // Confluenceの場合
-        const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
-        if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
-          return existingUrl;
-        }
-        if (pageId && spaceKey) {
-          return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
-        }
-        return existingUrl || '#';
-      };
-      
-      return bm25Results.map(result => ({
-        pageId: result.pageId,
-        id: result.id, // Jiraの場合はissue_keyが入る
-        title: result.title,
-        content: result.content,
-        labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
-        url: buildUrl(result.pageId, result.space_key, result.url, tableName), // URLを再構築
-        source: 'bm25' as const,
-        scoreKind: 'bm25' as const,
-        scoreRaw: result.score,
-        scoreText: `BM25 ${result.score.toFixed(2)}`
-      }));
+        return {
+          pageId: result.pageId,
+          id: result.id, // Jiraの場合はissue_keyが入る
+          title: result.title,
+          content: result.content,
+          labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
+          url: url, // URLを再構築
+          source: 'bm25' as const,
+          scoreKind: 'bm25' as const,
+          scoreRaw: result.score,
+          scoreText: `BM25 ${result.score.toFixed(2)}`
+        };
+      });
     } catch (error) {
       console.error('[HybridSearchEngine] BM25 search failed:', error);
       return [];
@@ -300,8 +298,8 @@ export class HybridSearchEngine {
       // 初期化が完了していない場合は、直接キャッシュから読み込みを試行
       console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready after initialization, trying direct cache load...`);
       const cachePath = tableName === 'confluence' 
-        ? path.join('.cache', 'lunr-index.json')
-        : path.join('.cache', `lunr-index-${tableName}.json`);
+        ? '.cache/lunr-index.json'
+        : `.cache/lunr-index-${tableName}.json`;
       const loaded = await lunrSearchClient.loadFromCache(cachePath, tableName);
       if (loaded) {
         console.log(`[HybridSearchEngine] ${tableName} Lunr client loaded from cache successfully`);

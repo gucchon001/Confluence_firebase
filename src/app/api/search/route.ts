@@ -65,23 +65,9 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         const searchEndTime = performance.now();
         const searchTime = searchEndTime - searchStartTime;
 
-        // URLを再構築するヘルパー関数
-        const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined, issueKey?: string): string => {
-          // Jiraの場合は既存URLを使用
-          if (effectiveSource === 'jira' && existingUrl && existingUrl.startsWith('http')) {
-            return existingUrl;
-          }
-          
-          // Confluenceの場合
-          const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
-          if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
-            return existingUrl;
-          }
-          if (pageId && spaceKey) {
-            return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
-          }
-          return existingUrl || '#';
-        };
+        // URLを再構築（共通ユーティリティを使用）
+        const { buildConfluenceUrl } = await import('@/lib/url-utils');
+        const { buildJiraUrl } = await import('@/lib/jira-url-utils');
         
         // 結果を整形（10件に制限）
         const formattedResults = hybridResults
@@ -92,6 +78,15 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
               ? (result.id || result.pageId?.toString() || '')
               : `${result.pageId}-0`;
             
+            // JiraとConfluenceでURL構築を分離
+            const issueKey = (result as any).issue_key || result.id;
+            let url: string;
+            if (effectiveSource === 'jira') {
+              url = buildJiraUrl(issueKey, result.url);
+            } else {
+              url = buildConfluenceUrl(result.pageId, result.space_key, result.url);
+            }
+            
             const baseResult: any = {
               id,
               title: result.title,
@@ -99,7 +94,7 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
               distance: result.scoreRaw,
               space_key: result.space_key || '',
               labels: result.labels,
-              url: buildUrl(result.pageId, result.space_key, result.url, result.id), // URLを再構築
+              url: url, // URLを再構築
               lastUpdated: null,
               source: effectiveSource,
               scoreKind: result.scoreKind,
@@ -171,23 +166,9 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
         .toArray();
       console.log(`Found ${results.length} results`);
       
-      // URLを再構築するヘルパー関数
-      const buildUrl = (pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined, issueKey?: string): string => {
-        // Jiraの場合は既存URLを使用
-        if (effectiveSource === 'jira' && existingUrl && existingUrl.startsWith('http')) {
-          return existingUrl;
-        }
-        
-        // Confluenceの場合
-        const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
-        if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
-          return existingUrl;
-        }
-        if (pageId && spaceKey) {
-          return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
-        }
-        return existingUrl || '#';
-      };
+      // URLを再構築（共通ユーティリティを使用）
+      const { buildConfluenceUrl } = await import('@/lib/url-utils');
+      const { buildJiraUrl } = await import('@/lib/jira-url-utils');
       
       // 6. 結果を整形（10件に制限）
       const formattedResults = results
@@ -197,6 +178,14 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
           const spaceKey = result.space_key || result.spaceKey;
           const issueKey = result.issue_key || result.id; // Jiraの場合はissue_keyを使用
           
+          // JiraとConfluenceでURL構築を分離
+          let url: string;
+          if (effectiveSource === 'jira') {
+            url = buildJiraUrl(issueKey, result.url);
+          } else {
+            url = buildConfluenceUrl(pageId, spaceKey, result.url);
+          }
+          
           const baseResult: any = {
             id: effectiveSource === 'jira' ? (issueKey || result.id) : result.id,
             title: result.title || 'No Title',
@@ -204,7 +193,7 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
             distance: result._distance,
             space_key: spaceKey || '',
             labels: result.labels || [],
-            url: buildUrl(pageId, spaceKey, result.url, issueKey), // URLを再構築
+            url: url, // URLを再構築
             lastUpdated: result.lastUpdated || result.updated_at || null,
             source: effectiveSource,
             scoreKind: 'vector',

@@ -1434,10 +1434,15 @@ async function executeBM25Search(
     // LanceDB側の詳細情報を取得してStructuredLabelなどを補完
     const lanceDbRecordMap = new Map<number, any>();
     try {
+      // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+      const { getPageIdFromRecord } = await import('./pageid-migration-helper');
       const uniquePageIds = Array.from(
         new Set(
           allLunrResults
-            .map(result => Number(result.pageId))
+            .map(result => {
+              const pageId = getPageIdFromRecord(result) || result.pageId;
+              return Number(pageId);
+            })
             .filter(id => Number.isFinite(id) && id > 0)
         )
       );
@@ -1462,12 +1467,15 @@ async function executeBM25Search(
               const key = Number(mapped.page_id ?? mapped.pageId);
               if (Number.isFinite(key)) {
                 lanceDbRecordMap.set(key, mapped);
+              } else {
+                console.warn(`[BM25 Search] Invalid pageId in mapped record:`, { page_id: mapped.page_id, pageId: mapped.pageId });
               }
             }
           } catch (fetchError) {
             console.warn('[BM25 Search] Failed to fetch LanceDB rows for chunk:', fetchError);
           }
         }
+
       }
     } catch (enrichError) {
       console.warn('[BM25 Search] LanceDB enrichment skipped due to error:', enrichError);
@@ -1497,6 +1505,9 @@ async function executeBM25Search(
             ? r.labels
             : (typeof r.labels === 'string' ? [r.labels] : []));
 
+      // space_keyはオプション（page_idだけでURL構築可能）
+      const spaceKey = enrichedRecord?.space_key ?? r.space_key ?? r.spaceKey ?? undefined;
+
       // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
       return {
         id: r.id,
@@ -1507,7 +1518,7 @@ async function executeBM25Search(
         page_id: page_id, // ★★★ MIGRATION: page_idを確実に保持 ★★★
         isChunked: r.isChunked,
         url: enrichedRecord?.url ?? r.url,
-        space_key: enrichedRecord?.space_key ?? r.space_key,
+        space_key: spaceKey,
         lastUpdated: enrichedRecord?.lastUpdated ?? r.lastUpdated,
         _bm25Score: boostedScore,
         _titleMatchRatio: titleMatchRatio,

@@ -7,6 +7,7 @@ import { calculateSimilarityPercentage, normalizeBM25Score, generateScoreText, c
 import { labelManager } from './label-manager';
 import { GENERIC_DOCUMENT_TERMS, CommonTermsHelper } from './common-terms-config';
 import { getLabelsAsArray } from './label-utils';
+import { buildConfluenceUrl } from './url-utils';
 
 /**
  * 検索結果の生データ
@@ -139,22 +140,10 @@ export class UnifiedSearchResultProcessor {
   /**
    * URLを再構築するヘルパーメソッド
    * page_idとspace_keyから正しいURLを生成
+   * @deprecated buildConfluenceUrlを使用してください
    */
   private buildUrl(pageId: number | undefined, spaceKey: string | undefined, existingUrl: string | undefined): string {
-    const baseUrl = process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
-    
-    // 既存のURLが有効な場合はそのまま使用
-    if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {
-      return existingUrl;
-    }
-    
-    // page_idとspace_keyからURLを構築
-    if (pageId && spaceKey) {
-      return `${baseUrl}/wiki/spaces/${spaceKey}/pages/${pageId}`;
-    }
-    
-    // フォールバック
-    return existingUrl || '#';
+    return buildConfluenceUrl(pageId, spaceKey, existingUrl);
   }
 
   /**
@@ -400,7 +389,7 @@ export class UnifiedSearchResultProcessor {
         score: finalScore, // Composite Scoreが利用可能な場合はそれを使用、それ以外は従来の計算
         space_key: result.space_key,
         labels: this.getLabelsAsArray(result.labels),
-        url: this.buildUrl(result.pageId || result.page_id, result.space_key, result.url),
+        url: buildConfluenceUrl(result.pageId || result.page_id, result.space_key, result.url),
         lastUpdated: result.lastUpdated || '',
         source: sourceType,
         matchDetails: result._matchDetails || {},

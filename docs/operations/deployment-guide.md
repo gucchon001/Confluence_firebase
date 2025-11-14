@@ -536,7 +536,7 @@ npx tsx scripts/check-production-lancedb-page703594590.ts
 |------|---------|
 | デプロイ失敗 | [トラブルシューティングガイド - ビルド・デプロイ関連の問題](../troubleshooting/README.md#5-ビルドデプロイ関連の問題) |
 | 検索が遅い | [トラブルシューティングガイド - 検索・パフォーマンス関連の問題](../troubleshooting/README.md#4-検索パフォーマンス関連の問題) |
-| `structured_tags`が本番で空 | [トラブルシューティングガイド - 一般的な問題](../troubleshooting/README.md#14-structured_tagsが本番で空) |
+| `structured_tags`が本番で空 | [トラブルシューティングガイド - `structured_tags`が本番で空](../troubleshooting/README.md#14-structured_tagsが本番で空) |
 | Firebase App Hostingエラー | [トラブルシューティングガイド - Firebase App Hosting関連の問題](../troubleshooting/README.md#2-firebase-app-hosting関連の問題) |
 | ログ確認 | [トラブルシューティングガイド - ログ確認方法](../troubleshooting/README.md#8-ログ確認方法) |
 

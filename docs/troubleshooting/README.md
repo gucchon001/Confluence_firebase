@@ -6,6 +6,7 @@
 ## 📋 目次
 
 1. [一般的な問題](#1-一般的な問題)
+   - [1.4 `structured_tags`が本番で空](#14-structured_tagsが本番で空)
 2. [Firebase App Hosting関連の問題](#2-firebase-app-hosting関連の問題)
 3. [データ同期・LanceDB関連の問題](#3-データ同期lancedb関連の問題)
 4. [検索・パフォーマンス関連の問題](#4-検索パフォーマンス関連の問題)
