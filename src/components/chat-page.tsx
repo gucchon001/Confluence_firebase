@@ -35,7 +35,7 @@ import { StreamingProcessingUI, StreamingErrorUI } from '@/components/streaming-
 import { streamingProcessClient, ProcessingStep } from '@/lib/streaming-process-client';
 import AdminDashboard from '@/components/admin-dashboard';
 import { FeedbackRating } from '@/components/feedback-rating';
-import { fixMarkdownTables, normalizeMarkdownSymbols, sharedMarkdownComponents } from '@/lib/markdown-utils';
+import { fixMarkdownTables, normalizeMarkdownSymbols, createSharedMarkdownComponents, convertReferencesToNumberedLinks } from '@/lib/markdown-utils';
 // 重複コード修正をロールバック
 // import MigrationButton from '@/components/migration-button';
 
@@ -57,9 +57,12 @@ const MessageCard = ({ msg }: { msg: Message }) => {
             <CardContent className={`p-4 text-sm break-words ${isAssistant ? 'prose prose-sm max-w-none' : ''}`}>
                 <ReactMarkdown 
                   remarkPlugins={[remarkGfm]}
-                  components={sharedMarkdownComponents as any}
+                  components={createSharedMarkdownComponents(msg.sources || []) as any}
                 >
-                  {isAssistant ? normalizeMarkdownSymbols(fixMarkdownTables(msg.content)) : msg.content}
+                  {isAssistant ? convertReferencesToNumberedLinks(
+                    normalizeMarkdownSymbols(fixMarkdownTables(msg.content)),
+                    msg.sources || []
+                  ) : msg.content}
                 </ReactMarkdown>
             </CardContent>
             {isAssistant && msg.sources && msg.sources.length > 0 && (
@@ -80,8 +83,12 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                                         href={source.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-xs text-primary hover:underline flex items-center gap-1 w-full p-2 rounded-md hover:bg-gray-50 transition-colors"
+                                        className="text-xs text-primary hover:underline flex items-center gap-2 w-full p-2 rounded-md hover:bg-gray-50 transition-colors"
+                                        id={`reference-${index + 1}`}
                                     >
+                                        <span className="flex-shrink-0 w-6 h-6 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-medium">
+                                            {index + 1}
+                                        </span>
                                         <LinkIcon className="h-3 w-3 shrink-0" />
                                         <span className="truncate flex-1">{source.title}</span>
                                         <span className="text-xs ml-1 font-bold shrink-0" style={{color: 'blue'}}>
@@ -797,7 +804,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                             <div>
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
-                                components={sharedMarkdownComponents as any}
+                                components={createSharedMarkdownComponents(streamingReferences || []) as any}
                             >
                               {(() => {
                                 let safeAnswer = '';
@@ -811,7 +818,10 @@ export default function ChatPage({ user }: ChatPageProps) {
                                   safeAnswer = '回答の生成中にエラーが発生しました。';
                                 }
                                 
-                                return normalizeMarkdownSymbols(fixMarkdownTables(safeAnswer));
+                                return convertReferencesToNumberedLinks(
+                                  normalizeMarkdownSymbols(fixMarkdownTables(safeAnswer)),
+                                  streamingReferences || []
+                                );
                               })()}
                               </ReactMarkdown>
                             </div>

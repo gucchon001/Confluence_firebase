@@ -187,15 +187,80 @@ export function normalizeMarkdownSymbols(markdown: string): string {
 }
 
 /**
+ * 参照元へのリンクを番号リンクに変換
+ * 「（XXX_【FIX】...）」のようなパターンを検出し、参照元リストから該当するタイトルを探して番号リンクに置き換える
+ * @param markdown マークダウンテキスト
+ * @param references 参照元リスト（title, urlを含む）
+ * @returns 変換後のマークダウンテキスト（特殊なマーカーを含む）
+ */
+export function convertReferencesToNumberedLinks(markdown: string, references: Array<{title: string, url?: string}>): string {
+  if (!markdown || !references || references.length === 0) {
+    return markdown;
+  }
+
+  // 「（XXX_【FIX】...）」のようなパターンを検出
+  // パターン1: （XXX_【FIX】...）
+  // パターン2: （【FIX】...）
+  // パターン3: （XXX_...）
+  const referencePattern = /（([^）]+)）/g;
+  
+  return markdown.replace(referencePattern, (match, content) => {
+    // 参照元リストから該当するタイトルを探す
+    const matchedIndex = references.findIndex(ref => {
+      const refTitle = ref.title || '';
+      // 完全一致または部分一致をチェック
+      // 例: 「453_【FIX】パスワード再設定機能」と「453_【FIX】パスワード再設定機能」が一致
+      // または「【FIX】パスワード再設定機能」が「453_【FIX】パスワード再設定機能」に含まれる
+      return refTitle === content || 
+             refTitle.includes(content) || 
+             content.includes(refTitle) ||
+             // 番号部分を除いた比較（例: 「453_【FIX】...」と「【FIX】...」）
+             refTitle.replace(/^\d+_/, '') === content.replace(/^\d+_/, '') ||
+             refTitle.replace(/^\d+_/, '').includes(content.replace(/^\d+_/, '')) ||
+             content.replace(/^\d+_/, '').includes(refTitle.replace(/^\d+_/, ''));
+    });
+
+    if (matchedIndex >= 0) {
+      // 番号リンクに置き換え（1ベースのインデックス）
+      const referenceNumber = matchedIndex + 1;
+      const referenceUrl = references[matchedIndex].url || '#';
+      // マークダウンリンク形式で返す（番号を表示）
+      return `[${referenceNumber}](${referenceUrl})`;
+    }
+
+    // マッチしない場合は元のテキストを返す
+    return match;
+  });
+}
+
+/**
  * 共通のMarkdownコンポーネント設定
  * ReactMarkdownで使用
  */
-export const sharedMarkdownComponents = {
+export const createSharedMarkdownComponents = (references?: Array<{title: string, url?: string}>) => ({
   h1: ({children}: any) => <h1 className="text-lg font-bold mb-4 mt-4">{children}</h1>,
   h2: ({children}: any) => <h2 className="text-lg font-bold mb-4 mt-6 text-gray-800">{children}</h2>,
   h3: ({children}: any) => <h3 className="text-base font-bold mb-3 mt-4 text-gray-900">{children}</h3>,
   h4: ({children}: any) => <h4 className="text-sm font-semibold mb-1">{children}</h4>,
   p: ({children}: any) => <p className="mb-3 leading-relaxed">{children}</p>,
+  a: ({href, children, ...props}: any) => {
+    // 参照番号リンクの場合、薄いグレー背景で表示
+    if (href && typeof children === 'string' && /^\d+$/.test(children.trim())) {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center w-6 h-6 rounded bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors"
+          style={{verticalAlign: 'middle', margin: '0 2px'}}
+          {...props}
+        >
+          {children}
+        </a>
+      );
+    }
+    return <a href={href} {...props}>{children}</a>;
+  },
   ul: ({children}: any) => <ul className="list-disc list-outside mb-3 ml-4">{children}</ul>,
   ol: ({children}: any) => <ol className="list-decimal list-outside mb-3 ml-4">{children}</ol>,
   li: ({children}: any) => <li className="mb-1 leading-relaxed">{children}</li>,
@@ -224,5 +289,8 @@ export const sharedMarkdownComponents = {
       {children}
     </td>
   ),
-} as const;
+});
+
+// 後方互換性のため、デフォルトのコンポーネントもエクスポート
+export const sharedMarkdownComponents = createSharedMarkdownComponents();
 
