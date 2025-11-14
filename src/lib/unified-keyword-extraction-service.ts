@@ -471,6 +471,20 @@ export class UnifiedKeywordExtractionService {
     return [...new Set(filteredKeywords)];
   }
 
+  /**
+   * 同期版のキーワード抽出（コンテンツ抽出用）
+   * ドメイン知識ベースからキーワードを抽出
+   */
+  extractKeywordsSync(query: string): string[] {
+    if (!this.keywordCategories) {
+      // キーワードリストが読み込まれていない場合は空配列を返す
+      return [];
+    }
+    
+    const extracted = this.extractKeywordsFromCategories(query);
+    return [...new Set(extracted.allKeywords)];
+  }
+
   private extractKeywordsFromCategories(query: string): {
     domainNames: string[];
     functionNames: string[];

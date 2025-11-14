@@ -4,17 +4,54 @@
  * キーワードマッチングに基づいて、関連する部分を優先的に抽出する
  */
 
+import { unifiedKeywordExtractionService } from '@/lib/unified-keyword-extraction-service';
+
 /**
- * クエリからキーワードを抽出（簡易版）
+ * クエリからキーワードを抽出
+ * ドメイン知識連携のキーワード抽出サービスを使用
  */
 function extractKeywords(query: string): string[] {
-  // 日本語の助詞・助動詞を除去
-  const stopWords = ['が', 'を', 'に', 'で', 'と', 'は', 'も', 'の', 'か', 'な', 'です', 'ます', 'た', 'て', 'で', 'どんな', 'どの', '何', 'どう'];
-  const words = query
-    .replace(/[、。，．]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 1 && !stopWords.includes(w));
-  return words;
+  // 同期版のキーワード抽出を使用（非同期処理を避けるため）
+  // unifiedKeywordExtractionService.extractKeywordsSync が利用可能な場合はそれを使用
+  // そうでない場合は、簡易版の抽出を使用
+  try {
+    // 同期版が利用可能か確認
+    if (typeof unifiedKeywordExtractionService.extractKeywordsSync === 'function') {
+      return unifiedKeywordExtractionService.extractKeywordsSync(query);
+    }
+  } catch (error) {
+    // エラーが発生した場合は簡易版にフォールバック
+    console.warn('[extractKeywords] Failed to use unifiedKeywordExtractionService, falling back to simple extraction:', error);
+  }
+  
+  // フォールバック: 簡易版のキーワード抽出
+  const stopWords = ['が', 'を', 'に', 'で', 'と', 'は', 'も', 'の', 'か', 'な', 'です', 'ます', 'た', 'て', 'で', 'どんな', 'どの', '何', 'どう', 'や', 'は', 'されます', 'されますか'];
+  
+  // 日本語のテキストを分割（2文字以上の連続する文字列を抽出）
+  const words: string[] = [];
+  let currentWord = '';
+  
+  for (let i = 0; i < query.length; i++) {
+    const char = query[i];
+    // ひらがな、カタカナ、漢字、数字、英字を単語として扱う
+    if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF0-9A-Za-z]/.test(char)) {
+      currentWord += char;
+    } else {
+      // 区切り文字（助詞など）で単語を区切る
+      if (currentWord.length >= 2 && !stopWords.includes(currentWord)) {
+        words.push(currentWord);
+      }
+      currentWord = '';
+    }
+  }
+  
+  // 最後の単語を追加
+  if (currentWord.length >= 2 && !stopWords.includes(currentWord)) {
+    words.push(currentWord);
+  }
+  
+  // 重複を除去
+  return Array.from(new Set(words));
 }
 
 /**
@@ -138,7 +175,7 @@ export function extractRelevantContentMultiKeyword(
   const keywordSpan = lastPos - firstPos;
   
   // キーワードが近い場合は、その範囲を中心に抽出
-  // キーワードが遠い場合は、最初のキーワードを中心に抽出
+  // キーワードが遠い場合は、最初と最後のキーワードを含む範囲を抽出
   let startPos: number;
   let endPos: number;
   
@@ -148,9 +185,40 @@ export function extractRelevantContentMultiKeyword(
     startPos = Math.max(0, center - maxLength / 2);
     endPos = Math.min(content.length, center + maxLength / 2);
   } else {
-    // キーワードが遠い場合：最初のキーワードを中心に抽出
-    startPos = Math.max(0, firstPos - maxLength * 0.3);
-    endPos = Math.min(content.length, firstPos + maxLength * 0.7);
+    // キーワードが遠い場合：最初と最後のキーワードを含む範囲を抽出
+    // 最初のキーワードの前30%、最後のキーワードの後30%を確保
+    const beforeFirst = Math.floor(maxLength * 0.3);
+    const afterLast = Math.floor(maxLength * 0.3);
+    const middleLength = maxLength - beforeFirst - afterLast;
+    
+    // キーワード間の距離が中間部分より大きい場合は、キーワード間を優先
+    if (keywordSpan > middleLength) {
+      // キーワード間を中心に、前後を均等に配分
+      const totalNeeded = keywordSpan + beforeFirst + afterLast;
+      if (totalNeeded <= maxLength) {
+        // キーワード間全体を含められる場合
+        startPos = Math.max(0, firstPos - beforeFirst);
+        endPos = Math.min(content.length, lastPos + afterLast);
+      } else {
+        // キーワード間全体を含められない場合、最初と最後のキーワードを含む最小範囲
+        startPos = Math.max(0, firstPos - beforeFirst);
+        endPos = Math.min(content.length, startPos + maxLength);
+        // 最後のキーワードが含まれるように調整
+        if (endPos < lastPos + afterLast) {
+          endPos = Math.min(content.length, lastPos + afterLast);
+          startPos = Math.max(0, endPos - maxLength);
+        }
+      }
+    } else {
+      // キーワード間の距離が中間部分より小さい場合、最初のキーワードを中心に抽出
+      startPos = Math.max(0, firstPos - beforeFirst);
+      endPos = Math.min(content.length, startPos + maxLength);
+      // 最後のキーワードが含まれるように調整
+      if (endPos < lastPos + afterLast) {
+        endPos = Math.min(content.length, lastPos + afterLast);
+        startPos = Math.max(0, endPos - maxLength);
+      }
+    }
   }
   
   let extracted = content.substring(startPos, endPos);
