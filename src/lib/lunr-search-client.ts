@@ -32,6 +32,13 @@ export interface LunrDocument {
   url: string;
   space_key: string;
   lastUpdated: string;
+  // Jira特有のフィールド（オプショナル）
+  issue_key?: string;
+  status?: string;
+  status_category?: string;
+  priority?: string;
+  assignee?: string;
+  issue_type?: string;
 }
 
 export interface LunrSearchResult {
@@ -45,6 +52,13 @@ export interface LunrSearchResult {
   url: string;
   space_key: string;
   lastUpdated: string;
+  // Jira特有のフィールド（オプショナル）
+  issue_key?: string;
+  status?: string;
+  status_category?: string;
+  priority?: string;
+  assignee?: string;
+  issue_type?: string;
 }
 
 export class LunrSearchClient {
@@ -348,7 +362,7 @@ export class LunrSearchClient {
         const doc = tableDocuments.get(result.ref);
         
         if (doc) {
-          validResults.push({
+          const searchResult: any = {
             id: doc.id,
             title: doc.originalTitle,
             content: doc.originalContent,
@@ -358,7 +372,19 @@ export class LunrSearchClient {
             url: doc.url,
             space_key: doc.space_key,
             lastUpdated: doc.lastUpdated,
-          });
+          };
+          
+          // Jira特有のフィールドを追加
+          if (doc.issue_key) {
+            searchResult.issue_key = doc.issue_key;
+            searchResult.status = doc.status;
+            searchResult.status_category = doc.status_category;
+            searchResult.priority = doc.priority;
+            searchResult.assignee = doc.assignee;
+            searchResult.issue_type = doc.issue_type;
+          }
+          
+          validResults.push(searchResult);
         }
       }
       
@@ -435,7 +461,7 @@ export class LunrSearchClient {
           const doc = tableDocuments.get(result.ref);
           if (!doc) return null;
 
-          return {
+          const searchResult: any = {
             id: doc.id,
             title: doc.originalTitle,
             content: doc.originalContent,
@@ -446,6 +472,18 @@ export class LunrSearchClient {
             space_key: doc.space_key,
             lastUpdated: doc.lastUpdated,
           };
+          
+          // Jira特有のフィールドを追加
+          if (doc.issue_key) {
+            searchResult.issue_key = doc.issue_key;
+            searchResult.status = doc.status;
+            searchResult.status_category = doc.status_category;
+            searchResult.priority = doc.priority;
+            searchResult.assignee = doc.assignee;
+            searchResult.issue_type = doc.issue_type;
+          }
+          
+          return searchResult;
         })
         .filter((result): result is LunrSearchResult => result !== null);
     } catch (error) {

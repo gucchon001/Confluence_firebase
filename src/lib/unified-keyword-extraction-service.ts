@@ -6,6 +6,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { organizeKeywordsByCategory } from './common-terms-config';
 
 // ===== 既存のインターフェースを再定義 =====
 export interface KeywordLists {
@@ -139,8 +140,24 @@ export class UnifiedKeywordExtractionService {
       this.keywordLists = JSON.parse(data);
       this.lastLoaded = new Date();
       
-      // カテゴリ別に整理
-      this.keywordCategories = this.organizeByCategory(this.keywordLists);
+      // カテゴリ別に整理（共通関数を使用）
+      this.keywordCategories = organizeKeywordsByCategory(this.keywordLists) as KeywordCategory;
+      
+      // Phase 6改善: ドメイン固有キーワードを動的に初期化（keyword-lists-v2.jsonから読み込む）
+      // relatedKeywordsとsystemTermsからも抽出
+      try {
+        const { initializeDomainSpecificKeywordsWithUpdate } = await import('./common-terms-config');
+        if (initializeDomainSpecificKeywordsWithUpdate && this.keywordCategories) {
+          initializeDomainSpecificKeywordsWithUpdate({
+            domainNames: this.keywordCategories.domainNames,
+            functionNames: this.keywordCategories.functionNames,
+            relatedKeywords: this.keywordCategories.relatedKeywords,
+            systemTerms: this.keywordCategories.systemTerms
+          });
+        }
+      } catch (error) {
+        console.warn('[UnifiedKeywordExtractionService] ドメイン固有キーワードの初期化に失敗:', error);
+      }
       
       console.log(`[UnifiedKeywordExtractionService] キーワードリストを読み込みました: ${defaultPath}`);
       console.log(`[UnifiedKeywordExtractionService] 総キーワード数: ${this.keywordLists.statistics.totalKeywords}個`);
@@ -151,44 +168,6 @@ export class UnifiedKeywordExtractionService {
     }
   }
 
-  /**
-   * カテゴリ別にキーワードを整理
-   */
-  private organizeByCategory(keywordLists: KeywordLists): KeywordCategory {
-    const categories: KeywordCategory = {
-      domainNames: [],
-      functionNames: [],
-      operationNames: [],
-      systemFields: [],
-      systemTerms: [],
-      relatedKeywords: []
-    };
-
-    for (const category of keywordLists.categories) {
-      switch (category.category) {
-        case 'domainNames':
-          categories.domainNames = category.keywords;
-          break;
-        case 'functionNames':
-          categories.functionNames = category.keywords;
-          break;
-        case 'operationNames':
-          categories.operationNames = category.keywords;
-          break;
-        case 'systemFields':
-          categories.systemFields = category.keywords;
-          break;
-        case 'systemTerms':
-          categories.systemTerms = category.keywords;
-          break;
-        case 'relatedKeywords':
-          categories.relatedKeywords = category.keywords;
-          break;
-      }
-    }
-
-    return categories;
-  }
 
   /**
    * 動的キーワード抽出のメイン処理（既存API互換）

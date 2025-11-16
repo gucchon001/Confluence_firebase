@@ -207,17 +207,46 @@ export function convertReferencesToNumberedLinks(markdown: string, references: A
   return markdown.replace(referencePattern, (match, content) => {
     // 参照元リストから該当するタイトルを探す
     const matchedIndex = references.findIndex(ref => {
-      const refTitle = ref.title || '';
-      // 完全一致または部分一致をチェック
-      // 例: 「453_【FIX】パスワード再設定機能」と「453_【FIX】パスワード再設定機能」が一致
-      // または「【FIX】パスワード再設定機能」が「453_【FIX】パスワード再設定機能」に含まれる
-      return refTitle === content || 
-             refTitle.includes(content) || 
-             content.includes(refTitle) ||
-             // 番号部分を除いた比較（例: 「453_【FIX】...」と「【FIX】...」）
-             refTitle.replace(/^\d+_/, '') === content.replace(/^\d+_/, '') ||
-             refTitle.replace(/^\d+_/, '').includes(content.replace(/^\d+_/, '')) ||
-             content.replace(/^\d+_/, '').includes(refTitle.replace(/^\d+_/, ''));
+      const refTitle = (ref.title || '').trim();
+      const contentTrimmed = content.trim();
+      
+      // 完全一致
+      if (refTitle === contentTrimmed) {
+        return true;
+      }
+      
+      // 番号部分を除いた比較（優先度: 高）
+      // 例: 「453_【FIX】パスワード再設定機能」と「045_【FIX】パスワード再設定機能」
+      const refWithoutNumber = refTitle.replace(/^\d+_/, '').trim();
+      const contentWithoutNumber = contentTrimmed.replace(/^\d+_/, '').trim();
+      
+      if (refWithoutNumber && contentWithoutNumber) {
+        // 番号除去後の完全一致
+        if (refWithoutNumber === contentWithoutNumber) {
+          return true;
+        }
+        // 番号除去後の包含関係（長い方に短い方が含まれる）
+        if (refWithoutNumber.length > contentWithoutNumber.length) {
+          if (refWithoutNumber.includes(contentWithoutNumber)) {
+            return true;
+          }
+        } else if (contentWithoutNumber.length > refWithoutNumber.length) {
+          if (contentWithoutNumber.includes(refWithoutNumber)) {
+            return true;
+          }
+        }
+      }
+      
+      // 部分一致（番号を含む場合のみ、短い方に長い方が含まれる場合は除外）
+      // 例: 「【FIX】パスワード再設定機能」が「453_【FIX】パスワード再設定機能」に含まれる
+      if (refTitle.length >= contentTrimmed.length && refTitle.includes(contentTrimmed)) {
+        return true;
+      }
+      if (contentTrimmed.length >= refTitle.length && contentTrimmed.includes(refTitle)) {
+        return true;
+      }
+      
+      return false;
     });
 
     if (matchedIndex >= 0) {

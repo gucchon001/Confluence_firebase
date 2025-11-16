@@ -6,7 +6,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { DynamicPriorityManager } from './dynamic-priority-manager';
-import { GENERIC_FUNCTION_TERMS, DOMAIN_SPECIFIC_KEYWORDS } from './common-terms-config';
+import { GENERIC_FUNCTION_TERMS, DOMAIN_SPECIFIC_KEYWORDS, organizeKeywordsByCategory } from './common-terms-config';
 
 export interface KeywordLists {
   metadata: {
@@ -71,8 +71,8 @@ export class KeywordListsLoader {
       this.keywordLists = JSON.parse(data);
       this.lastLoaded = new Date();
       
-      // カテゴリ別に整理
-      this.keywordCategories = this.organizeByCategory(this.keywordLists);
+      // カテゴリ別に整理（共通関数を使用）
+      this.keywordCategories = organizeKeywordsByCategory(this.keywordLists) as KeywordCategory;
       
       // ドメイン固有キーワードを動的に初期化（keyword-lists-v2.jsonから読み込む）
       // Phase 6改善: relatedKeywordsとsystemTermsからも抽出
@@ -106,44 +106,6 @@ export class KeywordListsLoader {
     }
   }
 
-  /**
-   * カテゴリ別にキーワードを整理
-   */
-  private organizeByCategory(keywordLists: KeywordLists): KeywordCategory {
-    const categories: KeywordCategory = {
-      domainNames: [],
-      functionNames: [],
-      operationNames: [],
-      systemFields: [],
-      systemTerms: [],
-      relatedKeywords: []
-    };
-
-    for (const category of keywordLists.categories) {
-      switch (category.category) {
-        case 'domainNames':
-          categories.domainNames = category.keywords;
-          break;
-        case 'functionNames':
-          categories.functionNames = category.keywords;
-          break;
-        case 'operationNames':
-          categories.operationNames = category.keywords;
-          break;
-        case 'systemFields':
-          categories.systemFields = category.keywords;
-          break;
-        case 'systemTerms':
-          categories.systemTerms = category.keywords;
-          break;
-        case 'relatedKeywords':
-          categories.relatedKeywords = category.keywords;
-          break;
-      }
-    }
-
-    return categories;
-  }
 
   /**
    * キャッシュされたキーワードリストを取得

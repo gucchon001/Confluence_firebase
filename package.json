@@ -16,6 +16,7 @@
     "postinstall": "patch-package",
     "test:confluence": "tsx src/scripts/test-confluence-api.ts",
     "test:jira": "tsx src/scripts/test-jira-api.ts",
+    "test:jira-search": "tsx src/scripts/test-jira-search.ts",
     "inspect:jira-issues": "tsx src/scripts/inspect-jira-issues.ts",
     "inspect:jira-fields": "tsx src/scripts/inspect-jira-fields.ts",
     "inspect:jira-firestore": "tsx src/scripts/inspect-jira-firestore.ts",

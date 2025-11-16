@@ -192,7 +192,7 @@ export class HybridSearchEngine {
           url = buildConfluenceUrl(result.pageId, result.space_key, result.url);
         }
         
-        return {
+        const hybridResult: any = {
           pageId: result.pageId,
           id: result.id, // Jiraの場合はissue_keyが入る
           title: result.title,
@@ -204,6 +204,18 @@ export class HybridSearchEngine {
           scoreRaw: result.score,
           scoreText: `BM25 ${result.score.toFixed(2)}`
         };
+        
+        // Jira特有のフィールドを追加
+        if (result.issue_key) {
+          hybridResult.issue_key = result.issue_key;
+          hybridResult.status = result.status;
+          hybridResult.status_category = result.status_category;
+          hybridResult.priority = result.priority;
+          hybridResult.assignee = result.assignee;
+          hybridResult.issue_type = result.issue_type;
+        }
+        
+        return hybridResult;
       });
     } catch (error) {
       console.error('[HybridSearchEngine] BM25 search failed:', error);

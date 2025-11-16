@@ -58,7 +58,8 @@ export class StreamingProcessClient {
     labelFilters: any = { includeMeetingNotes: false },
     userId?: string,
     sessionId?: string,
-    clientStartTime?: number
+    clientStartTime?: number,
+    source: 'confluence' | 'jira' = 'confluence'
   ): Promise<void> {
     try {
       // 既存のストリーミングを停止
@@ -98,7 +99,8 @@ export class StreamingProcessClient {
         body: JSON.stringify({
           question,
           chatHistory,
-          labelFilters
+          labelFilters,
+          source
         }),
         signal: this.controller.signal
       });

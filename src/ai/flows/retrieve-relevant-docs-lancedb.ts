@@ -150,6 +150,7 @@ async function lancedbRetrieverTool(
     labelFilters?: {
       includeMeetingNotes: boolean;
     };
+    source?: 'confluence' | 'jira';
   }
 ): Promise<any[]> {
   const searchStartTime = Date.now();
@@ -189,6 +190,7 @@ async function lancedbRetrieverTool(
 
     // Phase 0A-4: 詳細な検索パフォーマンス計測
     const searchLanceDBStartTime = Date.now();
+    const tableName = filters?.source === 'jira' ? 'jira_issues' : 'confluence';
     const unifiedResults = await searchLanceDB({
       query: query, // 元のクエリを使用
       topK: 10, // 参照元を10件に統一
@@ -197,6 +199,7 @@ async function lancedbRetrieverTool(
       labelFilters: filters?.labelFilters || {
         includeMeetingNotes: false
       },
+      tableName, // テーブル名を指定
     });
     const searchLanceDBDuration = Date.now() - searchLanceDBStartTime;
     
@@ -239,46 +242,75 @@ async function lancedbRetrieverTool(
     // ★★★ MIGRATION: page_idフィールドのみを使用（フォールバックなし） ★★★
     // LLMに渡すcontextの件数を制限（実際に使用される参照元のみを表示）
     const MAX_CONTEXT_DOCS = 10; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
+    const isJira = filters?.source === 'jira';
     const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
     const { buildConfluenceUrl } = await import('../../lib/url-utils');
+    const { buildJiraUrl } = await import('../../lib/jira-url-utils');
     const mapped = unifiedResults.slice(0, MAX_CONTEXT_DOCS).map(r => {
-      // page_idフィールドのみを使用（唯一の信頼できる情報源）
-      const pageId = getPageIdFromRecord(r);
-      if (!pageId) {
-        console.error(`[lancedbRetrieverTool] ❌ page_id not found for result: ${r.title}. This is a data integrity issue.`);
-        // page_idが存在しない場合はエラーとして扱う（フォールバックしない）
-      }
-      // page_idを数値として使用（データベース形式）
-      const pageIdValue = pageId ? String(pageId) : '';
-      // 🔍 原因特定: LanceDBから取得したデータにBOMが含まれているか確認
-      const originalContentHasBOM = (r.content || '').includes('\uFEFF') || ((r.content || '').length > 0 && (r.content || '').charCodeAt(0) === 0xFEFF);
-      const originalTitleHasBOM = (r.title || '').includes('\uFEFF') || ((r.title || '').length > 0 && (r.title || '').charCodeAt(0) === 0xFEFF);
-      
-      if (originalContentHasBOM || originalTitleHasBOM) {
-        console.error(`🚨 [BOM DETECTED IN LANCEDB DATA] LanceDBから取得したデータにBOMが含まれています:`, {
+      // JiraとConfluenceで処理を分岐
+      if (isJira) {
+        // Jiraの場合: issue_keyを使用
+        const issueKey = (r as any).issue_key || r.id || '';
+        const url = buildJiraUrl(issueKey, r.url);
+        
+        return {
+          id: issueKey,
+          pageId: 0, // JiraではpageIdは使用しない
+          page_id: 0,
+          content: removeBOM(r.content || ''),
+          url: url,
+          lastUpdated: (r as any).lastUpdated || (r as any).updated_at || null,
+          spaceName: '', // Jiraではspace_keyは存在しない
+          title: removeBOM(r.title || 'No Title'),
+          labels: r.labels || [],
+          distance: (r as any).distance,
+          source: r.source as any,
+          scoreText: r.scoreText,
+          // Jira特有のフィールド
+          issue_key: issueKey,
+          status: (r as any).status,
+          priority: (r as any).priority,
+          assignee: (r as any).assignee,
+        };
+      } else {
+        // Confluenceの場合: page_idを使用
+        const pageId = getPageIdFromRecord(r);
+        if (!pageId) {
+          console.error(`[lancedbRetrieverTool] ❌ page_id not found for result: ${r.title}. This is a data integrity issue.`);
+        }
+        const pageIdValue = pageId ? String(pageId) : '';
+        const url = buildConfluenceUrl(r.page_id || (pageId ? Number(pageId) : undefined), (r as any).space_key, r.url);
+        
+        // 🔍 原因特定: LanceDBから取得したデータにBOMが含まれているか確認
+        const originalContentHasBOM = (r.content || '').includes('\uFEFF') || ((r.content || '').length > 0 && (r.content || '').charCodeAt(0) === 0xFEFF);
+        const originalTitleHasBOM = (r.title || '').includes('\uFEFF') || ((r.title || '').length > 0 && (r.title || '').charCodeAt(0) === 0xFEFF);
+        
+        if (originalContentHasBOM || originalTitleHasBOM) {
+          console.error(`🚨 [BOM DETECTED IN LANCEDB DATA] LanceDBから取得したデータにBOMが含まれています:`, {
+            pageId: pageIdValue,
+            title: r.title?.substring(0, 50),
+            contentHasBOM: originalContentHasBOM,
+            titleHasBOM: originalTitleHasBOM,
+            contentFirstCharCode: (r.content || '').length > 0 ? (r.content || '').charCodeAt(0) : -1,
+            titleFirstCharCode: (r.title || '').length > 0 ? (r.title || '').charCodeAt(0) : -1,
+          });
+        }
+        
+        return {
+          id: pageIdValue,
           pageId: pageIdValue,
-          title: r.title?.substring(0, 50),
-          contentHasBOM: originalContentHasBOM,
-          titleHasBOM: originalTitleHasBOM,
-          contentFirstCharCode: (r.content || '').length > 0 ? (r.content || '').charCodeAt(0) : -1,
-          titleFirstCharCode: (r.title || '').length > 0 ? (r.title || '').charCodeAt(0) : -1,
-        });
+          page_id: r.page_id,
+          content: removeBOM(r.content || ''),
+          url: url,
+          lastUpdated: (r as any).lastUpdated || null,
+          spaceName: (r as any).space_key || 'Unknown',
+          title: removeBOM(r.title || 'No Title'),
+          labels: r.labels || [],
+          distance: (r as any).distance,
+          source: r.source as any,
+          scoreText: r.scoreText,
+        };
       }
-      
-      return {
-        id: pageIdValue, // API互換性のため、idフィールドも設定（page_idから生成）
-        pageId: pageIdValue, // Phase 0A-1.5: チャンク統合用（page_idから生成）
-        page_id: r.page_id, // データベース形式（内部処理用、唯一の信頼できる情報源）
-        content: removeBOM(r.content || ''), // 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
-        url: buildConfluenceUrl(r.page_id || (pageId ? Number(pageId) : undefined), (r as any).space_key, r.url),
-        lastUpdated: (r as any).lastUpdated || null,
-        spaceName: (r as any).space_key || 'Unknown',
-        title: removeBOM(r.title || 'No Title'), // タイトルにもBOMが含まれる可能性がある
-        labels: r.labels || [],
-        distance: (r as any).distance,
-        source: r.source as any,
-        scoreText: r.scoreText,
-      };
     });
 
     // Phase 0A-1.5: 全チャンク統合（サーバー側で実装）
@@ -355,12 +387,14 @@ export async function retrieveRelevantDocs({
   question,
   labels,
   labelFilters,
+  source = 'confluence',
 }: {
   question: string;
   labels?: string[];
   labelFilters?: {
     includeMeetingNotes: boolean;
   };
+  source?: 'confluence' | 'jira';
 }): Promise<any[]> {
   try {
     // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
@@ -368,9 +402,9 @@ export async function retrieveRelevantDocs({
     
     // 検索処理ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
-      writeLogToFile('info', 'retrieve_query', 'Searching for question', { question });
+      writeLogToFile('info', 'retrieve_query', 'Searching for question', { question, source });
     }
-    const results = await lancedbRetrieverTool(question, { labels, labelFilters });
+    const results = await lancedbRetrieverTool(question, { labels, labelFilters, source });
     if (process.env.NODE_ENV === 'development') {
       writeLogToFile('info', 'retrieve_results', 'Retrieve completed', {
         count: results.length

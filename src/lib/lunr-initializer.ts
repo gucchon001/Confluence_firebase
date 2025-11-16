@@ -177,7 +177,7 @@ export class LunrInitializer {
             spaceKey = doc.space_key || '';
           }
           
-          lunrDocs.push({
+          const lunrDoc: any = {
             id: docId,
             title: cleanTitle,
             content: cleanContent,
@@ -190,7 +190,19 @@ export class LunrInitializer {
             url: doc.url || '',
             space_key: spaceKey,
             lastUpdated: doc.lastUpdated || doc.updated_at || '',
-          });
+          };
+          
+          // Jira特有のフィールドを追加
+          if (tableName === 'jira_issues') {
+            lunrDoc.issue_key = doc.issue_key || doc.id || '';
+            lunrDoc.status = doc.status || '';
+            lunrDoc.status_category = doc.status_category || '';
+            lunrDoc.priority = doc.priority || '';
+            lunrDoc.assignee = doc.assignee || '';
+            lunrDoc.issue_type = doc.issue_type || '';
+          }
+          
+          lunrDocs.push(lunrDoc);
         } catch (error) {
           console.warn(`[LunrInitializer] Instance ${INSTANCE_ID}: Failed to process document ${doc.id}:`, error);
           // エラーが発生したドキュメントはスキップして続行

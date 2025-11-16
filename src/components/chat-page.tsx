@@ -35,12 +35,24 @@ import { streamingProcessClient, ProcessingStep } from '@/lib/streaming-process-
 import AdminDashboard from '@/components/admin-dashboard';
 import { FeedbackRating } from '@/components/feedback-rating';
 import { fixMarkdownTables, normalizeMarkdownSymbols, createSharedMarkdownComponents, convertReferencesToNumberedLinks } from '@/lib/markdown-utils';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 // 重複コード修正をロールバック
 // import MigrationButton from '@/components/migration-button';
 
 interface ChatPageProps {
   user: User;
 }
+
+// メッセージコンテンツの変換処理を共通化
+const formatMessageContent = (content: string, references: Array<{title: string, url?: string}>, isAssistant: boolean): string => {
+  if (!isAssistant) {
+    return content;
+  }
+  return convertReferencesToNumberedLinks(
+    normalizeMarkdownSymbols(fixMarkdownTables(content)),
+    references || []
+  );
+};
 
 const MessageCard = ({ msg }: { msg: Message }) => {
     const isAssistant = msg.role === 'assistant';
@@ -58,10 +70,7 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                   remarkPlugins={[remarkGfm]}
                   components={createSharedMarkdownComponents(msg.sources || []) as any}
                 >
-                  {isAssistant ? convertReferencesToNumberedLinks(
-                    normalizeMarkdownSymbols(fixMarkdownTables(msg.content)),
-                    msg.sources || []
-                  ) : msg.content}
+                  {formatMessageContent(msg.content, msg.sources || [], isAssistant)}
                 </ReactMarkdown>
             </CardContent>
             {isAssistant && msg.sources && msg.sources.length > 0 && (
@@ -152,6 +161,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [currentPostLogId, setCurrentPostLogId] = useState<string | null>(null);
   const [isStreamingComplete, setIsStreamingComplete] = useState<boolean>(false);
   const [currentSessionId] = useState<string>(() => `session_${Date.now()}`);
+  const [searchSource, setSearchSource] = useState<'confluence' | 'jira'>('confluence'); // 検索ソースの状態
 
   // ストリーミング回答の安全な更新関数
   const updateStreamingAnswer = (newContent: any) => {
@@ -441,7 +451,8 @@ export default function ChatPage({ user }: ChatPageProps) {
         labelFilters,
         user?.uid, // ユーザーID
         currentSessionId, // セッションID
-        clientStartTime // クライアント側の開始時刻
+        clientStartTime, // クライアント側の開始時刻
+        searchSource // 検索ソース
       );
 
     } catch (error) {
@@ -817,10 +828,8 @@ export default function ChatPage({ user }: ChatPageProps) {
                                   safeAnswer = '回答の生成中にエラーが発生しました。';
                                 }
                                 
-                                return convertReferencesToNumberedLinks(
-                                  normalizeMarkdownSymbols(fixMarkdownTables(safeAnswer)),
-                                  streamingReferences || []
-                                );
+                                // 共通の変換処理を使用
+                                return formatMessageContent(safeAnswer, streamingReferences || [], true);
                               })()}
                               </ReactMarkdown>
                             </div>
@@ -839,6 +848,16 @@ export default function ChatPage({ user }: ChatPageProps) {
       <footer className="border-t p-4 bg-white/80 backdrop-blur-sm">
         {!showSettings && (
           <div className="mx-auto max-w-3xl">
+            {/* ソース切替タブ */}
+            <div className="mb-3">
+              <Tabs value={searchSource} onValueChange={(value) => setSearchSource(value as 'confluence' | 'jira')}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="confluence">Confluence</TabsTrigger>
+                  <TabsTrigger value="jira">Jira</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            
             {/* ラベルフィルタ */}
             <div className="flex gap-4 mb-3 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -857,7 +876,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                 ref={textareaRef}
                 value={input}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
-                placeholder="Confluenceドキュメントについて質問..."
+                placeholder={searchSource === 'jira' ? 'Jiraチケットについて質問...' : 'Confluenceドキュメントについて質問...'}
                 className="flex-1 resize-none bg-white"
                 rows={1}
                 onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {

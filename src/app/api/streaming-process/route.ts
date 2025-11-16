@@ -207,7 +207,7 @@ export const POST = async (req: NextRequest) => {
       }, { status: 400 });
     }
     
-    let { question, chatHistory = [], labelFilters = { includeMeetingNotes: false } } = body;
+    let { question, chatHistory = [], labelFilters = { includeMeetingNotes: false }, source = 'confluence' } = body;
     
     // 🔍 原因特定: question変数にBOMが混入していないかチェック
     if (question && typeof question === 'string') {
@@ -332,7 +332,8 @@ export const POST = async (req: NextRequest) => {
             retrieveRelevantDocs({
               question,
               labels: [],
-              labelFilters
+              labelFilters,
+              source
             }),
             // ユーザー情報を並行取得（検索と同時実行）
             (async () => {

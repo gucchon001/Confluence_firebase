@@ -427,3 +427,63 @@ if (process.env.NODE_ENV === 'development') {
   console.log('[CommonTermsConfig] 汎用用語設定読み込み完了:', COMMON_TERMS_STATS);
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 共通ヘルパー関数（重複コード排除）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * キーワードリストをカテゴリ別に整理（共通関数）
+ * Phase 6改善: KeywordListsLoaderとUnifiedKeywordExtractionServiceの重複コードを共通化
+ */
+export interface KeywordListsForOrganize {
+  categories: Array<{
+    category: string;
+    keywords: string[];
+  }>;
+}
+
+export interface KeywordCategoryForOrganize {
+  domainNames: string[];
+  functionNames: string[];
+  operationNames: string[];
+  systemFields: string[];
+  systemTerms: string[];
+  relatedKeywords: string[];
+}
+
+export function organizeKeywordsByCategory(keywordLists: KeywordListsForOrganize): KeywordCategoryForOrganize {
+  const categories: KeywordCategoryForOrganize = {
+    domainNames: [],
+    functionNames: [],
+    operationNames: [],
+    systemFields: [],
+    systemTerms: [],
+    relatedKeywords: []
+  };
+
+  for (const category of keywordLists.categories) {
+    switch (category.category) {
+      case 'domainNames':
+        categories.domainNames = category.keywords;
+        break;
+      case 'functionNames':
+        categories.functionNames = category.keywords;
+        break;
+      case 'operationNames':
+        categories.operationNames = category.keywords;
+        break;
+      case 'systemFields':
+        categories.systemFields = category.keywords;
+        break;
+      case 'systemTerms':
+        categories.systemTerms = category.keywords;
+        break;
+      case 'relatedKeywords':
+        categories.relatedKeywords = category.keywords;
+        break;
+    }
+  }
+
+  return categories;
+}
+
