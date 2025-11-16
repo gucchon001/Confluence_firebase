@@ -3,7 +3,9 @@
  * Based on case_classroom-deletion-issue-search-quality-test.md
  */
 
-import { searchLanceDB } from '../lib/lancedb-search-client.js';
+// テスト用の環境変数を事前に読み込む（app-configのインポート前に）
+import { loadTestEnv } from './test-helpers/env-loader';
+loadTestEnv();
 
 // Test configuration
 const TEST_QUERY = '教室削除ができないのは何が原因ですか';
@@ -83,6 +85,9 @@ async function runClassroomDeletionIssueSearchTest() {
   console.log('');
 
   try {
+    // 動的インポートを使用（loadTestEnv()実行後にインポート）
+    const { searchLanceDB } = await import('../lib/lancedb-search-client.js');
+    
     // Execute search
     const searchResults = await searchLanceDB({
       query: TEST_QUERY,
@@ -238,8 +243,19 @@ async function runClassroomDeletionIssueSearchTest() {
 
   } catch (error) {
     console.error('Test execution error:', error);
+    process.exit(1);
   }
 }
 
 // Run test
-runClassroomDeletionIssueSearchTest();
+if (require.main === module) {
+  runClassroomDeletionIssueSearchTest()
+    .then(() => {
+      // 正常終了時に明示的にexit(0)を呼ぶ
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ 予期しないエラー:', error);
+      process.exit(1);
+    });
+}

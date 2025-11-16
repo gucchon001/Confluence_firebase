@@ -10,6 +10,7 @@
 
 import 'dotenv/config';
 import { confluenceSyncService } from '../lib/confluence-sync-service';
+import { GeminiApiKeyLeakedError, GeminiApiFatalError } from '../lib/gemini-api-errors';
 
 async function main() {
     console.log('🚀 統一Confluence同期を開始します...（全件実行）');
@@ -95,6 +96,34 @@ async function main() {
     console.log('\n🎉 統一Confluence同期が完了しました！');
 
   } catch (error) {
+    // APIキー漏洩エラーの場合は明確なメッセージを表示
+    if (GeminiApiKeyLeakedError.isApiKeyLeakedError(error) || error instanceof GeminiApiKeyLeakedError) {
+      console.error('\n🚨 ============================================');
+      console.error('🚨 致命的なエラー: Gemini APIキーが漏洩として報告されました');
+      console.error('🚨 ============================================');
+      console.error('\n📋 対応手順:');
+      console.error('1. Google AI Studio (https://aistudio.google.com/apikey) にアクセス');
+      console.error('2. 新しいAPIキーを生成');
+      console.error('3. GitHubリポジトリの Secrets で GEMINI_API_KEY を更新');
+      console.error('   - Settings > Secrets and variables > Actions > GEMINI_API_KEY');
+      console.error('4. 更新後、再度同期を実行してください');
+      console.error('\nエラー詳細:');
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+    
+    // その他の致命的なエラー
+    if (error instanceof GeminiApiFatalError) {
+      console.error('\n🚨 ============================================');
+      console.error('🚨 致命的なエラーが発生しました');
+      console.error('🚨 ============================================');
+      console.error(`\nエラー詳細: ${error.message}`);
+      if (error.statusCode) {
+        console.error(`HTTPステータスコード: ${error.statusCode}`);
+      }
+      process.exit(1);
+    }
+    
     console.error('❌ 同期中にエラーが発生しました:', error);
     process.exit(1);
   }

@@ -61,8 +61,11 @@ import {
 } from 'recharts';
 import { adminService } from '@/lib/admin-service';
 import { postLogService } from '@/lib/post-log-service';
+import { performanceAlertService } from '@/lib/performance-alert-service';
+import { errorAnalysisService } from '@/lib/error-analysis-service';
 import { useAdmin } from '@/hooks/use-admin';
-import type { AdminUser, PostLog, Reference, SatisfactionRating } from '@/types';
+import type { AdminUser, PostLog, Reference, SatisfactionRating, PerformanceAlert, ErrorLog } from '@/types';
+import type { ErrorAnalysis } from '@/lib/error-analysis-service';
 
 // ダミーデータ（実際の実装ではAPIから取得）
 const mockPostLogs: PostLog[] = [
@@ -132,6 +135,8 @@ const AdminDashboard: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [userFilter, setUserFilter] = useState<string>('all');
   const [questionTypeFilter, setQuestionTypeFilter] = useState<string>('all');
+  const [environmentFilter, setEnvironmentFilter] = useState<string>('all');
+  const [dataSourceFilter, setDataSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
   // ページネーション状態
@@ -142,19 +147,15 @@ const AdminDashboard: React.FC = () => {
   // リアルタイム更新の状態（デフォルトで無効）
   const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date());
-
-  // 管理者権限がない場合はアクセス拒否
-  if (!isAdminLoading && !isAdmin) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-red-600">アクセス拒否</h3>
-          <p className="text-muted-foreground">管理者権限が必要です。</p>
-        </div>
-      </div>
-    );
-  }
+  
+  // キャッシュクリア機能（すべてのHooksは早期リターンの前に呼び出す必要がある）
+  const [cacheStatus, setCacheStatus] = useState<'idle' | 'clearing' | 'success' | 'error'>('idle');
+  
+  // パフォーマンスアラート状態
+  const [alerts, setAlerts] = useState<PerformanceAlert[]>([]);
+  
+  // エラー分析状態
+  const [errorAnalysis, setErrorAnalysis] = useState<ErrorAnalysis | null>(null);
 
   // データ取得関数をuseCallbackなしで定義
   const loadData = async () => {
@@ -191,20 +192,6 @@ const AdminDashboard: React.FC = () => {
         postLogCount: recentLogs.length
       });
       
-      // 🔍 デバッグ: PostLogデータの詳細を確認
-      if (recentLogs.length > 0) {
-        console.log('🔍 [AdminDashboard] 最新PostLogデータ確認:', {
-          id: recentLogs[0].id,
-          question: recentLogs[0].question?.substring(0, 50) + '...',
-          answer: recentLogs[0].answer?.substring(0, 100) + '...',
-          answerLength: recentLogs[0].answer?.length || 0,
-          serverStartupTime: recentLogs[0].serverStartupTime,
-          ttfbTime: recentLogs[0].ttfbTime,
-          searchTime: recentLogs[0].searchTime,
-          aiGenerationTime: recentLogs[0].aiGenerationTime,
-          totalTime: recentLogs[0].totalTime
-        });
-      }
       
       setUsers(userList);
       setPostLogs(recentLogs);
@@ -238,6 +225,8 @@ const AdminDashboard: React.FC = () => {
     setDateFilter('all');
     setUserFilter('all');
     setQuestionTypeFilter('all');
+    setEnvironmentFilter('all');
+    setDataSourceFilter('all');
     setSearchQuery('');
   };
 
@@ -306,15 +295,31 @@ const AdminDashboard: React.FC = () => {
       );
     }
 
+    // 環境フィルター
+    if (environmentFilter !== 'all') {
+      filtered = filtered.filter(log => {
+        const env = getEnvironment(log);
+        return env === environmentFilter;
+      });
+    }
+
+    // データソースフィルター
+    if (dataSourceFilter !== 'all') {
+      filtered = filtered.filter(log => {
+        const source = getDataSource(log);
+        return source === dataSourceFilter;
+      });
+    }
+
     setFilteredPostLogs(filtered);
     setTotalPages(Math.ceil(filtered.length / pageSize));
     // フィルター条件変更時のみページをリセット（postLogsの変更時はリセットしない）
-  }, [postLogs, dateFilter, userFilter, questionTypeFilter, searchQuery, pageSize]);
+  }, [postLogs, dateFilter, userFilter, questionTypeFilter, environmentFilter, dataSourceFilter, searchQuery, pageSize]);
   
   // フィルター条件変更時のみページをリセット
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateFilter, userFilter, questionTypeFilter, searchQuery, pageSize]);
+  }, [dateFilter, userFilter, questionTypeFilter, environmentFilter, dataSourceFilter, searchQuery, pageSize]);
 
   // 初期データ取得
   useEffect(() => {
@@ -366,8 +371,6 @@ const AdminDashboard: React.FC = () => {
   };
 
   // キャッシュクリア機能
-  const [cacheStatus, setCacheStatus] = useState<'idle' | 'clearing' | 'success' | 'error'>('idle');
-  
   const clearCache = async () => {
     try {
       setCacheStatus('clearing');
@@ -416,6 +419,22 @@ const AdminDashboard: React.FC = () => {
   const avgAiTime = postLogs.length > 0 ? postLogs.reduce((sum, log) => sum + log.aiGenerationTime, 0) / postLogs.length : 0;
   const avgTotalTime = postLogs.length > 0 ? postLogs.reduce((sum, log) => sum + log.totalTime, 0) / postLogs.length : 0;
   const totalPosts = postLogs.length;
+
+  // パフォーマンスアラートの生成
+  useEffect(() => {
+    if (postLogs.length > 0) {
+      const generatedAlerts = performanceAlertService.generateAlerts(postLogs);
+      setAlerts(generatedAlerts);
+    }
+  }, [postLogs]);
+
+  // エラー分析の実行
+  useEffect(() => {
+    if (postLogs.length > 0) {
+      const analysis = errorAnalysisService.analyzeErrors(postLogs);
+      setErrorAnalysis(analysis);
+    }
+  }, [postLogs]);
   const activeUsers = new Set(postLogs.map(log => log.userId)).size;
   
   // アクティブユーザー数計算（過去1時間以内のアクティビティ）
@@ -559,6 +578,19 @@ const AdminDashboard: React.FC = () => {
   const questionTypeData = getQuestionTypePerformance();
   const userPerformanceData = getUserPerformance();
 
+  // 管理者権限がない場合はアクセス拒否（JSX返却時にチェック）
+  if (!isAdminLoading && !isAdmin) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-red-600">アクセス拒否</h3>
+          <p className="text-muted-foreground">管理者権限が必要です。</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* ヘッダー */}
@@ -660,10 +692,11 @@ const AdminDashboard: React.FC = () => {
 
       {/* タブコンテンツ */}
       <Tabs defaultValue="monitoring" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="monitoring">リアルタイム監視</TabsTrigger>
           <TabsTrigger value="users">ユーザー管理</TabsTrigger>
           <TabsTrigger value="performance">パフォーマンス</TabsTrigger>
+          <TabsTrigger value="errors">エラー分析</TabsTrigger>
           <TabsTrigger value="feedback">評価フィードバック</TabsTrigger>
           <TabsTrigger value="backup">バックアップ</TabsTrigger>
         </TabsList>
@@ -678,7 +711,7 @@ const AdminDashboard: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                 <div>
                   <label className="text-sm font-medium">日付</label>
                   <Select value={dateFilter} onValueChange={setDateFilter}>
@@ -722,6 +755,37 @@ const AdminDashboard: React.FC = () => {
                       <SelectItem value="login">ログイン関連</SelectItem>
                       <SelectItem value="classroom">教室・求人関連</SelectItem>
                       <SelectItem value="system">システム関連</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">環境</label>
+                  <Select value={environmentFilter} onValueChange={setEnvironmentFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべて</SelectItem>
+                      <SelectItem value="development">開発環境</SelectItem>
+                      <SelectItem value="staging">ステージング</SelectItem>
+                      <SelectItem value="production">本番環境</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">データソース</label>
+                  <Select value={dataSourceFilter} onValueChange={setDataSourceFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべて</SelectItem>
+                      <SelectItem value="confluence">Confluence</SelectItem>
+                      <SelectItem value="jira">Jira</SelectItem>
+                      <SelectItem value="mixed">Confluence + Jira</SelectItem>
+                      <SelectItem value="unknown">不明</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -796,6 +860,8 @@ const AdminDashboard: React.FC = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>日時</TableHead>
+                        <TableHead>環境</TableHead>
+                        <TableHead>データソース</TableHead>
                         <TableHead>ユーザー</TableHead>
                         <TableHead>質問</TableHead>
                         <TableHead>応答時間</TableHead>
@@ -804,39 +870,53 @@ const AdminDashboard: React.FC = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedLogs.map((log) => (
-                        <TableRow 
-                          key={log.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => handleLogClick(log)}
-                        >
-                          <TableCell>
-                            {new Date(log.timestamp).toLocaleString('ja-JP')}
-                          </TableCell>
-                          <TableCell>
-                            {log.metadata?.userDisplayName || 
-                             users.find(u => u.uid === log.userId)?.displayName || 
-                             users.find(u => u.uid === log.userId)?.email || 
-                             log.userId}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {log.question}
-                          </TableCell>
-                          <TableCell>
-                            {(log.totalTime / 1000).toFixed(1)}s
-                          </TableCell>
-                          <TableCell>
-                            {log.referencesCount}
-                          </TableCell>
-                          <TableCell>
-                            {log.errors && log.errors.length > 0 ? (
-                              <Badge variant="destructive">エラー</Badge>
-                            ) : (
-                              <Badge variant="default">成功</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {paginatedLogs.map((log) => {
+                        const env = getEnvironment(log);
+                        const dataSource = getDataSource(log);
+                        return (
+                          <TableRow 
+                            key={log.id}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => handleLogClick(log)}
+                          >
+                            <TableCell>
+                              {new Date(log.timestamp).toLocaleString('ja-JP')}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={getEnvironmentColor(env)} variant="outline">
+                                {getEnvironmentName(env)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={getDataSourceColor(dataSource)} variant="outline">
+                                {getDataSourceName(dataSource)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {log.metadata?.userDisplayName || 
+                               users.find(u => u.uid === log.userId)?.displayName || 
+                               users.find(u => u.uid === log.userId)?.email || 
+                               log.userId}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {log.question}
+                            </TableCell>
+                            <TableCell>
+                              {(log.totalTime / 1000).toFixed(1)}s
+                            </TableCell>
+                            <TableCell>
+                              {log.referencesCount}
+                            </TableCell>
+                            <TableCell>
+                              {log.errors && log.errors.length > 0 ? (
+                                <Badge variant="destructive">エラー</Badge>
+                              ) : (
+                                <Badge variant="default">成功</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
 
@@ -936,6 +1016,77 @@ const AdminDashboard: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="performance" className="space-y-4">
+          {/* パフォーマンスアラート */}
+          {alerts.length > 0 && (
+            <Card className="border-yellow-200 bg-yellow-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-yellow-800">
+                  <AlertTriangle className="h-5 w-5" />
+                  パフォーマンスアラート ({alerts.length}件)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {alerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className={`p-4 rounded-lg border ${
+                        alert.severity === 'critical'
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-yellow-50 border-yellow-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge
+                              variant={performanceAlertService.getAlertSeverityBadgeVariant(alert.severity)}
+                            >
+                              {alert.severity === 'critical' ? '緊急' : '警告'}
+                            </Badge>
+                            <span className="font-medium">
+                              {alert.type === 'search_time' && '検索時間'}
+                              {alert.type === 'ai_generation_time' && 'AI生成時間'}
+                              {alert.type === 'error_rate' && 'エラー率'}
+                              {alert.type === 'system_load' && 'システム負荷'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700 mb-1">{alert.message}</p>
+                          <p className="text-xs text-gray-500">
+                            {alert.timestamp.toLocaleString('ja-JP')}
+                          </p>
+                        </div>
+                        {!alert.resolved && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const resolvedAlert = performanceAlertService.resolveAlert(
+                                alert,
+                                'admin' // TODO: 実際のユーザーIDを取得
+                              );
+                              setAlerts((prev) =>
+                                prev.map((a) => (a.id === alert.id ? resolvedAlert : a))
+                              );
+                            }}
+                          >
+                            解決済み
+                          </Button>
+                        )}
+                        {alert.resolved && (
+                          <Badge variant="outline" className="bg-green-50 text-green-700">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            解決済み
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* パフォーマンス概要 */}
           <Card>
             <CardHeader>

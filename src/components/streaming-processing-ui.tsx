@@ -122,17 +122,6 @@ export const StreamingProcessingUI: React.FC<StreamingProcessingUIProps> = ({
                 </div>
               </div>
             </div>
-
-            {/* ヒントメッセージ */}
-            <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="flex items-center gap-2 text-xs text-yellow-800">
-                <div className="w-4 h-4 rounded-full bg-yellow-400 flex items-center justify-center">
-                  <span className="text-yellow-800 text-xs">💡</span>
-                </div>
-                <span className="font-medium">ヒント:</span>
-                <span>初回検索は時間がかかりますが、次回からは高速になります</span>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

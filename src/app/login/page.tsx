@@ -10,6 +10,7 @@ import { showErrorToast, handleNetworkError } from '@/lib/toast-helpers';
 
 // Disable static generation for this page
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg role="img" viewBox="0 0 24 24" {...props}>
@@ -57,8 +58,8 @@ function LoginContent() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <Bot className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold">Confluence Spec Chat</CardTitle>
-          <CardDescription>Sign in to access your Confluence specifications and documentation</CardDescription>
+          <CardTitle className="text-2xl font-bold">JUKUST Confluence Spec Jira Development Status Chat</CardTitle>
+          <CardDescription>Sign in to access your Confluence specifications, Jira issues, and development status</CardDescription>
         </CardHeader>
         <CardContent>
           <Button

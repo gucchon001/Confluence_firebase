@@ -12,6 +12,7 @@
 
 import { GenericCache } from './generic-cache';
 import crypto from 'crypto';
+import { getPageIdFromRecord } from './pageid-migration-helper';
 
 /**
  * キャッシュされた回答データ
@@ -96,7 +97,6 @@ export class AnswerCache {
     try {
       // ドキュメントIDを抽出
       // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
-      const { getPageIdFromRecord } = require('./pageid-migration-helper');
       const documentIds = documents
         .map(doc => {
           const pageId = getPageIdFromRecord(doc);
@@ -146,7 +146,6 @@ export class AnswerCache {
     try {
       // ドキュメントIDを抽出
       // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
-      const { getPageIdFromRecord } = require('./pageid-migration-helper');
       const documentIds = documents
         .map(doc => {
           const pageId = getPageIdFromRecord(doc);

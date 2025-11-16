@@ -3,7 +3,9 @@
  * 教室管理検索品質テスト仕様書に基づく
  */
 
-import { extractKeywordsConfigured } from '../lib/keyword-extractor-wrapper';
+// テスト用の環境変数を事前に読み込む（app-configのインポート前に）
+import { loadTestEnv } from './test-helpers/env-loader';
+loadTestEnv();
 
 async function runKeywordQualityTest() {
   console.log('🚀 キーワード抽出品質テスト開始');
@@ -14,16 +16,20 @@ async function runKeywordQualityTest() {
   console.log('');
 
   try {
-    const result = await extractKeywordsConfigured(query);
+    // 動的インポートを使用（loadTestEnv()実行後にインポート）
+    const { unifiedKeywordExtractionService } = await import('../lib/unified-keyword-extraction-service.js');
+    
+    const startTime = Date.now();
+    const keywords = await unifiedKeywordExtractionService.extractKeywordsConfigured(query);
+    const processingTime = Date.now() - startTime;
 
     console.log('📊 抽出結果:');
-    console.log(`- 総キーワード数: ${result.keywords.length}`);
-    console.log(`- キーワードソース: ${result.metadata.keywordSource}`);
-    console.log(`- 処理時間: ${result.metadata.processingTime}ms`);
+    console.log(`- 総キーワード数: ${keywords.length}`);
+    console.log(`- 処理時間: ${processingTime}ms`);
     console.log('');
 
     console.log('🔑 最終的なキーワード:');
-    result.keywords.forEach((keyword, index) => {
+    keywords.forEach((keyword, index) => {
       console.log(`  ${index + 1}. "${keyword}"`);
     });
     console.log('');
@@ -36,17 +42,17 @@ async function runKeywordQualityTest() {
 
     console.log('✅ 理想のキーワードとの比較:');
     console.log(`- 理想のキーワード: [${idealKeywords.join(', ')}]`);
-    console.log(`- 実際のキーワード: [${result.keywords.join(', ')}]`);
+    console.log(`- 実際のキーワード: [${keywords.join(', ')}]`);
 
     const matchedKeywords = idealKeywords.filter(ideal => 
-      result.keywords.some(actual => actual.includes(ideal))
+      keywords.some(actual => actual.includes(ideal))
     );
     
     const missingKeywords = idealKeywords.filter(ideal => 
-      !result.keywords.some(actual => actual.includes(ideal))
+      !keywords.some(actual => actual.includes(ideal))
     );
     
-    const irrelevantKeywords = result.keywords.filter(actual => 
+    const irrelevantKeywords = keywords.filter(actual => 
       !idealKeywords.some(ideal => ideal.includes(actual)) &&
       !isClassroomRelated(actual)
     );
@@ -64,11 +70,11 @@ async function runKeywordQualityTest() {
     console.log(`- キーワードスコアが0でない: ${keywordScore ? '✅' : '❌'}`);
     
     // 2.2 分割されたキーワードが正しく抽出される
-    const hasSplitKeywords = result.keywords.some(k => k.includes('教室管理'));
+    const hasSplitKeywords = keywords.some(k => k.includes('教室管理'));
     console.log(`- 分割されたキーワードが正しく抽出される: ${hasSplitKeywords ? '✅' : '❌'}`);
     
     // 2.3 タイトルマッチングが正しく動作する
-    const hasTitleMatching = result.keywords.some(k => k === '教室管理');
+    const hasTitleMatching = keywords.some(k => k === '教室管理');
     console.log(`- タイトルマッチングが正しく動作する: ${hasTitleMatching ? '✅' : '❌'}`);
     
     // 2.4 理想のキーワード抽出結果に近い結果が得られる
@@ -76,11 +82,11 @@ async function runKeywordQualityTest() {
     console.log(`- 理想のキーワード抽出結果に近い結果が得られる: ${similarityScore >= 0.5 ? '✅' : '❌'} (${(similarityScore * 100).toFixed(1)}%)`);
     
     // 2.5 キーワード数が5個以上
-    const hasEnoughKeywords = result.keywords.length >= 5;
-    console.log(`- キーワード数が5個以上: ${hasEnoughKeywords ? '✅' : '❌'} (${result.keywords.length}個)`);
+    const hasEnoughKeywords = keywords.length >= 5;
+    console.log(`- キーワード数が5個以上: ${hasEnoughKeywords ? '✅' : '❌'} (${keywords.length}個)`);
     
     // 2.6 教室管理に関連する具体的な機能名が含まれる
-    const hasFunctionNames = result.keywords.some(k => 
+    const hasFunctionNames = keywords.some(k => 
       k.includes('教室管理-') || k.includes('機能')
     );
     console.log(`- 教室管理に関連する具体的な機能名が含まれる: ${hasFunctionNames ? '✅' : '❌'}`);
@@ -90,10 +96,10 @@ async function runKeywordQualityTest() {
     console.log('📈 品質メトリクスの計算:');
     
     // 3.1 検索精度（Precision）
-    const relevantKeywords = result.keywords.filter(k => 
+    const relevantKeywords = keywords.filter(k => 
       !irrelevantKeywords.includes(k)
     );
-    const precision = result.keywords.length > 0 ? relevantKeywords.length / result.keywords.length : 0;
+    const precision = keywords.length > 0 ? relevantKeywords.length / keywords.length : 0;
     console.log(`- 検索精度（Precision）: ${precision.toFixed(3)} (目標: 0.8以上) ${precision >= 0.8 ? '✅' : '❌'}`);
     
     // 3.2 検索再現率（Recall）
@@ -106,7 +112,7 @@ async function runKeywordQualityTest() {
     console.log(`- F1スコア: ${f1Score.toFixed(3)} (目標: 0.75以上) ${f1Score >= 0.75 ? '✅' : '❌'}`);
     
     // 3.4 平均スコア（キーワードの関連性スコア）
-    const averageScore = relevantKeywords.length / result.keywords.length * 100;
+    const averageScore = keywords.length > 0 ? relevantKeywords.length / keywords.length * 100 : 0;
     console.log(`- 平均スコア: ${averageScore.toFixed(1)} (目標: 60以上) ${averageScore >= 60 ? '✅' : '❌'}`);
     console.log('');
     
@@ -179,7 +185,15 @@ function isClassroomRelated(keyword: string): boolean {
 
 // テスト実行
 if (require.main === module) {
-  runKeywordQualityTest();
+  runKeywordQualityTest()
+    .then(() => {
+      // 正常終了時に明示的にexit(0)を呼ぶ
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ 予期しないエラー:', error);
+      process.exit(1);
+    });
 }
 
 export { runKeywordQualityTest };

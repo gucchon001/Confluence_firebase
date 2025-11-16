@@ -16,6 +16,7 @@ import { getStructuredLabel } from './structured-label-service';
 import { flattenStructuredLabel, type ExtendedLanceDBRecord } from './lancedb-schema-extended';
 import { removeBOM } from './bom-utils';
 import { appConfig } from '@/config/app-config';
+import { GeminiApiKeyLeakedError, GeminiApiFatalError } from './gemini-api-errors';
 import axios from 'axios';
 
 export interface ConfluencePage {
@@ -536,11 +537,25 @@ export class ConfluenceSyncService {
           }
         }
       } catch (error) {
+        // APIキー漏洩エラーなどの致命的なエラーの場合は早期終了
+        if (GeminiApiKeyLeakedError.isApiKeyLeakedError(error) || error instanceof GeminiApiKeyLeakedError) {
+          console.error('\n🚨 致命的なエラーが発生しました: Gemini APIキーが漏洩として報告されました');
+          console.error('❌ 新しいAPIキーを生成してGitHub Secrets（GEMINI_API_KEY）を更新してください');
+          console.error(`エラー詳細: ${error instanceof Error ? error.message : String(error)}`);
+          throw error; // 処理を中断してエラーを上位に伝播
+        }
+        
+        // その他の致命的なエラーも早期終了
+        if (error instanceof GeminiApiFatalError && error.isFatal) {
+          console.error(`\n🚨 致命的なエラーが発生しました: ${error.message}`);
+          throw error; // 処理を中断してエラーを上位に伝播
+        }
+        
         const errorMsg = `ページ ${page.id} の処理に失敗: ${error instanceof Error ? error.message : 'Unknown error'}`;
         console.error(`❌ ${errorMsg}`);
         results.errors.push(errorMsg);
         
-        // エラーが発生した場合でも処理を継続
+        // その他のエラーは継続
         console.log(`⚠️ エラーが発生しましたが、処理を継続します...`);
       }
     }
@@ -728,6 +743,13 @@ export class ConfluenceSyncService {
         }
       }
     } catch (error) {
+      // APIキー漏洩エラーなどの致命的なエラーはそのまま伝播
+      if (GeminiApiKeyLeakedError.isApiKeyLeakedError(error) || 
+          error instanceof GeminiApiKeyLeakedError ||
+          error instanceof GeminiApiFatalError) {
+        throw error;
+      }
+      
       console.error(`ページ追加エラー: ${error}`);
       throw error;
     }

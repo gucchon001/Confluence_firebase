@@ -9,8 +9,9 @@ import * as admin from 'firebase-admin';
 import axios from 'axios';
 
 // テスト対象の関数をインポート
-// 注意: batch-sync-confluence.tsを直接テストできるようにexportを追加する必要があります
-// 差分同期機能は現在実装されていないため、テストをスキップ
+// 注意: getLastSyncTimeとgetConfluencePagesという関数は存在しません
+// 差分同期機能はscripts/archive/differential-sync.tsに実装されていますが、
+// テスト対象の関数（getLastSyncTime, getConfluencePages）は存在しないため、このテストは不要です
 // import { getLastSyncTime, getConfluencePages } from '../../scripts/batch-sync-confluence';
 
 // モック

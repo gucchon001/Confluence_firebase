@@ -146,8 +146,8 @@ export class HybridSearchEngine {
           url: url, // URLを再構築
           source: 'vector' as const,
           scoreKind: 'vector' as const,
-          scoreRaw: result.distance || result._distance,
-          scoreText: `Vector ${this.calculateSimilarityScore(result.distance || result._distance).toFixed(1)}%`,
+          scoreRaw: result.distance ?? 0,
+          scoreText: `Vector ${this.calculateSimilarityScore(result.distance ?? 0).toFixed(1)}%`,
           // Jira特有のフィールド
           ...jiraFields
         };

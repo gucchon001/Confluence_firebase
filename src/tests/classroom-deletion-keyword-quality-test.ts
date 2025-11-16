@@ -3,6 +3,10 @@
  * @case_classroom-deletion-issue-search-quality-test.md に基づく
  */
 
+// テスト用の環境変数を事前に読み込む（app-configのインポート前に）
+import { loadTestEnv } from './test-helpers/env-loader';
+loadTestEnv();
+
 async function testClassroomDeletionKeywordExtraction() {
   console.log('🚀 教室削除問題キーワード抽出品質テスト開始');
   console.log('=' .repeat(60));
@@ -231,5 +235,15 @@ function isClassroomDeletionRelated(keyword: string): boolean {
 }
 
 // テスト実行
-testClassroomDeletionKeywordExtraction();
+if (require.main === module) {
+  testClassroomDeletionKeywordExtraction()
+    .then(() => {
+      // 正常終了時に明示的にexit(0)を呼ぶ
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ 予期しないエラー:', error);
+      process.exit(1);
+    });
+}
 

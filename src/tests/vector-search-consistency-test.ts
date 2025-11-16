@@ -9,7 +9,10 @@
  * 5. 検索品質の安定性
  */
 
-import 'dotenv/config';
+// テスト用の環境変数を事前に読み込む（app-configのインポート前に）
+import { loadTestEnv } from './test-helpers/env-loader';
+loadTestEnv();
+
 import { searchLanceDB } from '../lib/lancedb-search-client';
 
 interface ConsistencyTestQuery {
@@ -472,7 +475,15 @@ async function runVectorSearchConsistencyTest(): Promise<void> {
 
 // テスト実行
 if (require.main === module) {
-  runVectorSearchConsistencyTest();
+  runVectorSearchConsistencyTest()
+    .then(() => {
+      // 正常終了時に明示的にexit(0)を呼ぶ
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ 予期しないエラー:', error);
+      process.exit(1);
+    });
 }
 
 export { runVectorSearchConsistencyTest, testQueryConsistency, analyzeCategoryConsistency };

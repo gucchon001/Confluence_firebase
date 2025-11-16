@@ -6,6 +6,7 @@
 
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
+import { appConfig } from '@/config/app-config';
 
 export interface LanceDBConnection {
   db: lancedb.Connection;
@@ -35,7 +36,7 @@ interface LanceDBStatus {
  * 最適化機能（接続プール、重複接続防止、ヘルスチェック）を統合
  */
 export class LanceDBClient {
-  private static instance: LanceDBClient;
+  private static instances: Map<string, LanceDBClient> = new Map();
   private connection: LanceDBConnection | null = null;
   private config: LanceDBClientConfig;
   private status: LanceDBStatus = {
@@ -62,8 +63,8 @@ export class LanceDBClient {
    * Phase 0A-4: Cloud Run Gen2環境でインメモリファイルシステムのパスを返す
    */
   private getDbPath(): string {
-    const isCloudRun = process.env.K_SERVICE !== undefined;
-    const useInMemoryFS = process.env.USE_INMEMORY_FS === 'true' && isCloudRun;
+    // 統合設定ファイルからデプロイメント設定を取得（型安全で検証済み）
+    const { isCloudRun, useInMemoryFS } = appConfig.deployment;
     
     if (useInMemoryFS) {
       console.log('🔥 [LanceDBClient] Using in-memory file system: /dev/shm/.lancedb');
@@ -74,13 +75,19 @@ export class LanceDBClient {
   }
 
   /**
-   * シングルトンインスタンスを取得
+   * テーブルごとのシングルトンインスタンスを取得
+   * テーブル名ごとに異なるインスタンスを返す（複数テーブル対応）
    */
   public static getInstance(config?: LanceDBClientConfig): LanceDBClient {
-    if (!LanceDBClient.instance) {
-      LanceDBClient.instance = new LanceDBClient(config);
+    const tableName = config?.tableName || 'confluence';
+    const dbPath = config?.dbPath || path.resolve(process.cwd(), '.lancedb');
+    const instanceKey = `${dbPath}:${tableName}`;
+    
+    if (!LanceDBClient.instances.has(instanceKey)) {
+      LanceDBClient.instances.set(instanceKey, new LanceDBClient(config));
     }
-    return LanceDBClient.instance;
+    
+    return LanceDBClient.instances.get(instanceKey)!;
   }
 
   /**

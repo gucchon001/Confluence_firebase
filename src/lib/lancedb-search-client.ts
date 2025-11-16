@@ -30,7 +30,6 @@ const getSearchCache = () => {
       maxSize: 5000,       // Phase 5: 1000 → 5000に拡大（より多くのクエリをキャッシュ）
       evictionStrategy: 'lru'
     });
-    console.log('🔧 検索キャッシュを初期化しました (Phase 5最適化: TTL=15分, maxSize=5000)');
   }
   return globalThis.__searchCache;
 };
@@ -43,7 +42,6 @@ const getTitleSearchCache = () => {
       maxSize: 1000,       // タイトル候補は1000件までキャッシュ
       evictionStrategy: 'lru'
     });
-    console.log('🔧 タイトル検索キャッシュを初期化しました (TTL=30分, maxSize=1000)');
   }
   return globalThis.__titleSearchCache;
 };
@@ -153,13 +151,6 @@ export interface LanceDBSearchResult {
 export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceDBSearchResult[]> {
   const searchFunctionStartTime = Date.now();
   try {
-    // 開発環境のみ詳細ログ
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`\n========================================`);
-      console.log(`🔍 [searchLanceDB] 検索開始`);
-      console.log(`Query: "${params.query}"`);
-      console.log(`========================================\n`);
-    }
     
     // キャッシュインスタンスの存在確認
     const cacheInstance = getSearchCache();
@@ -171,10 +162,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const cachedResults = cacheInstance.get(cacheKey);
     
     if (cachedResults) {
-      // 開発環境のみログ
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🚀 キャッシュヒット: ${cachedResults.length}件`);
-      }
       return cachedResults;
     }
     
@@ -187,17 +174,12 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       const tableName = params.tableName || 'confluence';
       await lunrInitializer.initializeAsync(tableName);
       
-      // Phase 6修正: 初期化完了を確実に待つ（並列検索前）
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // パフォーマンス最適化: 不要な遅延を削除（100ms削減）
+      // 初期化は完了しているため、追加の待機は不要
       
       const lunrInitDuration = Date.now() - lunrInitStartTime;
       if (lunrInitDuration > 1000) {
-        console.warn(`⚠️ [PERF] Slow Lunr initialization: ${lunrInitDuration}ms (${(lunrInitDuration / 1000).toFixed(2)}s)`);
-      }
-      
-      // 開発環境のみログ
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[PERF] ✅ Lunr initialization completed in ${lunrInitDuration}ms`);
+        console.warn(`⚠️ [PERF] Slow Lunr initialization: ${lunrInitDuration}ms`);
       }
     } catch (error) {
       const lunrInitDuration = Date.now() - lunrInitStartTime;
@@ -218,26 +200,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const originalFirstCharCode = params.query.length > 0 ? params.query.charCodeAt(0) : -1;
     const originalHasBOM = params.query.includes('\uFEFF') || originalFirstCharCode === 0xFEFF;
     
-    if (originalHasBOM) {
-      console.error(`🚨 [BOM DETECTED] searchLanceDB received query with BOM:`, {
-        firstCharCode: originalFirstCharCode,
-        firstChar: params.query.charAt(0),
-        queryLength: params.query.length,
-        queryPreview: params.query.substring(0, 50),
-        charCodes: Array.from(params.query.substring(0, 10)).map(c => c.charCodeAt(0))
-      });
-    }
-    
     const cleanQuery = removeBOM(params.query).trim();
-    
-    if (params.query !== cleanQuery) {
-      console.warn(`🔍 [BOM REMOVED] searchLanceDB removed BOM from query:`, {
-        beforeFirstCharCode: originalFirstCharCode,
-        afterFirstCharCode: cleanQuery.length > 0 ? cleanQuery.charCodeAt(0) : -1,
-        beforeLength: params.query.length,
-        afterLength: cleanQuery.length
-      });
-    }
     
     const vectorPromise = getEmbeddings(cleanQuery).then(v => {
       const embeddingDuration = Date.now() - embeddingStartTime;
@@ -280,19 +243,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     ]);
     const parallelDuration = Date.now() - parallelStartTime;
     
-    // ★★★ PERF LOG: 並列初期化の詳細な時間計測 ★★★
-    console.log(`[PERF] ⏱️ Parallel initialization completed in ${parallelDuration}ms (${(parallelDuration / 1000).toFixed(2)}s)`);
-    
     // 5秒以上かかった場合のみログ（パフォーマンス問題の検知）
     if (parallelDuration > 5000) {
-      console.warn(`⚠️ [PERF] Slow parallel initialization: ${parallelDuration}ms (${(parallelDuration / 1000).toFixed(2)}s)`);
-      console.warn(`⚠️ [PERF] Breakdown: Embedding=${Date.now() - embeddingStartTime}ms, Keywords=${Date.now() - keywordStartTime}ms, Connection=${Date.now() - connectionStartTime}ms`);
-    }
-    
-    // 開発環境のみ詳細ログ
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[searchLanceDB] Generated embedding vector with ${vector.length} dimensions`);
-      console.log(`[searchLanceDB] Extracted ${keywords.length} keywords: ${keywords.join(', ')}`);
+      console.warn(`⚠️ [PERF] Slow parallel initialization: ${parallelDuration}ms`);
     }
     
     // Phase 0A-4: 強化版キーワード抽出（ネガティブワード除去）
@@ -302,14 +255,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const coreKeywords = keywordAnalysis.coreKeywords;
     const priorityKeywords = keywordAnalysis.priorityKeywords;
     
-    // 開発環境のみ詳細ログ
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[searchLanceDB] Core keywords (negative words removed): ${coreKeywords.join(', ')}`);
-      if (keywordAnalysis.removedWords.length > 0) {
-        console.log(`[searchLanceDB] Removed negative words: ${keywordAnalysis.removedWords.join(', ')}`);
-      }
-      console.log(`[searchLanceDB] Priority keywords: ${priorityKeywords.join(', ')}`);
-    }
     
     // 核心キーワードを使用（ネガティブワード除去済み）
     const finalKeywords = coreKeywords.length > 0 ? coreKeywords : keywords;
@@ -334,7 +279,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // Stage 2以降: 通常のハイブリッド検索
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
-    console.log('[Stage 2] ハイブリッド検索開始...\n');
 
     // Check if Lunr is ready (should be initialized on startup)
     if (params.useLunrIndex && !lunrInitializer.isReady()) {
@@ -351,8 +295,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const labelFilters = params.labelFilters || labelManager.getDefaultFilterOptions();
     const excludeLabels = labelManager.buildExcludeLabels(labelFilters);
     
-    console.log('[searchLanceDB] Using labelFilters:', labelFilters);
-    console.log('[searchLanceDB] Excluding labels:', excludeLabels);
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Phase 5: ベクトル検索とBM25検索の並列実行（品質影響なし）
@@ -414,24 +356,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     try {
       const titleMatchedResults = vectorResults.filter(r => r._titleBoosted);
       
-      if (titleMatchedResults.length > 0) {
-        console.log(`\n[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`[Phase 4] KG拡張開始: ${titleMatchedResults.length}件のタイトルマッチ結果`);
-        
-        // Phase 7最適化: KG拡張を無効化（9.2秒→0秒で大幅高速化）
-        // KG拡張は高コスト・低効果のため一時的に無効化
-        console.log(`[Phase 7 KG Optimization] KG拡張を無効化（パフォーマンス最適化）`);
-        console.log(`[Phase 7 KG Optimization] 期待効果: 検索時間 -9.2秒（約50%改善）`);
-        
-        console.log(`[Phase 4] KG拡張スキップ: 0件追加（合計: ${vectorResults.length}件）`);
-        console.log(`[Phase 4] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-      } else {
-        console.log(`[Phase 4] タイトルマッチ結果なし - KG拡張をスキップ`);
-      }
+      // Phase 7最適化: KG拡張を無効化（9.2秒→0秒で大幅高速化）
+      // KG拡張は高コスト・低効果のため一時的に無効化
       
       // 結果数を制限（Phase 4調整: BM25結果とマージするため多めに保持）
       vectorResults = vectorResults.slice(0, topK * 5); // 10倍 → 50件（BM25マージ前）
-      console.log(`[searchLanceDB] Vector search results after KG: ${vectorResults.length}`);
     } catch (err) {
       console.error(`[searchLanceDB] KG expansion error: ${err}`);
       // エラー時もベクトル検索結果は保持
@@ -440,11 +369,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // 1.5 フォールバック: ベクトル検索が0件でフィルタがある場合、フィルタのみで取得
     if (vectorResults.length === 0 && params.filter) {
       try {
-        console.log('[searchLanceDB] Fallback to filter-only query due to 0 vector results');
         const filterOnlyResults = await tbl.query().where(params.filter).limit(topK).toArray();
         // ベクトル距離がないため、ダミーの距離を設定
         vectorResults = filterOnlyResults.map(r => ({ ...r, _distance: 1.0, _sourceType: 'filter' }));
-        console.log(`[searchLanceDB] Filter-only query found ${vectorResults.length} results`);
       } catch (fallbackErr) {
         console.error('[searchLanceDB] Filter-only query error:', fallbackErr);
       }
@@ -453,22 +380,18 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // 1.6 フォールバック: pageIdフィルタがある場合、フォールバック取得を試行
     if (vectorResults.length === 0 && params.filter && params.filter.includes('pageId')) {
       try {
-        console.log('[searchLanceDB] Attempting fallback pageId retrieval');
         const pageIdMatch = params.filter.match(/pageId.*?(\d+)/);
         if (pageIdMatch) {
           const pageId = parseInt(pageIdMatch[1]);
-          console.log(`[searchLanceDB] Extracted pageId: ${pageId}`);
           
           // フォールバック取得を試行
           const fallbackResults = await getRowsByPageId(tbl, pageId);
           if (fallbackResults.length > 0) {
-            console.log(`[searchLanceDB] Fallback pageId retrieval found ${fallbackResults.length} results`);
             vectorResults = fallbackResults.map(r => ({ ...r, _distance: 0.5, _sourceType: 'fallback' }));
           } else {
             // URL LIKE フォールバックを試行
             const urlFallbackResults = await getRowsByPageIdViaUrl(tbl, pageId);
             if (urlFallbackResults.length > 0) {
-              console.log(`[searchLanceDB] URL fallback retrieval found ${urlFallbackResults.length} results`);
               vectorResults = urlFallbackResults.map(r => ({ ...r, _distance: 0.6, _sourceType: 'url-fallback' }));
             }
           }
@@ -492,12 +415,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       titles = titles.slice(0, 10);
       
       if (titles.length > 0) {
-        console.log(`[searchLanceDB] Exact title candidates (${titles.length}, limited to 10): ${titles.slice(0, 5).join(', ')}...`);
-        
         // ★★★ 改善案1: LIKEクエリをLunr検索に置き換える（高速化） ★★★
         // ★★★ 改善案3: タイトル検索結果をキャッシュ（頻繁に検索される候補をキャッシュ） ★★★
         const titleSearchCache = getTitleSearchCache();
-        const titleSearchStart = Date.now();
         const titleSearchPromises = titles.map(async (t) => {
           try {
             // キャッシュキーを生成
@@ -506,7 +426,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             // キャッシュから取得を試行
             const cachedResult = titleSearchCache.get(cacheKey);
             if (cachedResult) {
-              console.log(`[TitleSearchCache] Cache hit for: "${t}"`);
               return cachedResult;
             }
             
@@ -569,7 +488,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             
             // 検索結果をキャッシュに保存
             titleSearchCache.set(cacheKey, searchResults);
-            console.log(`[TitleSearchCache] Cache miss for: "${t}" (cached ${searchResults.length} results)`);
             
             return searchResults;
           } catch (e) {
@@ -580,8 +498,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         
         // すべてのタイトル検索を並列実行
         const titleSearchResults = await Promise.all(titleSearchPromises);
-        const titleSearchDuration = Date.now() - titleSearchStart;
-        console.log(`[PERF] 🔍 Title exact search completed in ${titleSearchDuration}ms (Lunr search + cache + parallel execution)`);
         
         // 結果をマージ
         const added: any[] = [];
@@ -595,7 +511,6 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         }
         
         if (added.length > 0) {
-          console.log(`[searchLanceDB] Added ${added.length} exact-title rows to candidates (救済検索)`);
           vectorResults = vectorResults.concat(added);
         }
       }
@@ -912,23 +827,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // 3. 結果の結合（Phase 0A-4: 複合スコアリング適用済み）
     const combinedResults = [...vectorResults];
     
-    console.log(`[searchLanceDB] Combined results: ${vectorResults.length} total`);
-    
     // 複合スコアでソート済みなので、上位を取得
     // Phase 4最適化: 結果数制限を緩和（topK * 3）
     // 理由: 重複排除とフィルタリング後に十分な結果を確保
     let finalResults = combinedResults.slice(0, topK * 3);
-    
-    // ラベルフィルタリングは既にベクトル・BM25で実行済みのため削除（重複処理の排除）
-    // 最終的なフィルタリングは不要（パフォーマンス最適化）
-    
-    console.log(`[searchLanceDB] Returning top ${finalResults.length} results based on hybrid score`);
-    
-    // 結果を整形（統一サービスを使用）
-    console.log(`[searchLanceDB] Final results before formatting:`);
-    finalResults.forEach((result, idx) => {
-      console.log(`[searchLanceDB] Result ${idx+1}: title=${result.title}, _sourceType=${result._sourceType}`);
-    });
     
     // Phase 0A-1.5: ページ単位の重複排除
     // ★★★ MIGRATION: 非同期対応 ★★★
@@ -963,30 +865,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // 10秒以上かかった場合のみログ（パフォーマンス問題の検知）
     if (searchFunctionDuration > 10000) {
-      console.warn(`⚠️ [searchLanceDB] Slow search: ${searchFunctionDuration}ms (${(searchFunctionDuration / 1000).toFixed(2)}s) for query: "${params.query}"`);
-      
-      // 詳細な時間計測を出力（ボトルネック特定のため）
-      console.warn(`📊 [PERF] Search breakdown:`);
-      console.warn(`   - Total duration: ${searchFunctionDuration}ms`);
-      console.warn(`   - Parallel init: ${parallelDuration}ms`);
-      console.warn(`   - Phase 5 parallel search: ${parallelSearchTime}ms`);
-      console.warn(`   - Post-processing: ${searchFunctionDuration - parallelSearchTime - parallelDuration}ms`);
-    }
-    
-    // 開発環境のみ詳細ログ
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`\n========================================`);
-      console.log(`📊 [searchLanceDB] Total search completed`);
-      console.log(`⏱️ Total duration: ${searchFunctionDuration}ms (${(searchFunctionDuration / 1000).toFixed(2)}s)`);
-      console.log(`✅ Returned ${processedResults.length} results`);
-      console.log(`========================================\n`);
-      
-      // 検索ログをファイルに保存
-      try {
-        searchLogger.saveSearchLog(params.query, processedResults);
-      } catch (logError) {
-        console.warn('[searchLanceDB] Failed to save search log:', logError);
-      }
+      console.warn(`⚠️ [searchLanceDB] Slow search: ${searchFunctionDuration}ms for query: "${params.query}"`);
     }
     
     return processedResults;
@@ -1271,17 +1150,15 @@ async function executeVectorSearch(
           // ベクトル検索結果を完全なレコードで置き換え
           vectorResults = vectorResults.map(result => {
             const fullRecord = fullRecordsMap.get(result.id || result.issue_key);
-            if (fullRecord) {
+            if (fullRecord && typeof fullRecord === 'object' && fullRecord !== null) {
               // ベクトル検索の距離情報を保持
               return {
-                ...fullRecord,
-                _distance: result._distance
+                ...(fullRecord as Record<string, any>),
+                _distance: result.distance
               };
             }
             return result;
           });
-          
-          console.log(`[Vector Search] 完全なレコード取得完了: ${fullRecordsMap.size}件`);
         } catch (error) {
           console.warn(`[Vector Search] 完全なレコード取得に失敗:`, error);
         }
@@ -1305,6 +1182,7 @@ async function executeVectorSearch(
         issue_type: result.issue_type,
         updated_at: result.updated_at
       } : {};
+      
       
       if (matchedKeywords.length > 0) {
         let boostFactor = 1.0;
@@ -1421,54 +1299,142 @@ async function executeBM25Search(
     
     // スコアでソート（降順）
     allLunrResults.sort((a, b) => (b.score || 0) - (a.score || 0));
-    
-    console.log(`[BM25 Search] Total unique results: ${allLunrResults.length}`);
 
     // LanceDB側の詳細情報を取得してStructuredLabelなどを補完
-    const lanceDbRecordMap = new Map<number, any>();
+    const lanceDbRecordMap = new Map<number | string, any>();
     try {
-      // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
-      const { getPageIdFromRecord } = await import('./pageid-migration-helper');
-      const uniquePageIds = Array.from(
-        new Set(
-          allLunrResults
-            .map(result => {
-              const pageId = getPageIdFromRecord(result) || result.pageId;
-              return Number(pageId);
-            })
-            .filter(id => Number.isFinite(id) && id > 0)
-        )
-      );
+      // デバッグ: テーブル名とテーブルの最初のレコードを確認
+      console.log(`[BM25 Search] デバッグ: tableName=${tableName}, tbl存在=${!!tbl}`);
+      if (tbl) {
+        try {
+          const testRows = await tbl.query().limit(1).toArray();
+          if (testRows.length > 0) {
+            console.log(`[BM25 Search] デバッグ: テーブルの最初のレコード（tableName=${tableName}）:`, {
+              id: testRows[0].id,
+              idType: typeof testRows[0].id,
+              issue_key: testRows[0].issue_key,
+              issue_keyType: typeof testRows[0].issue_key,
+              page_id: testRows[0].page_id,
+              page_idType: typeof testRows[0].page_id,
+              title: testRows[0].title?.substring(0, 30)
+            });
+          }
+        } catch (testError) {
+          console.warn(`[BM25 Search] デバッグ: テーブル確認エラー:`, testError);
+        }
+      }
+      
+      // Jiraテーブルの場合、id（issue_key）で取得、Confluenceテーブルの場合、page_idで取得
+      if (tableName === 'jira_issues') {
+        // Jiraテーブル: id（issue_key）で取得
+        const uniqueIssueKeys = Array.from(
+          new Set(
+            allLunrResults
+              .map(result => result.id || result.issue_key)
+              .filter(Boolean)
+          )
+        );
 
-      if (uniquePageIds.length > 0) {
-        const { mapLanceDBRecordToAPI } = await import('./pageid-migration-helper');
-        const chunkSize = 50;
-
-        for (let i = 0; i < uniquePageIds.length; i += chunkSize) {
-          const chunk = uniquePageIds.slice(i, i + chunkSize);
-          const pageIdConditions = chunk.map(id => `\`page_id\` = ${id}`).join(' OR ');
-
-          try {
-            const rows = await tbl
-              .query()
-              .where(`(${pageIdConditions})`)
-              .limit(chunk.length * 5)
-              .toArray();
-
-            for (const row of rows) {
-              const mapped = mapLanceDBRecordToAPI(row);
-              const key = Number(mapped.page_id ?? mapped.pageId);
-              if (Number.isFinite(key)) {
-                lanceDbRecordMap.set(key, mapped);
+        if (uniqueIssueKeys.length > 0) {
+          console.log(`[BM25 Search] Jira enrichment: ${uniqueIssueKeys.length}件のissue_keyを取得予定（最初の5件: ${uniqueIssueKeys.slice(0, 5).join(', ')}）`);
+          
+          // デバッグ: LanceDBテーブルから実際に取得できるかテスト
+          if (uniqueIssueKeys.length > 0) {
+            const testKey = uniqueIssueKeys[0];
+            try {
+              const testRows = await tbl
+                .query()
+                .where(`\`id\` = '${testKey}'`)
+                .limit(1)
+                .toArray();
+              console.log(`[BM25 Search] デバッグ: テストクエリ（id='${testKey}'）: ${testRows.length}件取得`);
+              if (testRows.length > 0) {
+                console.log(`[BM25 Search] デバッグ: テスト結果のフィールド:`, Object.keys(testRows[0]).slice(0, 20));
               } else {
-                console.warn(`[BM25 Search] Invalid pageId in mapped record:`, { page_id: mapped.page_id, pageId: mapped.pageId });
+                // 別の方法で試す（idフィールドの型を確認）
+                const allRows = await tbl.query().limit(1).toArray();
+                if (allRows.length > 0) {
+                  console.log(`[BM25 Search] デバッグ: テーブルの最初のレコードのid:`, allRows[0].id, `型:`, typeof allRows[0].id);
+                  console.log(`[BM25 Search] デバッグ: テーブルの最初のレコードのissue_key:`, allRows[0].issue_key, `型:`, typeof allRows[0].issue_key);
+                }
               }
+            } catch (testError) {
+              console.warn(`[BM25 Search] デバッグ: テストクエリエラー:`, testError);
             }
-          } catch (fetchError) {
-            console.warn('[BM25 Search] Failed to fetch LanceDB rows for chunk:', fetchError);
+          }
+          
+          const chunkSize = 50;
+          for (let i = 0; i < uniqueIssueKeys.length; i += chunkSize) {
+            const chunk = uniqueIssueKeys.slice(i, i + chunkSize);
+            const idConditions = chunk.map(key => `\`id\` = '${key}'`).join(' OR ');
+
+            try {
+              const rows = await tbl
+                .query()
+                .where(`(${idConditions})`)
+                .limit(chunk.length)
+                .toArray();
+
+              console.log(`[BM25 Search] Jira enrichment: チャンク ${i / chunkSize + 1} - ${rows.length}件のレコードを取得（クエリ: ${chunk.length}件のissue_key）`);
+
+              for (const row of rows) {
+                const key = row.id;
+                if (key) {
+                  lanceDbRecordMap.set(key, row);
+                }
+              }
+            } catch (fetchError) {
+              console.warn('[BM25 Search] Failed to fetch Jira records for chunk:', fetchError);
+            }
+          }
+          console.log(`[BM25 Search] Jira enrichment: ${lanceDbRecordMap.size}件のレコードを取得`);
+        } else {
+          console.warn(`[BM25 Search] Jira enrichment: issue_keyが取得できませんでした（allLunrResults: ${allLunrResults.length}件）`);
+        }
+      } else {
+        // Confluenceテーブル: page_idで取得（既存の処理）
+        // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+        const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+        const uniquePageIds = Array.from(
+          new Set(
+            allLunrResults
+              .map(result => {
+                const pageId = getPageIdFromRecord(result) || result.pageId;
+                return Number(pageId);
+              })
+              .filter(id => Number.isFinite(id) && id > 0)
+          )
+        );
+
+        if (uniquePageIds.length > 0) {
+          const { mapLanceDBRecordToAPI } = await import('./pageid-migration-helper');
+          const chunkSize = 50;
+
+          for (let i = 0; i < uniquePageIds.length; i += chunkSize) {
+            const chunk = uniquePageIds.slice(i, i + chunkSize);
+            const pageIdConditions = chunk.map(id => `\`page_id\` = ${id}`).join(' OR ');
+
+            try {
+              const rows = await tbl
+                .query()
+                .where(`(${pageIdConditions})`)
+                .limit(chunk.length * 5)
+                .toArray();
+
+              for (const row of rows) {
+                const mapped = mapLanceDBRecordToAPI(row);
+                const key = Number(mapped.page_id ?? mapped.pageId);
+                if (Number.isFinite(key)) {
+                  lanceDbRecordMap.set(key, mapped);
+                } else {
+                  console.warn(`[BM25 Search] Invalid pageId in mapped record:`, { page_id: mapped.page_id, pageId: mapped.pageId });
+                }
+              }
+            } catch (fetchError) {
+              console.warn('[BM25 Search] Failed to fetch LanceDB rows for chunk:', fetchError);
+            }
           }
         }
-
       }
     } catch (enrichError) {
       console.warn('[BM25 Search] LanceDB enrichment skipped due to error:', enrichError);
@@ -1490,7 +1456,11 @@ async function executeBM25Search(
       const pageId = getPageIdFromRecord(r) || r.pageId;
       const numericPageId = Number(pageId);
       const page_id = r.page_id ?? pageId; // ★★★ MIGRATION: page_idを確実に保持 ★★★
-      const enrichedRecord = Number.isFinite(numericPageId) ? lanceDbRecordMap.get(numericPageId) : undefined;
+      
+      // Jiraテーブルの場合、id（issue_key）で取得、Confluenceテーブルの場合、page_idで取得
+      const enrichedRecord = tableName === 'jira_issues'
+        ? lanceDbRecordMap.get(r.id || r.issue_key)
+        : (Number.isFinite(numericPageId) ? lanceDbRecordMap.get(numericPageId) : undefined);
 
       const normalizedLabels = enrichedRecord
         ? getLabelsAsArray(enrichedRecord.labels)
@@ -1500,6 +1470,25 @@ async function executeBM25Search(
 
       // space_keyはオプション（page_idだけでURL構築可能）
       const spaceKey = enrichedRecord?.space_key ?? r.space_key ?? r.spaceKey ?? undefined;
+
+      // Jira特有のフィールドを取得
+      const jiraFields = tableName === 'jira_issues' && enrichedRecord ? {
+        issue_key: enrichedRecord.issue_key || enrichedRecord.id || r.id,
+        status: enrichedRecord.status,
+        status_category: enrichedRecord.status_category,
+        priority: enrichedRecord.priority,
+        assignee: enrichedRecord.assignee,
+        issue_type: enrichedRecord.issue_type,
+        updated_at: enrichedRecord.updated_at
+      } : (r.issue_key ? {
+        issue_key: r.issue_key,
+        status: r.status,
+        status_category: r.status_category,
+        priority: r.priority,
+        assignee: r.assignee,
+        issue_type: r.issue_type,
+        updated_at: r.updated_at
+      } : {});
 
       // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
       return {
@@ -1525,7 +1514,9 @@ async function executeBM25Search(
         structured_tags: enrichedRecord?.structured_tags,
         structured_version: enrichedRecord?.structured_version,
         structured_content_length: enrichedRecord?.structured_content_length,
-        structured_is_valid: enrichedRecord?.structured_is_valid
+        structured_is_valid: enrichedRecord?.structured_is_valid,
+        // Jira特有のフィールドを追加
+        ...jiraFields
       };
     });
     

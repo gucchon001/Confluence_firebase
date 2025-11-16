@@ -263,10 +263,107 @@ export function convertReferencesToNumberedLinks(markdown: string, references: A
 }
 
 /**
+ * 回答テキストから実際に使用された参照元のインデックスを抽出
+ * @param markdown マークダウンテキスト
+ * @param references 参照元リスト（title, urlを含む）
+ * @returns 使用された参照元のインデックス（0ベース）のセット
+ */
+export function extractUsedReferenceIndices(markdown: string, references: Array<{title: string, url?: string}>): Set<number> {
+  const usedIndices = new Set<number>();
+  
+  if (!markdown || !references || references.length === 0) {
+    return usedIndices;
+  }
+
+  // 「（XXX_【FIX】...）」のようなパターンを検出
+  const referencePattern = /（([^）]+)）/g;
+  const matches = Array.from(markdown.matchAll(referencePattern));
+  
+  for (const match of matches) {
+    const content = match[1].trim();
+    
+    // 参照元リストから該当するタイトルを探す
+    const matchedIndex = references.findIndex(ref => {
+      const refTitle = (ref.title || '').trim();
+      const contentTrimmed = content.trim();
+      
+      // 完全一致
+      if (refTitle === contentTrimmed) {
+        return true;
+      }
+      
+      // 番号部分を除いた比較（優先度: 高）
+      const refWithoutNumber = refTitle.replace(/^\d+_/, '').trim();
+      const contentWithoutNumber = contentTrimmed.replace(/^\d+_/, '').trim();
+      
+      if (refWithoutNumber && contentWithoutNumber) {
+        // 番号除去後の完全一致
+        if (refWithoutNumber === contentWithoutNumber) {
+          return true;
+        }
+        // 番号除去後の包含関係（長い方に短い方が含まれる）
+        if (refWithoutNumber.length > contentWithoutNumber.length) {
+          if (refWithoutNumber.includes(contentWithoutNumber)) {
+            return true;
+          }
+        } else if (contentWithoutNumber.length > refWithoutNumber.length) {
+          if (contentWithoutNumber.includes(refWithoutNumber)) {
+            return true;
+          }
+        }
+      }
+      
+      // 部分一致（番号を含む場合のみ、短い方に長い方が含まれる場合は除外）
+      if (refTitle.length >= contentTrimmed.length && refTitle.includes(contentTrimmed)) {
+        return true;
+      }
+      if (contentTrimmed.length >= refTitle.length && contentTrimmed.includes(refTitle)) {
+        return true;
+      }
+      
+      return false;
+    });
+
+    if (matchedIndex >= 0) {
+      usedIndices.add(matchedIndex);
+    }
+  }
+  
+  // マークダウンリンク形式の参照番号も検出（[1](url)のような形式）
+  const linkPattern = /\[(\d+)\]\([^)]+\)/g;
+  const linkMatches = Array.from(markdown.matchAll(linkPattern));
+  for (const match of linkMatches) {
+    const referenceNumber = parseInt(match[1], 10);
+    if (referenceNumber >= 1 && referenceNumber <= references.length) {
+      usedIndices.add(referenceNumber - 1); // 1ベースから0ベースに変換
+    }
+  }
+  
+  return usedIndices;
+}
+
+/**
+ * 実際に使用された参照元のみをフィルタリング
+ * @param references 参照元リスト
+ * @param usedIndices 使用された参照元のインデックス（0ベース）のセット
+ * @returns フィルタリングされた参照元リスト
+ */
+export function filterUsedReferences<T extends {title: string, url?: string}>(
+  references: T[],
+  usedIndices: Set<number>
+): T[] {
+  if (usedIndices.size === 0) {
+    return references; // 使用された参照元がない場合は全て返す（後方互換性のため）
+  }
+  
+  return references.filter((_, index) => usedIndices.has(index));
+}
+
+/**
  * メッセージコンテンツの変換処理（共通化）
  * チャットページと管理画面で使用
  * @param content マークダウンテキスト
- * @param references 参照元リスト（オプション）
+ * @param references 参照元リスト（オプション、既に使用された参照元のみが渡されることを想定）
  * @param isAssistant アシスタントのメッセージかどうか（デフォルト: true）
  * @returns 変換後のマークダウンテキスト
  */
@@ -282,6 +379,8 @@ export function formatMessageContent(
   const normalized = normalizeMarkdownSymbols(fixMarkdownTables(content));
   
   if (references && references.length > 0) {
+    // 使用された参照元のみが渡されることを想定
+    // 番号は1から順番に振り直される
     return convertReferencesToNumberedLinks(normalized, references);
   }
   

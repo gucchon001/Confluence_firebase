@@ -1,70 +1,56 @@
 /**
- * Phase 0A-4: Cloud Run Gen2対応
- * 
- * Kuromoji辞書ファイルをStandaloneビルドに確実にコピー
- * Gen2では outputFileTracingIncludes が無視されるため、
- * ビルド後に明示的にコピーする
+ * Kuromoji辞書ファイルを.next/standaloneにコピー
+ * postbuildスクリプトで実行される
  */
 
 const fs = require('fs');
 const path = require('path');
 
-console.log('📦 [PostBuild] Kuromoji辞書ファイルをコピー中...');
+const sourceDir = path.resolve(process.cwd(), 'node_modules/kuromoji/dict');
+const targetDir = path.resolve(process.cwd(), '.next/standalone/node_modules/kuromoji/dict');
 
-const sourceDir = path.resolve(__dirname, '../node_modules/kuromoji/dict');
-const standaloneDestDir = path.resolve(__dirname, '../.next/standalone/node_modules/kuromoji/dict');
+console.log('[copy-kuromoji-dict] Starting copy process...');
+console.log(`[copy-kuromoji-dict] Source: ${sourceDir}`);
+console.log(`[copy-kuromoji-dict] Target: ${targetDir}`);
 
-// Standaloneディレクトリが存在しない場合は作成
-if (!fs.existsSync(path.dirname(standaloneDestDir))) {
-  fs.mkdirSync(path.dirname(standaloneDestDir), { recursive: true });
+// ソースディレクトリの存在確認
+if (!fs.existsSync(sourceDir)) {
+  console.warn(`[copy-kuromoji-dict] ⚠️  Source directory not found: ${sourceDir}`);
+  console.warn('[copy-kuromoji-dict] Skipping copy (kuromoji may not be installed)');
+  process.exit(0);
 }
 
-// 辞書ディレクトリが存在しない場合は作成
-if (!fs.existsSync(standaloneDestDir)) {
-  fs.mkdirSync(standaloneDestDir, { recursive: true });
+// ターゲットディレクトリの親ディレクトリを作成
+const targetParentDir = path.dirname(targetDir);
+if (!fs.existsSync(targetParentDir)) {
+  fs.mkdirSync(targetParentDir, { recursive: true });
+}
+
+// ターゲットディレクトリを作成
+if (!fs.existsSync(targetDir)) {
+  fs.mkdirSync(targetDir, { recursive: true });
 }
 
 // 辞書ファイルをコピー
-function copyRecursiveSync(src, dest) {
-  const exists = fs.existsSync(src);
-  const stats = exists && fs.statSync(src);
-  const isDirectory = exists && stats.isDirectory();
-  
-  if (isDirectory) {
-    if (!fs.existsSync(dest)) {
-      fs.mkdirSync(dest, { recursive: true });
-    }
-    fs.readdirSync(src).forEach((childItemName) => {
-      copyRecursiveSync(
-        path.join(src, childItemName),
-        path.join(dest, childItemName)
-      );
-    });
-  } else {
-    fs.copyFileSync(src, dest);
-  }
-}
-
 try {
-  copyRecursiveSync(sourceDir, standaloneDestDir);
-  
-  // 確認
-  const files = fs.readdirSync(standaloneDestDir);
-  console.log(`✅ [PostBuild] Kuromoji辞書ファイルをコピー完了: ${files.length}ファイル`);
-  console.log(`   Source: ${sourceDir}`);
-  console.log(`   Dest: ${standaloneDestDir}`);
-  
-  // base.dat.gzの存在確認（最重要ファイル）
-  const baseDatPath = path.join(standaloneDestDir, 'base.dat.gz');
-  if (fs.existsSync(baseDatPath)) {
-    const size = fs.statSync(baseDatPath).size;
-    console.log(`   ✅ base.dat.gz: ${(size / 1024 / 1024).toFixed(2)} MB`);
-  } else {
-    console.error(`   ❌ base.dat.gz が見つかりません！`);
-    process.exit(1);
+  const files = fs.readdirSync(sourceDir);
+  let copiedCount = 0;
+
+  for (const file of files) {
+    const sourcePath = path.join(sourceDir, file);
+    const targetPath = path.join(targetDir, file);
+    const stat = fs.statSync(sourcePath);
+
+    if (stat.isFile()) {
+      fs.copyFileSync(sourcePath, targetPath);
+      copiedCount++;
+      console.log(`[copy-kuromoji-dict] ✅ Copied: ${file}`);
+    }
   }
+
+  console.log(`[copy-kuromoji-dict] ✅ Successfully copied ${copiedCount} files`);
 } catch (error) {
-  console.error('❌ [PostBuild] Kuromoji辞書ファイルのコピー失敗:', error);
+  console.error('[copy-kuromoji-dict] ❌ Error copying files:', error.message);
   process.exit(1);
 }
 

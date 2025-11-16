@@ -138,20 +138,20 @@ class CodeQualityChecker {
       const importGroups = new Map<string, string[]>();
       
       imports.forEach(importStmt => {
-        const module = importStmt.module;
-        if (!importGroups.has(module)) {
-          importGroups.set(module, []);
+        const moduleName = importStmt.module;
+        if (!importGroups.has(moduleName)) {
+          importGroups.set(moduleName, []);
         }
-        importGroups.get(module)!.push(importStmt.statement);
+        importGroups.get(moduleName)!.push(importStmt.statement);
       });
       
-      for (const [module, statements] of importGroups.entries()) {
+      for (const [moduleName, statements] of importGroups.entries()) {
         if (statements.length > 1) {
           this.addIssue({
             type: 'import',
             severity: 'low',
             file,
-            message: `Multiple imports from same module: ${module}`,
+            message: `Multiple imports from same module: ${moduleName}`,
             suggestion: 'Combine into single import statement'
           });
         }

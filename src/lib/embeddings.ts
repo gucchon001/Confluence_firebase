@@ -4,6 +4,8 @@
  */
 import { getDeploymentInfo } from './deployment-info';
 import { removeBOM, checkStringForBOM } from './bom-utils';
+import { appConfig } from '@/config/app-config';
+import { GeminiApiKeyLeakedError, GeminiApiFatalError } from './gemini-api-errors';
 // embedding-cacheはアーカイブに移動済み。簡易キャッシュ実装を使用
 
 // 簡易キャッシュ（メモリ内のみ）
@@ -193,13 +195,11 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
 }
 
 async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
-  const rawApiKey = process.env.GEMINI_API_KEY;
-  if (!rawApiKey) {
-    throw new Error('GEMINI_API_KEY environment variable is not set');
-  }
+  // 統合設定ファイルからGemini APIキーを取得（型安全で検証済み）
+  const rawApiKey = appConfig.gemini.apiKey;
   const apiKey = rawApiKey.trim();
   if (apiKey.length === 0) {
-    throw new Error('GEMINI_API_KEY environment variable is empty after trimming');
+    throw new Error('GEMINI_API_KEY is empty after trimming');
   }
 
   let response: Response;
@@ -246,6 +246,31 @@ async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
       statusText: response.statusText,
       responseJson: json
     });
+    
+    // 403エラー（APIキー漏洩）の場合は特別なエラーを投げる
+    if (response.status === 403) {
+      const errorMessage = json?.error?.message || json?.message || 'API key was reported as leaked';
+      const isLeakedError = 
+        errorMessage.toLowerCase().includes('leaked') ||
+        errorMessage.toLowerCase().includes('permission_denied');
+      
+      if (isLeakedError) {
+        throw new GeminiApiKeyLeakedError(
+          `Gemini APIキーが漏洩として報告されました。新しいAPIキーを生成してGitHub Secrets（GEMINI_API_KEY）を更新してください。詳細: ${errorMessage}`,
+          { status: response.status, responseJson: json }
+        );
+      }
+    }
+    
+    // その他の致命的なエラー（400, 401, 429など）も特別なエラーとして扱う
+    if (response.status >= 400 && response.status < 500) {
+      throw new GeminiApiFatalError(
+        `Gemini REST API error ${response.status}: ${JSON.stringify(json)}`,
+        response.status,
+        { responseJson: json }
+      );
+    }
+    
     throw new Error(
       `Gemini REST API error ${response.status}: ${JSON.stringify(json)}`
     );

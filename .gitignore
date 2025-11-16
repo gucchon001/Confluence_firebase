@@ -52,6 +52,9 @@ firestore-debug.log
 # temp files
 /temp
 /temp/**/* temp_build/
+/tmp
+/tmp/**/*
+tmp-production-lancedb/
 # artifacts
 debug.log
 \ntemp_build/\n

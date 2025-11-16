@@ -1,0 +1,17 @@
+# テスト用のデバッグファイルと自動生成ファイルを除外
+src/tests/debug/
+src/tests/generated/
+
+# ビルド成果物
+.next/
+out/
+dist/
+build/
+
+# 依存関係
+node_modules/
+
+# その他
+*.min.js
+*.bundle.js
+

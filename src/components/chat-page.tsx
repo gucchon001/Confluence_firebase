@@ -12,6 +12,7 @@ import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIco
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useAuthWrapper } from '@/hooks/use-auth-wrapper';
 import { useAdmin } from '@/hooks/use-admin';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -39,14 +40,141 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 // 重複コード修正をロールバック
 // import MigrationButton from '@/components/migration-button';
 
+// MockUser型を定義（use-mock-auth.tsxから）
+interface MockUser {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}
+
 interface ChatPageProps {
-  user: User;
+  user: User | MockUser;
 }
 
 // formatMessageContentはmarkdown-utils.tsxからインポート
 
+// 環境を推測する関数
+function getEnvironmentFromSources(sources?: Array<{ url?: string }>): 'development' | 'staging' | 'production' {
+  if (!sources || sources.length === 0) {
+    // クライアント側のホスト名から推測
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+        return 'development';
+      }
+      if (hostname.includes('staging') || hostname.includes('dev')) {
+        return 'staging';
+      }
+    }
+    return 'production';
+  }
+  
+  // 参照元URLから推測（将来的にmetadataから取得できるようにする）
+  // 現時点ではデフォルト値を返す
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+      return 'development';
+    }
+    if (hostname.includes('staging') || hostname.includes('dev')) {
+      return 'staging';
+    }
+  }
+  return 'production';
+}
+
+// データソースを推測する関数
+function getDataSourceFromSources(sources?: Array<{ url?: string }>): 'confluence' | 'jira' | 'mixed' | 'unknown' {
+  if (!sources || sources.length === 0) {
+    return 'unknown';
+  }
+  
+  const hasConfluence = sources.some(source => 
+    source.url && (source.url.includes('confluence') || source.url.includes('atlassian.net'))
+  );
+  const hasJira = sources.some(source => 
+    source.url && (source.url.includes('jira') || source.url.includes('atlassian.net/jira'))
+  );
+  
+  if (hasConfluence && hasJira) {
+    return 'mixed';
+  }
+  if (hasConfluence) {
+    return 'confluence';
+  }
+  if (hasJira) {
+    return 'jira';
+  }
+  
+  return 'unknown';
+}
+
+// 環境の色を取得
+function getEnvironmentColor(env: 'development' | 'staging' | 'production'): string {
+  switch (env) {
+    case 'development':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'staging':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'production':
+      return 'bg-green-100 text-green-800 border-green-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+}
+
+// データソースの色を取得
+function getDataSourceColor(source: 'confluence' | 'jira' | 'mixed' | 'unknown'): string {
+  switch (source) {
+    case 'confluence':
+      return 'bg-purple-100 text-purple-800 border-purple-200';
+    case 'jira':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'mixed':
+      return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+    case 'unknown':
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+}
+
+// 環境の表示名を取得
+function getEnvironmentName(env: 'development' | 'staging' | 'production'): string {
+  switch (env) {
+    case 'development':
+      return '開発環境';
+    case 'staging':
+      return 'ステージング';
+    case 'production':
+      return '本番環境';
+    default:
+      return '不明';
+  }
+}
+
+// データソースの表示名を取得
+function getDataSourceName(source: 'confluence' | 'jira' | 'mixed' | 'unknown'): string {
+  switch (source) {
+    case 'confluence':
+      return 'Confluence';
+    case 'jira':
+      return 'Jira';
+    case 'mixed':
+      return 'Confluence + Jira';
+    case 'unknown':
+      return '不明';
+    default:
+      return '不明';
+  }
+}
+
 const MessageCard = ({ msg }: { msg: Message }) => {
     const isAssistant = msg.role === 'assistant';
+    const env = getEnvironmentFromSources(msg.sources);
+    const dataSource = getDataSourceFromSources(msg.sources);
+    
     return (
       <div className={`flex items-start gap-4 ${isAssistant ? '' : 'justify-end'} max-w-full`}>
         {isAssistant && (
@@ -56,6 +184,19 @@ const MessageCard = ({ msg }: { msg: Message }) => {
         )}
         <div className={`flex flex-col gap-2 ${isAssistant ? 'items-start' : 'items-end'} max-w-[85%] sm:max-w-[75%]`}>
             <Card className={`w-full ${isAssistant ? 'bg-white' : 'bg-primary text-primary-foreground'}`}>
+            {/* 環境とデータソースのバッジ（アシスタントメッセージのみ） */}
+            {isAssistant && (
+              <CardHeader className="pb-2 pt-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge className={getEnvironmentColor(env)} variant="outline" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
+                    {getEnvironmentName(env)}
+                  </Badge>
+                  <Badge className={getDataSourceColor(dataSource)} variant="outline" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
+                    {getDataSourceName(dataSource)}
+                  </Badge>
+                </div>
+              </CardHeader>
+            )}
             <CardContent className={`p-4 text-sm break-words ${isAssistant ? 'prose prose-sm max-w-none' : ''}`}>
                 <ReactMarkdown 
                   remarkPlugins={[remarkGfm]}
@@ -76,25 +217,40 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                             </AccordionTrigger>
                             <AccordionContent className="pt-2">
                                 <div className="flex flex-col gap-2 w-full">
-                                    {msg.sources.map((source: any, index) => (
-                                    <a
-                                        key={index}
-                                        href={source.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs text-primary hover:underline flex items-center gap-2 w-full p-2 rounded-md hover:bg-gray-50 transition-colors"
-                                        id={`reference-${index + 1}`}
-                                    >
-                                        <span className="flex-shrink-0 w-6 h-6 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-medium">
-                                            {index + 1}
-                                        </span>
-                                        <LinkIcon className="h-3 w-3 shrink-0" />
-                                        <span className="truncate flex-1">{source.title}</span>
-                                        <span className="text-xs ml-1 font-bold shrink-0" style={{color: 'blue'}}>
-                                            {source.source === 'keyword' ? '⌨️' : '🔍'}
-                                        </span>
-                                    </a>
-                                    ))}
+                                    {msg.sources.map((source: any, index) => {
+                                      // 各参照元のデータソースを推測
+                                      const sourceType: 'confluence' | 'jira' | 'unknown' = 
+                                        source.url?.includes('jira') || source.url?.includes('atlassian.net/jira') ? 'jira' :
+                                        source.url?.includes('confluence') || source.url?.includes('atlassian.net') ? 'confluence' :
+                                        'unknown';
+                                      
+                                      return (
+                                        <a
+                                          key={index}
+                                          href={source.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs text-primary hover:underline flex items-center gap-2 w-full p-2 rounded-md hover:bg-gray-50 transition-colors"
+                                          id={`reference-${index + 1}`}
+                                        >
+                                          <span className="flex-shrink-0 w-6 h-6 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-medium">
+                                              {index + 1}
+                                          </span>
+                                          <LinkIcon className="h-3 w-3 shrink-0" />
+                                          <span className="truncate flex-1">{source.title}</span>
+                                          <Badge 
+                                            className={getDataSourceColor(sourceType)} 
+                                            variant="outline" 
+                                            style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginLeft: '0.25rem' }}
+                                          >
+                                            {getDataSourceName(sourceType)}
+                                          </Badge>
+                                          <span className="text-xs ml-1 font-bold shrink-0" style={{color: 'blue'}}>
+                                              {source.source === 'keyword' ? '⌨️' : '🔍'}
+                                          </span>
+                                        </a>
+                                      );
+                                    })}
                                 </div>
                             </AccordionContent>
                         </AccordionItem>
@@ -302,9 +458,6 @@ export default function ChatPage({ user }: ChatPageProps) {
         currentInput,
         // ステップ更新コールバック
         (step: ProcessingStep) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('ステップ更新:', step);
-          }
           setCurrentStep(step);
         },
         // チャンク受信コールバック
@@ -313,10 +466,6 @@ export default function ChatPage({ user }: ChatPageProps) {
         },
         // 完了コールバック
         async (fullAnswer: string, references: any[], postLogId?: string) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('ストリーミング完了:', fullAnswer);
-            console.log('🔍 [DEBUG] postLogId received:', postLogId);
-          }
           setStreamingAnswerSafe(fullAnswer);
           setStreamingReferences(references);
           setCurrentPostLogId(postLogId || null);
@@ -346,9 +495,6 @@ export default function ChatPage({ user }: ChatPageProps) {
             
             if (currentConversationId) {
               // 既存の会話にメッセージを追加
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`[Firebase] Adding messages to existing conversation: ${currentConversationId}`);
-              }
               await addMessageToConversation(user.uid, currentConversationId, 
                 { role: 'user', content: userMessage.content, user: userMessage.user }
               );
@@ -357,9 +503,6 @@ export default function ChatPage({ user }: ChatPageProps) {
               );
             } else {
               // 新しい会話を作成
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`[Firebase] Creating new conversation for user: ${user.uid}`);
-              }
               const newConversationId = await createConversation(user.uid, 
                 { role: 'user', content: userMessage.content, user: userMessage.user }
               );
@@ -367,9 +510,6 @@ export default function ChatPage({ user }: ChatPageProps) {
                 { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
               );
               setCurrentConversationId(newConversationId);
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`[Firebase] Successfully created new conversation: ${newConversationId}`);
-              }
               
               // 会話一覧を更新
               try {
@@ -416,9 +556,6 @@ export default function ChatPage({ user }: ChatPageProps) {
         },
         // postLogId更新コールバック（エラーコールバックの後）
         (postLogId: string) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🔍 [DEBUG] postLogId更新を受信:', postLogId);
-          }
           setCurrentPostLogId(postLogId);
           
           // 最後のアシスタントメッセージを更新
@@ -428,9 +565,6 @@ export default function ChatPage({ user }: ChatPageProps) {
             for (let i = updated.length - 1; i >= 0; i--) {
               if (updated[i].role === 'assistant' && !updated[i].postLogId) {
                 updated[i] = { ...updated[i], postLogId };
-                if (process.env.NODE_ENV === 'development') {
-                  console.log('🔍 [DEBUG] メッセージを更新:', updated[i].id, 'postLogId:', postLogId);
-                }
                 break;
               }
             }
@@ -620,7 +754,7 @@ export default function ChatPage({ user }: ChatPageProps) {
             </Button>
             <Bot className="h-6 w-6 text-primary" />
             <h1 className="text-lg font-semibold">
-              {showAdminDashboard ? '管理ダッシュボード' : 'Confluence Spec Chat'}
+              {showAdminDashboard ? '管理ダッシュボード' : 'JUKUST Confluence Spec Jira Development Status Chat'}
             </h1>
           </div>
           
@@ -695,7 +829,6 @@ export default function ChatPage({ user }: ChatPageProps) {
                                         try {
                                             const userConversations = await getConversations(user.uid);
                                             setConversations(userConversations);
-                                            console.log('[refreshConversations] Successfully refreshed conversations');
                                         } catch (error) {
                                             console.error("Failed to refresh conversations:", error);
                                         }
@@ -747,9 +880,6 @@ export default function ChatPage({ user }: ChatPageProps) {
                               userId={user?.uid}
                               sessionId={currentSessionId}
                               onSubmitted={(rating, comment) => {
-                                if (process.env.NODE_ENV === 'development') {
-                                  console.log('評価が送信されました:', { rating, comment });
-                                }
                               }}
                             />
                           </div>
@@ -767,7 +897,7 @@ export default function ChatPage({ user }: ChatPageProps) {
             ) : (
                 <div className="flex items-center justify-center min-h-[60vh]">
                     <div className="max-w-md mx-auto text-center">
-                        <h1 className="text-2xl font-bold mb-4">ようこそ！Confluence Spec Chatへ</h1>
+                        <h1 className="text-2xl font-bold mb-4">ようこそ！JUKUST Confluence Spec Jira Development Status Chatへ</h1>
                         <p className="text-muted-foreground">このチャットボットは、Confluenceの仕様書に関する質問に回答します。</p>
                         <div className="mt-4 space-y-2">
                           <p className="text-xs text-muted-foreground">例えば、次のような質問ができます：</p>

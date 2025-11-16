@@ -4,8 +4,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'Confluence Spec Chat',
-  description: 'AI-powered chat for your Confluence specifications and documentation.',
+  title: 'JUKUST Confluence Spec Jira Development Status Chat',
+  description: 'AI-powered chat for your Confluence specifications, Jira issues, and development status.',
 };
 
 export default function RootLayout({

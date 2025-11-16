@@ -3,9 +3,10 @@
  * テスト仕様書: docs/case_classroom-management-search-quality-test.md
  */
 
-import { searchLanceDB } from '../lib/lancedb-search-client';
-import { summarizeConfluenceDocs } from '../ai/flows/summarize-confluence-docs';
-import { hybridSearchEngine } from '../lib/hybrid-search-engine';
+// テスト用の環境変数を事前に読み込む（app-configのインポート前に）
+import { loadTestEnv } from './test-helpers/env-loader';
+loadTestEnv();
+
 import { performance } from 'perf_hooks';
 
 // 理想の抽出ページ（優先度：高）
@@ -186,6 +187,9 @@ async function testBasicSearch(): Promise<TestResult> {
   console.log('クエリ: 教室管理の詳細は');
   
   try {
+    // 動的インポートを使用（loadTestEnv()実行後にインポート）
+    const { searchLanceDB } = await import('../lib/lancedb-search-client.js');
+    
     const searchStartTime = performance.now();
     
     const results = await searchLanceDB({
@@ -242,6 +246,10 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
   console.log('クエリ: 教室管理の詳細は');
   
   try {
+    // 動的インポートを使用（loadTestEnv()実行後にインポート）
+    const { hybridSearchEngine } = await import('../lib/hybrid-search-engine.js');
+    const { streamingSummarizeConfluenceDocsBackend } = await import('../ai/flows/streaming-summarize-confluence-docs.js');
+    
     const totalStartTime = performance.now();
     const searchStartTime = performance.now();
     
@@ -295,7 +303,7 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
     const aiStartTime = performance.now();
     
     // AI回答生成
-    const aiResult = await summarizeConfluenceDocs({
+    const aiResult = await streamingSummarizeConfluenceDocsBackend({
       question: '教室管理の詳細は',
       context: documents,
       chatHistory: []
@@ -310,22 +318,19 @@ async function testAIResponse(): Promise<{ prompt: string; response: string; ref
     console.log(`⏱️  AI生成時間: ${aiGenerationTime.toFixed(2)}ms`);
     console.log(`⏱️  総時間: ${totalTime.toFixed(2)}ms`);
     
-    console.log('\n📝 AIプロンプト（プレビュー）:');
-    console.log(aiResult.prompt ? aiResult.prompt.substring(0, 1000) + '...' : 'プロンプトの取得に失敗しました');
-    
     console.log('\n🤖 AI回答:');
     console.log(aiResult.answer);
     
     console.log('\n📚 AI参照元:');
     aiResult.references.forEach((ref, index) => {
       console.log(`${index + 1}. ${ref.title}`);
-      console.log(`   URL: ${ref.url}`);
+      console.log(`   URL: ${ref.url || 'N/A'}`);
       console.log(`   スコア: ${ref.scoreText || 'N/A'}`);
       console.log(`   ソース: ${ref.source || 'unknown'}`);
     });
     
     return {
-      prompt: aiResult.prompt || '',
+      prompt: '', // streamingSummarizeConfluenceDocsBackendはpromptを返さない
       response: aiResult.answer,
       references: aiResult.references,
       performance: {
@@ -506,6 +511,9 @@ async function testPerformanceComparison(): Promise<void> {
   console.log('\n⚡ パフォーマンス比較テスト');
   console.log('複数回の検索実行によるパフォーマンス測定');
   
+  // 動的インポートを使用（loadTestEnv()実行後にインポート）
+  const { searchLanceDB } = await import('../lib/lancedb-search-client.js');
+  
   const testQueries = [
     '教室管理の詳細は',
     '教室一覧機能',
@@ -625,7 +633,15 @@ async function runClassroomManagementQualityTest(): Promise<void> {
 
 // テスト実行
 if (require.main === module) {
-  runClassroomManagementQualityTest();
+  runClassroomManagementQualityTest()
+    .then(() => {
+      // 正常終了時に明示的にexit(0)を呼ぶ
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ 予期しないエラー:', error);
+      process.exit(1);
+    });
 }
 
 export { runClassroomManagementQualityTest, TestResult, PerformanceMetrics };

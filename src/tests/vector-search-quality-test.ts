@@ -10,7 +10,10 @@
  * 6. 検索結果の関連性
  */
 
-import 'dotenv/config';
+// テスト用の環境変数を事前に読み込む（app-configのインポート前に）
+import { loadTestEnv } from './test-helpers/env-loader';
+loadTestEnv();
+
 import { getEmbeddings } from '../lib/embeddings';
 import { searchLanceDB } from '../lib/lancedb-search-client';
 import * as lancedb from '@lancedb/lancedb';
@@ -423,7 +426,15 @@ async function runVectorSearchQualityTest(): Promise<void> {
 
 // テスト実行
 if (require.main === module) {
-  runVectorSearchQualityTest();
+  runVectorSearchQualityTest()
+    .then(() => {
+      // 正常終了時に明示的にexit(0)を呼ぶ
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ 予期しないエラー:', error);
+      process.exit(1);
+    });
 }
 
 export { runVectorSearchQualityTest, testVectorSearchQuality, analyzeVectorDistanceScoreRelationship };

@@ -73,9 +73,6 @@ export class StreamingProcessClient {
       // Phase 0A-4 FIX: バッファをリセット
       this.buffer = '';
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🌊 ストリーミング処理開始:', question);
-      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -127,9 +124,6 @@ export class StreamingProcessClient {
         // Phase 0A-4 FIX: 残りのバッファを処理
         if (this.buffer.trim()) {
           this.processLine(this.buffer.trim(), onStepUpdate, onChunk, onCompletion, onError, onPostLogIdUpdate);
-        }
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Stream finished.');
         }
         break;
       }
@@ -186,7 +180,6 @@ export class StreamingProcessClient {
         // Phase 0A-4 FIX: パースエラーの詳細をログ出力（開発環境のみ）
         if (process.env.NODE_ENV === 'development') {
           console.warn('Failed to parse streaming data:', parseError);
-          console.warn('Problematic line:', line.substring(0, 200));
         }
       }
     }
@@ -226,19 +219,6 @@ export class StreamingProcessClient {
           };
           onStepUpdate(step);
           
-          // ハイブリッド検索の詳細情報をログ出力（開発環境のみ）
-          if (message.searchDetails && process.env.NODE_ENV === 'development') {
-            console.log('🔍 [ハイブリッド検索] 詳細情報:', message.searchDetails);
-            console.log('📊 検索ソース別の内訳:');
-            Object.entries(message.searchDetails.sourceBreakdown).forEach(([source, count]) => {
-              console.log(`  - ${source}: ${count}件`);
-            });
-            console.log('🏆 Top 3検索結果:');
-            message.searchDetails.topResults.forEach((result, idx) => {
-              console.log(`  ${idx + 1}. [${result.source}] ${result.title}`);
-              console.log(`     スコア: ${result.score?.toFixed(4)}, 距離: ${result.distance?.toFixed(4)}`);
-            });
-          }
         }
         break;
 
@@ -254,8 +234,6 @@ export class StreamingProcessClient {
           
           if (safeChunk && !safeChunk.includes('[object Object]')) {
             onChunk(safeChunk, message.chunkIndex);
-          } else if (process.env.NODE_ENV === 'development') {
-            console.warn('🔍 [DEBUG] Invalid chunk detected, skipping:', message.chunk);
           }
         }
         break;
@@ -273,9 +251,6 @@ export class StreamingProcessClient {
           if (safeAnswer && !safeAnswer.includes('[object Object]')) {
             onCompletion(safeAnswer, message.references, message.postLogId);
           } else {
-            if (process.env.NODE_ENV === 'development') {
-              console.warn('🔍 [DEBUG] Invalid fullAnswer detected, using fallback');
-            }
             onCompletion('回答の生成中にエラーが発生しました。', message.references);
           }
         }
@@ -288,9 +263,6 @@ export class StreamingProcessClient {
 
       case 'post_log_id_update':
         if (message.postLogId && onPostLogIdUpdate) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🔍 [DEBUG] postLogId更新メッセージを受信:', message.postLogId);
-          }
           onPostLogIdUpdate(message.postLogId);
         }
         break;

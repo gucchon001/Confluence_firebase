@@ -97,6 +97,8 @@ export type PostLog = {
     ipAddress?: string; // 匿名化済み
     sessionId: string;
     userDisplayName?: string; // ユーザー表示名
+    environment?: 'development' | 'staging' | 'production'; // 環境情報
+    dataSource?: 'confluence' | 'jira' | 'mixed' | 'unknown'; // データソース
   };
 };
 
@@ -142,4 +144,18 @@ export type SatisfactionRating = {
     sessionId: string;
     userDisplayName?: string;
   };
+};
+
+// パフォーマンスアラート型
+export type PerformanceAlert = {
+  id: string;
+  type: 'search_time' | 'ai_generation_time' | 'error_rate' | 'system_load';
+  severity: 'warning' | 'critical';
+  message: string;
+  value: number; // 実際の値
+  threshold: number; // 閾値
+  timestamp: Date;
+  resolved: boolean;
+  resolvedAt?: Date;
+  resolvedBy?: string;
 };

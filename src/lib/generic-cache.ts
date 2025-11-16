@@ -236,13 +236,3 @@ export class GenericCache<T> {
   }
 }
 
-/**
- * キャッシュファクトリー関数
- * @template T キャッシュする値の型
- * @param options キャッシュオプション
- * @returns GenericCacheインスタンス
- */
-export function createCache<T>(options: CacheOptions): GenericCache<T> {
-  return new GenericCache<T>(options);
-}
-

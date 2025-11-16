@@ -2,242 +2,172 @@
 
 このディレクトリには、Confluence Firebaseプロジェクトの包括的なドキュメントが含まれています。
 
+## 📋 採番ルール
+
+### フォルダの採番
+
+すべてのフォルダには2桁の番号が付けられています：
+
+- **`01-architecture/`** - アーキテクチャ・設計
+- **`02-specifications/`** - 仕様書
+- **`03-implementation/`** - 実装・開発
+- **`04-operations/`** - 運用・デプロイ
+- **`05-testing/`** - テスト・分析
+- **`06-troubleshooting/`** - トラブルシューティング
+- **`99-archive/`** - アーカイブ（過去のドキュメント）
+
+### ファイルの採番
+
+各フォルダ内のファイルは、フォルダ番号に続けて採番されます：
+
+#### `01-architecture/` 内のファイル
+- 階層的な採番を使用（`01.01.01-`, `01.02.01-`など）
+- 第1レベル: カテゴリ（例: 01=システム全体、02=検索システム）
+- 第2レベル: サブカテゴリ（例: 01=データフロー、02=データベース統合）
+- 第3レベル: 個別ドキュメント（例: 01, 02, 03...）
+
+#### `02-specifications/` 内のファイル
+- `02.01-`, `02.02-`, `02.03-`など（2桁の連番）
+
+#### `03-implementation/` 内のファイル
+- `03.01-`, `03.02-`, `03.03-`など（2桁の連番）
+
+#### `04-operations/` 内のファイル
+- `04.01-`, `04.02-`, `04.03-`など（2桁の連番）
+
+#### `05-testing/` 内のファイル
+- `05.01-`, `05.02-`, `05.03-`など（2桁の連番）
+
+#### `06-troubleshooting/` 内のファイル
+- `06.01-`, `06.02-`, `06.03-`など（2桁の連番）
+
+### 採番の原則
+
+1. **フォルダ番号**: 2桁の番号（01-99）
+2. **ファイル番号**: フォルダ番号 + `.` + 2桁の連番（例: `04.01-`, `04.02-`）
+3. **階層的採番**: `01-architecture/`のみ階層的採番を使用（`01.01.01-`など）
+4. **README.md**: 各フォルダのREADME.mdは採番なし
+5. **アーカイブ**: `99-archive/`は特別扱い（採番なしまたは任意）
+
+---
+
 ## 🗂️ ドキュメント構成
 
-### 🏗️ [architecture/](./architecture/) - アーキテクチャ・設計
+### 🏗️ [01-architecture/](./01-architecture/) - アーキテクチャ・設計
 システムの全体的な設計とアーキテクチャに関するドキュメント
 
 #### 現行システム
-- **[blueprint.md](./architecture/blueprint.md)** - プロジェクト概要と全体設計
-- **[data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - LanceDBデータフロー図
-- **[hybrid-search-specification-latest.md](./architecture/hybrid-search-specification-latest.md)** 🌟 **最新** - ハイブリッド検索システム完全仕様書（Phase 4完了版）
-- **[hybrid-search-quick-reference.md](./architecture/hybrid-search-quick-reference.md)** ⚡ **NEW** - ハイブリッド検索クイックリファレンス
-- **[hybrid-search-logic-current.md](./architecture/hybrid-search-logic-current.md)** - ハイブリッド検索ロジック（Phase 0A-4 + BM25修正版）
-- **[hybrid-search-contract.md](./architecture/hybrid-search-contract.md)** - ハイブリッド検索契約
-- **[hybrid-search-flow-and-parallelization-analysis.md](./architecture/hybrid-search-flow-and-parallelization-analysis.md)** - ハイブリッド検索並行実行分析
-- **[enhanced-hybrid-search-design.md](./architecture/enhanced-hybrid-search-design.md)** - 強化版ハイブリッド検索設計
-- **[search-system-comprehensive-guide.md](./architecture/search-system-comprehensive-guide.md)** - 検索システム総合ガイド
-- **[lancedb-firestore-integration-design.md](./architecture/lancedb-firestore-integration-design.md)** 🔧 **更新** - LanceDB-Firestore統合設計（ページ除外フィルタリング追加）
-- **[prompt-design.md](./architecture/prompt-design.md)** - プロンプト設計
-- **[ui-ux-performance-strategy.md](./architecture/ui-ux-performance-strategy.md)** - UI/UXパフォーマンス戦略
+- **[01.01.01-data-flow-diagram-lancedb.md](./01-architecture/01.01.01-data-flow-diagram-lancedb.md)** - LanceDBデータフロー図
+- **[02.01.02-hybrid-search-specification.md](./01-architecture/02.01.02-hybrid-search-specification.md)** 🌟 **最新** - ハイブリッド検索システム完全仕様書（Phase 4完了版）
+- **[02.01.01-hybrid-search-quick-reference.md](./01-architecture/02.01.01-hybrid-search-quick-reference.md)** ⚡ **NEW** - ハイブリッド検索クイックリファレンス
+- **[01.02.01-lancedb-firestore-integration-design.md](./01-architecture/01.02.01-lancedb-firestore-integration-design.md)** 🔧 **更新** - LanceDB-Firestore統合設計（ページ除外フィルタリング追加）
+- **[03.02.01-prompt-design.md](./01-architecture/03.02.01-prompt-design.md)** - プロンプト設計
+- **[05.01.01-ui-ux-performance-strategy.md](./01-architecture/05.01.01-ui-ux-performance-strategy.md)** - UI/UXパフォーマンス戦略
 
-#### ラベル・ドメイン知識
-- **[structured-label-design.md](./architecture/structured-label-design.md)** - 構造化ラベル設計
-- **[label-domain-kg-integration.md](./architecture/label-domain-kg-integration.md)** - ラベル・ドメイン知識・KG統合
+詳細は [`01-architecture/README.md`](./01-architecture/README.md) を参照してください。
 
-#### Knowledge Graph / GraphRAG
-- **[KNOWLEDGE_GRAPH_README.md](./architecture/KNOWLEDGE_GRAPH_README.md)** 📚 **NEW** - KG/GraphRAG ドキュメント一覧（ナビゲーション）
-- **[knowledge-graph-comprehensive-overview.md](./architecture/knowledge-graph-comprehensive-overview.md)** 🌟 **NEW** - KG/GraphRAG 総合ドキュメント
-  - 現在の実装状況（KG拡張無効化の経緯）
-  - GraphRAGとの比較
-  - パフォーマンス分析
-  - 将来的な導入計画（デュアルモード検索）
-
-#### 将来計画
-- **[phase-5-improvement-plan.md](./architecture/phase-5-improvement-plan.md)** 🚀 **NEW** - Phase 5: パフォーマンス最適化計画（レスポンス速度85%削減）
-- **[foundation-first-strategy.md](./architecture/foundation-first-strategy.md)** 🔥 - 基盤強化優先戦略（ラベル+KG → 横断拡張）
-- **[genkit-migration-and-expansion-roadmap.md](./architecture/genkit-migration-and-expansion-roadmap.md)** ⭐ - Genkit移行と拡張ロードマップ（6.5ヶ月計画）
-- **[genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
-
-### 🛠️ [implementation/](./implementation/) - 実装・開発
-具体的な実装方法と開発に関するドキュメント
-
-#### Phase 完了状況
-- **[phase-0a-4-completion-report.md](./implementation/phase-0a-4-completion-report.md)** ✅ **最新** - Phase 0A-4完了レポート（Fast Refresh問題解決、本番ビルド対応完了 - 2025-10-19更新）
-- **[phase-4-kg-integration-completion-report.md](./implementation/phase-4-kg-integration-completion-report.md)** ✅ - Phase 4: KG統合完了レポート（タイトル重複埋め込み含む）
-- **[phase-4-kg-integration-plan.md](./implementation/phase-4-kg-integration-plan.md)** - Phase 4: KG統合計画
-- **[current-search-quality-report.md](./implementation/current-search-quality-report.md)** ✅ - 現在の検索品質レポート
-- **[kg-contribution-analysis-report.md](./implementation/kg-contribution-analysis-report.md)** - ナレッジグラフ貢献度分析
-- **[phase-1-4-implementation-status.md](./implementation/phase-1-4-implementation-status.md)** - Phase 1-4実装状況
-- **[phase-1-3-spec-compliance.md](./implementation/phase-1-3-spec-compliance.md)** - Phase 1-3仕様準拠状況
-
-#### Phase 0A-2 データ品質管理
-- **[lancedb-label-filtering-specification.md](./implementation/lancedb-label-filtering-specification.md)** 🔧 **NEW** - ラベルフィルタリング仕様
-- **[lancedb-label-filtering-fix-report.md](./implementation/lancedb-label-filtering-fix-report.md)** ✅ **NEW** - フィルタリング修正完了報告
-
-#### システム設計・仕様
-- **[error-handling.md](./implementation/error-handling.md)** - エラーハンドリング仕様
-- **[ai-models-configuration.md](./implementation/ai-models-configuration.md)** - AIモデル設定ガイド
-- **[lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様
-- **[firestore-integration-guide.md](./implementation/firestore-integration-guide.md)** - Firestore統合ガイド
-
-#### ラベルシステム
-- **[label-system-overview.md](./implementation/label-system-overview.md)** - ラベルシステム概要
-- **[label-system-design.md](./implementation/label-system-design.md)** - ラベルシステム設計
-- **[label-system-api.md](./implementation/label-system-api.md)** - ラベルシステムAPI
-
-#### ドメイン知識
-- **[domain-knowledge-extraction-comprehensive-guide.md](./implementation/domain-knowledge-extraction-comprehensive-guide.md)** - ドメイン知識抽出総合ガイド
-
-#### 課題管理
-- **[remaining-issues.md](./implementation/remaining-issues.md)** - 継続的な課題管理
-
-### 🚀 [operations/](./operations/) - 運用・デプロイ
-システムの運用、デプロイ、移行に関するドキュメント
-
-#### AI開発・協働
-- **[cursor-ai-collaboration-guide.md](./operations/cursor-ai-collaboration-guide.md)** 🤖 **NEW** - Cursor AI協働マニュアル
-
-#### 同期・データ管理
-- **[data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** ⭐ - データ同期戦略と定期実行スケジュール
-- **[firebase-scheduled-sync-setup.md](./operations/firebase-scheduled-sync-setup.md)** - Firebase Functions自動同期セットアップ
-
-#### デプロイ・設定
-- **[deployment-guide.md](./operations/deployment-guide.md)** - 包括的デプロイガイド（環境変数設定、Firebase App Hosting設定、データ準備、デプロイ手順を含む）
-
-#### Cloud Storage・データ管理
-- **[latest-bucket-status.md](./operations/latest-bucket-status.md)** 📦 **最新** - 最新バケット状況（更新日時・デプロイ連携確認）
-- **[cloud-storage-region-analysis.md](./operations/cloud-storage-region-analysis.md)** 🌏 - Cloud Storageリージョン整合性分析（米国 vs 東京）
-
-#### パフォーマンス分析（Phase 0A-4）
-- **[phase-0a-4-next-steps.md](./operations/phase-0a-4-next-steps.md)** 🚀 **最新** - 次のステップ（Cloud Logging確認手順）
-- **[phase-0a-4-search-performance-emergency.md](./operations/phase-0a-4-search-performance-emergency.md)** 🚨 - 検索パフォーマンス緊急対応（96.5秒問題）
-- **[phase-0a-4-production-deployment-fixes.md](./operations/phase-0a-4-production-deployment-fixes.md)** - 本番デプロイ修正
-
-#### 運用・管理
-- **[extended-schema-operation-guide.md](./operations/extended-schema-operation-guide.md)** 🌟 **NEW** - 拡張スキーマ運用ガイド（StructuredLabel統合版）
-- **[production-schema-verification-guide.md](./operations/production-schema-verification-guide.md)** 🔍 **NEW** - 本番環境スキーマ確認ガイド
-- **[backup-management-guide.md](./operations/backup-management-guide.md)** - バックアップ管理ガイド
-- **[migration-guide.md](./operations/migration-guide.md)** - リポジトリ移管ガイド
-- **[network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有ガイド
-
-#### 監査レポート
-- **[operations-docs-audit-report.md](./operations/operations-docs-audit-report.md)** - ドキュメント監査レポート (2025-10-11)
-
-### 📊 [testing/](./testing/) - テスト・分析
-テスト計画、分析結果、品質評価に関するドキュメント
-
-- **[case_classroom-management-search-quality-test.md](./testing/case_classroom-management-search-quality-test.md)** - 教室管理検索品質テスト
-- **[chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - チャットボットパフォーマンス改善計画
-- **[phase-0a-4-test-criteria.md](./testing/phase-0a-4-test-criteria.md)** - Phase 0A-4テスト基準
-- **[real-vector-search-testing-guide.md](./testing/real-vector-search-testing-guide.md)** - リアルベクトル検索テストガイド
-
-### 🔧 [troubleshooting/](./troubleshooting/) - トラブルシューティング
-問題解決とデバッグに関するドキュメント
-
-- **[README.md](./troubleshooting/README.md)** 🌟 **NEW** - トラブルシューティングガイド（包括的な問題解決ガイド）
-  - 一般的な問題の解決方法
-  - Firebase App Hosting関連の問題
-  - データ同期・LanceDB関連の問題
-  - 検索・パフォーマンス関連の問題
-  - ビルド・デプロイ関連の問題
-  - デバッグ手順
-  - エラーハンドリング仕様
-  - ログ確認方法
-  - 本番環境確認方法
-- **[cloud-logging-check-commands.md](./troubleshooting/cloud-logging-check-commands.md)** - Cloud Logging確認コマンド集
-- **[production-environment-check-guide.md](./troubleshooting/production-environment-check-guide.md)** - 本番環境確認ガイド
-
-### 📋 [specifications/](./specifications/) - 仕様書
+### 📋 [02-specifications/](./02-specifications/) - 仕様書
 システムの詳細仕様と技術仕様に関するドキュメント
 
-- **[spec.md](./specifications/spec.md)** - システム仕様書
-- **[lancedb-integration-guide.md](./specifications/lancedb-integration-guide.md)** - LanceDB統合ガイド
-- **[implementation-gap-analysis.md](./specifications/implementation-gap-analysis.md)** - 仕様書と実装のギャップ分析
+- **[02.01-spec.md](./02-specifications/02.01-spec.md)** - システム全体仕様書
+- **[02.02-confluence-spec.md](./02-specifications/02.02-confluence-spec.md)** - Confluence検索システム仕様
+- **[02.03-jira-spec.md](./02-specifications/02.03-jira-spec.md)** - Jira検索システム仕様
+- **[02.04-implementation-gap-analysis.md](./02-specifications/02.04-implementation-gap-analysis.md)** - 仕様書と実装のギャップ分析
+- **[02.05-management-dashboard-specification.md](./02-specifications/02.05-management-dashboard-specification.md)** - 管理画面・ダッシュボード仕様書
 
-### 📊 [analysis/](./analysis/) - 分析レポート
-パフォーマンス分析、技術調査レポート
+### 🛠️ [03-implementation/](./03-implementation/) - 実装・開発
+具体的な実装方法と開発に関するドキュメント
 
-- **[graphrag-performance-impact.md](./analysis/graphrag-performance-impact.md)** 🔬 **NEW** - GraphRAG導入時のパフォーマンス影響分析
-  - グラフトラバーサルのコスト
-  - Community Detectionの計算量
-  - Firestoreクエリのボトルネック
-  - 最適化後の予測
+- **[03.01-jira-field-mapping.md](./03-implementation/03.01-jira-field-mapping.md)** - Jiraフィールドマッピング仕様
+
+詳細は [`03-implementation/README.md`](./03-implementation/README.md) を参照してください。
+
+### 🚀 [04-operations/](./04-operations/) - 運用・デプロイ
+システムの運用、デプロイ、移行に関するドキュメント
+
+- **[04.01-deployment-guide.md](./04-operations/04.01-deployment-guide.md)** - 包括的デプロイガイド
+- **[04.02-github-actions-setup.md](./04-operations/04.02-github-actions-setup.md)** - GitHub Actions設定
+- **[04.03-data-synchronization-strategy.md](./04-operations/04.03-data-synchronization-strategy.md)** - データ同期戦略
+- **[04.04-backup-management-guide.md](./04-operations/04.04-backup-management-guide.md)** - バックアップ管理
+- **[04.05-extended-schema-operation-guide.md](./04-operations/04.05-extended-schema-operation-guide.md)** - 拡張スキーマ運用ガイド
+- **[04.06-scripts-guide.md](./04-operations/04.06-scripts-guide.md)** - スクリプト利用ガイド
+- **[04.07-migration-guide.md](./04-operations/04.07-migration-guide.md)** - リポジトリ移管ガイド
+- **[04.08-network-sharing-guide.md](./04-operations/04.08-network-sharing-guide.md)** - ネットワーク共有ガイド
+- **[04.12-environment-setup.md](./04-operations/04.12-environment-setup.md)** - 環境別設定ガイド
+- **[04.13-environment-variables.md](./04-operations/04.13-environment-variables.md)** - 環境変数設定ガイド
+- **[14-quick-start.md](./04-operations/14-quick-start.md)** - クイックスタートガイド
+
+詳細は [`04-operations/README.md`](./04-operations/README.md) を参照してください。
+
+### 📊 [05-testing/](./05-testing/) - テスト・分析
+テスト計画、分析結果、品質評価に関するドキュメント
+
+- **[05.01-data-validation.md](./05-testing/05.01-data-validation.md)** - データ関連テスト
+- **[05.02-feature-tests.md](./05-testing/05.02-feature-tests.md)** - 主要機能関連テスト
+- **[05.03-deployment-integration.md](./05-testing/05.03-deployment-integration.md)** - デプロイ・整合性テスト
+- **[05.04-performance-tests.md](./05-testing/05.04-performance-tests.md)** - パフォーマンステスト
+- **[05.13-production-readiness-verification.md](./05-testing/05.13-production-readiness-verification.md)** - 本番環境データ整合性テスト
+- **[05.16-test-execution-guide.md](./05-testing/05.16-test-execution-guide.md)** - テスト実行ガイド
+
+詳細は [`05-testing/README.md`](./05-testing/README.md) を参照してください。
+
+### 🔧 [06-troubleshooting/](./06-troubleshooting/) - トラブルシューティング
+問題解決とデバッグに関するドキュメント
+
+- **[06.01-cloud-logging-check-commands.md](./06-troubleshooting/06.01-cloud-logging-check-commands.md)** - Cloud Logging確認コマンド集
+- **[06.06-production-environment-check-guide.md](./06-troubleshooting/06.06-production-environment-check-guide.md)** - 本番環境確認ガイド
+
+詳細は [`06-troubleshooting/README.md`](./06-troubleshooting/README.md) を参照してください。
 
 ### 💡 [proposals/](./proposals/) - 提案書
 新機能・改善提案に関するドキュメント
 
-- **[graphrag-dual-mode-search.md](./proposals/graphrag-dual-mode-search.md)** 🚀 **NEW** - GraphRAG デュアルモード検索提案
-  - 「高速検索」と「詳細分析」の2モード提供
-  - OpenAI o1 "Thinking Mode"と同様のコンセプト
-  - UI/UX設計、段階的な実装計画
-  - 期待される効果とリスク対策
+- **[dashboard-consolidation-plan.md](./proposals/dashboard-consolidation-plan.md)** - 管理画面統合・整理計画
 
-### 📁 [archive/](./archive/) - アーカイブ
+### 📁 [99-archive/](./99-archive/) - アーカイブ
 過去の分析レポート、テスト結果、最適化計画、非推奨ドキュメント
 
-#### マイグレーション関連（完了済み - 2025年11月）
-- **[migration/](./archive/migration/)** - pageId → page_id マイグレーション関連ドキュメント
-  - マイグレーション計画、進捗記録、完了報告など19個のドキュメント
-  - マイグレーション完了によりアーカイブに移動
+完了した分析レポート、統合済みドキュメント、古い仕様書などがアーカイブされています。
 
-#### Phase 0A-4関連（解決済み）
-- **[phase-0a-4-rollback-failure-analysis.md](./archive/phase-0a-4-rollback-failure-analysis.md)** - ロールバック失敗分析
-- **[rollback-impact-analysis.md](./archive/rollback-impact-analysis.md)** - ロールバック影響分析
-- **[phase-0a-4-vs-current-comparison.md](./archive/phase-0a-4-vs-current-comparison.md)** - Phase 0A-4比較
-- **[phase-0a-4-vs-current-logic-diff.md](./archive/phase-0a-4-vs-current-logic-diff.md)** - ロジック差分
+詳細は [`99-archive/README.md`](./99-archive/README.md) を参照してください。
 
-#### パフォーマンス分析
-- **[server-startup-analysis-phase-0a-4.md](./archive/performance-analysis/server-startup-analysis-phase-0a-4.md)** - サーバー起動分析（Phase 0A-4で解決）
-- **[nextjs-compile-time-optimization.md](./archive/performance-analysis/nextjs-compile-time-optimization.md)** - コンパイル最適化
-
-#### 分析レポート
-- **[scoring-simplification-analysis.md](./archive/analysis-reports/scoring-simplification-analysis.md)** - スコアリング簡素化分析
-- **[scoring-quality-checklist.md](./archive/analysis-reports/scoring-quality-checklist.md)** - 品質チェックリスト
-
-#### バグ修正レポート
-- **[markdown-processing-fixes.md](./archive/bug-fix-reports/markdown-processing-fixes.md)** - Markdown処理修正 (2025-10-08)
-
-#### 非推奨ドキュメント
-- **[current-implementation-status.md](./archive/deprecated/current-implementation-status.md)** - 古い実装状況 (2024-12)
-- **[api-design.md](./archive/deprecated/api-design.md)** - 古いAPI設計 (2025-09)
-
-その他、過去のLanceDB関連ドキュメント、Phase 0A履歴、プロジェクトクリーンアップ計画など
+---
 
 ## 🚀 クイックスタート
 
 ### 新規開発者向け
-1. **[architecture/blueprint.md](./architecture/blueprint.md)** - プロジェクト概要を理解
-2. **[architecture/data-flow-diagram-lancedb.md](./architecture/data-flow-diagram-lancedb.md)** - システム全体のデータフローを確認
-3. **[specifications/spec.md](./specifications/spec.md)** - 機能要件と技術スタックを確認
-4. **[implementation/lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様（最新版: page_id対応）
-5. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイ手順を確認
+1. **[01-architecture/01.01.01-data-flow-diagram-lancedb.md](./01-architecture/01.01.01-data-flow-diagram-lancedb.md)** - システム全体のデータフローを確認
+2. **[02-specifications/02.01-spec.md](./02-specifications/02.01-spec.md)** - 機能要件と技術スタックを確認
+3. **[04-operations/04.12-environment-setup.md](./04-operations/04.12-environment-setup.md)** - 開発環境のセットアップ
+4. **[04-operations/04.01-deployment-guide.md](./04-operations/04.01-deployment-guide.md)** - デプロイ手順を確認
 
 ### 運用担当者向け
-1. **[operations/extended-schema-operation-guide.md](./operations/extended-schema-operation-guide.md)** 🌟 **NEW** - 拡張スキーマ運用ガイド（StructuredLabel統合版）
-2. **[operations/build-optimization-guide.md](./operations/build-optimization-guide.md)** 🚀 - ビルド最適化（75-90%高速化）
-3. **[operations/data-synchronization-strategy.md](./operations/data-synchronization-strategy.md)** - データ同期戦略と定期実行スケジュール
-4. **[operations/deployment-guide.md](./operations/deployment-guide.md)** - デプロイガイド
-5. **[operations/migration-guide.md](./operations/migration-guide.md)** - 移行手順を確認
-6. **[operations/network-sharing-guide.md](./operations/network-sharing-guide.md)** - ネットワーク共有設定
-7. **[testing/chatbot-performance-improvement-plan.md](./testing/chatbot-performance-improvement-plan.md)** - パフォーマンス改善計画
+1. **[04-operations/04.01-deployment-guide.md](./04-operations/04.01-deployment-guide.md)** - デプロイガイド
+2. **[04-operations/04.03-data-synchronization-strategy.md](./04-operations/04.03-data-synchronization-strategy.md)** - データ同期戦略
+3. **[04-operations/04.05-extended-schema-operation-guide.md](./04-operations/04.05-extended-schema-operation-guide.md)** - 拡張スキーマ運用ガイド
 
 ### 開発者向け
-1. **[architecture/hybrid-search-logic-current.md](./architecture/hybrid-search-logic-current.md)** ✅ - 現在のハイブリッド検索ロジック（最新版）
-2. **[implementation/phase-4-kg-integration-completion-report.md](./implementation/phase-4-kg-integration-completion-report.md)** - Phase 4: KG統合完了レポート
-3. **[architecture/genkit-design.md](./architecture/genkit-design.md)** - Genkit設計方針
-4. **[implementation/error-handling.md](./implementation/error-handling.md)** - エラーハンドリング
-5. **[implementation/label-system-api.md](./implementation/label-system-api.md)** - ラベルシステムAPI
-6. **[implementation/lancedb-data-structure-specification.md](./implementation/lancedb-data-structure-specification.md)** - LanceDBデータ構造仕様
+1. **[01-architecture/02.01.02-hybrid-search-specification.md](./01-architecture/02.01.02-hybrid-search-specification.md)** - ハイブリッド検索システム完全仕様書
+2. **[01-architecture/03.01.01-genkit-design.md](./01-architecture/03.01.01-genkit-design.md)** - Genkit設計方針
+3. **[01-architecture/04.01.01-structured-label-design.md](./01-architecture/04.01.01-structured-label-design.md)** - 構造化ラベル設計
+
+---
 
 ## 📝 ドキュメント更新
 
-**最終更新**: 2025年11月2日
+**最終更新**: 2025年11月16日（採番ルール統一完了）
 
 ### 最新の実装状況
 - ✅ **pageId → page_id マイグレーション完了**（2025年11月）
-  - スカラーインデックス対応のため`pageId` → `page_id`に変更
-  - パフォーマンス向上（14秒 → 5ms）
-  - API互換性のため変換レイヤーを実装
-- ✅ **アーカイブ整理完了**（2025年11月）
-  - 未使用ファイルを`src/lib/archive/`と`scripts/archive/`に移動
-  - 13個のlibファイル、28個のscriptsファイルをアーカイブ
-- ✅ **型チェック・ビルド成功**（2025年11月）
-  - すべての型エラーを解消
-  - ビルドが正常に完了
+- ✅ **ドキュメント整理完了**（2025年11月16日）
+  - フォルダとファイルに統一的な採番ルールを適用
+  - 重複フォルダの統合（deployment → operations）
+  - 関連ドキュメントとの連携強化
 
-### ドキュメント更新ガイドライン
-
-ドキュメントを更新する際は、以下の点にご注意ください：
-
-- 関連するディレクトリに適切に配置する
-- 更新日時を記録する
-- 関連ドキュメントへのリンクを更新する
-- アーカイブが必要な場合は `archive/` ディレクトリに移動する
-- 実装変更時は、関連するすべてのドキュメントを更新する
+---
 
 ## 🔗 関連リンク
 
 - [プロジェクトルートのREADME.md](../README.md)
-- [セットアップガイド](../SETUP_GUIDE.md)
-- [クイックスタートガイド](../QUICK_START.md)
+- [セットアップガイド](./04-operations/04.12-environment-setup.md)
+- [クイックスタートガイド](./04-operations/README.md#クイックスタート)

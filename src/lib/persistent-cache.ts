@@ -149,38 +149,6 @@ export function loadStartupState(): Record<string, boolean> | null {
 }
 
 /**
- * 汎用キャッシュの保存
- */
-export function setCache(key: string, value: any, ttl?: number): void {
-  const cacheItem = {
-    value,
-    timestamp: Date.now(),
-    ttl: ttl || (60 * 60 * 1000) // デフォルト1時間
-  };
-  
-  memoryCache.set(key, cacheItem);
-  console.log(`[PersistentCache] Cached: ${key} (TTL: ${ttl || 3600}s)`);
-}
-
-/**
- * 汎用キャッシュの取得
- */
-export function getCache(key: string): any | null {
-  const cacheItem = memoryCache.get(key);
-  if (!cacheItem) return null;
-  
-  const age = Date.now() - cacheItem.timestamp;
-  if (age > cacheItem.ttl) {
-    memoryCache.delete(key);
-    console.log(`[PersistentCache] Cache expired: ${key}`);
-    return null;
-  }
-  
-  console.log(`[PersistentCache] Cache hit: ${key} (age: ${Math.round(age / 1000)}s)`);
-  return cacheItem.value;
-}
-
-/**
  * キャッシュのクリア
  */
 export function clearCache(): void {
