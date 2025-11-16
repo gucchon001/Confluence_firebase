@@ -143,7 +143,13 @@ export class JiraSyncService {
     let stored = 0;
     let skipped = 0;
 
-    for (const issue of issues) {
+    console.log(`📝 Firestoreへの保存を開始します (${issues.length}件)`);
+    
+    // バッチ処理用に正規化されたissueを収集
+    const normalizedIssues: Array<{ issue: ReturnType<typeof this.normalizeIssue>; original: JiraIssueResponse }> = [];
+    
+    for (let i = 0; i < issues.length; i++) {
+      const issue = issues[i];
       try {
         if (!issue || !issue.key) {
           console.warn(`⚠️ 無効なissueをスキップ: ${JSON.stringify(issue).substring(0, 100)}`);
@@ -151,17 +157,46 @@ export class JiraSyncService {
           continue;
         }
         const normalized = this.normalizeIssue(issue);
-        await this.saveIssueToFirestore(normalized);
-        lanceDbRecords.push(this.toLanceDbRecord(normalized));
-        stored += 1;
+        normalizedIssues.push({ issue: normalized, original: issue });
       } catch (error) {
         const issueKey = issue?.key || 'unknown';
-        console.error(`❌ Jira issue 保存中にエラー (${issueKey}):`, error instanceof Error ? error.message : error);
+        console.error(`❌ Jira issue 正規化中にエラー (${issueKey}):`, error instanceof Error ? error.message : error);
         skipped += 1;
       }
     }
+    
+    // Firestoreへのバッチ書き込み（500件ずつ）
+    const BATCH_SIZE = 500;
+    const progressInterval = Math.max(1, Math.floor(normalizedIssues.length / 10));
+    
+    for (let i = 0; i < normalizedIssues.length; i += BATCH_SIZE) {
+      const batch = firestore.batch();
+      const batchIssues = normalizedIssues.slice(i, i + BATCH_SIZE);
+      
+      for (const { issue: normalized } of batchIssues) {
+        const docRef = firestore.collection('jiraIssues').doc(normalized.key);
+        batch.set(docRef, {
+          ...normalized,
+          syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+          url: this.buildIssueUrl(normalized.key)
+        }, { merge: true });
+        lanceDbRecords.push(this.toLanceDbRecord(normalized));
+      }
+      
+      await batch.commit();
+      stored += batchIssues.length;
+      
+      // 進捗ログ
+      const processed = Math.min(i + BATCH_SIZE, normalizedIssues.length);
+      if (processed % progressInterval === 0 || processed === normalizedIssues.length) {
+        console.log(`📝 Firestore保存進捗: ${processed} / ${normalizedIssues.length} (${Math.round(processed / normalizedIssues.length * 100)}%)`);
+      }
+    }
 
+    console.log(`✅ Firestoreへの保存が完了しました (${stored}件保存, ${skipped}件スキップ)`);
+    console.log(`🗃️ LanceDBへの書き込みを開始します (${lanceDbRecords.length}件)`);
     const lanceDbCount = await this.writeLanceDbRecords(lanceDbRecords);
+    console.log(`✅ LanceDBへの書き込みが完了しました (${lanceDbCount}件)`);
 
     const finishedAt = new Date();
     await syncJobRef.set({

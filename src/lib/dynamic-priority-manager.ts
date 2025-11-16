@@ -42,44 +42,7 @@ export class DynamicPriorityManager {
         systemTerms: 30,
         relatedKeywords: 20
       },
-      rules: [
-        {
-          pattern: /教室管理|教室コピー|教室機能/,
-          priorityAdjustments: {
-            domainNames: 20,
-            functionNames: 15,
-            operationNames: 10,
-            systemFields: 5,
-            systemTerms: 5,
-            relatedKeywords: 10
-          },
-          description: '教室管理関連クエリの優先度調整'
-        },
-        {
-          pattern: /ログイン|認証|アクセス/,
-          priorityAdjustments: {
-            domainNames: 15,
-            functionNames: 20,
-            operationNames: 15,
-            systemFields: 10,
-            systemTerms: 5,
-            relatedKeywords: 10
-          },
-          description: 'ログイン関連クエリの優先度調整'
-        },
-        {
-          pattern: /オファー|求人|応募/,
-          priorityAdjustments: {
-            domainNames: 10,
-            functionNames: 15,
-            operationNames: 10,
-            systemFields: 5,
-            systemTerms: 5,
-            relatedKeywords: 8
-          },
-          description: 'オファー関連クエリの優先度調整'
-        }
-      ]
+      rules: [] // テスト用の特別処理を削除
     };
   }
 

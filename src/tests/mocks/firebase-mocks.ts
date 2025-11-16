@@ -53,7 +53,7 @@ export const mockRAGService = {
       url: 'https://example.atlassian.net/wiki/spaces/ARCH/pages/45678/job-data-model'
     }
   ]),
-  summarizeConfluenceDocs: jest.fn().mockResolvedValue({
+  streamingSummarizeConfluenceDocsBackend: jest.fn().mockResolvedValue({
     summary: '求人詳細機能は、主に以下の3つの主要コンポーネントで構成されています：\n\n1. 求人情報の表示エリア\n2. 応募ボタンと関連アクション\n3. 関連求人の表示セクション',
     sources: [
       {

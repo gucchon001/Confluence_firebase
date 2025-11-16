@@ -167,65 +167,202 @@ export function extractRelevantContentMultiKeyword(
   // 位置でソート
   keywordPositions.sort((a, b) => a.position - b.position);
   
-  // 最初と最後のキーワードの位置を取得
-  const firstPos = keywordPositions[0].position;
-  const lastPos = keywordPositions[keywordPositions.length - 1].position;
+  // ハイブリッド方式：ランクによる先頭取得 + キーワード周辺のコンテンツ取得
+  // ステップ1: すべてのキーワードを含む範囲を計算（キーワード周辺のコンテンツ）
+  const firstKeywordPos = keywordPositions[0].position;
+  const lastKeywordPos = keywordPositions[keywordPositions.length - 1].position;
   
-  // キーワード間の距離を計算
-  const keywordSpan = lastPos - firstPos;
+  // キーワード周辺の前後余白（各キーワードの前後100文字）
+  const contextBefore = 100;
+  const contextAfter = 100;
   
-  // キーワードが近い場合は、その範囲を中心に抽出
-  // キーワードが遠い場合は、最初と最後のキーワードを含む範囲を抽出
+  // キーワード周辺の範囲を計算
+  const keywordStartPos = Math.max(0, firstKeywordPos - contextBefore);
+  const keywordEndPos = Math.min(content.length, lastKeywordPos + contextAfter);
+  const keywordSpan = keywordEndPos - keywordStartPos;
+  
+  // ステップ2: ランクに基づいて先頭からmaxLength分の文字数を取得（ランクによる重要性を保持）
+  const headStartPos = 0;
+  const headEndPos = Math.min(content.length, maxLength);
+  const headSpan = headEndPos - headStartPos;
+  
+  // ステップ3: 範囲内・範囲外のキーワード分類（先頭取得範囲内）
+  const keywordsInHeadRange = keywordPositions.filter(kp => kp.position < headEndPos);
+  const keywordsOutOfHeadRange = keywordPositions.filter(kp => kp.position >= headEndPos);
+  
+  // ステップ4: ハイブリッド方式での抽出範囲決定
   let startPos: number;
   let endPos: number;
   
-  if (keywordSpan < maxLength * 0.5) {
-    // キーワードが近い場合：キーワード範囲を中心に抽出
-    const center = (firstPos + lastPos) / 2;
-    startPos = Math.max(0, center - maxLength / 2);
-    endPos = Math.min(content.length, center + maxLength / 2);
+  if (keywordSpan <= maxLength) {
+    // ケース1: すべてのキーワードを含む範囲がmaxLength以内の場合
+    // キーワード周辺のコンテンツを優先的に取得
+    startPos = keywordStartPos;
+    endPos = keywordEndPos;
   } else {
-    // キーワードが遠い場合：最初と最後のキーワードを含む範囲を抽出
-    // 最初のキーワードの前30%、最後のキーワードの後30%を確保
-    const beforeFirst = Math.floor(maxLength * 0.3);
-    const afterLast = Math.floor(maxLength * 0.3);
-    const middleLength = maxLength - beforeFirst - afterLast;
+    // ケース2: すべてのキーワードを含む範囲がmaxLengthを超える場合
+    // ハイブリッド方式：先頭取得とキーワード周辺取得を組み合わせる
     
-    // キーワード間の距離が中間部分より大きい場合は、キーワード間を優先
-    if (keywordSpan > middleLength) {
-      // キーワード間を中心に、前後を均等に配分
-      const totalNeeded = keywordSpan + beforeFirst + afterLast;
-      if (totalNeeded <= maxLength) {
-        // キーワード間全体を含められる場合
-        startPos = Math.max(0, firstPos - beforeFirst);
-        endPos = Math.min(content.length, lastPos + afterLast);
+    // 先頭取得範囲内のキーワードと範囲外のキーワードを確認
+    const keywordsInHeadCount = keywordsInHeadRange.length;
+    const keywordsOutOfHeadCount = keywordsOutOfHeadRange.length;
+    
+    if (keywordsInHeadCount > 0 && keywordsOutOfHeadCount > 0) {
+      // ケース2-1: 先頭範囲内にも範囲外にもキーワードがある場合
+      // 先頭範囲内のキーワードと範囲外のキーワードを含む最小範囲を計算
+      
+      const firstOutOfHeadPos = keywordsOutOfHeadRange[0].position;
+      const lastOutOfHeadPos = keywordsOutOfHeadRange[keywordsOutOfHeadRange.length - 1].position;
+      const firstInHeadPos = keywordsInHeadRange[0].position;
+      
+      // 先頭範囲内の最初のキーワードから範囲外の最後のキーワードまでの範囲
+      const combinedStartPos = Math.max(0, firstInHeadPos - contextBefore);
+      const combinedEndPos = Math.min(content.length, lastOutOfHeadPos + contextAfter);
+      const combinedSpan = combinedEndPos - combinedStartPos;
+      
+      if (combinedSpan <= maxLength) {
+        // 先頭と範囲外のキーワードを含む範囲がmaxLength以内の場合
+        startPos = combinedStartPos;
+        endPos = combinedEndPos;
       } else {
-        // キーワード間全体を含められない場合、最初と最後のキーワードを含む最小範囲
-        startPos = Math.max(0, firstPos - beforeFirst);
-        endPos = Math.min(content.length, startPos + maxLength);
-        // 最後のキーワードが含まれるように調整
-        if (endPos < lastPos + afterLast) {
-          endPos = Math.min(content.length, lastPos + afterLast);
-          startPos = Math.max(0, endPos - maxLength);
+        // 先頭と範囲外のキーワードを含む範囲がmaxLengthを超える場合
+        // ハイブリッド方式：先頭範囲と範囲外キーワードを含む範囲を組み合わせる
+        // キーワード密度が高い領域を優先的に抽出しつつ、両方の範囲を含める
+        
+        // 範囲外のキーワード範囲
+        const outOfHeadStartPos = Math.max(0, firstOutOfHeadPos - contextBefore);
+        const outOfHeadEndPos = Math.min(content.length, lastOutOfHeadPos + contextAfter);
+        const outOfHeadSpan = outOfHeadEndPos - outOfHeadStartPos;
+        
+        // 先頭範囲内のキーワード密度
+        const headKeywordDensity = keywordsInHeadCount / headSpan;
+        
+        // 範囲外のキーワード密度
+        const outOfHeadKeywordDensity = keywordsOutOfHeadCount / outOfHeadSpan;
+        
+        // ハイブリッド方式：先頭範囲と範囲外キーワードを含む範囲を組み合わせる
+        // 先頭範囲と範囲外キーワードを含む範囲の比率を計算
+        const headRatio = headKeywordDensity / (headKeywordDensity + outOfHeadKeywordDensity);
+        const outOfHeadRatio = outOfHeadKeywordDensity / (headKeywordDensity + outOfHeadKeywordDensity);
+        
+        // maxLengthを先頭範囲と範囲外キーワード範囲に分配
+        const headPortion = Math.floor(maxLength * headRatio);
+        const outOfHeadPortion = maxLength - headPortion;
+        
+        if (headKeywordDensity >= outOfHeadKeywordDensity) {
+          // 先頭範囲内のキーワード密度が高い場合、先頭を優先
+          // ただし、範囲外のキーワードも含める
+          // 先頭範囲の一部 + 範囲外キーワードを含む範囲
+          const headPortionForExtraction = Math.min(headPortion, headSpan);
+          const outOfHeadPortionForExtraction = Math.min(outOfHeadPortion, outOfHeadSpan);
+          
+          // 先頭範囲内の最初のキーワードから抽出開始
+          // 範囲外キーワードを含む範囲まで拡張
+          startPos = Math.max(0, firstInHeadPos - contextBefore);
+          // 先頭範囲内のキーワードと範囲外キーワードを含む範囲を計算
+          const totalNeeded = (lastOutOfHeadPos + contextAfter) - (firstInHeadPos - contextBefore);
+          
+          if (totalNeeded <= maxLength) {
+            // すべてのキーワードを含む範囲がmaxLength以内の場合
+            endPos = Math.min(content.length, lastOutOfHeadPos + contextAfter);
+          } else {
+            // maxLengthを超える場合、先頭範囲を優先しつつ範囲外キーワードも含める
+            // 先頭範囲の一部を保持し、範囲外キーワードを含む範囲を追加
+            endPos = Math.min(content.length, startPos + headPortionForExtraction + outOfHeadPortionForExtraction);
+            
+            // 範囲外キーワードを含む範囲が先頭範囲に重なる場合は調整
+            if (endPos < lastOutOfHeadPos + contextAfter) {
+              // 範囲外キーワードを含む範囲まで拡張（maxLength内で）
+              const maxEndPos = Math.min(content.length, startPos + maxLength);
+              if (maxEndPos >= lastOutOfHeadPos + contextAfter) {
+                endPos = Math.min(content.length, lastOutOfHeadPos + contextAfter);
+              } else {
+                // 範囲外キーワードを含む範囲がmaxLengthを超える場合
+                // 先頭範囲を削減して範囲外キーワードを含める
+                const neededForOutOfHead = (lastOutOfHeadPos + contextAfter) - outOfHeadStartPos;
+                if (neededForOutOfHead <= maxLength) {
+                  startPos = Math.max(0, (lastOutOfHeadPos + contextAfter) - maxLength);
+                  endPos = Math.min(content.length, lastOutOfHeadPos + contextAfter);
+                } else {
+                  // 範囲外キーワードを含む範囲がmaxLengthを超える場合
+                  // 範囲外キーワードのみを抽出（キーワード周辺のコンテンツを優先）
+                  startPos = outOfHeadStartPos;
+                  endPos = Math.min(content.length, startPos + maxLength);
+                }
+              }
+            }
+          }
+        } else {
+          // 範囲外のキーワード密度が高い場合、範囲外を優先
+          // ただし、先頭範囲内のキーワードも一部含める
+          // 範囲外キーワードを含む範囲 + 先頭範囲の一部
+          const outOfHeadPortionForExtraction = Math.min(outOfHeadPortion, outOfHeadSpan);
+          const headPortionForExtraction = Math.min(headPortion, headSpan);
+          
+          // 範囲外キーワードを含む範囲から抽出開始
+          startPos = outOfHeadStartPos;
+          // 先頭範囲の一部も含める
+          const totalNeeded = (lastOutOfHeadPos + contextAfter) - Math.max(0, firstInHeadPos - contextBefore);
+          
+          if (totalNeeded <= maxLength) {
+            // すべてのキーワードを含む範囲がmaxLength以内の場合
+            startPos = Math.max(0, firstInHeadPos - contextBefore);
+            endPos = Math.min(content.length, lastOutOfHeadPos + contextAfter);
+          } else {
+            // maxLengthを超える場合、範囲外キーワードを優先しつつ先頭範囲も含める
+            // 範囲外キーワードを含む範囲を優先的に保持
+            endPos = Math.min(content.length, startPos + maxLength);
+            
+            // 先頭範囲内のキーワードを含む範囲まで拡張できるか確認
+            const headStartWithContext = Math.max(0, firstInHeadPos - contextBefore);
+            if (endPos >= headStartWithContext + headPortionForExtraction) {
+              // 先頭範囲も含められる場合
+              startPos = Math.max(0, endPos - maxLength);
+            } else {
+              // 範囲外キーワードのみを抽出（キーワード周辺のコンテンツを優先）
+              startPos = outOfHeadStartPos;
+              endPos = Math.min(content.length, startPos + maxLength);
+            }
+          }
         }
       }
-    } else {
-      // キーワード間の距離が中間部分より小さい場合、最初のキーワードを中心に抽出
-      startPos = Math.max(0, firstPos - beforeFirst);
-      endPos = Math.min(content.length, startPos + maxLength);
-      // 最後のキーワードが含まれるように調整
-      if (endPos < lastPos + afterLast) {
-        endPos = Math.min(content.length, lastPos + afterLast);
-        startPos = Math.max(0, endPos - maxLength);
+    } else if (keywordsInHeadCount > 0) {
+      // ケース2-2: 先頭範囲内にのみキーワードがある場合
+      // 先頭範囲を優先的に取得
+      startPos = headStartPos;
+      endPos = headEndPos;
+    } else if (keywordsOutOfHeadCount > 0) {
+      // ケース2-3: 範囲外にのみキーワードがある場合
+      // キーワード周辺のコンテンツを取得（範囲外のキーワードを含む範囲）
+      const firstOutOfHeadPos = keywordsOutOfHeadRange[0].position;
+      const lastOutOfHeadPos = keywordsOutOfHeadRange[keywordsOutOfHeadRange.length - 1].position;
+      
+      startPos = Math.max(0, firstOutOfHeadPos - contextBefore);
+      endPos = Math.min(content.length, lastOutOfHeadPos + contextAfter);
+      
+      // maxLengthを超える場合は調整
+      if (endPos - startPos > maxLength) {
+        // キーワードを含む範囲を優先的に保持
+        const keywordOnlySpan = lastOutOfHeadPos - firstOutOfHeadPos;
+        const remainingForContext = maxLength - keywordOnlySpan;
+        const contextPerSide = Math.floor(remainingForContext / 2);
+        startPos = Math.max(0, firstOutOfHeadPos - contextPerSide);
+        endPos = Math.min(content.length, lastOutOfHeadPos + contextPerSide);
       }
+    } else {
+      // ケース2-4: キーワードが見つからない場合（発生しないはず）
+      startPos = headStartPos;
+      endPos = headEndPos;
     }
   }
   
+  // ステップ5: 抽出範囲を確定
   let extracted = content.substring(startPos, endPos);
   
   // 抽出した部分がmaxLengthを超える場合は切り詰める
   if (extracted.length > maxLength) {
     extracted = extracted.substring(0, maxLength);
+    endPos = startPos + maxLength;
   }
   
   // 先頭・末尾の調整

@@ -265,31 +265,7 @@ export class DynamicKeywordExtractor {
     );
     patterns.push(...functionPatterns);
 
-    // 教室コピー機能の詳細パターン強化
-    if (query.includes('教室コピー') || query.includes('コピー機能')) {
-      patterns.push('教室コピー', 'コピー機能', '教室コピー機能');
-      
-      // 詳細項目の動的抽出
-      if (query.includes('項目') || query.includes('可能')) {
-        patterns.push('塾チャート', 'ロゴ', 'スライド画像', '基本情報', '求人情報', '応募情報');
-        patterns.push('教室名', 'ホームページ', 'アクセス方法', '管理メモ');
-        patterns.push('応募情報転送連絡先', '応募後連絡先電話番号');
-        patterns.push('勤務条件', '指導科目', '応募条件', '研修情報', 'PR情報');
-      }
-      
-      // コピー制限・制約の動的抽出
-      if (query.includes('制限') || query.includes('制約') || query.includes('可能')) {
-        patterns.push('制限', '制約', '上限', '非同期', '件数制限', '画像制限');
-        patterns.push('コピー制限事項', '画像コピー制限', 'コピー件数制限');
-      }
-      
-      // コピー処理挙動の動的抽出
-      if (query.includes('処理') || query.includes('挙動') || query.includes('機能')) {
-        patterns.push('処理', '挙動', '上書き', '新規作成', 'プラン設定');
-        patterns.push('教室コピー処理挙動', '求人数によるコピー挙動', '教室プラン設定');
-        patterns.push('非同期コピー処理', '求人数による処理分岐');
-      }
-    }
+    // テスト用の特別処理を削除
 
     return patterns;
   }
@@ -361,12 +337,7 @@ export class DynamicKeywordExtractor {
    * ドメイン知識からの動的抽出
    */
   private async extractFromDomainKnowledge(queryAnalysis: any): Promise<string[]> {
-    // 教室コピー機能の詳細項目を動的に生成（keywordListsLoaderに依存しない）
-    if (queryAnalysis.originalQuery.includes('教室コピー') || queryAnalysis.originalQuery.includes('コピー機能')) {
-      return this.getClassroomCopySpecificKeywords(queryAnalysis.originalQuery);
-    }
-
-    // その他のクエリの場合は従来のロジックを使用
+    // テスト用の特別処理を削除
     if (!this.keywordListsLoader.isLoaded()) {
       await this.keywordListsLoader.loadKeywordLists();
     }
@@ -379,42 +350,6 @@ export class DynamicKeywordExtractor {
     );
 
     return [...new Set(filteredKeywords)];
-  }
-
-  /**
-   * 教室コピー機能に特化したキーワードの動的生成
-   */
-  private getClassroomCopySpecificKeywords(query: string): string[] {
-    const specificKeywords: string[] = [];
-
-    // 詳細項目の動的抽出
-    if (query.includes('項目') || query.includes('可能')) {
-      specificKeywords.push(
-        '塾チャート', 'ロゴ', 'スライド画像', '基本情報', '求人情報', '応募情報',
-        '教室名', 'ホームページ', 'アクセス方法', '管理メモ',
-        '応募情報転送連絡先', '応募後連絡先電話番号',
-        '勤務条件', '指導科目', '応募条件', '研修情報', 'PR情報'
-      );
-    }
-
-    // コピー制限・制約の動的抽出
-    if (query.includes('制限') || query.includes('制約') || query.includes('可能')) {
-      specificKeywords.push(
-        '制限', '制約', '上限', '非同期', '件数制限', '画像制限',
-        'コピー制限事項', '画像コピー制限', 'コピー件数制限'
-      );
-    }
-
-    // コピー処理挙動の動的抽出
-    if (query.includes('処理') || query.includes('挙動') || query.includes('機能')) {
-      specificKeywords.push(
-        '処理', '挙動', '上書き', '新規作成', 'プラン設定',
-        '教室コピー処理挙動', '求人数によるコピー挙動', '教室プラン設定',
-        '非同期コピー処理', '求人数による処理分岐'
-      );
-    }
-
-    return specificKeywords;
   }
 
   /**
@@ -466,24 +401,7 @@ export class DynamicKeywordExtractor {
    */
   private applyDynamicFiltering(keywords: string[], queryAnalysis: any): string[] {
     return keywords.filter(keyword => {
-      // 教室コピー機能のキーワードは常に保持
-      if (queryAnalysis.originalQuery.includes('教室コピー') || queryAnalysis.originalQuery.includes('コピー機能')) {
-        const classroomCopyRelatedKeywords = [
-          '塾チャート', 'ロゴ', 'スライド画像', '基本情報', '求人情報', '応募情報',
-          '教室名', 'ホームページ', 'アクセス方法', '管理メモ',
-          '応募情報転送連絡先', '応募後連絡先電話番号',
-          '勤務条件', '指導科目', '応募条件', '研修情報', 'PR情報',
-          '制限', '制約', '上限', '非同期', '件数制限', '画像制限',
-          'コピー制限事項', '画像コピー制限', 'コピー件数制限',
-          '処理', '挙動', '上書き', '新規作成', 'プラン設定',
-          '教室コピー処理挙動', '求人数によるコピー挙動', '教室プラン設定',
-          '非同期コピー処理', '求人数による処理分岐'
-        ];
-        
-        if (classroomCopyRelatedKeywords.includes(keyword)) {
-          return true;
-        }
-      }
+      // テスト用の特別処理を削除
 
       // 除外フィルタの適用
       for (const filter of queryAnalysis.filters) {
@@ -523,24 +441,7 @@ export class DynamicKeywordExtractor {
       }
     }
 
-    // 教室コピー機能の詳細項目の特別処理
-    if (queryAnalysis.originalQuery.includes('教室コピー') || queryAnalysis.originalQuery.includes('コピー機能')) {
-      const classroomCopyRelatedKeywords = [
-        '塾チャート', 'ロゴ', 'スライド画像', '基本情報', '求人情報', '応募情報',
-        '教室名', 'ホームページ', 'アクセス方法', '管理メモ',
-        '応募情報転送連絡先', '応募後連絡先電話番号',
-        '勤務条件', '指導科目', '応募条件', '研修情報', 'PR情報',
-        '制限', '制約', '上限', '非同期', '件数制限', '画像制限',
-        'コピー制限事項', '画像コピー制限', 'コピー件数制限',
-        '処理', '挙動', '上書き', '新規作成', 'プラン設定',
-        '教室コピー処理挙動', '求人数によるコピー挙動', '教室プラン設定',
-        '非同期コピー処理', '求人数による処理分岐'
-      ];
-      
-      if (classroomCopyRelatedKeywords.includes(keyword)) {
-        return true;
-      }
-    }
+    // テスト用の特別処理を削除
 
     return false;
   }
@@ -569,21 +470,7 @@ export class DynamicKeywordExtractor {
       priority += 100;
     }
 
-    // 教室コピー機能の詳細項目の優先度強化
-    if (queryAnalysis.originalQuery.includes('教室コピー') || queryAnalysis.originalQuery.includes('コピー機能')) {
-      // 詳細項目の高優先度
-      if (['塾チャート', 'ロゴ', 'スライド画像', '基本情報', '求人情報', '応募情報'].includes(keyword)) {
-        priority += 90;
-      }
-      // コピー制限・制約の中優先度
-      if (['制限', '制約', '上限', '非同期', '件数制限', '画像制限'].includes(keyword)) {
-        priority += 70;
-      }
-      // コピー処理挙動の中優先度
-      if (['処理', '挙動', '上書き', '新規作成', 'プラン設定'].includes(keyword)) {
-        priority += 70;
-      }
-    }
+    // テスト用の特別処理を削除
 
     // ドメインとの関連性
     if (queryAnalysis.domain !== 'unknown' && keyword.includes(queryAnalysis.domain)) {
@@ -618,31 +505,22 @@ export class DynamicKeywordExtractor {
     // 優先度順にソート
     prioritizedKeywords.sort((a, b) => b.priority - a.priority);
 
-    // 教室コピー機能の場合は、改善目標のキーワードを優先的に選択
-    const classroomCopyKeywords = [
-      '塾チャート', 'ロゴ', 'スライド画像', '基本情報', '求人情報', '応募情報',
-      '制限', '制約', '上限', '非同期', '件数制限', '画像制限',
-      '処理', '挙動', '上書き', '新規作成', 'プラン設定'
-    ];
+    // テスト用の特別処理を削除
+    // 優先度順に選択
+    const uniqueKeywords: string[] = [];
+    const seen = new Set<string>();
+    
+    for (const item of prioritizedKeywords) {
+      if (!seen.has(item.keyword)) {
+        uniqueKeywords.push(item.keyword);
+        seen.add(item.keyword);
+        if (uniqueKeywords.length >= maxCount) {
+          break;
+        }
+      }
+    }
 
-    // 改善目標のキーワードを優先的に選択
-    const targetKeywords = prioritizedKeywords.filter(item => 
-      classroomCopyKeywords.includes(item.keyword)
-    );
-
-    // その他のキーワード
-    const otherKeywords = prioritizedKeywords.filter(item => 
-      !classroomCopyKeywords.includes(item.keyword)
-    );
-
-    // 改善目標のキーワードを最大6個、その他を最大6個選択
-    const selectedTargetKeywords = targetKeywords.slice(0, 6).map(item => item.keyword);
-    const selectedOtherKeywords = otherKeywords.slice(0, maxCount - selectedTargetKeywords.length).map(item => item.keyword);
-
-    // 結合して重複を除去
-    const finalKeywords = [...new Set([...selectedTargetKeywords, ...selectedOtherKeywords])];
-
-    return finalKeywords.slice(0, maxCount);
+    return uniqueKeywords;
   }
 
   /**

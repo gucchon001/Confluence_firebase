@@ -194,7 +194,7 @@ const aiResponseTestSuite: IntegrationTestSuite = {
         const startTime = Date.now();
         
         try {
-          const { summarizeConfluenceDocs } = await import('../ai/flows/summarize-confluence-docs');
+          const { streamingSummarizeConfluenceDocsBackend } = await import('../ai/flows/streaming-summarize-confluence-docs');
           
           const testQueries = [
             '教室管理の詳細は',
@@ -207,13 +207,13 @@ const aiResponseTestSuite: IntegrationTestSuite = {
           const results = [];
           
           for (const query of testQueries) {
-            const aiResponse = await summarizeConfluenceDocs(query);
+            const aiResponse = await streamingSummarizeConfluenceDocsBackend({ question: query, context: [], chatHistory: [] });
             
-            if (!aiResponse || !aiResponse.message) {
+            if (!aiResponse || !aiResponse.answer) {
               throw new Error(`AI回答が生成されませんでした: ${query}`);
             }
             
-            const responseText = aiResponse.message;
+            const responseText = aiResponse.answer;
             const responseLength = responseText.length;
             const hasMinimumLength = responseLength > 100;
             const hasRelevantContent = responseText.toLowerCase().includes(query.split(' ')[0]);

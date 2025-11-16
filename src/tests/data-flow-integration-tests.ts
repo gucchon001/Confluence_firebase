@@ -206,15 +206,15 @@ export async function testAIResponseGenerationFlow(): Promise<IntegrationTestRes
     
     // 14. LLM API呼び出しテスト
     console.log('   🤖 LLM API呼び出しテスト...');
-    const { summarizeConfluenceDocs } = await import('../ai/flows/summarize-confluence-docs');
-    const aiResponse = await summarizeConfluenceDocs(testQuery);
+    const { streamingSummarizeConfluenceDocsBackend } = await import('../ai/flows/streaming-summarize-confluence-docs');
+    const aiResponse = await streamingSummarizeConfluenceDocsBackend({ question: testQuery, context: [], chatHistory: [] });
     
-    if (!aiResponse || !aiResponse.message) {
+    if (!aiResponse || !aiResponse.answer) {
       throw new Error('AI回答が生成されませんでした');
     }
     
     // 回答の品質チェック
-    const responseText = aiResponse.message;
+    const responseText = aiResponse.answer;
     const responseLength = responseText.length;
     const hasMinimumLength = responseLength > 100;
     const hasRelevantContent = responseText.toLowerCase().includes('教室') || 
@@ -309,8 +309,8 @@ export async function testComponentIntegration(): Promise<IntegrationTestResult>
     
     // 4. 検索エンジン ↔ AI回答生成連携テスト
     console.log('   🤖 検索エンジン ↔ AI回答生成連携テスト...');
-    const { summarizeConfluenceDocs } = await import('../ai/flows/summarize-confluence-docs');
-    const aiResponse = await summarizeConfluenceDocs(testQuery);
+    const { streamingSummarizeConfluenceDocsBackend } = await import('../ai/flows/streaming-summarize-confluence-docs');
+    const aiResponse = await streamingSummarizeConfluenceDocsBackend({ question: testQuery, context: [], chatHistory: [] });
     
     // 連携の品質チェック
     const allComponentsWorking = embedding && 
@@ -377,11 +377,11 @@ export async function testSystemPerformance(): Promise<IntegrationTestResult> {
       
       // 完全な検索フロー実行
       const { HybridSearchEngine } = await import('../lib/hybrid-search-engine');
-      const { summarizeConfluenceDocs } = await import('../ai/flows/summarize-confluence-docs');
+      const { streamingSummarizeConfluenceDocsBackend } = await import('../ai/flows/streaming-summarize-confluence-docs');
       
       const hybridSearchEngine = new HybridSearchEngine();
       const searchResults = await hybridSearchEngine.search(query);
-      const aiResponse = await summarizeConfluenceDocs(query);
+      const aiResponse = await streamingSummarizeConfluenceDocsBackend({ question: query, context: [], chatHistory: [] });
       
       const queryDuration = Date.now() - queryStart;
       
@@ -389,7 +389,7 @@ export async function testSystemPerformance(): Promise<IntegrationTestResult> {
         query,
         duration: queryDuration,
         searchResultCount: searchResults?.length || 0,
-        aiResponseLength: aiResponse?.message?.length || 0,
+        aiResponseLength: aiResponse?.answer?.length || 0,
         success: !!(searchResults && aiResponse)
       });
     }

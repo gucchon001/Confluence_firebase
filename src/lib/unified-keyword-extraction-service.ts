@@ -474,6 +474,7 @@ export class UnifiedKeywordExtractionService {
   /**
    * 同期版のキーワード抽出（コンテンツ抽出用）
    * ドメイン知識ベースからキーワードを抽出
+   * 検索時（extractKeywordsConfigured）と同じ処理を同期版で実装
    */
   extractKeywordsSync(query: string): string[] {
     if (!this.keywordCategories) {
@@ -481,8 +482,107 @@ export class UnifiedKeywordExtractionService {
       return [];
     }
     
+    // Step 1: カテゴリ別のキーワード抽出
     const extracted = this.extractKeywordsFromCategories(query);
-    return [...new Set(extracted.allKeywords)];
+    
+    // Step 2: 優先度付け（カテゴリ別の優先度 + キーワードの長さ）
+    const prioritizedKeywords = this.applySimplePrioritization(
+      extracted.allKeywords,
+      extracted
+    );
+    
+    // Step 3: 最終的なキーワード選択（最大8個に制限、検索時と同じ）
+    const finalKeywords = this.selectFinalKeywordsSync(prioritizedKeywords, 8);
+    
+    return finalKeywords;
+  }
+  
+  /**
+   * 簡易版の優先度付け（同期処理用）
+   * カテゴリ別の優先度とキーワードの長さに基づいて優先度を計算
+   */
+  private applySimplePrioritization(
+    keywords: string[],
+    extracted: {
+      domainNames: string[];
+      functionNames: string[];
+      operationNames: string[];
+      systemFields: string[];
+      systemTerms: string[];
+      relatedKeywords: string[];
+    }
+  ): Array<{ keyword: string; priority: number }> {
+    // カテゴリ別のキーワードマップを作成（高速検索用）
+    const categoryMap = new Map<string, string[]>();
+    categoryMap.set('domainNames', extracted.domainNames);
+    categoryMap.set('functionNames', extracted.functionNames);
+    categoryMap.set('operationNames', extracted.operationNames);
+    categoryMap.set('systemFields', extracted.systemFields);
+    categoryMap.set('systemTerms', extracted.systemTerms);
+    categoryMap.set('relatedKeywords', extracted.relatedKeywords);
+    
+    // カテゴリ別の優先度設定（basePriorityを使用）
+    const categoryPriority: { [key: string]: number } = {
+      domainNames: this.priorityConfig.basePriority.domainNames,
+      functionNames: this.priorityConfig.basePriority.functionNames,
+      operationNames: this.priorityConfig.basePriority.operationNames,
+      systemFields: this.priorityConfig.basePriority.systemFields,
+      systemTerms: this.priorityConfig.basePriority.systemTerms,
+      relatedKeywords: this.priorityConfig.basePriority.relatedKeywords,
+    };
+    
+    return keywords.map(keyword => {
+      let priority = 0;
+      
+      // カテゴリ別の優先度を設定
+      for (const [category, keywords] of categoryMap.entries()) {
+        if (keywords.includes(keyword)) {
+          priority += categoryPriority[category];
+          break; // 最初にマッチしたカテゴリの優先度を使用
+        }
+      }
+      
+      // キーワードの長さによる調整（短すぎず長すぎないキーワードを優先）
+      // 検索時と同じロジック（2-8文字のキーワードを優先）
+      if (keyword.length >= 2 && keyword.length <= 8) {
+        priority += 20;
+      }
+      
+      // より長いキーワード（複合語）も優先（検索時のロジックを参考）
+      if (keyword.length > 8 && keyword.length <= 15) {
+        priority += 10;
+      }
+      
+      return { keyword, priority };
+    });
+  }
+  
+  /**
+   * 同期版の最終的なキーワード選択（検索時と同じロジック）
+   * 優先度順にソートし、重複を除去して最大maxCount個を選択
+   */
+  private selectFinalKeywordsSync(
+    prioritizedKeywords: Array<{ keyword: string; priority: number }>,
+    maxCount: number
+  ): string[] {
+    // 優先度順にソート
+    prioritizedKeywords.sort((a, b) => b.priority - a.priority);
+    
+    // 重複を除去して最終的なキーワード選択
+    const uniqueKeywords: string[] = [];
+    const seen = new Set<string>();
+    
+    for (const item of prioritizedKeywords) {
+      if (!seen.has(item.keyword)) {
+        uniqueKeywords.push(item.keyword);
+        seen.add(item.keyword);
+        if (uniqueKeywords.length >= maxCount) {
+          break;
+        }
+      }
+    }
+    
+    return uniqueKeywords;
   }
 
   private extractKeywordsFromCategories(query: string): {

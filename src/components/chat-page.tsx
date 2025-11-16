@@ -17,7 +17,6 @@ import { useAdmin } from '@/hooks/use-admin';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { type Message } from '@/types';
-import { askQuestion } from '@/app/actions';
 import { getMessages, addMessageBatch } from '@/lib/chat-service';
 import { 
   getConversations, 

@@ -229,18 +229,18 @@ export const aiResponseTestSuite: IntegrationTestSuite = {
             { query: '検索機能の実装', expectedTopics: ['検索', '機能', '実装'] }
           ];
           
-          const { summarizeConfluenceDocs } = await import('../ai/flows/summarize-confluence-docs');
+          const { streamingSummarizeConfluenceDocsBackend } = await import('../ai/flows/streaming-summarize-confluence-docs');
           
           const results = [];
           
           for (const testCase of testQueries) {
-            const aiResponse = await summarizeConfluenceDocs(testCase.query);
+            const aiResponse = await streamingSummarizeConfluenceDocsBackend({ question: testCase.query, context: [], chatHistory: [] });
             
-            if (!aiResponse || !aiResponse.message) {
+            if (!aiResponse || !aiResponse.answer) {
               throw new Error(`AI回答が生成されませんでした: ${testCase.query}`);
             }
             
-            const responseText = aiResponse.message;
+            const responseText = aiResponse.answer;
             const responseLength = responseText.length;
             
             // 回答の品質評価

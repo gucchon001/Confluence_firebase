@@ -12,7 +12,7 @@ import { LanceDBClient } from '../lib/lancedb-client';
 import { LunrSearchClient } from '../lib/lunr-search-client';
 import { HybridSearchEngine } from '../lib/hybrid-search-engine';
 import { DynamicKeywordExtractor } from '../lib/dynamic-keyword-extractor';
-import { summarizeConfluenceDocs } from '../ai/flows/summarize-confluence-docs';
+import { streamingSummarizeConfluenceDocsBackend } from '../ai/flows/streaming-summarize-confluence-docs';
 import { UnifiedFirebaseService } from '../lib/unified-firebase-service';
 
 export interface IntegrationTestResult {
@@ -269,14 +269,14 @@ export class IntegrationTestFramework {
     try {
       // 1. テストクエリでAI回答生成
       const testQuery = '教室管理の詳細は';
-      const aiResponse = await summarizeConfluenceDocs(testQuery);
+      const aiResponse = await streamingSummarizeConfluenceDocsBackend({ question: testQuery, context: [], chatHistory: [] });
       
-      if (!aiResponse || !aiResponse.message) {
+      if (!aiResponse || !aiResponse.answer) {
         throw new Error('No AI response generated');
       }
 
       // 2. 回答の品質チェック
-      const responseText = aiResponse.message;
+      const responseText = aiResponse.answer;
       const hasRelevantContent = responseText.toLowerCase().includes('教室') || 
                                 responseText.toLowerCase().includes('管理');
       
@@ -343,12 +343,12 @@ export class IntegrationTestFramework {
       const searchResults = await hybridSearchEngine.search(testQuery);
       
       // AI回答生成
-      const aiResponse = await summarizeConfluenceDocs(testQuery);
+      const aiResponse = await streamingSummarizeConfluenceDocsBackend({ question: testQuery, context: [], chatHistory: [] });
 
       // 3. 結果の統合チェック
       const hasKeywords = keywords && keywords.length > 0;
       const hasSearchResults = searchResults && searchResults.length > 0;
-      const hasAIResponse = aiResponse && aiResponse.message;
+      const hasAIResponse = aiResponse && aiResponse.answer;
 
       if (!hasKeywords) {
         throw new Error('Keyword extraction failed');
@@ -371,7 +371,7 @@ export class IntegrationTestFramework {
           query: testQuery,
           keywordCount: keywords?.length || 0,
           searchResultCount: searchResults?.length || 0,
-          aiResponseLength: aiResponse?.message?.length || 0,
+          aiResponseLength: aiResponse?.answer?.length || 0,
           allComponentsWorking: true
         }
       };

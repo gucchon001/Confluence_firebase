@@ -29,6 +29,7 @@
     "test:auth": "tsx src/scripts/test-auth.ts",
     "test:sync-batch": "tsx src/scripts/test-sync-batch.ts",
     "test:rag-flow": "tsx src/scripts/test-rag-flow.ts",
+    "test:login-auth": "tsx scripts/test-login-auth-query.ts",
     "test:unit": "vitest run src/tests/unit",
     "test:integration": "vitest run src/tests/integration",
     "test": "vitest run",

@@ -73,7 +73,7 @@ export class HybridSearchEngine {
       console.log(`[HybridSearchEngine] ${tableName} Lunr client ready: ${lunrSearchClient.isReady(tableName)}`);
       
       const [vectorResults, bm25Results] = await Promise.all([
-        this.performVectorSearch(processedQuery.processedQuery, topK * 2, tableName),
+        this.performVectorSearch(processedQuery.processedQuery, topK * 2, tableName, labelFilters),
         useLunrIndex ? this.performBM25Search(processedQuery.processedQuery, topK * 2, labelFilters, tableName) : []
       ]);
 
@@ -94,12 +94,13 @@ export class HybridSearchEngine {
   /**
    * ベクトル検索を実行
    */
-  private async performVectorSearch(query: string, limit: number, tableName: string): Promise<HybridSearchResult[]> {
+  private async performVectorSearch(query: string, limit: number, tableName: string, labelFilters?: LabelFilterOptions): Promise<HybridSearchResult[]> {
     try {
       const vectorResults = await searchLanceDB({
         query,
         topK: limit,
-        tableName
+        tableName,
+        labelFilters: labelFilters || { includeMeetingNotes: false }
       });
 
       // URLを再構築（共通ユーティリティを使用）

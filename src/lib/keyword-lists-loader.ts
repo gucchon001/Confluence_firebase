@@ -75,12 +75,15 @@ export class KeywordListsLoader {
       this.keywordCategories = this.organizeByCategory(this.keywordLists);
       
       // ドメイン固有キーワードを動的に初期化（keyword-lists-v2.jsonから読み込む）
+      // Phase 6改善: relatedKeywordsとsystemTermsからも抽出
       try {
         const { initializeDomainSpecificKeywordsWithUpdate } = await import('./common-terms-config');
         if (initializeDomainSpecificKeywordsWithUpdate && this.keywordCategories) {
           initializeDomainSpecificKeywordsWithUpdate({
             domainNames: this.keywordCategories.domainNames,
-            functionNames: this.keywordCategories.functionNames
+            functionNames: this.keywordCategories.functionNames,
+            relatedKeywords: this.keywordCategories.relatedKeywords,
+            systemTerms: this.keywordCategories.systemTerms
           });
         }
       } catch (error) {
@@ -218,36 +221,8 @@ export class KeywordListsLoader {
    * 問題原因特化型キーワードの抽出（部分一致対応版）
    */
   private extractProblemCauseKeywords(query: string): string[] {
-    const problemCauseKeywords: string[] = [];
-    
-    // 教室削除問題の原因キーワード
-    if (query.includes('教室削除') && (query.includes('できない') || query.includes('問題') || query.includes('原因'))) {
-      const causeKeywords = [
-        '求人掲載', '求人掲載状態', '求人掲載状態管理', '求人非掲載', '求人非掲載機能',
-        '応募情報', '応募履歴', '応募履歴管理', '採用ステータス', '採用ステータス管理', '採用決定日', '採用決定日管理',
-        '教室と求人の紐づけ', '教室と求人の紐づけ管理', '削除制限', '削除制限条件', '削除前チェック', '削除前チェック機能',
-        '論理削除', '論理削除機能', '削除権限', '削除権限管理', '削除エラー', '削除エラーメッセージ',
-        '削除制限通知', '削除制限通知機能', '削除可能性チェック', '削除可能性チェック機能'
-      ];
-      
-      // 関連キーワードリストから部分一致で抽出
-      if (this.keywordCategories) {
-        for (const keyword of causeKeywords) {
-          // 完全一致
-          if (this.keywordCategories.relatedKeywords.includes(keyword)) {
-            problemCauseKeywords.push(keyword);
-          } else {
-            // 部分一致で検索
-            const partialMatches = this.keywordCategories.relatedKeywords.filter(related => 
-              related.includes(keyword) || keyword.includes(related)
-            );
-            problemCauseKeywords.push(...partialMatches);
-          }
-        }
-      }
-    }
-    
-    return [...new Set(problemCauseKeywords)]; // 重複除去
+    // テスト用の特別処理を削除
+    return [];
   }
 
   /**

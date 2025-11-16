@@ -1,7 +1,7 @@
 // src/app/api/flow/[flow]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
+import { streamingSummarizeConfluenceDocsBackend } from '@/ai/flows/streaming-summarize-confluence-docs';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
 import { APIErrorHandler, withAPIErrorHandling } from '@/lib/api-error-handler';
 import { screenTestLogger } from '@/lib/screen-test-logger';
@@ -32,7 +32,12 @@ export const POST = withAPIErrorHandling(async (
         const aiStartTime = performance.now();
         screenTestLogger.info('ai', `AI summarization request: "${body.question}"`, { contextLength: body.context?.length || 0 });
         
-        const result = await summarizeConfluenceDocs(body);
+        // ストリーミング版の非ストリーミング互換版を使用
+        const result = await streamingSummarizeConfluenceDocsBackend({
+          question: body.question,
+          context: body.context || [],
+          chatHistory: body.chatHistory || []
+        });
         
         const aiEndTime = performance.now();
         const aiTime = aiEndTime - aiStartTime;

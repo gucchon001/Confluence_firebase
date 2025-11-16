@@ -172,8 +172,17 @@ let cachedDomainKeywordsSet: Set<string> | null = null;
 /**
  * ドメイン固有キーワードを初期化（keyword-lists-loader から動的に読み込む）
  * この関数は keyword-lists-loader が初期化された後に呼び出す必要がある
+ * 
+ * Phase 6改善: relatedKeywordsとsystemTermsからも重要なキーワードを抽出
  */
-export function initializeDomainSpecificKeywords(keywordCategories: { domainNames: string[]; functionNames: string[] } | null): void {
+export function initializeDomainSpecificKeywords(
+  keywordCategories: { 
+    domainNames: string[]; 
+    functionNames: string[]; 
+    relatedKeywords?: string[]; 
+    systemTerms?: string[]; 
+  } | null
+): void {
   if (cachedDomainKeywords) {
     return; // 既に初期化済み
   }
@@ -204,6 +213,50 @@ export function initializeDomainSpecificKeywords(keywordCategories: { domainName
         const cleanName = functionName.replace(/[機能管理情報画面設定登録編集削除一覧詳細閲覧作成更新]/g, '').trim();
         if (cleanName.length >= 2) {
           domainKeywords.add(cleanName);
+        }
+      }
+    }
+
+    // Phase 6改善: relatedKeywordsから重要なキーワードを抽出
+    // 複合語（4文字以上）や重要な単語（例：「ログイン」「認証」）を抽出
+    if (keywordCategories.relatedKeywords) {
+      for (const relatedKeyword of keywordCategories.relatedKeywords) {
+        // 複合語（4文字以上）は追加
+        if (relatedKeyword.length >= 4) {
+          // 汎用語を除去
+          const cleanName = relatedKeyword.replace(/[機能管理情報画面設定登録編集削除一覧詳細閲覧作成更新]/g, '').trim();
+          if (cleanName.length >= 2 && !GENERIC_FUNCTION_TERMS_SET.has(cleanName as any)) {
+            domainKeywords.add(cleanName);
+            // 元の複合語も追加（例：「ログイン認証」）
+            if (relatedKeyword.length >= 4 && !relatedKeyword.includes('管理') && !relatedKeyword.includes('機能')) {
+              domainKeywords.add(relatedKeyword);
+            }
+          }
+        } else if (relatedKeyword.length >= 2 && relatedKeyword.length <= 5) {
+          // 短いキーワード（2-5文字）は重要な概念の可能性がある（例：「ログイン」「認証」）
+          // ただし汎用語は除外
+          if (!GENERIC_FUNCTION_TERMS_SET.has(relatedKeyword as any)) {
+            domainKeywords.add(relatedKeyword);
+          }
+        }
+      }
+    }
+
+    // Phase 6改善: systemTermsから複合語のみを抽出
+    // systemTermsはノイズが多いため、複合語（4文字以上）のみを抽出
+    if (keywordCategories.systemTerms) {
+      for (const systemTerm of keywordCategories.systemTerms) {
+        // 複合語（4文字以上）のみ追加
+        if (systemTerm.length >= 4) {
+          // 汎用語を除去
+          const cleanName = systemTerm.replace(/[機能管理情報画面設定登録編集削除一覧詳細閲覧作成更新]/g, '').trim();
+          if (cleanName.length >= 2 && !GENERIC_FUNCTION_TERMS_SET.has(cleanName as any)) {
+            domainKeywords.add(cleanName);
+            // 元の複合語も追加（汎用語を含まない場合）
+            if (systemTerm.length >= 4 && !systemTerm.includes('管理') && !systemTerm.includes('機能')) {
+              domainKeywords.add(systemTerm);
+            }
+          }
         }
       }
     }
@@ -239,7 +292,14 @@ export let DOMAIN_SPECIFIC_KEYWORDS: readonly string[] = DOMAIN_SPECIFIC_KEYWORD
 export let DOMAIN_SPECIFIC_KEYWORDS_SET: Set<string> = new Set(DOMAIN_SPECIFIC_KEYWORDS_CORE);
 
 // 初期化関数が呼ばれたら、エクスポート変数も更新するラッパー関数
-export function initializeDomainSpecificKeywordsWithUpdate(keywordCategories: { domainNames: string[]; functionNames: string[] } | null): void {
+export function initializeDomainSpecificKeywordsWithUpdate(
+  keywordCategories: { 
+    domainNames: string[]; 
+    functionNames: string[]; 
+    relatedKeywords?: string[]; 
+    systemTerms?: string[]; 
+  } | null
+): void {
   initializeDomainSpecificKeywords(keywordCategories);
   // エクスポート変数を更新
   DOMAIN_SPECIFIC_KEYWORDS = cachedDomainKeywords || DOMAIN_SPECIFIC_KEYWORDS_CORE;

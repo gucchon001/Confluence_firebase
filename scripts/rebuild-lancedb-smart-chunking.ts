@@ -7,8 +7,8 @@
 
 import { OptimizedLanceDBClient } from '../src/lib/optimized-lancedb-client';
 import { EXTENDED_LANCEDB_SCHEMA } from '../src/lib/lancedb-schema-extended';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import axios from 'axios';
+import { getEmbeddings } from '../src/lib/embeddings';
+import { confluenceSyncService } from '../src/lib/confluence-sync-service';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -16,11 +16,7 @@ import * as arrow from 'apache-arrow';
 
 dotenv.config();
 
-const CONFLUENCE_BASE_URL = process.env.CONFLUENCE_BASE_URL || '';
-const CONFLUENCE_USER_EMAIL = process.env.CONFLUENCE_USER_EMAIL || '';
-const CONFLUENCE_API_TOKEN = process.env.CONFLUENCE_API_TOKEN || '';
 const CONFLUENCE_SPACE_KEY = process.env.CONFLUENCE_SPACE_KEY || '';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
 // Phase 0A-4: チャンクサイズ最適化
 // 参考: https://docs.databricks.com/gcp/ja/generative-ai/vector-search-best-practices
@@ -147,56 +143,43 @@ function splitIntoChunks(text: string, chunkSize: number, overlap: number = CHUN
 }
 
 /**
- * Confluenceページを取得
+ * Confluenceページを取得（重複削除: ConfluenceSyncServiceを使用）
+ * src/lib/confluence-sync-service.ts の getAllConfluencePages を使用
  */
 async function fetchAllPages(): Promise<any[]> {
-  const auth = Buffer.from(`${CONFLUENCE_USER_EMAIL}:${CONFLUENCE_API_TOKEN}`).toString('base64');
-  const allPages: any[] = [];
-  let start = 0;
-  const limit = 100;
+  // ConfluenceSyncService を使用してページを取得（ページネーション対応）
+  const pages = await confluenceSyncService.getAllConfluencePages(10000); // 最大10000ページ
   
-  while (true) {
-    const response = await axios.get(
-      `${CONFLUENCE_BASE_URL}/wiki/rest/api/content`,
-      {
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Accept': 'application/json',
-        },
-        params: {
-          spaceKey: CONFLUENCE_SPACE_KEY,
-          limit: limit,
-          start: start,
-          expand: 'body.storage,space,version,metadata.labels',
-          type: 'page',
-        },
+  // ConfluenceSyncService の ConfluencePage 形式から、このスクリプトで使用する形式に変換
+  return pages.map(page => ({
+    id: page.id,
+    title: page.title,
+    body: {
+      storage: {
+        value: page.content
       }
-    );
-    
-    const pages = response.data.results;
-    allPages.push(...pages);
-    
-    if (pages.length < limit) break;
-    start += limit;
-    
-    console.log(`   取得中: ${allPages.length}ページ...`);
-  }
-  
-  return allPages;
+    },
+    space: {
+      key: page.spaceKey || CONFLUENCE_SPACE_KEY
+    },
+    version: {
+      when: page.lastModified || new Date().toISOString()
+    },
+    metadata: page.metadata || {
+      labels: {
+        results: []
+      }
+    }
+  }));
 }
 
 /**
- * 埋め込みベクトルを生成
+ * 埋め込みベクトルを生成（重複削除: getEmbeddingsを使用）
+ * src/lib/embeddings.ts の getEmbeddings を使用（キャッシュ機能付き）
  */
 async function generateEmbedding(text: string): Promise<number[]> {
-  // BOM文字（U+FEFF）を削除（埋め込み生成エラーを防ぐため）
-  const cleanText = text.replace(/\uFEFF/g, '');
-  
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
-  
-  const result = await model.embedContent(cleanText);
-  return result.embedding.values;
+  // src/lib/embeddings.ts の getEmbeddings を使用（BOM除去、キャッシュ機能付き）
+  return await getEmbeddings(text);
 }
 
 /**

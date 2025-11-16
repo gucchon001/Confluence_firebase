@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { retrieveRelevantDocs } from '@/ai/flows/retrieve-relevant-docs-lancedb';
-import { summarizeConfluenceDocs } from '@/ai/flows/summarize-confluence-docs';
+import { streamingSummarizeConfluenceDocsBackend } from '@/ai/flows/streaming-summarize-confluence-docs';
 import { ai } from '@/ai/genkit';
 
 // AIモジュールのモック
@@ -51,7 +51,7 @@ describe.skip('RAG Flow', () => {
     });
   });
   
-  describe('summarizeConfluenceDocs', () => {
+  describe('streamingSummarizeConfluenceDocsBackend', () => {
     it('should summarize documents based on a question and context', async () => {
       // textをプロパティとしてモックする（メソッドではなく）
       const mockResponse = { text: '要約されたテキスト' };
@@ -66,7 +66,7 @@ describe.skip('RAG Flow', () => {
         }
       ];
       
-      const result = await summarizeConfluenceDocs({ question, context });
+      const result = await streamingSummarizeConfluenceDocsBackend({ question, context, chatHistory: [] });
       
       expect(ai.generate).toHaveBeenCalledWith({
         model: expect.anything(),
@@ -82,7 +82,7 @@ describe.skip('RAG Flow', () => {
       const question = 'ログイン認証の仕組みはどうなっていますか？';
       const context = [];
       
-      const result = await summarizeConfluenceDocs({ question, context });
+      const result = await streamingSummarizeConfluenceDocsBackend({ question, context, chatHistory: [] });
       
       expect(ai.generate).not.toHaveBeenCalled();
       expect(result.answer).toContain('参考情報の中に関連する記述が見つかりませんでした');

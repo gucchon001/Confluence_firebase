@@ -838,21 +838,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
             if (matchedTagCount > 0) {
               // 1つのタグマッチ: 2.0倍、2つ以上: 3.0倍（複数タグマッチで大幅ボーナス、タグマッチングを大幅に重視）
               const tagBoost = matchedTagCount === 1 ? 2.0 : 3.0;
-              const rrfBefore = rrf;
               rrf *= tagBoost;
-              // デバッグログ（対象ページのみ）
-              const pageId = r.page_id ?? r.pageId;
-              if (String(pageId) === '703594590') {
-                console.log(`[Tag Boost] pageId=703594590: ${matchedTagCount} tags matched (${matchedTagsList.join(', ')}), RRF ${rrfBefore.toFixed(6)} → ${rrf.toFixed(6)} (x${tagBoost})`);
-              }
             }
           }
         } catch (e: any) {
-          // エラーをログに記録（デバッグ用）
-          const pageId = r.page_id ?? r.pageId;
-          if (String(pageId) === '703594590') {
-            console.warn(`[Tag Boost Error] pageId=703594590:`, e.message);
-          }
+          // エラーは無視して続行（タグマッチングは補助的な機能のため）
         }
 
         r._rrfScore = rrf;
@@ -1161,10 +1151,14 @@ function filterMeetingNotesByCategory(results: any[], includeMeetingNotes: boole
   }
   
   // 議事録を示すタイトルパターン（structured_categoryがnullの場合のフォールバック）
+  // 日付形式に対応: "2024-5-8 ミーティング議事録" (1桁月日) と "2024-05-08 ミーティング議事録" (2桁月日)
   const meetingPatterns = [
     /ミーティング議事録/i,
     /会議議事録/i,
-    /^\d{4}-\d{2}-\d{2}\s+(ミーティング|会議|打ち合わせ)/i, // "2023-01-18 ミーティング"
+    /^\d{4}-\d{1,2}-\d{1,2}\s+(ミーティング|会議|打ち合わせ)/i, // "2024-5-8 ミーティング" や "2024-05-08 ミーティング"
+    /^\d{4}-\d{1,2}-\d{1,2}\s+.*議事録/i, // "2024-5-8 ミーティング議事録" などの形式
+    /^\d{4}-\d{2}-\d{2}\s+.*議事録/i, // "2025-06-04 ミーティング議事録" などの形式（2桁月日）
+    /^\d{4}-\d{1,2}-\d{1,2}\s+確認会.*議事録/i, // "2024-10-04 確認会ミーティング議事録" などの形式
     /MTG議事録/i,
     /meeting\s*notes?/i,
   ];
@@ -1187,17 +1181,16 @@ function filterMeetingNotesByCategory(results: any[], includeMeetingNotes: boole
       continue;
     }
     
-    // 方法2: structured_categoryがnullの場合、タイトルパターンで判定
-    if (!category || category === 'null') {
-      const isMeetingNote = meetingPatterns.some(pattern => pattern.test(title));
-      
-      if (isMeetingNote) {
-        filteredByTitle++;
-        if (filteredByCategory + filteredByTitle <= 5) { // 最初の5件のみログ出力
-          console.log(`[MeetingNoteFilter] Excluded: ${title} (title pattern match)`);
-        }
-        continue;
+    // 方法2: タイトルパターンで判定（structured_categoryがnullでない場合もチェック）
+    // タイトルに「議事録」が含まれている場合は、structured_categoryに関係なく除外
+    const isMeetingNote = meetingPatterns.some(pattern => pattern.test(title));
+    
+    if (isMeetingNote) {
+      filteredByTitle++;
+      if (filteredByCategory + filteredByTitle <= 5) { // 最初の5件のみログ出力
+        console.log(`[MeetingNoteFilter] Excluded: ${title} (title pattern match)`);
       }
+      continue;
     }
     
     validResults.push(result);
