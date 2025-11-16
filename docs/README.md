@@ -106,8 +106,10 @@
 - **[05.02-feature-tests.md](./05-testing/05.02-feature-tests.md)** - 主要機能関連テスト
 - **[05.03-deployment-integration.md](./05-testing/05.03-deployment-integration.md)** - デプロイ・整合性テスト
 - **[05.04-performance-tests.md](./05-testing/05.04-performance-tests.md)** - パフォーマンステスト
-- **[05.13-production-readiness-verification.md](./05-testing/05.13-production-readiness-verification.md)** - 本番環境データ整合性テスト
-- **[05.16-test-execution-guide.md](./05-testing/05.16-test-execution-guide.md)** - テスト実行ガイド
+- **[05.07-production-readiness-verification.md](./05-testing/05.07-production-readiness-verification.md)** - 本番環境データ整合性テスト
+- **[05.08-test-execution-guide.md](./05-testing/05.08-test-execution-guide.md)** - テスト実行ガイド
+- **[05.10-test-coverage-analysis.md](./05-testing/05.10-test-coverage-analysis.md)** - テストカバレッジ分析レポート
+- **[05.11-e2e-test-plan.md](./05-testing/05.11-e2e-test-plan.md)** - E2Eテスト計画書
 
 詳細は [`05-testing/README.md`](./05-testing/README.md) を参照してください。
 

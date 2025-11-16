@@ -184,5 +184,5 @@ npm list --depth=0 > /dev/null 2>&1 && echo "✅ Dependencies installed" || echo
 
 - [`05.01-data-validation.md`](./05.01-data-validation.md): テスト項目の詳細
 - [`TEST_EXECUTION_RESULTS.md`](./TEST_EXECUTION_RESULTS.md): テスト実行結果の記録
-- [`05.16-test-execution-guide.md`](./05.16-test-execution-guide.md): 一般的なテスト実行ガイド
+- [`05.08-test-execution-guide.md`](./05.08-test-execution-guide.md): 一般的なテスト実行ガイド
 

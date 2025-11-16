@@ -611,10 +611,11 @@ export default function ChatPage({ user }: ChatPageProps) {
 
   return (
     <div className="flex h-screen">
-      {/* サイドバー - デスクトップ: 常に表示、モバイル: 切り替え可能 */}
-      <div className={`w-72 bg-gray-50 border-r overflow-hidden flex flex-col transition-transform duration-200 ${
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } md:translate-x-0 fixed md:static inset-y-0 left-0 z-40`}>
+      {/* サイドバー - デスクトップ: 常に表示、モバイル: 切り替え可能（管理画面では非表示） */}
+      {!showAdminDashboard && (
+        <div className={`w-72 bg-gray-50 border-r overflow-hidden flex flex-col transition-transform duration-200 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0 fixed md:static inset-y-0 left-0 z-40`}>
         <div className="p-4 border-b">
           <Button className="w-full" onClick={async () => {
             // 新しい会話を開始
@@ -730,9 +731,10 @@ export default function ChatPage({ user }: ChatPageProps) {
           </div>
         </ScrollArea>
       </div>
+      )}
 
       {/* オーバーレイ（モバイルでサイドバーが開いているとき） */}
-      {isSidebarOpen && (
+      {!showAdminDashboard && isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
           onClick={() => setIsSidebarOpen(false)}
@@ -743,15 +745,17 @@ export default function ChatPage({ user }: ChatPageProps) {
       <div className="flex-1 flex flex-col">
         <header className="flex h-16 items-center justify-between border-b bg-white/80 backdrop-blur-sm px-4 md:px-6 sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            {/* ハンバーガーメニュー（モバイルのみ） */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
+            {/* ハンバーガーメニュー（モバイルのみ、管理画面では非表示） */}
+            {!showAdminDashboard && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            )}
             <Bot className="h-6 w-6 text-primary" />
             <h1 className="text-lg font-semibold">
               {showAdminDashboard ? '管理ダッシュボード' : 'JUKUST Confluence Spec Jira Development Status Chat'}
@@ -967,7 +971,7 @@ export default function ChatPage({ user }: ChatPageProps) {
         </ScrollArea>
       </main>
       <footer className="border-t p-4 bg-white/80 backdrop-blur-sm">
-        {!showSettings && (
+        {!showSettings && !showAdminDashboard && (
           <div className="mx-auto max-w-3xl">
             {/* ソース切替タブ */}
             <div className="mb-3">

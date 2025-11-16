@@ -29,6 +29,16 @@ const nextConfig = {
       config.externals.push('handlebars');
     }
 
+    // クライアントサイドではLanceDBのネイティブモジュールを外部化
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@lancedb/lancedb': false,
+        '@lancedb/lancedb-win32-x64-msvc': false,
+        '@lancedb/lancedb-linux-x64-gnu': false,
+      };
+    }
+
     return config;
   },
   serverExternalPackages: [

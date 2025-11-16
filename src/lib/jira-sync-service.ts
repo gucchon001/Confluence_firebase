@@ -177,25 +177,45 @@ export class JiraSyncService {
       }
     }
     
-    // Firestoreへのバッチ書き込み（500件ずつ）
-    const BATCH_SIZE = 500;
+    // Firestoreへのバッチ書き込み（rawJsonを含むため、サイズ制限を考慮して50件ずつ）
+    // Firestoreの1バッチあたりのペイロードサイズ制限は約11MB
+    const BATCH_SIZE = 50;
     const progressInterval = Math.max(1, Math.floor(normalizedIssues.length / 10));
     
     for (let i = 0; i < normalizedIssues.length; i += BATCH_SIZE) {
       const batch = firestore.batch();
       const batchIssues = normalizedIssues.slice(i, i + BATCH_SIZE);
       
-      for (const { issue: normalized } of batchIssues) {
-        const docRef = firestore.collection('jiraIssues').doc(normalized.key);
-        batch.set(docRef, {
-          ...normalized,
-          syncedAt: admin.firestore.FieldValue.serverTimestamp(),
-          url: this.buildIssueUrl(normalized.key)
-        }, { merge: true });
-        lanceDbRecords.push(this.toLanceDbRecord(normalized));
+      for (const { issue: normalized, original } of batchIssues) {
+        try {
+          const docRef = firestore.collection('jiraIssues').doc(normalized.key);
+          
+          // 全コメント履歴を抽出
+          const allComments = this.extractAllComments(original.fields?.comment?.comments || []);
+          
+          batch.set(docRef, {
+            ...normalized,
+            // rawデータをJSON文字列として保存（20レベル制限を回避）
+            // 必要に応じて JSON.parse() で復元可能
+            rawJson: JSON.stringify(original),
+            // 全コメント履歴を配列としても保存（検索しやすくするため）
+            comments: allComments,
+            syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+            url: this.buildIssueUrl(normalized.key)
+          }, { merge: true });
+          lanceDbRecords.push(this.toLanceDbRecord(normalized));
+        } catch (error) {
+          console.error(`❌ Issue ${normalized.key} のFirestore保存準備中にエラー:`, error instanceof Error ? error.message : error);
+          skipped += 1;
+        }
       }
       
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (error) {
+        console.error(`❌ バッチコミット中にエラーが発生しました。バッチ内の最初のissue: ${batchIssues[0]?.issue?.key || 'unknown'}`);
+        throw error;
+      }
       stored += batchIssues.length;
       
       // 進捗ログ
@@ -356,10 +376,11 @@ export class JiraSyncService {
       gigStatus: fields.customfield_10278?.value || '', // GIG状況
       devValidation: fields.customfield_10279?.value || '', // 開発検証
       prodValidation: fields.customfield_10280?.value || '', // 本番検証
-      releaseDate: fields.customfield_10281 || '', // リリース予定日
-      completedDate: fields.customfield_10282 || '', // 完了日
-      desiredReleaseDate: fields.customfield_10283 || '', // 希望リリース日
-      deadlineReleaseDate: fields.customfield_10284 || '', // 限界リリース日
+      // 日付フィールドは文字列に変換（オブジェクトの場合はISO文字列に変換）
+      releaseDate: this.serializeField(fields.customfield_10281) || '', // リリース予定日
+      completedDate: this.serializeField(fields.customfield_10282) || '', // 完了日
+      desiredReleaseDate: this.serializeField(fields.customfield_10283) || '', // 希望リリース日
+      deadlineReleaseDate: this.serializeField(fields.customfield_10284) || '', // 限界リリース日
       impactDomain: fields.customfield_10291?.value || '', // 影響業務
       impactLevel: fields.customfield_10292?.value || '' // 業務影響度
     };
@@ -580,6 +601,58 @@ export class JiraSyncService {
     const created = latest.created || '';
     const text = this.extractTextFromADF(latest.body);
     return `投稿者: ${author}\n投稿日: ${created}\n${text}`.trim();
+  }
+
+  /**
+   * 全コメント履歴を抽出して配列として返す
+   * 注意: bodyRawは20レベル制限を回避するため含めない
+   * 必要に応じてrawJsonから復元可能
+   */
+  private extractAllComments(comments: Array<{ body?: any; created?: string; updateAuthor?: JiraUser; id?: string; }>): Array<{
+    id?: string;
+    author: string;
+    created: string;
+    body: string;
+  }> {
+    if (!comments || comments.length === 0) {
+      return [];
+    }
+
+    // 作成日時でソート（古い順）
+    const sorted = comments
+      .slice()
+      .sort((a, b) => new Date(a.created || 0).getTime() - new Date(b.created || 0).getTime());
+
+    return sorted.map(comment => ({
+      id: comment.id,
+      author: comment.updateAuthor?.displayName || '(unknown)',
+      created: comment.created || '',
+      body: this.extractTextFromADF(comment.body)
+      // bodyRawは20レベル制限を回避するため含めない
+      // 必要に応じてrawJsonから復元可能
+    }));
+  }
+
+  /**
+   * フィールド値をFirestore保存可能な形式に変換
+   * オブジェクトの場合はJSON文字列に変換、日付の場合はISO文字列に変換
+   */
+  private serializeField(value: any): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'object') {
+      // 日付オブジェクトの場合はISO文字列に変換
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
+      // その他のオブジェクトはJSON文字列に変換
+      return JSON.stringify(value);
+    }
+    return String(value);
   }
 
   private buildIssueUrl(issueKey: string): string {

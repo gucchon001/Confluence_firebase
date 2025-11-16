@@ -42,7 +42,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   Database,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -63,8 +64,10 @@ import { adminService } from '@/lib/admin-service';
 import { postLogService } from '@/lib/post-log-service';
 import { performanceAlertService } from '@/lib/performance-alert-service';
 import { errorAnalysisService } from '@/lib/error-analysis-service';
+import { systemHealthService } from '@/lib/system-health-service';
 import { useAdmin } from '@/hooks/use-admin';
-import type { AdminUser, PostLog, Reference, SatisfactionRating, PerformanceAlert, ErrorLog } from '@/types';
+import { JiraDashboard } from '@/components/jira-dashboard';
+import type { AdminUser, PostLog, Reference, SatisfactionRating, PerformanceAlert, ErrorLog, SystemHealth } from '@/types';
 import type { ErrorAnalysis } from '@/lib/error-analysis-service';
 
 // ダミーデータ（実際の実装ではAPIから取得）
@@ -156,6 +159,10 @@ const AdminDashboard: React.FC = () => {
   
   // エラー分析状態
   const [errorAnalysis, setErrorAnalysis] = useState<ErrorAnalysis | null>(null);
+  
+  // システムヘルス状態
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [isLoadingHealth, setIsLoadingHealth] = useState(false);
 
   // データ取得関数をuseCallbackなしで定義
   const loadData = async () => {
@@ -298,7 +305,8 @@ const AdminDashboard: React.FC = () => {
     // 環境フィルター
     if (environmentFilter !== 'all') {
       filtered = filtered.filter(log => {
-        const env = getEnvironment(log);
+        // metadataから環境を取得、またはデフォルト値
+        const env = log.metadata?.environment || 'production';
         return env === environmentFilter;
       });
     }
@@ -306,7 +314,18 @@ const AdminDashboard: React.FC = () => {
     // データソースフィルター
     if (dataSourceFilter !== 'all') {
       filtered = filtered.filter(log => {
-        const source = getDataSource(log);
+        // metadataからデータソースを取得、またはreferencesから推測
+        const dataSource = log.metadata?.dataSource;
+        if (dataSource) {
+          return dataSource === dataSourceFilter;
+        }
+        // referencesから推測
+        const hasConfluence = log.references?.some(r => r.url?.includes('confluence'));
+        const hasJira = log.references?.some(r => r.url?.includes('jira'));
+        let source = 'unknown';
+        if (hasConfluence && hasJira) source = 'mixed';
+        else if (hasConfluence) source = 'confluence';
+        else if (hasJira) source = 'jira';
         return source === dataSourceFilter;
       });
     }
@@ -691,898 +710,334 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* タブコンテンツ */}
-      <Tabs defaultValue="monitoring" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="monitoring">リアルタイム監視</TabsTrigger>
-          <TabsTrigger value="users">ユーザー管理</TabsTrigger>
-          <TabsTrigger value="performance">パフォーマンス</TabsTrigger>
+      <Tabs defaultValue="jira" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="jira">開発進捗ダッシュボード</TabsTrigger>
           <TabsTrigger value="errors">エラー分析</TabsTrigger>
-          <TabsTrigger value="feedback">評価フィードバック</TabsTrigger>
-          <TabsTrigger value="backup">バックアップ</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="monitoring" className="space-y-4">
-          {/* フィルター */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                フィルター
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
-                <div>
-                  <label className="text-sm font-medium">日付</label>
-                  <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">すべて</SelectItem>
-                      <SelectItem value="today">今日</SelectItem>
-                      <SelectItem value="week">過去1週間</SelectItem>
-                      <SelectItem value="month">過去1ヶ月</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+        <TabsContent value="jira" className="space-y-4">
+          <JiraDashboard />
+        </TabsContent>
 
-                <div>
-                  <label className="text-sm font-medium">ユーザー</label>
-                  <Select value={userFilter} onValueChange={setUserFilter}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">すべて</SelectItem>
-                      {users.map(user => (
-                        <SelectItem key={user.uid} value={user.uid}>
-                          {user.displayName || user.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">質問タイプ</label>
-                  <Select value={questionTypeFilter} onValueChange={setQuestionTypeFilter}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">すべて</SelectItem>
-                      <SelectItem value="login">ログイン関連</SelectItem>
-                      <SelectItem value="classroom">教室・求人関連</SelectItem>
-                      <SelectItem value="system">システム関連</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">環境</label>
-                  <Select value={environmentFilter} onValueChange={setEnvironmentFilter}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">すべて</SelectItem>
-                      <SelectItem value="development">開発環境</SelectItem>
-                      <SelectItem value="staging">ステージング</SelectItem>
-                      <SelectItem value="production">本番環境</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">データソース</label>
-                  <Select value={dataSourceFilter} onValueChange={setDataSourceFilter}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">すべて</SelectItem>
-                      <SelectItem value="confluence">Confluence</SelectItem>
-                      <SelectItem value="jira">Jira</SelectItem>
-                      <SelectItem value="mixed">Confluence + Jira</SelectItem>
-                      <SelectItem value="unknown">不明</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">検索</label>
-                  <Input
-                    placeholder="質問や回答を検索..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <Button variant="outline" onClick={resetFilters}>
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    リセット
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 投稿ログ一覧 */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
-                    投稿ログ ({filteredPostLogs.length}件)
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    ページ {currentPage} / {totalPages} (1ページあたり {pageSize}件)
-                    {lastUpdateTime && (
-                      <span className="ml-2">
-                        • 最終更新: {lastUpdateTime.toLocaleTimeString('ja-JP')}
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRefresh}
-                    disabled={isLoading}
-                  >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                    更新
-                  </Button>
-                  <Button
-                    variant={isRealTimeEnabled ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setIsRealTimeEnabled(!isRealTimeEnabled)}
-                  >
-                    <Zap className="h-4 w-4 mr-2" />
-                    {isRealTimeEnabled ? 'リアルタイム ON' : 'リアルタイム OFF'}
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {paginatedLogs.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>フィルター条件に一致する投稿ログがありません</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>日時</TableHead>
-                        <TableHead>環境</TableHead>
-                        <TableHead>データソース</TableHead>
-                        <TableHead>ユーザー</TableHead>
-                        <TableHead>質問</TableHead>
-                        <TableHead>応答時間</TableHead>
-                        <TableHead>参照数</TableHead>
-                        <TableHead>ステータス</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedLogs.map((log) => {
-                        const env = getEnvironment(log);
-                        const dataSource = getDataSource(log);
-                        return (
-                          <TableRow 
-                            key={log.id}
-                            className="cursor-pointer hover:bg-muted/50"
-                            onClick={() => handleLogClick(log)}
-                          >
-                            <TableCell>
-                              {new Date(log.timestamp).toLocaleString('ja-JP')}
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={getEnvironmentColor(env)} variant="outline">
-                                {getEnvironmentName(env)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={getDataSourceColor(dataSource)} variant="outline">
-                                {getDataSourceName(dataSource)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {log.metadata?.userDisplayName || 
-                               users.find(u => u.uid === log.userId)?.displayName || 
-                               users.find(u => u.uid === log.userId)?.email || 
-                               log.userId}
-                            </TableCell>
-                            <TableCell className="max-w-xs truncate">
-                              {log.question}
-                            </TableCell>
-                            <TableCell>
-                              {(log.totalTime / 1000).toFixed(1)}s
-                            </TableCell>
-                            <TableCell>
-                              {log.referencesCount}
-                            </TableCell>
-                            <TableCell>
-                              {log.errors && log.errors.length > 0 ? (
-                                <Badge variant="destructive">エラー</Badge>
-                              ) : (
-                                <Badge variant="default">成功</Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-
-                  {/* ページネーション */}
-                  {totalPages > 1 && (
+        <TabsContent value="errors" className="space-y-4">
+          {/* エラー分析概要 */}
+          {errorAnalysis ? (
+            <>
+              {/* エラー統計カード */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-6">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          disabled={currentPage === 1}
-                        >
-                          前へ
-                        </Button>
-                        <span className="text-sm">
-                          {currentPage} / {totalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                          disabled={currentPage === totalPages}
-                        >
-                          次へ
-                        </Button>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">総エラー数</p>
+                        <p className="text-2xl font-bold">
+                          {errorAnalysis.byCategory.search.count +
+                           errorAnalysis.byCategory.ai.count +
+                           errorAnalysis.byCategory.system.count +
+                           errorAnalysis.byCategory.auth.count}
+                        </p>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm">表示件数:</span>
-                        <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(Number(value))}>
-                          <SelectTrigger className="w-20">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="10">10</SelectItem>
-                            <SelectItem value="20">20</SelectItem>
-                            <SelectItem value="50">50</SelectItem>
-                            <SelectItem value="100">100</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <AlertCircle className="h-8 w-8 text-red-500" />
                     </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  </CardContent>
+                </Card>
 
-        <TabsContent value="users" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                ユーザー管理
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              ) : (
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-3">
-                    {users.map((user) => (
-                      <div key={user.uid} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{user.displayName || '名前なし'}</p>
-                            {user.isAdmin && (
-                              <Badge variant="default" className="flex items-center gap-1">
-                                <Shield className="h-3 w-3" />
-                                管理者
-                              </Badge>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">未解決</p>
+                        <p className="text-2xl font-bold text-red-600">
+                          {errorAnalysis.resolutionStatus.unresolved}
+                        </p>
+                      </div>
+                      <XCircle className="h-8 w-8 text-red-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">解決済み</p>
+                        <p className="text-2xl font-bold text-green-600">
+                          {errorAnalysis.resolutionStatus.resolved}
+                        </p>
+                      </div>
+                      <CheckCircle className="h-8 w-8 text-green-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">調査中</p>
+                        <p className="text-2xl font-bold text-yellow-600">
+                          {errorAnalysis.resolutionStatus.investigating}
+                        </p>
+                      </div>
+                      <AlertTriangle className="h-8 w-8 text-yellow-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* エラー種別別統計 */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5" />
+                    エラー種別別統計
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {(['search', 'ai', 'system', 'auth'] as const).map((category) => {
+                      const stats = errorAnalysis.byCategory[category];
+                      return (
+                        <Card key={category} className="border-l-4 border-l-red-500">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium">
+                                {errorAnalysisService.getCategoryName(category)}
+                              </span>
+                              <Badge variant="destructive">{stats.count}件</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {stats.percentage.toFixed(1)}% / 1日平均: {stats.avgOccurrencesPerDay.toFixed(1)}件
+                            </p>
+                            {stats.recentErrors.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                <p className="text-xs font-medium text-muted-foreground">最近のエラー:</p>
+                                {stats.recentErrors.slice(0, 2).map((error) => (
+                                  <p key={error.id} className="text-xs truncate" title={error.message}>
+                                    {error.message.substring(0, 50)}...
+                                  </p>
+                                ))}
+                              </div>
                             )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
-                          <p className="text-xs text-muted-foreground">
-                            登録日: {user.createdAt.toLocaleDateString()}
-                          </p>
-                        </div>
-                        <Button
-                          variant={user.isAdmin ? "destructive" : "default"}
-                          size="sm"
-                          onClick={() => handleToggleAdmin(user.uid, user.isAdmin)}
-                        >
-                          {user.isAdmin ? '管理者権限削除' : '管理者権限付与'}
-                        </Button>
-                      </div>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                </CardContent>
+              </Card>
 
-        <TabsContent value="performance" className="space-y-4">
-          {/* パフォーマンスアラート */}
-          {alerts.length > 0 && (
-            <Card className="border-yellow-200 bg-yellow-50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-yellow-800">
-                  <AlertTriangle className="h-5 w-5" />
-                  パフォーマンスアラート ({alerts.length}件)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {alerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className={`p-4 rounded-lg border ${
-                        alert.severity === 'critical'
-                          ? 'bg-red-50 border-red-200'
-                          : 'bg-yellow-50 border-yellow-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge
-                              variant={performanceAlertService.getAlertSeverityBadgeVariant(alert.severity)}
-                            >
-                              {alert.severity === 'critical' ? '緊急' : '警告'}
-                            </Badge>
-                            <span className="font-medium">
-                              {alert.type === 'search_time' && '検索時間'}
-                              {alert.type === 'ai_generation_time' && 'AI生成時間'}
-                              {alert.type === 'error_rate' && 'エラー率'}
-                              {alert.type === 'system_load' && 'システム負荷'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-700 mb-1">{alert.message}</p>
-                          <p className="text-xs text-gray-500">
-                            {alert.timestamp.toLocaleString('ja-JP')}
-                          </p>
-                        </div>
-                        {!alert.resolved && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const resolvedAlert = performanceAlertService.resolveAlert(
-                                alert,
-                                'admin' // TODO: 実際のユーザーIDを取得
-                              );
-                              setAlerts((prev) =>
-                                prev.map((a) => (a.id === alert.id ? resolvedAlert : a))
-                              );
-                            }}
-                          >
-                            解決済み
-                          </Button>
-                        )}
-                        {alert.resolved && (
-                          <Badge variant="outline" className="bg-green-50 text-green-700">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            解決済み
-                          </Badge>
-                        )}
-                      </div>
+              {/* エラー発生率グラフ */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* 時間別エラー発生率 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      時間別エラー発生率（過去24時間）
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={errorAnalysis.errorRateByHour}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="time" />
+                          <YAxis />
+                          <Tooltip 
+                            formatter={(value: any) => [`${value.toFixed(1)}%`, 'エラー率']}
+                            labelFormatter={(label) => `時刻: ${label}`}
+                          />
+                          <Legend />
+                          <Line 
+                            type="monotone" 
+                            dataKey="errorRate" 
+                            stroke="#ef4444" 
+                            strokeWidth={2}
+                            name="エラー率"
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
                     </div>
-                  ))}
-                </div>
+                  </CardContent>
+                </Card>
+
+                {/* 日別エラー発生率 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart className="h-5 w-5" />
+                      日別エラー発生率（過去7日間）
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsBarChart data={errorAnalysis.errorRateByDay}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="time" />
+                          <YAxis />
+                          <Tooltip 
+                            formatter={(value: any) => [`${value.toFixed(1)}%`, 'エラー率']}
+                            labelFormatter={(label) => `日付: ${label}`}
+                          />
+                          <Legend />
+                          <Bar dataKey="errorRate" fill="#ef4444" name="エラー率" />
+                        </RechartsBarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* エラーパターン分析 */}
+              {errorAnalysis.errorPatterns.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Target className="h-5 w-5" />
+                      エラーパターン分析（上位10パターン）
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {errorAnalysis.errorPatterns.map((pattern, index) => (
+                        <Card key={index} className="border-l-4 border-l-orange-500">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge variant="outline">
+                                    {errorAnalysisService.getCategoryName(pattern.category)}
+                                  </Badge>
+                                  <Badge variant={pattern.level === 'error' ? 'destructive' : 'default'}>
+                                    {errorAnalysisService.getLevelName(pattern.level)}
+                                  </Badge>
+                                  <Badge variant="secondary">{pattern.count}回</Badge>
+                                </div>
+                                <p className="text-sm font-medium mb-1">{pattern.pattern}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  初回: {pattern.firstOccurrence.toLocaleString('ja-JP')} / 
+                                  最終: {pattern.lastOccurrence.toLocaleString('ja-JP')}
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* 最近のエラー一覧 */}
+              {errorAnalysis.recentErrors.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      最近のエラー（上位20件）
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[400px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>日時</TableHead>
+                            <TableHead>種別</TableHead>
+                            <TableHead>レベル</TableHead>
+                            <TableHead>メッセージ</TableHead>
+                            <TableHead>ステータス</TableHead>
+                            <TableHead>操作</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {errorAnalysis.recentErrors.map((error) => (
+                            <TableRow key={error.id}>
+                              <TableCell>
+                                {new Date(error.timestamp).toLocaleString('ja-JP')}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">
+                                  {errorAnalysisService.getCategoryName(error.category)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={error.level === 'error' ? 'destructive' : error.level === 'warning' ? 'default' : 'secondary'}
+                                >
+                                  {errorAnalysisService.getLevelName(error.level)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-md truncate" title={error.message}>
+                                {error.message}
+                              </TableCell>
+                              <TableCell>
+                                {error.resolved ? (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    解決済み
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-red-50 text-red-700">
+                                    <XCircle className="h-3 w-3 mr-1" />
+                                    未解決
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {!error.resolved && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const resolvedError = errorAnalysisService.resolveError(error, 'admin');
+                                      // TODO: Firestoreに保存する処理を追加
+                                      setErrorAnalysis(prev => {
+                                        if (!prev) return null;
+                                        return {
+                                          ...prev,
+                                          recentErrors: prev.recentErrors.map(e => 
+                                            e.id === error.id ? resolvedError : e
+                                          ),
+                                        };
+                                      });
+                                    }}
+                                  >
+                                    解決済み
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* エラーがない場合 */}
+              {errorAnalysis.recentErrors.length === 0 && (
+                <Card>
+                  <CardContent className="p-12 text-center">
+                    <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">エラーはありません</h3>
+                    <p className="text-muted-foreground">現在、エラーは発生していません。</p>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          ) : (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Loader2 className="h-12 w-12 text-muted-foreground mx-auto mb-4 animate-spin" />
+                <p className="text-muted-foreground">エラー分析を実行中...</p>
               </CardContent>
             </Card>
           )}
-
-          {/* パフォーマンス概要 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                パフォーマンス概要
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 border rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <Search className="h-5 w-5 text-blue-500" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">平均検索時間</p>
-                  <p className="text-2xl font-bold text-blue-600">{(avgSearchTime / 1000).toFixed(1)}s</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <Brain className="h-5 w-5 text-orange-500" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">平均AI生成時間</p>
-                  <p className="text-2xl font-bold text-orange-600">{(avgAiTime / 1000).toFixed(1)}s</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <Clock className="h-5 w-5 text-green-500" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">平均総処理時間</p>
-                  <p className="text-2xl font-bold text-green-600">{(avgTotalTime / 1000).toFixed(1)}s</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <AlertTriangle className="h-5 w-5 text-red-500" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">エラー率</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {postLogs.length > 0 
-                      ? ((postLogs.filter(log => log.errors && log.errors.length > 0).length / postLogs.length) * 100).toFixed(1)
-                      : 0}%
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 時間帯別パフォーマンス */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart className="h-5 w-5" />
-                時間帯別パフォーマンス（過去24時間）
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={performanceData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip 
-                      formatter={(value, name) => [
-                        `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
-                        name === 'serverStartupTime' ? 'サーバー起動時間' :
-                        name === 'ttfbTime' ? '初期応答時間(TTFB)' :
-                        name === 'searchTime' ? '検索時間' : 
-                        name === 'aiTime' ? 'AI生成時間' : 
-                        name === 'totalTime' ? '総処理時間' : name
-                      ]}
-                    />
-                    <Legend />
-                    <Line 
-                      type="monotone" 
-                      dataKey="serverStartupTime" 
-                      stroke="#8b5cf6" 
-                      strokeWidth={2}
-                      name="サーバー起動時間"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="ttfbTime" 
-                      stroke="#f59e0b" 
-                      strokeWidth={2}
-                      name="初期応答時間(TTFB)"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="searchTime" 
-                      stroke="#3b82f6" 
-                      strokeWidth={2}
-                      name="検索時間"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="aiTime" 
-                      stroke="#f97316" 
-                      strokeWidth={2}
-                      name="AI生成時間"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="totalTime" 
-                      stroke="#10b981" 
-                      strokeWidth={2}
-                      name="総処理時間"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* 質問タイプ別パフォーマンス */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  質問タイプ別パフォーマンス
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsBarChart data={questionTypeData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="type" />
-                      <YAxis />
-                      <Tooltip 
-                        formatter={(value, name) => [
-                          `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
-                          name === 'avgServerStartupTime' ? '平均サーバー起動時間' :
-                          name === 'avgSearchTime' ? '平均検索時間' : 
-                          name === 'avgAiTime' ? '平均AI生成時間' : name
-                        ]}
-                      />
-                      <Legend />
-                      <Bar dataKey="avgServerStartupTime" fill="#8b5cf6" name="平均サーバー起動時間" />
-                      <Bar dataKey="avgSearchTime" fill="#3b82f6" name="平均検索時間" />
-                      <Bar dataKey="avgAiTime" fill="#f97316" name="平均AI生成時間" />
-                    </RechartsBarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 質問タイプ別分布 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <PieChart className="h-5 w-5" />
-                  質問タイプ別分布
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={questionTypeData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ type, count, percent }) => `${type}: ${count}件 (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="count"
-                      >
-                        {questionTypeData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={['#3b82f6', '#f97316', '#10b981', '#8b5cf6'][index % 4]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ユーザー別パフォーマンス */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                ユーザー別パフォーマンス（上位10ユーザー）
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsBarChart data={userPerformanceData} layout="horizontal">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="userName" type="category" width={100} />
-                      <Tooltip 
-                        formatter={(value, name) => [
-                          `${typeof value === 'number' ? value.toFixed(1) : value}s`, 
-                          name === 'avgSearchTime' ? '平均検索時間' : 
-                          name === 'avgAiTime' ? '平均AI生成時間' : name
-                        ]}
-                      />
-                      <Legend />
-                      <Bar dataKey="avgSearchTime" fill="#3b82f6" name="平均検索時間" />
-                      <Bar dataKey="avgAiTime" fill="#f97316" name="平均AI生成時間" />
-                    </RechartsBarChart>
-                  </ResponsiveContainer>
-                </div>
-                
-                {/* ユーザー別詳細テーブル */}
-                <div className="mt-6">
-                  <h4 className="font-medium mb-3">ユーザー別詳細統計</h4>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>ユーザー</TableHead>
-                          <TableHead>投稿数</TableHead>
-                          <TableHead>平均検索時間</TableHead>
-                          <TableHead>平均AI時間</TableHead>
-                          <TableHead>エラー率</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {userPerformanceData.map((user, index) => (
-                          <TableRow key={user.userId}>
-                            <TableCell className="font-medium">{user.userName}</TableCell>
-                            <TableCell>{user.posts}</TableCell>
-                            <TableCell>{user.avgSearchTime.toFixed(1)}s</TableCell>
-                            <TableCell>{user.avgAiTime.toFixed(1)}s</TableCell>
-                            <TableCell>
-                              <Badge variant={user.errorRate > 10 ? "destructive" : "outline"}>
-                                {user.errorRate.toFixed(1)}%
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="feedback" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Star className="h-5 w-5" />
-                評価フィードバック ({feedbacks.length}件)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* 評価統計 */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  {[1, 2, 3, 4, 5].map((rating) => {
-                    const count = feedbacks.filter(f => f.rating === rating).length;
-                    const percentage = feedbacks.length > 0 ? (count / feedbacks.length) * 100 : 0;
-                    return (
-                      <Card key={rating}>
-                        <CardContent className="p-4 text-center">
-                          <div className="flex items-center justify-center mb-2">
-                            {Array.from({ length: rating }, (_, i) => (
-                              <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
-                            ))}
-                          </div>
-                          <div className="text-2xl font-bold">{count}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {percentage.toFixed(1)}%
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-
-                {/* 評価一覧 */}
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold">評価一覧</h3>
-                  <ScrollArea className="h-96">
-                    <div className="space-y-2">
-                      {feedbacks.map((feedback) => {
-                        // PostLog IDから対応する投稿ログを検索
-                        const relatedPostLog = postLogs.find(log => log.id === feedback.postLogId);
-                        
-                        return (
-                          <Card key={feedback.id}>
-                            <CardContent className="p-4">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <div className="flex items-center">
-                                      {Array.from({ length: feedback.rating }, (_, i) => (
-                                        <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
-                                      ))}
-                                      {Array.from({ length: 5 - feedback.rating }, (_, i) => (
-                                        <Star key={i} className="w-4 h-4 text-gray-300" />
-                                      ))}
-                                    </div>
-                                    <span className="text-sm text-muted-foreground">
-                                      {feedback.metadata.userDisplayName || feedback.userId || '匿名ユーザー'}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {new Date(feedback.timestamp).toLocaleString('ja-JP')}
-                                    </span>
-                                  </div>
-                                  
-                                  {/* 評価された質問内容を表示 */}
-                                  {relatedPostLog && (
-                                    <div className="mb-2 p-2 bg-blue-50 rounded border-l-4 border-blue-200">
-                                      <div className="text-xs text-blue-600 font-medium mb-1">評価された質問:</div>
-                                      <div className="text-sm text-gray-700">
-                                        {relatedPostLog.question.length > 100 
-                                          ? `${relatedPostLog.question.substring(0, 100)}...` 
-                                          : relatedPostLog.question
-                                        }
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  {feedback.comment && (
-                                    <p className="text-sm text-gray-700 mt-2 p-2 bg-gray-50 rounded">
-                                      {feedback.comment}
-                                    </p>
-                                  )}
-                                  
-                                  <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2">
-                                    <span>PostLog ID: {feedback.postLogId}</span>
-                                    {relatedPostLog && (
-                                      <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        onClick={() => handleLogClick(relatedPostLog)}
-                                        className="h-6 px-2 text-xs"
-                                      >
-                                        <Eye className="w-3 h-3 mr-1" />
-                                        詳細表示
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="backup" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                バックアップ管理
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">フルバックアップ</h3>
-                        <Shield className="h-6 w-6 text-blue-500" />
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        全データの完全バックアップを実行します
-                      </p>
-                      <Button 
-                        onClick={() => runBackup('full')} 
-                        disabled={backupStatus === 'running'}
-                        className="w-full"
-                      >
-                        {backupStatus === 'running' ? '実行中...' : 'フルバックアップ実行'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">緊急バックアップ</h3>
-                        <AlertTriangle className="h-6 w-6 text-red-500" />
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        緊急時の即座バックアップを実行します
-                      </p>
-                      <Button 
-                        onClick={() => runBackup('emergency')} 
-                        disabled={backupStatus === 'running'}
-                        variant="destructive"
-                        className="w-full"
-                      >
-                        {backupStatus === 'running' ? '実行中...' : '緊急バックアップ実行'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {backupStatus !== 'idle' && (
-                  <Card className={backupStatus === 'success' ? 'border-green-200 bg-green-50' : backupStatus === 'error' ? 'border-red-200 bg-red-50' : ''}>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-2">
-                        {backupStatus === 'success' && <CheckCircle className="h-4 w-4 text-green-600" />}
-                        {backupStatus === 'error' && <XCircle className="h-4 w-4 text-red-600" />}
-                        {backupStatus === 'running' && <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />}
-                        <span className={backupStatus === 'success' ? 'text-green-600' : backupStatus === 'error' ? 'text-red-600' : 'text-blue-600'}>
-                          {backupStatus === 'success' && 'バックアップが完了しました'}
-                          {backupStatus === 'error' && 'バックアップ中にエラーが発生しました'}
-                          {backupStatus === 'running' && 'バックアップを実行中...'}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-
-              {/* キャッシュ管理セクション */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Database className="h-5 w-5" />
-                  <h3 className="text-lg font-semibold">キャッシュ管理</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  永続化キャッシュとメモリキャッシュを管理し、起動時間を最適化します
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                        <h4 className="font-medium">キャッシュクリア</h4>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        永続化キャッシュとメモリキャッシュをクリアし、次回起動時にフレッシュな状態にします
-                      </p>
-                      <Button 
-                        onClick={clearCache} 
-                        disabled={cacheStatus === 'clearing'}
-                        variant="outline"
-                        className="w-full border-red-200 text-red-600 hover:bg-red-50"
-                      >
-                        {cacheStatus === 'clearing' ? 'クリア中...' : 'キャッシュクリア'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Zap className="h-4 w-4 text-yellow-600" />
-                        <h4 className="font-medium">起動最適化</h4>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        キャッシュにより次回起動時間が大幅に短縮されます（通常3秒以下）
-                      </p>
-                      <div className="text-xs text-muted-foreground">
-                        <div>• トークナイザー状態: キャッシュ済み</div>
-                        <div>• 起動最適化: 有効</div>
-                        <div>• バックグラウンド更新: 有効</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {cacheStatus !== 'idle' && (
-                  <Card className={cacheStatus === 'success' ? 'border-green-200 bg-green-50' : cacheStatus === 'error' ? 'border-red-200 bg-red-50' : ''}>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-2">
-                        {cacheStatus === 'success' && <CheckCircle className="h-4 w-4 text-green-600" />}
-                        {cacheStatus === 'error' && <XCircle className="h-4 w-4 text-red-600" />}
-                        {cacheStatus === 'clearing' && <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />}
-                        <span className={cacheStatus === 'success' ? 'text-green-600' : cacheStatus === 'error' ? 'text-red-600' : 'text-blue-600'}>
-                          {cacheStatus === 'success' && 'キャッシュが正常にクリアされました'}
-                          {cacheStatus === 'error' && 'キャッシュクリア中にエラーが発生しました'}
-                          {cacheStatus === 'clearing' && 'キャッシュをクリア中...'}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
 

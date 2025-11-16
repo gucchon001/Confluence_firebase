@@ -159,3 +159,28 @@ export type PerformanceAlert = {
   resolvedAt?: Date;
   resolvedBy?: string;
 };
+
+// サービスステータス型
+export type ServiceStatus = {
+  status: 'healthy' | 'warning' | 'critical';
+  message: string;
+  lastChecked: Date;
+  responseTime?: number; // ミリ秒
+  errorCount?: number;
+  uptime?: number; // 秒
+};
+
+// システムヘルス型
+export type SystemHealth = {
+  id: string;
+  timestamp: Date;
+  status: 'healthy' | 'warning' | 'critical';
+  services: {
+    lancedb: ServiceStatus;
+    firestore: ServiceStatus;
+    gemini: ServiceStatus;
+    authentication: ServiceStatus;
+    cache?: ServiceStatus;
+  };
+  alerts: PerformanceAlert[];
+};

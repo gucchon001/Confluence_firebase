@@ -14,49 +14,83 @@
 import { z } from 'zod';
 
 /**
- * 環境変数のスキーマ定義
+ * スクリプト実行時かどうかを判定
+ * Next.jsアプリケーションコンテキスト外（スクリプト実行時）では、
+ * Firebaseクライアント側の環境変数は不要
  */
-const EnvSchema = z.object({
-  // Confluence設定（必須）
-  CONFLUENCE_BASE_URL: z.string().url('CONFLUENCE_BASE_URL は有効なURLである必要があります'),
-  CONFLUENCE_USER_EMAIL: z.string().email('CONFLUENCE_USER_EMAIL は有効なメールアドレスである必要があります'),
-  CONFLUENCE_API_TOKEN: z.string().min(1, 'CONFLUENCE_API_TOKEN は必須です'),
-  CONFLUENCE_SPACE_KEY: z.string().min(1, 'CONFLUENCE_SPACE_KEY は必須です'),
-  
-  // Jira設定（オプション、Confluence設定をフォールバック）
-  JIRA_BASE_URL: z.string().url().optional(),
-  JIRA_USER_EMAIL: z.string().email().optional(),
-  JIRA_API_TOKEN: z.string().min(1).optional(),
-  JIRA_PROJECT_KEY: z.string().optional(),
-  JIRA_MAX_ISSUES: z.string().regex(/^\d+$/).optional(),
-  
-  // Gemini設定（必須）
-  GEMINI_API_KEY: z.string().min(1, 'GEMINI_API_KEY は必須です'),
-  
-  // Firebase設定（クライアント側、必須）
-  NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_API_KEY は必須です'),
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN は必須です'),
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_PROJECT_ID は必須です'),
-  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET は必須です'),
-  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID は必須です'),
-  NEXT_PUBLIC_FIREBASE_APP_ID: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_APP_ID は必須です'),
-  
-  // Firebase設定（サーバー側、オプション）
-  FIREBASE_PROJECT_ID: z.string().optional(),
-  GOOGLE_CLOUD_PROJECT: z.string().optional(),
-  
-  // 環境判定
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  
-  // デプロイメント環境判定
-  K_SERVICE: z.string().optional(), // Cloud Run
-  USE_INMEMORY_FS: z.string().optional(), // インメモリファイルシステムを使用するか
-  
-  // その他の設定
-  USE_LLM_EXPANSION: z.string().optional(),
-  SKIP_DATA_DOWNLOAD: z.string().optional(),
-  EMBEDDINGS_PROVIDER: z.string().optional(),
-});
+function isScriptContext(): boolean {
+  // Next.jsアプリケーションコンテキストでは NEXT_RUNTIME が設定される
+  // スクリプト実行時は設定されない
+  return !process.env.NEXT_RUNTIME;
+}
+
+/**
+ * 環境変数のスキーマ定義
+ * スクリプト実行時はFirebaseクライアント側の環境変数をオプショナルにする
+ */
+const createEnvSchema = () => {
+  const baseSchema = {
+    // Confluence設定（必須）
+    CONFLUENCE_BASE_URL: z.string().url('CONFLUENCE_BASE_URL は有効なURLである必要があります'),
+    CONFLUENCE_USER_EMAIL: z.string().email('CONFLUENCE_USER_EMAIL は有効なメールアドレスである必要があります'),
+    CONFLUENCE_API_TOKEN: z.string().min(1, 'CONFLUENCE_API_TOKEN は必須です'),
+    CONFLUENCE_SPACE_KEY: z.string().min(1, 'CONFLUENCE_SPACE_KEY は必須です'),
+    
+    // Jira設定（オプション、Confluence設定をフォールバック）
+    JIRA_BASE_URL: z.string().url().optional(),
+    JIRA_USER_EMAIL: z.string().email().optional(),
+    JIRA_API_TOKEN: z.string().min(1).optional(),
+    JIRA_PROJECT_KEY: z.string().optional(),
+    JIRA_MAX_ISSUES: z.string().regex(/^\d+$/).optional(),
+    
+    // Gemini設定（必須）
+    GEMINI_API_KEY: z.string().min(1, 'GEMINI_API_KEY は必須です'),
+    
+    // Firebase設定（サーバー側、オプション）
+    FIREBASE_PROJECT_ID: z.string().optional(),
+    GOOGLE_CLOUD_PROJECT: z.string().optional(),
+    
+    // 環境判定
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    
+    // デプロイメント環境判定
+    K_SERVICE: z.string().optional(), // Cloud Run
+    USE_INMEMORY_FS: z.string().optional(), // インメモリファイルシステムを使用するか
+    
+    // その他の設定
+    USE_LLM_EXPANSION: z.string().optional(),
+    SKIP_DATA_DOWNLOAD: z.string().optional(),
+    EMBEDDINGS_PROVIDER: z.string().optional(),
+  };
+
+  // スクリプト実行時はFirebaseクライアント側の環境変数をオプショナルにする
+  if (isScriptContext()) {
+    return z.object({
+      ...baseSchema,
+      // Firebase設定（クライアント側、スクリプト実行時はオプション）
+      NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1).optional(),
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1).optional(),
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1).optional(),
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().min(1).optional(),
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1).optional(),
+      NEXT_PUBLIC_FIREBASE_APP_ID: z.string().min(1).optional(),
+    });
+  }
+
+  // Next.jsアプリケーションコンテキストではFirebaseクライアント側の環境変数は必須
+  return z.object({
+    ...baseSchema,
+    // Firebase設定（クライアント側、必須）
+    NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_API_KEY は必須です'),
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN は必須です'),
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_PROJECT_ID は必須です'),
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET は必須です'),
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID は必須です'),
+    NEXT_PUBLIC_FIREBASE_APP_ID: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_APP_ID は必須です'),
+  });
+};
+
+const EnvSchema = createEnvSchema();
 
 /**
  * 環境変数の検証と型安全な取得
@@ -152,22 +186,24 @@ export const appConfig = {
   
   /**
    * Firebase設定（クライアント側）
+   * スクリプト実行時は値がundefinedになる可能性がある
    */
   firebase: {
-    apiKey: validatedEnv.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: validatedEnv.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: validatedEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: validatedEnv.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: validatedEnv.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: validatedEnv.NEXT_PUBLIC_FIREBASE_APP_ID,
+    apiKey: validatedEnv.NEXT_PUBLIC_FIREBASE_API_KEY || '',
+    authDomain: validatedEnv.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+    projectId: validatedEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+    storageBucket: validatedEnv.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+    messagingSenderId: validatedEnv.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+    appId: validatedEnv.NEXT_PUBLIC_FIREBASE_APP_ID || '',
   },
   
   /**
    * Firebase設定（サーバー側）
+   * スクリプト実行時はNEXT_PUBLIC_FIREBASE_PROJECT_IDがundefinedになる可能性がある
    */
   firebaseServer: {
-    projectId: validatedEnv.FIREBASE_PROJECT_ID || validatedEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    googleCloudProject: validatedEnv.GOOGLE_CLOUD_PROJECT || validatedEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    projectId: validatedEnv.FIREBASE_PROJECT_ID || validatedEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+    googleCloudProject: validatedEnv.GOOGLE_CLOUD_PROJECT || validatedEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
   },
   
   /**
