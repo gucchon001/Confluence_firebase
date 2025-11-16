@@ -45,6 +45,7 @@ jobs:
       - name: Run differential sync
         if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_type == 'differential')
         run: npm run sync:confluence:differential
+        continue-on-error: false
         env:
           CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -77,5 +78,11 @@ jobs:
         if: failure()
         run: |
           echo "❌ Confluence data sync failed"
-          echo "Please check the logs for details"
+          echo "Please check the logs above for details"
+          echo ""
+          echo "Common issues:"
+          echo "1. Check if environment variables are set correctly"
+          echo "2. Check if Confluence API token is valid"
+          echo "3. Check if Gemini API key is valid"
+          echo "4. Check the previous step logs for error messages"
 
