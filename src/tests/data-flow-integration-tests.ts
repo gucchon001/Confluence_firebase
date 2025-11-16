@@ -116,9 +116,8 @@ export async function testHybridSearchFlow(): Promise<IntegrationTestResult> {
     
     // 8b. 動的キーワード抽出テスト
     console.log('   🔍 動的キーワード抽出テスト...');
-    const { DynamicKeywordExtractor } = await import('../lib/dynamic-keyword-extractor');
-    const keywordExtractor = new DynamicKeywordExtractor();
-    const keywords = await keywordExtractor.extractKeywords(testQuery);
+    const { unifiedKeywordExtractionService } = await import('../lib/unified-keyword-extraction-service');
+    const keywords = await unifiedKeywordExtractionService.extractKeywordsConfigured(testQuery);
     
     if (!keywords || keywords.length === 0) {
       throw new Error('キーワード抽出に失敗しました');
@@ -303,9 +302,8 @@ export async function testComponentIntegration(): Promise<IntegrationTestResult>
     
     // 3. キーワード抽出器 ↔ 検索エンジン連携テスト
     console.log('   🔍 キーワード抽出器 ↔ 検索エンジン連携テスト...');
-    const { DynamicKeywordExtractor } = await import('../lib/dynamic-keyword-extractor');
-    const keywordExtractor = new DynamicKeywordExtractor();
-    const keywords = await keywordExtractor.extractKeywords(testQuery);
+    const { unifiedKeywordExtractionService } = await import('../lib/unified-keyword-extraction-service');
+    const keywords = await unifiedKeywordExtractionService.extractKeywordsConfigured(testQuery);
     
     // 4. 検索エンジン ↔ AI回答生成連携テスト
     console.log('   🤖 検索エンジン ↔ AI回答生成連携テスト...');

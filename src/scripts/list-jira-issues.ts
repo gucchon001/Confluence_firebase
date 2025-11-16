@@ -24,8 +24,10 @@ async function main() {
   console.log('🔍 Jiraチケット一覧を取得します\n');
   
   const issues: Array<{ key: string; title: string }> = [];
+  const uniqueKeys = new Set<string>(); // 重複チェック用
   let startAt = 0;
   let isLast = false;
+  let duplicateCount = 0;
   
   while (!isLast) {
     const searchUrl = new URL(
@@ -54,13 +56,20 @@ async function main() {
     const batchIssues = data.issues || [];
     
     for (const issue of batchIssues) {
-      issues.push({
-        key: issue.key || '',
-        title: issue.fields?.summary || '(タイトルなし)'
-      });
+      const key = issue.key || '';
+      if (uniqueKeys.has(key)) {
+        duplicateCount++;
+        console.warn(`⚠️ 重複検出: ${key} (${duplicateCount}件目の重複)`);
+      } else {
+        uniqueKeys.add(key);
+        issues.push({
+          key: key,
+          title: issue.fields?.summary || '(タイトルなし)'
+        });
+      }
     }
     
-    console.log(`✅ ${issues.length}件取得済み`);
+    console.log(`✅ ${issues.length}件取得済み (重複: ${duplicateCount}件)`);
     
     isLast = data.isLast === true || batchIssues.length < pageSize;
     startAt += batchIssues.length;
@@ -71,7 +80,12 @@ async function main() {
     }
   }
   
-  console.log(`\n📊 総件数: ${issues.length}件\n`);
+  console.log(`\n📊 総件数: ${issues.length}件 (重複: ${duplicateCount}件, ユニーク: ${uniqueKeys.size}件)\n`);
+  
+  // 重複がある場合は警告
+  if (duplicateCount > 0) {
+    console.warn(`⚠️ 警告: ${duplicateCount}件の重複チケットが検出されました`);
+  }
   
   // ファイルに出力
   const fs = await import('fs');

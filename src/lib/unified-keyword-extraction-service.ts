@@ -1,7 +1,9 @@
 /**
  * 統一キーワード抽出サービス
- * DynamicKeywordExtractor, KeywordListsLoader, DynamicPriorityManagerを統合
+ * DynamicKeywordExtractor（削除済み）, KeywordListsLoader, DynamicPriorityManagerを統合
  * デグレードを防ぐため、既存APIとの互換性を維持
+ * 
+ * ★★★ 統合完了: DynamicKeywordExtractor の機能は全てここに統合済み ★★★
  */
 
 import { readFileSync } from 'fs';
@@ -284,8 +286,7 @@ export class UnifiedKeywordExtractionService {
   }
 
   // ===== 既存のメソッドを統合 =====
-  // （既存のDynamicKeywordExtractorのメソッドをここに統合）
-  // 長いため、次のステップで実装
+  // ★★★ 統合完了: DynamicKeywordExtractor のメソッドは全て統合済み ★★★
 
   /**
    * クエリの動的解析

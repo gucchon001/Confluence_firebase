@@ -11,7 +11,7 @@
 import { LanceDBClient } from '../lib/lancedb-client';
 import { LunrSearchClient } from '../lib/lunr-search-client';
 import { HybridSearchEngine } from '../lib/hybrid-search-engine';
-import { DynamicKeywordExtractor } from '../lib/dynamic-keyword-extractor';
+import { unifiedKeywordExtractionService } from '../lib/unified-keyword-extraction-service';
 import { streamingSummarizeConfluenceDocsBackend } from '../ai/flows/streaming-summarize-confluence-docs';
 import { UnifiedFirebaseService } from '../lib/unified-firebase-service';
 
@@ -331,13 +331,12 @@ export class IntegrationTestFramework {
       await lunrClient.initialize();
 
       const hybridSearchEngine = new HybridSearchEngine();
-      const keywordExtractor = new DynamicKeywordExtractor();
 
       // 2. 完全な検索フロー実行
       const testQuery = '教室管理の詳細は';
       
-      // キーワード抽出
-      const keywords = await keywordExtractor.extractKeywords(testQuery);
+      // キーワード抽出（UnifiedKeywordExtractionServiceを使用）
+      const keywords = await unifiedKeywordExtractionService.extractKeywordsConfigured(testQuery);
       
       // ハイブリッド検索
       const searchResults = await hybridSearchEngine.search(testQuery);
