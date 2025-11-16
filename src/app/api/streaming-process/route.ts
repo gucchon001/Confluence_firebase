@@ -292,38 +292,47 @@ export const POST = async (req: NextRequest) => {
           const searchStartTime = processingStartTime;
           let userDisplayName = 'anonymous';
           
-          const [searchResults, userInfo] = await Promise.all([
-            retrieveRelevantDocs({
-              question,
-              labels: [],
-              labelFilters,
-              source
-            }),
-            // ユーザー情報を並行取得（検索と同時実行）
-            (async () => {
-              if (userId && userId !== 'anonymous') {
-                try {
-                  const adminApp = initializeFirebaseAdmin();
-                  const auth = admin.auth(adminApp);
-                  const userRecord = await auth.getUser(userId);
-                  return userRecord.displayName || userRecord.email || 'unknown';
-                } catch (userError) {
-                  console.warn('⚠️ ユーザー情報取得失敗:', userError);
-                  return 'anonymous';
+          let searchResults: any[] = [];
+          try {
+            const [results, userInfo] = await Promise.all([
+              retrieveRelevantDocs({
+                question,
+                labels: [],
+                labelFilters,
+                source
+              }),
+              // ユーザー情報を並行取得（検索と同時実行）
+              (async () => {
+                if (userId && userId !== 'anonymous') {
+                  try {
+                    const adminApp = initializeFirebaseAdmin();
+                    const auth = admin.auth(adminApp);
+                    const userRecord = await auth.getUser(userId);
+                    return userRecord.displayName || userRecord.email || 'unknown';
+                  } catch (userError) {
+                    console.warn('⚠️ ユーザー情報取得失敗:', userError);
+                    return 'anonymous';
+                  }
                 }
-              }
-              return 'anonymous';
-            })()
-          ]);
+                return 'anonymous';
+              })()
+            ]);
+            
+            searchResults = results || [];
+            userDisplayName = userInfo;
+          } catch (searchError) {
+            console.error('❌ 検索処理エラー:', searchError);
+            searchResults = [];
+            userDisplayName = 'anonymous';
+          }
           
           relevantDocs = searchResults;
-          userDisplayName = userInfo;
           // Phase 0A-4 FIX: 検索時間は検索開始から検索完了まで
           const searchEndTime = Date.now();
           searchTime = searchEndTime - searchStartTime;
           
           // 検索ソース別の集計
-          const searchSourceStats = relevantDocs.reduce((acc: Record<string, number>, doc) => {
+          const searchSourceStats = (relevantDocs || []).reduce((acc: Record<string, number>, doc) => {
             const source = doc.source || 'unknown';
             acc[source] = (acc[source] || 0) + 1;
             return acc;
@@ -374,8 +383,8 @@ export const POST = async (req: NextRequest) => {
             encoder.encode(`data: ${JSON.stringify(searchDetailMessage)}\n\n`)
           );
 
-          // ステップ2: ドキュメント処理中...
-          // ドキュメント処理ステップで参照情報を含める
+          // パフォーマンス最適化: ドキュメント処理ステップを簡略化し、AI生成を早期開始
+          // ステップ2: ドキュメント処理中...（簡略版）
           const processingMessage = {
             type: 'step_update',
             step: 1,  // Phase 5修正: ドキュメント処理はステップ1（0ベース）
@@ -384,7 +393,7 @@ export const POST = async (req: NextRequest) => {
             description: `検索結果 ${relevantDocs.length} 件を分析・整理しています...`,
             totalSteps: 4,
             icon: '📊',
-            references: relevantDocs.map((doc, index) => ({
+            references: relevantDocs.slice(0, 12).map((doc, index) => ({
               id: doc.id || `${doc.pageId}-${index}`,
               title: doc.title || 'タイトル不明',
               url: doc.url || '',
@@ -399,9 +408,9 @@ export const POST = async (req: NextRequest) => {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(processingMessage)}\n\n`)
           );
-          
+
+          // パフォーマンス最適化: 遅延を完全に削除し、即座にAI生成を開始
           const documentProcessingStartTime = Date.now();
-          await delay(100); // 視覚的効果のための最小限の遅延
           const processingTime = Date.now() - documentProcessingStartTime;
 
           // ドキュメント処理の詳細分析
@@ -436,7 +445,7 @@ export const POST = async (req: NextRequest) => {
           const aiStartTime = searchEndTime;
 
           // LLMに渡すcontextの件数を制限（実際に使用される参照元のみを表示）
-          const MAX_CONTEXT_DOCS = 10; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
+          const MAX_CONTEXT_DOCS = 12; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
           const contextDocsForLLM = relevantDocs.slice(0, MAX_CONTEXT_DOCS);
           // LLMコンテキスト用ドキュメント準備完了（ログ削減）
           
@@ -550,14 +559,6 @@ export const POST = async (req: NextRequest) => {
               // postLogIdを取得してから完了メッセージを送信
               try {
                 savedPostLogId = await savePostLogToAdminDB(logData);
-                if (process.env.NODE_ENV === 'development' && totalTime > 1000) {
-                  console.log('✅ 投稿ログを保存しました:', {
-                    postLogId: savedPostLogId,
-                    userId: logData.userId,
-                    userDisplayName: logData.metadata.userDisplayName,
-                    question: logData.question.substring(0, 50) + '...'
-                  });
-                }
               } catch (logError) {
                 console.error('❌ 投稿ログの保存に失敗しました:', logError);
                 // エラーが発生しても処理は継続（postLogIdはnullのまま）
@@ -745,7 +746,14 @@ export const POST = async (req: NextRequest) => {
           controller.close();
           
         } catch (error) {
+          // エラーの詳細をログに出力
           console.error('❌ 処理ステップストリーミングエラー:', error);
+          console.error('❌ エラー詳細:', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+            name: error instanceof Error ? error.name : typeof error,
+            error: error
+          });
           
           // Genkitエラーハンドリングを追加（既存のエラーハンドリングと並行動作）
           const genkitErrorResponse = createAPIErrorResponse(
@@ -768,7 +776,12 @@ export const POST = async (req: NextRequest) => {
             genkitError: {
               code: genkitErrorResponse.body.code,
               details: genkitErrorResponse.body.details
-            }
+            },
+            // 開発環境のみスタックトレースを返す
+            ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
+              stack: error.stack,
+              name: error.name
+            } : {})
           };
           
           controller.enqueue(
@@ -842,9 +855,22 @@ export const POST = async (req: NextRequest) => {
       console.error('❌ システムエラー時の投稿ログの保存に失敗しました:', logError);
     }
     
+    // エラーの詳細をログに出力
+    console.error('❌ 詳細エラー情報:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : typeof error,
+      error: error
+    });
+    
     return NextResponse.json({
       error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      message: error instanceof Error ? error.message : 'Unknown error',
+      // 開発環境のみスタックトレースを返す
+      ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
+        stack: error.stack,
+        name: error.name
+      } : {})
     }, { status: 500 });
   }
 };

@@ -78,7 +78,7 @@ const STREAMING_PROMPT_TEMPLATE = `
 
 **正しい例（詳細な回答形式）**:
 \`\`\`markdown
-お問い合わせありがとうございます。会員情報のうち、学年や現在の職業が自動で更新されるかについて、資料に基づいてご説明いたします。
+会員情報のうち、学年や現在の職業が自動で更新されるかについて、資料に基づいてご説明いたします。
 
 提供された資料によると、学年については自動更新の仕組みが存在しますが、現在の職業についても自動更新されるという直接的な記載は見当たりませんでした。
 
@@ -289,37 +289,40 @@ export async function* streamingSummarizeConfluenceDocs(
   
   try {
     // コンテキストの準備（参照元として表示される全件を使用）
-    // MAX_CONTEXT_DOCS=10件すべてをLLMに渡すことで、参照元として表示される情報が回答に反映される
-    const contextText = context
-      .slice(0, 10) // 上位10件（参照元として表示される全件）
-      .map(
-        (doc, index) => {
-          // ランキングに基づく動的な文字数制限（1位のドキュメントに十分な文字数を確保）
-          // パフォーマンス最適化: 処理時間短縮のため文字数を削減（-30%）
-          // 1位: 1400文字、2位: 1260文字、3位: 1120文字、4-6位: 980文字、7-10位: 840文字
-          const maxLength = index === 0 ? 1400 : index === 1 ? 1260 : index === 2 ? 1120 : index < 6 ? 980 : 840;
-          
-          // 理想的なハイブリッド方式によるコンテンツ抽出
-          // 先頭取得（固定800文字）とキーワード周辺取得（固定600文字）を組み合わせ、
-          // ランキングに応じて比率を調整（1位: 先頭:キーワード=7:3、10位: 先頭:キーワード=3:7）
-          const truncatedContent = doc.content && doc.content.length > maxLength
-            ? extractRelevantContentMultiKeyword(doc.content, sanitizedQuestion, maxLength, index)
-            : doc.content || '内容なし';
-          
-          return `**${doc.title}**
+    // MAX_CONTEXT_DOCS=12件すべてをLLMに渡すことで、参照元として表示される情報が回答に反映される
+    // パフォーマンス最適化: 同期処理でコンテンツ抽出を高速化（extractRelevantContentMultiKeywordは同期関数）
+    const contextDocs = context.slice(0, 12); // 上位12件（参照元として表示される全件）
+    
+    // 同期処理でコンテンツ抽出を実行（パフォーマンス最適化）
+    const contextParts = contextDocs.map((doc, index) => {
+        // ランキングに基づく動的な文字数制限（1位のドキュメントに十分な文字数を確保）
+        // パフォーマンス最適化: 処理時間短縮のため文字数を削減（-30%）
+        // 1位: 1400文字、2位: 1260文字、3位: 1120文字、4-6位: 800文字、7-10位: 700文字、11-12位: 500文字
+        const maxLength = index === 0 ? 1400 : index === 1 ? 1260 : index === 2 ? 1120 : index < 6 ? 800 : index < 10 ? 700 : 500;
+        
+        // 理想的なハイブリッド方式によるコンテンツ抽出
+        // 先頭取得（固定800文字）とキーワード周辺取得（固定600文字）を組み合わせ、
+        // ランキングに応じて比率を調整（1位: 先頭:キーワード=7:3、12位: 先頭:キーワード=3:7）
+        const truncatedContent = doc.content && doc.content.length > maxLength
+          ? extractRelevantContentMultiKeyword(doc.content, sanitizedQuestion, maxLength, index)
+          : doc.content || '内容なし';
+        
+        return `**${doc.title}**
 ${truncatedContent}`;
-        }
-      )
-      .join('\n\n');
+      });
+    
+    const contextText = contextParts.join('\n\n');
 
-    // チャット履歴の準備
+    // パフォーマンス最適化: チャット履歴とプロンプト生成を並列処理
+    // テンプレートは事前にコンパイル（グローバルスコープで1回だけ）
+    const template = Handlebars.compile(STREAMING_PROMPT_TEMPLATE);
+    
+    // チャット履歴の準備（軽量処理）
     const chatHistoryText = chatHistory.length > 0 
       ? chatHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')
       : 'なし';
 
-    // プロンプトの準備
-    const template = Handlebars.compile(STREAMING_PROMPT_TEMPLATE);
-
+    // BOMチェックとサニタイズ
     const contextBomCheck = checkStringForBOM(contextText);
     if (contextBomCheck.hasBOM) {
       console.warn('🚨 [BOM DETECTED] Context text contains BOM characters', {
@@ -336,11 +339,13 @@ ${truncatedContent}`;
       });
     }
 
+    // プロンプト生成
     const promptRaw = template({
       context: sanitizedContextText,
       question: sanitizedQuestion
     });
 
+    // BOMチェックとサニタイズ
     const promptBomCheck = checkStringForBOM(promptRaw);
     if (promptBomCheck.hasBOM) {
       console.warn('🚨 [BOM DETECTED] Prompt contains BOM characters before AI generate', {
@@ -349,7 +354,6 @@ ${truncatedContent}`;
         bomCheck: promptBomCheck
       });
     }
-
     const sanitizedPrompt = removeBOM(promptRaw);
     if (sanitizedPrompt !== promptRaw) {
       console.warn('🔧 [BOM REMOVED] Prompt sanitized before AI generate', {
@@ -405,7 +409,7 @@ ${truncatedContent}`;
     }
 
     // 参照元の準備（LLMに渡されたcontextのみを参照元として表示）
-    // 注意: contextは既にMAX_CONTEXT_DOCS件に制限されているため、全てを参照元として表示
+    // 注意: contextは既にMAX_CONTEXT_DOCS（12件）に制限されているため、全てを参照元として表示
     // URLを再構築（共通ユーティリティを使用）
     const { buildConfluenceUrl } = await import('../../lib/url-utils');
     

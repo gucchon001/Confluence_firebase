@@ -222,7 +222,7 @@ async function lancedbRetrieverTool(
     // UIが期待する形へ最小変換（scoreText, source を保持）
     // ★★★ MIGRATION: page_idフィールドのみを使用（フォールバックなし） ★★★
     // LLMに渡すcontextの件数を制限（実際に使用される参照元のみを表示）
-    const MAX_CONTEXT_DOCS = 10; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
+    const MAX_CONTEXT_DOCS = 12; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
     const isJira = filters?.source === 'jira';
     const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
     const { buildConfluenceUrl } = await import('../../lib/url-utils');
