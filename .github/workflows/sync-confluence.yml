@@ -42,7 +42,15 @@ jobs:
       - name: Install dependencies
         run: npm install
       
+      - name: Debug workflow context
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Sync type: ${{ github.event.inputs.sync_type }}"
+          echo "Should run differential: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_type == 'differential') }}"
+          echo "Should run full: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_type == 'full' }}"
+      
       - name: Run differential sync
+        id: differential_sync
         if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_type == 'differential')
         run: npm run sync:confluence:differential
         continue-on-error: false
@@ -54,6 +62,7 @@ jobs:
           CONFLUENCE_SPACE_KEY: CLIENTTOMO
       
       - name: Run full sync
+        id: full_sync
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.sync_type == 'full'
         run: npm run sync:confluence:batch
         env:
@@ -64,6 +73,7 @@ jobs:
           CONFLUENCE_SPACE_KEY: CLIENTTOMO
       
       - name: Upload data to Cloud Storage
+        if: steps.differential_sync.outcome == 'success' || steps.full_sync.outcome == 'success'
         run: npm run upload:production-data
         env:
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
@@ -73,6 +83,18 @@ jobs:
         run: |
           echo "✅ Confluence data sync completed successfully"
           echo "📊 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+      
+      - name: Check if sync step was executed
+        if: always()
+        run: |
+          if [ "${{ steps.differential_sync.outcome }}" != "success" ] && [ "${{ steps.full_sync.outcome }}" != "success" ]; then
+            echo "❌ 同期ステップが実行されませんでした"
+            echo "Event name: ${{ github.event_name }}"
+            echo "Sync type: ${{ github.event.inputs.sync_type }}"
+            echo "Differential sync outcome: ${{ steps.differential_sync.outcome }}"
+            echo "Full sync outcome: ${{ steps.full_sync.outcome }}"
+            exit 1
+          fi
       
       - name: Notify failure
         if: failure()
@@ -85,4 +107,5 @@ jobs:
           echo "2. Check if Confluence API token is valid"
           echo "3. Check if Gemini API key is valid"
           echo "4. Check the previous step logs for error messages"
+          echo "5. Check if sync step was executed (differential or full)"
 

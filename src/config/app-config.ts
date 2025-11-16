@@ -21,7 +21,15 @@ import { z } from 'zod';
 function isScriptContext(): boolean {
   // Next.jsアプリケーションコンテキストでは NEXT_RUNTIME が設定される
   // スクリプト実行時は設定されない
-  return !process.env.NEXT_RUNTIME;
+  const isScript = !process.env.NEXT_RUNTIME;
+  
+  // デバッグ用（本番環境ではログが出ないように）
+  if (process.env.NODE_ENV !== 'production' && process.env.DEBUG_ENV_CHECK) {
+    console.log('[app-config] NEXT_RUNTIME:', process.env.NEXT_RUNTIME);
+    console.log('[app-config] isScriptContext:', isScript);
+  }
+  
+  return isScript;
 }
 
 /**
