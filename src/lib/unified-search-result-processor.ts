@@ -120,6 +120,8 @@ export interface ScoreCalculationOptions {
   bm25MaxScore?: number;
   enableRRF?: boolean;
   rrfK?: number;
+  query?: string;  // RRF処理でのドメインキーワードブーストとタグマッチング用
+  keywords?: string[];  // RRF処理でのタグマッチング用
 }
 
 /**
@@ -160,6 +162,8 @@ export class UnifiedSearchResultProcessor {
       bm25MaxScore: 20,
       enableRRF: true,
       rrfK: 60,
+      query: '',
+      keywords: [],
       ...options
     };
 
@@ -254,8 +258,8 @@ export class UnifiedSearchResultProcessor {
                 (tr ? 1.2 * (1 / (kRrf + tr)) : 0) + 
                 (br ? 0.6 * (1 / (kRrf + br)) : 0);
 
-      // ドメイン減衰適用
-      rrf = this.applyDomainPenalty(rrf, result);
+      // ドメイン減衰・ブースト・タグマッチングボーナス適用
+      rrf = this.applyDomainPenalty(rrf, result, options.query, options.keywords);
 
       return {
         ...result,
@@ -265,10 +269,16 @@ export class UnifiedSearchResultProcessor {
   }
 
   /**
-   * ドメイン減衰・ブースト適用（RRF段階）
+   * ドメイン減衰・ブースト・タグマッチングボーナス適用（RRF段階）
    * Phase 5改善: クエリに関連するドメイン固有キーワードのみをブースト
+   * タグマッチングボーナス: StructuredLabelのtagsとクエリキーワードの一致
    */
-  private applyDomainPenalty(rrf: number, result: RawSearchResult, query?: string): number {
+  private applyDomainPenalty(
+    rrf: number, 
+    result: RawSearchResult, 
+    query?: string, 
+    keywords?: string[]
+  ): number {
     try {
       const titleStr = String(result.title || '').toLowerCase();
       const labelsArr = this.getLabelsAsArray(result.labels);
@@ -296,7 +306,38 @@ export class UnifiedSearchResultProcessor {
         }
       }
       
+      // タグマッチングボーナス（StructuredLabelのtagsとクエリキーワードの一致）
+      if (keywords && keywords.length > 0) {
+        const tagsArray = getLabelsAsArray((result as any).structured_tags);
+        
+        if (tagsArray.length > 0) {
+          const tagsLower = tagsArray.map((t: string) => String(t).toLowerCase());
+          let matchedTagCount = 0;
+          const matchedTagsSet = new Set<string>(); // 重複を避けるためSetを使用
+          
+          for (const keyword of keywords) {
+            const keywordLower = keyword.toLowerCase();
+            // 1つのキーワードに対して複数のタグがマッチする場合も全てカウント
+            const matchedTags = tagsLower.filter((tag: string) => tag.includes(keywordLower) || keywordLower.includes(tag));
+            for (const matchedTag of matchedTags) {
+              // 重複を避けるため、既にカウントしたタグはスキップ
+              if (!matchedTagsSet.has(matchedTag)) {
+                matchedTagCount++;
+                matchedTagsSet.add(matchedTag);
+              }
+            }
+          }
+          
+          if (matchedTagCount > 0) {
+            // 1つのタグマッチ: 2.0倍、2つ以上: 3.0倍（複数タグマッチで大幅ボーナス、タグマッチングを大幅に重視）
+            const tagBoost = matchedTagCount === 1 ? 2.0 : 3.0;
+            rrf *= tagBoost;
+          }
+        }
+      }
+      
     } catch (error) {
+      // エラーは無視して続行（タグマッチングは補助的な機能のため）
       console.warn('[UnifiedSearchResultProcessor] Domain penalty calculation failed:', error);
     }
     

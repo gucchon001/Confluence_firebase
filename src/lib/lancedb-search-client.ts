@@ -764,88 +764,25 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       } catch (e) {
         console.warn('[searchLanceDB] BM25 merge failed', e);
       }
-      // RRF融合（vector距離順位 + keyword順位 + 厳格タイトル順位 + BM25順位）
-      const kRrf = 60;
-      const byVector = [...resultsWithHybridScore].sort((a, b) => (a._distance ?? 1) - (b._distance ?? 1));
-      const byKeyword = [...resultsWithHybridScore].sort((a, b) => (b._keywordScore ?? 0) - (a._keywordScore ?? 0));
-      const byTitleExact = resultsWithHybridScore.filter(r => r._sourceType === 'title-exact');
-      const byBm25 = resultsWithHybridScore.filter(r => r._sourceType === 'bm25');
+      // RRF融合を UnifiedSearchResultProcessor で処理
+      // ★★★ 統合: インライン実装をUnifiedSearchResultProcessorに置き換え ★★★
+      const rrfProcessedResults = unifiedSearchResultProcessor.processSearchResults(resultsWithHybridScore, {
+        vectorWeight: 0.4,
+        keywordWeight: 0.4,
+        labelWeight: 0.2,
+        enableRRF: true,  // ✅ RRFを有効化（統合完了）
+        rrfK: 60,
+        query: params.query,  // ドメインキーワードブースト用
+        keywords: finalKeywords  // タグマッチング用
+      });
 
-      const vecRank = new Map<string, number>();
-      const kwRank = new Map<string, number>();
-      const titleRank = new Map<string, number>();
-      const bm25Rank = new Map<string, number>();
-      byVector.forEach((r, idx) => vecRank.set(r.id, idx + 1));
-      byKeyword.forEach((r, idx) => kwRank.set(r.id, idx + 1));
-      byTitleExact.forEach((r, idx) => titleRank.set(r.id, idx + 1));
-      byBm25.forEach((r, idx) => bm25Rank.set(r.id, idx + 1));
-
+      // RRF処理後の結果をresultsWithHybridScoreに反映
+      const rrfScoreMap = new Map<string, number>();
+      for (const r of rrfProcessedResults) {
+        rrfScoreMap.set(r.id, r.rrfScore || 0);
+      }
       for (const r of resultsWithHybridScore) {
-        const vr = vecRank.get(r.id) ?? 1000000;
-        const kr = kwRank.get(r.id) ?? 1000000;
-        const tr = titleRank.get(r.id); // 厳格タイトルはある場合のみ加点
-        const br = bm25Rank.get(r.id);
-        // 重み: vector=1.0, keyword=0.8, title-exact=1.2, bm25=0.6（キーワードマッチングを重視）
-        let rrf = (1.0 / (kRrf + vr)) + 0.8 * (1 / (kRrf + kr)) + (tr ? 1.2 * (1 / (kRrf + tr)) : 0) + (br ? 0.6 * (1 / (kRrf + br)) : 0);
-        // Phase 5改善: ドメイン減衰・ブースト適用（クエリ関連のみ）
-        try {
-          const titleStr = String(r.title || '').toLowerCase();
-          const labelsArr: string[] = getLabelsAsArray(r.labels);
-          const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
-          const penaltyTerms = labelManager.getPenaltyTerms();
-          const hasPenalty = penaltyTerms.some(t => titleStr.includes(t)) || lowerLabels.some(l => penaltyTerms.some(t => l.includes(t)));
-          const isGenericDoc = GENERIC_DOCUMENT_TERMS.some(t => titleStr.includes(t.toLowerCase()));
-          
-          // 減衰適用（強化版）
-          if (hasPenalty) rrf *= 0.9; // 議事録など
-          if (isGenericDoc) rrf *= 0.5; // 0.8 → 0.5に強化（汎用文書を大幅減衰）
-          if (String(r.title || '').includes('本システム外')) rrf *= 0.8;
-          
-          // Phase 5改善: クエリとタイトルの両方に含まれるドメイン固有キーワードのみをブースト
-          if (!isGenericDoc) {
-            const matchingKeywordCount = CommonTermsHelper.countMatchingDomainKeywords(params.query, String(r.title || ''));
-            
-            if (matchingKeywordCount > 0) {
-              // マッチしたキーワード数に応じてブースト（最大2倍）
-              const boostFactor = 1.0 + (matchingKeywordCount * 0.5);
-              rrf *= Math.min(boostFactor, 2.0);
-            }
-          }
-          
-          // タグマッチングボーナス（StructuredLabelのtagsとクエリキーワードの一致）
-          // Vector型を配列に変換（getLabelsAsArrayを使用）
-          const tagsArray = getLabelsAsArray(r.structured_tags);
-          
-          if (tagsArray.length > 0) {
-            const tagsLower = tagsArray.map((t: string) => String(t).toLowerCase());
-            let matchedTagCount = 0;
-            const matchedTagsList: string[] = [];
-            const matchedTagsSet = new Set<string>(); // 重複を避けるためSetを使用
-            
-            for (const keyword of finalKeywords) {
-              const keywordLower = keyword.toLowerCase();
-              // 1つのキーワードに対して複数のタグがマッチする場合も全てカウント
-              const matchedTags = tagsLower.filter((tag: string) => tag.includes(keywordLower) || keywordLower.includes(tag));
-              for (const matchedTag of matchedTags) {
-                // 重複を避けるため、既にカウントしたタグはスキップ
-                if (!matchedTagsSet.has(matchedTag)) {
-                  matchedTagCount++;
-                  matchedTagsSet.add(matchedTag);
-                  matchedTagsList.push(`${keyword}↔${matchedTag}`);
-                }
-              }
-            }
-            if (matchedTagCount > 0) {
-              // 1つのタグマッチ: 2.0倍、2つ以上: 3.0倍（複数タグマッチで大幅ボーナス、タグマッチングを大幅に重視）
-              const tagBoost = matchedTagCount === 1 ? 2.0 : 3.0;
-              rrf *= tagBoost;
-            }
-          }
-        } catch (e: any) {
-          // エラーは無視して続行（タグマッチングは補助的な機能のため）
-        }
-
-        r._rrfScore = rrf;
+        r._rrfScore = rrfScoreMap.get(r.id) ?? 0;
       }
 
       // 同一pageId/titleの重複を1件に正規化（最良スコアを残す）
@@ -1005,12 +942,13 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // structured_status = 'deprecated' またはタイトルに非推奨キーワードが含まれるページを除外
     const filtered = filterDeprecatedDocuments(meetingFiltered);
     
-    // 統一検索結果処理サービスを使用して結果を処理（RRF無効化で高速化）
+    // 統一検索結果処理サービスを使用して結果を処理（フォーマットのみ、RRFは既に適用済み）
+    // ★★★ 統合: RRF処理は既に適用済みのため、フォーマットのみ実行 ★★★
     const processedResults = unifiedSearchResultProcessor.processSearchResults(filtered, {
       vectorWeight: 0.4,
       keywordWeight: 0.4,
       labelWeight: 0.2,
-      enableRRF: false  // RRF無効化で高速化
+      enableRRF: false  // RRFは既に適用済み（767行目付近）のため無効化
     });
     
     // 結果をキャッシュに保存
