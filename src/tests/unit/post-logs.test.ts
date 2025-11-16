@@ -92,18 +92,20 @@ vi.mock('@/lib/startup-optimizer', () => ({
   initializeStartupOptimizations: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('@/lib/markdown-quality-monitor', () => ({
-  markdownQualityMonitor: {
-    checkQuality: vi.fn().mockResolvedValue({ score: 0.9, issues: [] })
-  }
-}));
+// markdown-quality-monitor.tsは削除されたため、モックを削除
+// vi.mock('@/lib/markdown-quality-monitor', () => ({
+//   markdownQualityMonitor: {
+//     checkQuality: vi.fn().mockResolvedValue({ score: 0.9, issues: [] })
+//   }
+// }));
 
-vi.mock('@/lib/markdown-quality-service', () => ({
-  markdownQualityService: {
-    generateQualityReport: vi.fn().mockResolvedValue({}),
-    getUnresolvedIssues: vi.fn().mockResolvedValue([])
-  }
-}));
+// markdown-quality-service.tsは存在しないため、モックを削除
+// vi.mock('@/lib/markdown-quality-service', () => ({
+//   markdownQualityService: {
+//     generateQualityReport: vi.fn().mockResolvedValue({}),
+//     getUnresolvedIssues: vi.fn().mockResolvedValue([])
+//   }
+// }));
 
 // screenTestLoggerのモック
 const mockScreenTestLogger = {

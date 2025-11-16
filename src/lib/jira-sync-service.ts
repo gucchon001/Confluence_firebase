@@ -7,6 +7,7 @@ import fetch from 'node-fetch';
 
 import { initializeFirebaseAdmin } from './firebase-admin-init';
 import { getEmbeddings } from './embeddings';
+import { appConfig } from '@/config/app-config';
 
 initializeFirebaseAdmin();
 
@@ -112,6 +113,7 @@ interface JiraSearchBatchResponse {
   maxResults?: number;
   total?: number;
   isLast?: boolean;
+  nextPageToken?: string;
 }
 
 export class JiraSyncService {
@@ -123,22 +125,23 @@ export class JiraSyncService {
   private readonly maxIssues: number;
 
   constructor(maxIssues?: number) {
-    this.baseUrl = process.env.JIRA_BASE_URL || process.env.CONFLUENCE_BASE_URL || '';
-    this.email = process.env.JIRA_USER_EMAIL || process.env.CONFLUENCE_USER_EMAIL || '';
-    this.apiToken = process.env.JIRA_API_TOKEN || process.env.CONFLUENCE_API_TOKEN || '';
-    this.projectKey = process.env.JIRA_PROJECT_KEY || '';
-    // maxIssuesが明示的に指定されている場合はそれを使用、そうでない場合は環境変数から取得
-    // 環境変数が'0'の場合は全件取得モード
+    // 統合設定ファイルからJira設定を取得（型安全で検証済み）
+    // Jira固有の設定がない場合はConfluence設定をフォールバックとして使用
+    this.baseUrl = appConfig.jira.baseUrl;
+    this.email = appConfig.jira.userEmail;
+    this.apiToken = appConfig.jira.apiToken;
+    this.projectKey = appConfig.jira.projectKey;
+    
+    // maxIssuesが明示的に指定されている場合はそれを使用、そうでない場合は統合設定から取得
     if (maxIssues !== undefined) {
       this.maxIssues = maxIssues;
-    } else if (process.env.JIRA_MAX_ISSUES !== undefined) {
-      this.maxIssues = parseInt(process.env.JIRA_MAX_ISSUES, 10);
     } else {
-      this.maxIssues = 1000; // デフォルト値
+      this.maxIssues = appConfig.jira.maxIssues; // デフォルト値: 1000
     }
 
+    // 統合設定ファイルで検証済みだが、projectKeyは空文字の可能性があるため再チェック
     if (!this.baseUrl || !this.email || !this.apiToken || !this.projectKey) {
-      throw new Error('Jira同期に必要な環境変数 (JIRA_BASE_URL, JIRA_USER_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY) が不足しています。');
+      throw new Error('Jira同期に必要な設定が不足しています。JIRA_PROJECT_KEY を設定してください。');
     }
   }
 
@@ -229,7 +232,7 @@ export class JiraSyncService {
 
   private async fetchAllIssues(): Promise<JiraIssueResponse[]> {
     const issues: JiraIssueResponse[] = [];
-    let startAt = 0;
+    let nextPageToken: string | undefined = undefined;
     let isLast = false;
     let effectiveMaxIssues = this.maxIssues;
 
@@ -242,7 +245,7 @@ export class JiraSyncService {
     }
 
     while (!isLast && issues.length < effectiveMaxIssues) {
-      const batch = await this.fetchIssuesBatch(startAt);
+      const batch = await this.fetchIssuesBatch(nextPageToken);
       const batchIssues = batch.issues || [];
       
       // 最大件数に達するまで追加
@@ -258,30 +261,45 @@ export class JiraSyncService {
       }
 
       isLast = batch.isLast === true || batchIssues.length < this.pageSize;
-      startAt += batchIssues.length;
+      nextPageToken = batch.nextPageToken;
+      
+      // nextPageTokenがない場合は終了
+      if (!nextPageToken && !isLast) {
+        console.warn(`⚠️ nextPageTokenがありませんが、isLast=${isLast}です。終了します。`);
+        isLast = true;
+      }
     }
 
     console.log(`✅ 取得完了: ${issues.length}件`);
     return issues;
   }
 
-  private async fetchIssuesBatch(startAt: number): Promise<JiraSearchBatchResponse> {
+  private async fetchIssuesBatch(nextPageToken?: string): Promise<JiraSearchBatchResponse> {
     const jql = `project = "${this.projectKey}" ORDER BY updated DESC`;
     const encodedJql = encodeURIComponent(jql);
     
     // テストスクリプトと同じエンドポイントを使用
     // カスタムフィールドも含めて取得
-    const searchUrl = new URL(
-      `/rest/api/3/search/jql?jql=${encodedJql}&fields=summary,description,status,priority,assignee,reporter,created,updated,labels,issuetype,project,customfield_10276,customfield_10277,customfield_10278,customfield_10279,customfield_10280,customfield_10281,customfield_10282,customfield_10283,customfield_10284,customfield_10291,customfield_10292,comment&startAt=${startAt}&maxResults=${this.pageSize}`,
-      this.baseUrl
-    );
+    // /rest/api/3/search/jqlエンドポイントはstartAtを無視するため、nextPageTokenを使用
+    let searchUrl: URL;
+    if (nextPageToken) {
+      searchUrl = new URL(
+        `/rest/api/3/search/jql?jql=${encodedJql}&fields=summary,description,status,priority,assignee,reporter,created,updated,labels,issuetype,project,customfield_10276,customfield_10277,customfield_10278,customfield_10279,customfield_10280,customfield_10281,customfield_10282,customfield_10283,customfield_10284,customfield_10291,customfield_10292,comment&nextPageToken=${encodeURIComponent(nextPageToken)}&maxResults=${this.pageSize}`,
+        this.baseUrl
+      );
+    } else {
+      searchUrl = new URL(
+        `/rest/api/3/search/jql?jql=${encodedJql}&fields=summary,description,status,priority,assignee,reporter,created,updated,labels,issuetype,project,customfield_10276,customfield_10277,customfield_10278,customfield_10279,customfield_10280,customfield_10281,customfield_10282,customfield_10283,customfield_10284,customfield_10291,customfield_10292,comment&maxResults=${this.pageSize}`,
+        this.baseUrl
+      );
+    }
 
     const headers = {
       Authorization: `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`,
       Accept: 'application/json'
     };
 
-    console.log(`🌐 Fetching Jira issues: startAt=${startAt}`);
+    console.log(`🌐 Fetching Jira issues: ${nextPageToken ? `nextPageToken使用` : '最初のページ'}`);
 
     const res = await fetch(searchUrl.toString(), {
       method: 'GET',
@@ -296,12 +314,14 @@ export class JiraSyncService {
     
     // Jira API v3の新しいエンドポイント(/rest/api/3/search/jql)のレスポンス構造に合わせて変換
     // このエンドポイントはtotalを返さず、nextPageTokenとisLastを使用
+    // startAtパラメータは無視されるため、nextPageTokenを使用する必要がある
     return {
       issues: data.issues || [],
-      startAt: data.startAt || startAt,
+      startAt: data.startAt,
       maxResults: data.maxResults || this.pageSize,
       total: data.total, // 新しいAPIではundefinedになる可能性がある
-      isLast: data.isLast === true
+      isLast: data.isLast === true,
+      nextPageToken: data.nextPageToken
     };
   }
 

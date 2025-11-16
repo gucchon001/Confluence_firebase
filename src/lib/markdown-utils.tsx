@@ -263,6 +263,32 @@ export function convertReferencesToNumberedLinks(markdown: string, references: A
 }
 
 /**
+ * メッセージコンテンツの変換処理（共通化）
+ * チャットページと管理画面で使用
+ * @param content マークダウンテキスト
+ * @param references 参照元リスト（オプション）
+ * @param isAssistant アシスタントのメッセージかどうか（デフォルト: true）
+ * @returns 変換後のマークダウンテキスト
+ */
+export function formatMessageContent(
+  content: string, 
+  references?: Array<{title: string, url?: string}>, 
+  isAssistant: boolean = true
+): string {
+  if (!isAssistant) {
+    return content;
+  }
+  
+  const normalized = normalizeMarkdownSymbols(fixMarkdownTables(content));
+  
+  if (references && references.length > 0) {
+    return convertReferencesToNumberedLinks(normalized, references);
+  }
+  
+  return normalized;
+}
+
+/**
  * 共通のMarkdownコンポーネント設定
  * ReactMarkdownで使用
  */

@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { fixMarkdownTables, normalizeMarkdownSymbols, sharedMarkdownComponents } from '@/lib/markdown-utils';
+import { formatMessageContent, sharedMarkdownComponents } from '@/lib/markdown-utils';
 import { 
   BarChart3, 
   Users, 
@@ -1567,7 +1567,7 @@ const AdminDashboard: React.FC = () => {
                         remarkPlugins={[remarkGfm]}
                         components={sharedMarkdownComponents}
                       >
-                        {normalizeMarkdownSymbols(fixMarkdownTables(selectedLog.answer))}
+                        {formatMessageContent(selectedLog.answer)}
                       </ReactMarkdown>
                     </div>
                   </ScrollArea>

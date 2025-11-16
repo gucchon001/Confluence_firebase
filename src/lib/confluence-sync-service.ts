@@ -10,10 +10,12 @@
 
 import { LanceDBClient } from './lancedb-client';
 import { getEmbeddings } from './embeddings';
-import { convertLabelsToArray, shouldExcludeByLabels } from './label-helper';
+import { shouldExcludeByLabels } from './label-helper';
+import { getLabelsAsArray } from './label-utils';
 import { getStructuredLabel } from './structured-label-service';
 import { flattenStructuredLabel, type ExtendedLanceDBRecord } from './lancedb-schema-extended';
 import { removeBOM } from './bom-utils';
+import { appConfig } from '@/config/app-config';
 import axios from 'axios';
 
 export interface ConfluencePage {
@@ -62,11 +64,11 @@ export class ConfluenceSyncService {
     this.lancedbClient = LanceDBClient.getInstance();
     // embeddings.ts の getEmbeddings 関数を使用
     
-    // 環境変数からConfluence設定を取得
-    this.baseUrl = process.env.CONFLUENCE_BASE_URL || '';
-    this.username = process.env.CONFLUENCE_USER_EMAIL || '';
-    this.apiToken = process.env.CONFLUENCE_API_TOKEN || '';
-    this.spaceKey = process.env.CONFLUENCE_SPACE_KEY || '';
+    // 統合設定ファイルからConfluence設定を取得（型安全で検証済み）
+    this.baseUrl = appConfig.confluence.baseUrl;
+    this.username = appConfig.confluence.userEmail;
+    this.apiToken = appConfig.confluence.apiToken;
+    this.spaceKey = appConfig.confluence.spaceKey;
   }
 
   /**
@@ -156,49 +158,6 @@ export class ConfluenceSyncService {
     }
   }
 
-
-  /**
-   * Confluenceページを並列バッチで取得
-   */
-  async getConfluencePagesBatch(totalPages: number, batchSize: number = 50): Promise<ConfluencePage[]> {
-    console.log(`🚀 並列バッチ取得を開始: 総ページ数=${totalPages}, バッチサイズ=${batchSize}`);
-    
-    const allPages: ConfluencePage[] = [];
-    const batches: Promise<ConfluencePage[]>[] = [];
-    
-    // バッチを作成
-    for (let start = 0; start < totalPages; start += batchSize) {
-      const currentBatchSize = Math.min(batchSize, totalPages - start);
-      const batchPromise = this.getConfluencePages(currentBatchSize, start);
-      batches.push(batchPromise);
-      
-      console.log(`📦 バッチ ${Math.floor(start / batchSize) + 1}: ${start}-${start + currentBatchSize - 1}ページ`);
-    }
-    
-    console.log(`⚡ ${batches.length}個のバッチを並列実行中...`);
-    const startTime = Date.now();
-    
-    try {
-      // 全バッチを並列実行
-      const batchResults = await Promise.all(batches);
-      
-      // 結果をマージ
-      for (const batchPages of batchResults) {
-        allPages.push(...batchPages);
-      }
-      
-      const endTime = Date.now();
-      const executionTime = endTime - startTime;
-      
-      console.log(`✅ 並列バッチ取得完了: ${allPages.length}ページ (${executionTime}ms)`);
-      console.log(`📊 パフォーマンス: ${Math.round(allPages.length / executionTime * 1000)}ページ/秒`);
-      
-      return allPages;
-    } catch (error) {
-      console.error(`❌ 並列バッチ取得エラー: ${error}`);
-      throw error;
-    }
-  }
 
   /**
    * Confluence APIから全ページを取得（ページネーション対応）
@@ -305,7 +264,7 @@ export class ConfluenceSyncService {
     const hasExcludedLabel = shouldExcludeByLabels(labels, this.EXCLUDED_LABELS);
     
     if (hasExcludedLabel) {
-      console.log(`🚫 除外対象: ${page.title} (${page.id}) - ラベル: [${convertLabelsToArray(labels).join(', ')}]`);
+      console.log(`🚫 除外対象: ${page.title} (${page.id}) - ラベル: [${getLabelsAsArray(labels).join(', ')}]`);
       return true;
     }
     
@@ -389,124 +348,128 @@ export class ConfluenceSyncService {
 
   /**
    * 指定されたページ数で同期を実行
+   * ⚠️ 注意: アーカイブスクリプトでのみ使用。本番コードでは未使用。
+   * 必要に応じて `syncPages` を使用してください。
    */
-  async syncPagesByCount(maxPages: number): Promise<SyncResult> {
-    console.log(`🔄 ${maxPages}ページの同期を開始します...`);
-    
-    // ページを取得
-    const pages = await this.getAllConfluencePages(maxPages);
-    console.log(`📄 取得したページ数: ${pages.length}`);
-    
-    // 並列同期を実行
-    return await this.syncPagesParallel(pages, 10);
-  }
+  // async syncPagesByCount(maxPages: number): Promise<SyncResult> {
+  //   console.log(`🔄 ${maxPages}ページの同期を開始します...`);
+  //   
+  //   // ページを取得
+  //   const pages = await this.getAllConfluencePages(maxPages);
+  //   console.log(`📄 取得したページ数: ${pages.length}`);
+  //   
+  //   // 並列同期を実行
+  //   return await this.syncPagesParallel(pages, 10);
+  // }
 
   /**
    * 並列同期処理
+   * ⚠️ 注意: 本番コードでは未使用。将来の最適化で使用される可能性があるためコメントアウト。
+   * 必要に応じて `syncPages` を使用してください。
    */
-  async syncPagesParallel(pages: ConfluencePage[], concurrency: number = 10): Promise<SyncResult> {
-    await this.lancedbClient.connect();
-    const table = await this.lancedbClient.getTable();
-
-    const results: SyncResult = { added: 0, updated: 0, unchanged: 0, excluded: 0, errors: [] };
-
-    console.log(`🔄 並列同期を開始: ${pages.length}ページ, 並列度=${concurrency}`);
-    
-    // まず除外対象のページをデータベースから削除
-    const removedCount = await this.removeExcludedPages(table);
-    console.log(`📊 除外対象ページ削除: ${removedCount}ページ`);
-
-    // ページをチャンクに分割
-    const chunks: ConfluencePage[][] = [];
-    for (let i = 0; i < pages.length; i += concurrency) {
-      chunks.push(pages.slice(i, i + concurrency));
-    }
-
-    console.log(`📦 ${chunks.length}個のチャンクに分割して並列処理`);
-
-    const startTime = Date.now();
-
-    // 各チャンクを並列処理
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      console.log(`⚡ チャンク ${i + 1}/${chunks.length} を並列処理中... (${chunk.length}ページ)`);
-      
-      const chunkPromises = chunk.map(async (page) => {
-        try {
-          // 除外対象のラベルを持つページはスキップ
-          if (this.shouldExcludePage(page)) {
-            return { type: 'excluded', page };
-          }
-          
-          const existingChunks = await this.findExistingChunks(table, page.id);
-
-          if (existingChunks.length === 0) {
-            // ページIDが存在しない場合：追加
-            await this.addNewPage(table, page);
-            return { type: 'added', page };
-                 } else {
-                   // ページIDが存在する場合：セット全体で更新日時を比較
-                   const existingLastModified = existingChunks[0].lastUpdated;
-                   const confluenceLastModified = page.lastModified || new Date().toISOString();
-                   
-                   const existingDate = new Date(existingLastModified);
-                   const confluenceDate = new Date(confluenceLastModified);
-                   
-                   // より厳密な日時比較（1秒以内の差は同じとみなす）
-                   const timeDiff = confluenceDate.getTime() - existingDate.getTime();
-                   const isSignificantlyNewer = timeDiff > 1000; // 1秒以上新しい場合のみ更新
-                   
-                   if (isSignificantlyNewer) {
-                     // Confluenceが1秒以上新しい場合：セット全体を削除して再作成
-                     await this.updateExistingPage(table, page, existingChunks);
-                     return { type: 'updated', page };
-                   } else {
-                     // 1秒以内の差または既存の方が新しい場合：何もしない
-                     return { type: 'unchanged', page };
-                   }
-                 }
-        } catch (error) {
-          const errorMsg = `ページ ${page.id} の処理に失敗: ${error instanceof Error ? error.message : 'Unknown error'}`;
-          console.error(`❌ ${errorMsg}`);
-          return { type: 'error', page, error: errorMsg };
-        }
-      });
-
-      // チャンク内の全ページを並列実行
-      const chunkResults = await Promise.all(chunkPromises);
-      
-      // 結果を集計
-      for (const result of chunkResults) {
-        switch (result.type) {
-          case 'added':
-            results.added++;
-            break;
-          case 'updated':
-            results.updated++;
-            break;
-          case 'unchanged':
-            results.unchanged++;
-            break;
-          case 'excluded':
-            results.excluded++;
-            break;
-          case 'error':
-            results.errors.push(result.error!);
-            break;
-        }
-      }
-      
-      console.log(`✅ チャンク ${i + 1} 完了: 追加=${chunkResults.filter(r => r.type === 'added').length}, 更新=${chunkResults.filter(r => r.type === 'updated').length}, 除外=${chunkResults.filter(r => r.type === 'excluded').length}`);
-    }
-    
-    const endTime = Date.now();
-    const executionTime = endTime - startTime;
-    
-    console.log(`✅ 並列同期完了: ${pages.length}ページ (${executionTime}ms)`);
-    console.log(`📊 パフォーマンス: ${Math.round(pages.length / executionTime * 1000)}ページ/秒`);
-    
-    return results;
-  }
+  // async syncPagesParallel(pages: ConfluencePage[], concurrency: number = 10): Promise<SyncResult> {
+  //   await this.lancedbClient.connect();
+  //   const table = await this.lancedbClient.getTable();
+  //
+  //   const results: SyncResult = { added: 0, updated: 0, unchanged: 0, excluded: 0, errors: [] };
+  //
+  //   console.log(`🔄 並列同期を開始: ${pages.length}ページ, 並列度=${concurrency}`);
+  //   
+  //   // まず除外対象のページをデータベースから削除
+  //   const removedCount = await this.removeExcludedPages(table);
+  //   console.log(`📊 除外対象ページ削除: ${removedCount}ページ`);
+  //
+  //   // ページをチャンクに分割
+  //   const chunks: ConfluencePage[][] = [];
+  //   for (let i = 0; i < pages.length; i += concurrency) {
+  //     chunks.push(pages.slice(i, i + concurrency));
+  //   }
+  //
+  //   console.log(`📦 ${chunks.length}個のチャンクに分割して並列処理`);
+  //
+  //   const startTime = Date.now();
+  //
+  //   // 各チャンクを並列処理
+  //   for (let i = 0; i < chunks.length; i++) {
+  //     const chunk = chunks[i];
+  //     console.log(`⚡ チャンク ${i + 1}/${chunks.length} を並列処理中... (${chunk.length}ページ)`);
+  //     
+  //     const chunkPromises = chunk.map(async (page) => {
+  //       try {
+  //         // 除外対象のラベルを持つページはスキップ
+  //         if (this.shouldExcludePage(page)) {
+  //           return { type: 'excluded', page };
+  //         }
+  //         
+  //         const existingChunks = await this.findExistingChunks(table, page.id);
+  //
+  //         if (existingChunks.length === 0) {
+  //           // ページIDが存在しない場合：追加
+  //           await this.addNewPage(table, page);
+  //           return { type: 'added', page };
+  //         } else {
+  //           // ページIDが存在する場合：セット全体で更新日時を比較
+  //           const existingLastModified = existingChunks[0].lastUpdated;
+  //           const confluenceLastModified = page.lastModified || new Date().toISOString();
+  //           
+  //           const existingDate = new Date(existingLastModified);
+  //           const confluenceDate = new Date(confluenceLastModified);
+  //           
+  //           // より厳密な日時比較（1秒以内の差は同じとみなす）
+  //           const timeDiff = confluenceDate.getTime() - existingDate.getTime();
+  //           const isSignificantlyNewer = timeDiff > 1000; // 1秒以上新しい場合のみ更新
+  //           
+  //           if (isSignificantlyNewer) {
+  //             // Confluenceが1秒以上新しい場合：セット全体を削除して再作成
+  //             await this.updateExistingPage(table, page, existingChunks);
+  //             return { type: 'updated', page };
+  //           } else {
+  //             // 1秒以内の差または既存の方が新しい場合：何もしない
+  //             return { type: 'unchanged', page };
+  //           }
+  //         }
+  //       } catch (error) {
+  //         const errorMsg = `ページ ${page.id} の処理に失敗: ${error instanceof Error ? error.message : 'Unknown error'}`;
+  //         console.error(`❌ ${errorMsg}`);
+  //         return { type: 'error', page, error: errorMsg };
+  //       }
+  //     });
+  //
+  //     // チャンク内の全ページを並列実行
+  //     const chunkResults = await Promise.all(chunkPromises);
+  //     
+  //     // 結果を集計
+  //     for (const result of chunkResults) {
+  //       switch (result.type) {
+  //         case 'added':
+  //           results.added++;
+  //           break;
+  //         case 'updated':
+  //           results.updated++;
+  //           break;
+  //         case 'unchanged':
+  //           results.unchanged++;
+  //           break;
+  //         case 'excluded':
+  //           results.excluded++;
+  //           break;
+  //         case 'error':
+  //           results.errors.push(result.error!);
+  //           break;
+  //       }
+  //     }
+  //     
+  //     console.log(`✅ チャンク ${i + 1} 完了: 追加=${chunkResults.filter(r => r.type === 'added').length}, 更新=${chunkResults.filter(r => r.type === 'updated').length}, 除外=${chunkResults.filter(r => r.type === 'excluded').length}`);
+  //   }
+  //   
+  //   const endTime = Date.now();
+  //   const executionTime = endTime - startTime;
+  //   
+  //   console.log(`✅ 並列同期完了: ${pages.length}ページ (${executionTime}ms)`);
+  //   console.log(`📊 パフォーマンス: ${Math.round(pages.length / executionTime * 1000)}ページ/秒`);
+  //   
+  //   return results;
+  // }
 
   /**
    * 正しい仕様に基づく同期処理
@@ -624,12 +587,12 @@ export class ConfluenceSyncService {
         if (structuredLabel) {
           structuredLabelFlat = flattenStructuredLabel(structuredLabel);
           // 本番環境では詳細ログを抑制（パフォーマンス最適化）
-          if (process.env.NODE_ENV !== 'production') {
+          if (appConfig.environment.isDevelopment || appConfig.environment.isTest) {
             console.log(`  ✅ Firestore StructuredLabel取得: ${page.id} (feature: ${structuredLabel.feature || 'N/A'})`);
           }
         } else {
           // 本番環境では警告ログを抑制（StructuredLabelがないのは正常なケース）
-          if (process.env.NODE_ENV !== 'production') {
+          if (appConfig.environment.isDevelopment || appConfig.environment.isTest) {
             console.log(`  ⚠️ Firestore StructuredLabelなし: ${page.id}`);
           }
         }
@@ -669,7 +632,7 @@ export class ConfluenceSyncService {
           chunkIndex: chunk.chunkIndex,
           lastUpdated: chunk.lastUpdated,
           space_key: chunk.spaceKey,
-          url: `${process.env.CONFLUENCE_BASE_URL}/wiki/spaces/${chunk.spaceKey}/pages/${chunk.pageId}`,
+          url: `${appConfig.confluence.baseUrl}/wiki/spaces/${chunk.spaceKey}/pages/${chunk.pageId}`,
           labels: labels, // 配列として保存
           vector: embedding // 768次元の配列として保存
         };
@@ -759,7 +722,7 @@ export class ConfluenceSyncService {
         if (i === 0 || i === chunks.length - 1) {
           // 最初と最後のチャンクのみログ出力（パフォーマンス最適化）
           console.log(`  ✅ チャンク ${i + 1}/${chunks.length} を追加: ${chunk.title.substring(0, 50)}${chunk.title.length > 50 ? '...' : ''}`);
-        } else if (process.env.NODE_ENV !== 'production') {
+        } else if (appConfig.environment.isDevelopment || appConfig.environment.isTest) {
           // 開発環境では全チャンクのログを出力
           console.log(`  ✅ チャンク ${i + 1}/${chunks.length} を追加: ${chunk.title}`);
         }

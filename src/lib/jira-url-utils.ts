@@ -3,6 +3,8 @@
  * JiraイシューのURLを構築する共通関数
  */
 
+import { appConfig, DEFAULT_CONFLUENCE_BASE_URL } from '@/config/app-config';
+
 /**
  * JiraイシューのURLを構築
  * 
@@ -18,7 +20,7 @@ export function buildJiraUrl(
     baseUrl?: string;
   }
 ): string {
-  const baseUrl = options?.baseUrl || process.env.JIRA_BASE_URL || process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
+  const baseUrl = options?.baseUrl || appConfig.jira.baseUrl || DEFAULT_CONFLUENCE_BASE_URL;
   
   // 既存のURLが有効な場合はそのまま使用
   if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http')) {

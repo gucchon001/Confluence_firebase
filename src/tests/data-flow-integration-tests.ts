@@ -47,12 +47,10 @@ export async function testDataAcquisitionFlow(): Promise<IntegrationTestResult> 
     
     // 4. 埋め込みベクトル生成テスト
     console.log('   🧠 埋め込みベクトル生成テスト...');
-    const { UnifiedEmbeddingService } = await import('../lib/unified-embedding-service');
-    const embeddingService = UnifiedEmbeddingService.getInstance();
+    const { getEmbeddings } = await import('../lib/embeddings');
     
     const testText = '教室管理の詳細について';
-    const embeddingResult = await embeddingService.generateSingleEmbedding(testText);
-    const embedding = embeddingResult.embedding;
+    const embedding = await getEmbeddings(testText);
     
     if (!embedding || embedding.length !== 768) {
       throw new Error('埋め込みベクトルの生成に失敗しました');
@@ -105,10 +103,8 @@ export async function testHybridSearchFlow(): Promise<IntegrationTestResult> {
     
     // 8a. クエリベクトル化テスト
     console.log('   🔢 クエリベクトル化テスト...');
-    const { UnifiedEmbeddingService } = await import('../lib/unified-embedding-service');
-    const embeddingService = UnifiedEmbeddingService.getInstance();
-    const queryEmbeddingResult = await embeddingService.generateSingleEmbedding(testQuery);
-    const queryEmbedding = queryEmbeddingResult.embedding;
+    const { getEmbeddings } = await import('../lib/embeddings');
+    const queryEmbedding = await getEmbeddings(testQuery);
     
     if (!queryEmbedding || queryEmbedding.length !== 768) {
       throw new Error('クエリベクトル化に失敗しました');
@@ -289,15 +285,13 @@ export async function testComponentIntegration(): Promise<IntegrationTestResult>
     
     // 2. 埋め込みサービス ↔ 検索エンジン連携テスト
     console.log('   🧠 埋め込みサービス ↔ 検索エンジン連携テスト...');
-    const { UnifiedEmbeddingService } = await import('../lib/unified-embedding-service');
+    const { getEmbeddings } = await import('../lib/embeddings');
     const { HybridSearchEngine } = await import('../lib/hybrid-search-engine');
     
-    const embeddingService = UnifiedEmbeddingService.getInstance();
     const hybridSearchEngine = new HybridSearchEngine();
     
     const testQuery = '教室管理の詳細は';
-    const embeddingResult = await embeddingService.generateSingleEmbedding(testQuery);
-    const embedding = embeddingResult.embedding;
+    const embedding = await getEmbeddings(testQuery);
     const searchResults = await hybridSearchEngine.search(testQuery);
     
     // 3. キーワード抽出器 ↔ 検索エンジン連携テスト

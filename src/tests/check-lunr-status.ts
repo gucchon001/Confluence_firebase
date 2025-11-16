@@ -47,19 +47,22 @@ async function checkLunrStatus() {
   
   // Next.jsアプリケーションでの初期化呼び出しを確認
   try {
-    const { initializeOnStartup } = await import('../lib/startup-initializer');
-    console.log('startup-initializer モジュール:', '存在');
+    const { initializeStartupOptimizations } = await import('../lib/startup-optimizer');
+    console.log('startup-optimizer モジュール:', '存在');
     
     // 手動で初期化を実行してみる
     console.log('\n--- 手動初期化の実行 ---');
-    await initializeOnStartup();
+    await initializeStartupOptimizations();
+    
+    // Lunrインデックスの初期化
+    await lunrInitializer.initializeAsync();
     
     // 初期化後の状態確認
     const finalStatus = lunrInitializer.getStatus();
     console.log('手動初期化後の状態:', JSON.stringify(finalStatus, null, 2));
     
   } catch (error) {
-    console.log('startup-initializer エラー:', (error as Error).message);
+    console.log('startup-optimizer エラー:', (error as Error).message);
   }
 }
 

@@ -3,6 +3,8 @@
  * ConfluenceページのURLを構築する共通関数
  */
 
+import { appConfig, DEFAULT_CONFLUENCE_BASE_URL } from '@/config/app-config';
+
 /**
  * ConfluenceページのURLを構築
  * page_idだけでURLを構築可能（space_keyはオプション）
@@ -21,7 +23,7 @@ export function buildConfluenceUrl(
     baseUrl?: string;
   }
 ): string {
-  const baseUrl = options?.baseUrl || process.env.CONFLUENCE_BASE_URL || 'https://giginc.atlassian.net';
+  const baseUrl = options?.baseUrl || appConfig.confluence.baseUrl || DEFAULT_CONFLUENCE_BASE_URL;
   
   // 既存のURLが有効な場合はそのまま使用
   if (existingUrl && existingUrl !== '#' && existingUrl.startsWith('http') && existingUrl.includes('/wiki/')) {

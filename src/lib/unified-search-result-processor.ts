@@ -281,7 +281,7 @@ export class UnifiedSearchResultProcessor {
   ): number {
     try {
       const titleStr = String(result.title || '').toLowerCase();
-      const labelsArr = this.getLabelsAsArray(result.labels);
+      const labelsArr = getLabelsAsArray(result.labels);
       const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
       
       const penaltyTerms = labelManager.getPenaltyTerms();
@@ -429,7 +429,7 @@ export class UnifiedSearchResultProcessor {
         distance: distance,
         score: finalScore, // Composite Scoreが利用可能な場合はそれを使用、それ以外は従来の計算
         space_key: result.space_key,
-        labels: this.getLabelsAsArray(result.labels),
+        labels: getLabelsAsArray(result.labels),
         url: buildConfluenceUrl(result.pageId || result.page_id, result.space_key, result.url),
         lastUpdated: result.lastUpdated || '',
         source: sourceType,
@@ -475,22 +475,6 @@ export class UnifiedSearchResultProcessor {
     });
   }
 
-  /**
-   * ラベル配列の取得（統一処理）
-   */
-  private getLabelsAsArray(labels: string | string[] | undefined): string[] {
-    if (!labels) return [];
-    if (Array.isArray(labels)) return labels;
-    if (typeof labels === 'string') {
-      try {
-        const parsed = JSON.parse(labels);
-        return Array.isArray(parsed) ? parsed : [labels];
-      } catch {
-        return [labels];
-      }
-    }
-    return [];
-  }
 
   /**
    * 結果の並び替え（RRFスコア順）

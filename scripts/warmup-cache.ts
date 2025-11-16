@@ -31,8 +31,8 @@ async function warmupCache() {
   // Step 1: Lunrインデックスをロード
   console.log('📚 Step 1: Lunrインデックスをロード中...');
   try {
-    const { OptimizedLunrInitializer } = await import('../src/lib/optimized-lunr-initializer');
-    await OptimizedLunrInitializer.initialize();
+    const { lunrInitializer } = await import('../src/lib/lunr-initializer');
+    await lunrInitializer.initializeAsync();
     console.log('   ✅ Lunrインデックス準備完了\n');
   } catch (error) {
     console.error('   ❌ Lunrインデックスエラー:', error);

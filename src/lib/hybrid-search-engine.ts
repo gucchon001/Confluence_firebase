@@ -43,6 +43,13 @@ export interface HybridSearchResult {
     contentMatches?: number;
   };
   rrfScore?: number;
+  // Jira特有のフィールド（オプショナル）
+  issue_key?: string;
+  status?: string;
+  status_category?: string;
+  priority?: string;
+  assignee?: string;
+  issue_type?: string;
 }
 
 export class HybridSearchEngine {
@@ -120,6 +127,16 @@ export class HybridSearchEngine {
           url = buildConfluenceUrl(pageId, result.space_key, result.url);
         }
         
+        // Jira特有のフィールドを取得（LanceDBから直接取得）
+        const jiraFields = tableName === 'jira_issues' ? {
+          issue_key: result.issue_key || issueKey,
+          status: result.status,
+          status_category: result.status_category,
+          priority: result.priority,
+          assignee: result.assignee,
+          issue_type: result.issue_type
+        } : {};
+        
         return {
           pageId: pageId || (issueKey ? 0 : undefined), // Jiraの場合はpageIdが存在しない可能性がある
           id: issueKey || result.id, // Jiraの場合はissue_keyをidとして使用
@@ -129,15 +146,10 @@ export class HybridSearchEngine {
           url: url, // URLを再構築
           source: 'vector' as const,
           scoreKind: 'vector' as const,
-          scoreRaw: result.distance,
-          scoreText: `Vector ${this.calculateSimilarityScore(result.distance).toFixed(1)}%`,
+          scoreRaw: result.distance || result._distance,
+          scoreText: `Vector ${this.calculateSimilarityScore(result.distance || result._distance).toFixed(1)}%`,
           // Jira特有のフィールド
-          issue_key: issueKey,
-          status: result.status,
-          status_category: result.status_category,
-          priority: result.priority,
-          assignee: result.assignee,
-          issue_type: result.issue_type
+          ...jiraFields
         };
       });
     } catch (error) {
@@ -259,9 +271,17 @@ export class HybridSearchEngine {
 
       if (vectorResult && bm25Result) {
         // 両方の結果がある場合：ハイブリッドスコアを計算
+        // BM25結果のJira特有フィールドを優先（より正確な情報）
         const hybridScore = this.calculateHybridScore(vectorResult.scoreRaw, bm25Result.scoreRaw);
         hybridResults.push({
           ...vectorResult,
+          // Jira特有フィールドはBM25結果から取得（より正確）
+          issue_key: bm25Result.issue_key || vectorResult.issue_key,
+          status: bm25Result.status || vectorResult.status,
+          status_category: bm25Result.status_category || vectorResult.status_category,
+          priority: bm25Result.priority || vectorResult.priority,
+          assignee: bm25Result.assignee || vectorResult.assignee,
+          issue_type: bm25Result.issue_type || vectorResult.issue_type,
           source: 'hybrid',
           scoreKind: 'hybrid',
           scoreRaw: hybridScore,

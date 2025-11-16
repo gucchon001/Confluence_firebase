@@ -122,67 +122,69 @@ export async function getStructuredLabels(
 
 /**
  * ドメイン別にStructuredLabelを取得
+ * ⚠️ 注意: 現在未使用。将来の機能で使用される可能性があるためコメントアウト。
  */
-export async function getStructuredLabelsByDomain(
-  domain: string,
-  maxResults: number = 100
-): Promise<StructuredLabelDocument[]> {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where('structuredLabel.domain', '==', domain),
-      limit(maxResults)
-    );
-    
-    const snapshot = await getDocs(q);
-    const results: StructuredLabelDocument[] = [];
-    
-    snapshot.forEach(doc => {
-      const data = doc.data() as StructuredLabelDocument;
-      results.push({
-        ...data,
-        structuredLabel: sanitizeStructuredLabel(data.structuredLabel)
-      });
-    });
-    
-    return results;
-  } catch (error) {
-    console.error(`Error querying labels by domain ${domain}:`, error);
-    return [];
-  }
-}
+// export async function getStructuredLabelsByDomain(
+//   domain: string,
+//   maxResults: number = 100
+// ): Promise<StructuredLabelDocument[]> {
+//   try {
+//     const q = query(
+//       collection(db, COLLECTION_NAME),
+//       where('structuredLabel.domain', '==', domain),
+//       limit(maxResults)
+//     );
+//     
+//     const snapshot = await getDocs(q);
+//     const results: StructuredLabelDocument[] = [];
+//     
+//     snapshot.forEach(doc => {
+//       const data = doc.data() as StructuredLabelDocument;
+//       results.push({
+//         ...data,
+//         structuredLabel: sanitizeStructuredLabel(data.structuredLabel)
+//       });
+//     });
+//     
+//     return results;
+//   } catch (error) {
+//     console.error(`Error querying labels by domain ${domain}:`, error);
+//     return [];
+//   }
+// }
 
 /**
  * カテゴリ別にStructuredLabelを取得
+ * ⚠️ 注意: 現在未使用。将来の機能で使用される可能性があるためコメントアウト。
  */
-export async function getStructuredLabelsByCategory(
-  category: string,
-  maxResults: number = 100
-): Promise<StructuredLabelDocument[]> {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where('structuredLabel.category', '==', category),
-      limit(maxResults)
-    );
-    
-    const snapshot = await getDocs(q);
-    const results: StructuredLabelDocument[] = [];
-    
-    snapshot.forEach(doc => {
-      const data = doc.data() as StructuredLabelDocument;
-      results.push({
-        ...data,
-        structuredLabel: sanitizeStructuredLabel(data.structuredLabel)
-      });
-    });
-    
-    return results;
-  } catch (error) {
-    console.error(`Error querying labels by category ${category}:`, error);
-    return [];
-  }
-}
+// export async function getStructuredLabelsByCategory(
+//   category: string,
+//   maxResults: number = 100
+// ): Promise<StructuredLabelDocument[]> {
+//   try {
+//     const q = query(
+//       collection(db, COLLECTION_NAME),
+//       where('structuredLabel.category', '==', category),
+//       limit(maxResults)
+//     );
+//     
+//     const snapshot = await getDocs(q);
+//     const results: StructuredLabelDocument[] = [];
+//     
+//     snapshot.forEach(doc => {
+//       const data = doc.data() as StructuredLabelDocument;
+//       results.push({
+//         ...data,
+//         structuredLabel: sanitizeStructuredLabel(data.structuredLabel)
+//       });
+//     });
+//     
+//     return results;
+//   } catch (error) {
+//     console.error(`Error querying labels by category ${category}:`, error);
+//     return [];
+//   }
+// }
 
 /**
  * 統計情報を取得

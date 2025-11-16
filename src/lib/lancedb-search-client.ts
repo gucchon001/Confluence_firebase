@@ -3,7 +3,7 @@
  */
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
-import { lancedbClient } from './lancedb-client';
+import { lancedbClient, LanceDBClient } from './lancedb-client';
 import { getEmbeddings } from './embeddings';
 import { calculateKeywordScore, LabelFilterOptions } from './search-weights';
 import { calculateHybridScore } from './score-utils';
@@ -184,7 +184,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     try {
       // optimized-lunr-initializerはアーカイブに移動済み。代わりにlunr-initializerを使用
       const { lunrInitializer } = await import('./lunr-initializer');
-      await lunrInitializer.initializeAsync();
+      const tableName = params.tableName || 'confluence';
+      await lunrInitializer.initializeAsync(tableName);
       
       // Phase 6修正: 初期化完了を確実に待つ（並列検索前）
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -260,13 +261,16 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     const connectionStartTime = Date.now();
     const connectionPromise = (async () => {
-      const { lancedbClient } = await import('./lancedb-client');
-      const conn = await lancedbClient.getConnection();
+      const { getLanceDBTable } = await import('./lancedb-client');
+      const tableName = params.tableName || 'confluence';
+      // tableNameに基づいて適切なテーブルを取得
+      const table = await getLanceDBTable(tableName);
       const connectionDuration = Date.now() - connectionStartTime;
       if (connectionDuration > 2000) {
         console.warn(`⚠️ [searchLanceDB] Slow LanceDB connection: ${connectionDuration}ms (${(connectionDuration / 1000).toFixed(2)}s)`);
       }
-      return conn;
+      // テーブルをラップしてconnection形式に変換
+      return { table };
     })();
     
     const [vector, keywords, connection] = await Promise.all([
@@ -362,7 +366,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // Promise.allSettledで並列実行（一方が失敗しても継続）
     const [vectorSearchResult, bm25SearchResult] = await Promise.allSettled([
       executeVectorSearch(tbl, vector, params, finalKeywords, excludeLabels, topK),
-      executeBM25Search(tbl, params, finalKeywords, topK)
+      executeBM25Search(tbl, params, finalKeywords, topK, params.tableName || 'confluence')
     ]);
     
     // 結果を取得（失敗時は空配列）
@@ -1240,12 +1244,67 @@ async function executeVectorSearch(
     // タイトルブースト適用
     // ★★★ MIGRATION: page_idフィールドを確実に保持 ★★★
     const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+    const tableName = params.tableName || 'confluence';
+    
+    // Jiraテーブルの場合、ベクトル検索結果から完全なレコードを取得
+    if (tableName === 'jira_issues' && vectorResults.length > 0) {
+      console.log(`[Vector Search] Jiraテーブル: ${vectorResults.length}件の結果から完全なレコードを取得中...`);
+      
+      // id（issue_key）のリストを収集
+      const issueKeys = vectorResults
+        .map(r => r.id || r.issue_key)
+        .filter(Boolean)
+        .slice(0, Math.min(vectorResults.length, 300)); // 最大300件まで
+      
+      if (issueKeys.length > 0) {
+        try {
+          // バッチで完全なレコードを取得
+          const idConditions = issueKeys.map(key => `\`id\` = '${key}'`).join(' OR ');
+          const fullRecords = await tbl.query()
+            .where(`(${idConditions})`)
+            .limit(issueKeys.length)
+            .toArray();
+          
+          // idでマップを作成
+          const fullRecordsMap = new Map(fullRecords.map((r: any) => [r.id, r]));
+          
+          // ベクトル検索結果を完全なレコードで置き換え
+          vectorResults = vectorResults.map(result => {
+            const fullRecord = fullRecordsMap.get(result.id || result.issue_key);
+            if (fullRecord) {
+              // ベクトル検索の距離情報を保持
+              return {
+                ...fullRecord,
+                _distance: result._distance
+              };
+            }
+            return result;
+          });
+          
+          console.log(`[Vector Search] 完全なレコード取得完了: ${fullRecordsMap.size}件`);
+        } catch (error) {
+          console.warn(`[Vector Search] 完全なレコード取得に失敗:`, error);
+        }
+      }
+    }
+    
     vectorResults = vectorResults.map(result => {
       const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(result.title, finalKeywords);
       
       // page_idを確実に保持（getPageIdFromRecordを使用）
       const pageId = getPageIdFromRecord(result);
       const page_id = result.page_id ?? pageId;
+      
+      // Jira特有のフィールドを保持（LanceDBから取得したデータに含まれている場合）
+      const jiraFields = tableName === 'jira_issues' ? {
+        issue_key: result.issue_key || result.id,
+        status: result.status,
+        status_category: result.status_category,
+        priority: result.priority,
+        assignee: result.assignee,
+        issue_type: result.issue_type,
+        updated_at: result.updated_at
+      } : {};
       
       if (matchedKeywords.length > 0) {
         let boostFactor = 1.0;
@@ -1257,6 +1316,7 @@ async function executeVectorSearch(
         
         return { 
           ...result, 
+          ...jiraFields, // Jira特有のフィールドを追加
           page_id: page_id, // ★★★ MIGRATION: page_idを確実に保持 ★★★
           _distance: result._distance * (1 / boostFactor), 
           _titleBoosted: true,
@@ -1264,9 +1324,10 @@ async function executeVectorSearch(
           _titleMatchRatio: titleMatchRatio
         };
       }
-      // マッチしない場合もpage_idを保持
+      // マッチしない場合もpage_idとJira特有のフィールドを保持
       return {
         ...result,
+        ...jiraFields, // Jira特有のフィールドを追加
         page_id: page_id // ★★★ MIGRATION: page_idを確実に保持 ★★★
       };
     });
@@ -1288,13 +1349,14 @@ async function executeBM25Search(
   tbl: any,
   params: LanceDBSearchParams,
   finalKeywords: string[],
-  topK: number
+  topK: number,
+  tableName: string = 'confluence'
 ): Promise<any[]> {
   const bm25SearchStart = Date.now();
   try {
     // Phase 6修正: lunrSearchClientの状態を直接チェック（lunrInitializerの間接チェックは信頼性が低い）
     const isLunrIndexEnabled = params.useLunrIndex !== false; // デフォルトはtrue
-    const isLunrReady = lunrSearchClient.isReady();
+    const isLunrReady = lunrSearchClient.isReady(tableName);
     
     if (!isLunrIndexEnabled || !isLunrReady) {
       console.log(`[BM25 Search] Skipping BM25 search: useLunrIndex=${params.useLunrIndex}, isLunrIndexEnabled=${isLunrIndexEnabled}, isLunrReady=${isLunrReady}`);
@@ -1317,7 +1379,7 @@ async function executeBM25Search(
       const tokenizedQuery = await tokenizeJapaneseText(keyword);
       console.log(`[BM25 Search] Searching '${keyword}' -> '${tokenizedQuery}'`);
       
-      const keywordResults = await lunrSearchClient.searchCandidates(tokenizedQuery, kwCap);
+      const keywordResults = await lunrSearchClient.searchCandidates(tokenizedQuery, kwCap, tableName);
       console.log(`[BM25 Search] Found ${keywordResults.length} results for '${keyword}'`);
       
       for (const result of keywordResults) {

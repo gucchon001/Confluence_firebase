@@ -34,7 +34,7 @@ import { StreamingProcessingUI, StreamingErrorUI } from '@/components/streaming-
 import { streamingProcessClient, ProcessingStep } from '@/lib/streaming-process-client';
 import AdminDashboard from '@/components/admin-dashboard';
 import { FeedbackRating } from '@/components/feedback-rating';
-import { fixMarkdownTables, normalizeMarkdownSymbols, createSharedMarkdownComponents, convertReferencesToNumberedLinks } from '@/lib/markdown-utils';
+import { formatMessageContent, createSharedMarkdownComponents } from '@/lib/markdown-utils';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 // 重複コード修正をロールバック
 // import MigrationButton from '@/components/migration-button';
@@ -43,16 +43,7 @@ interface ChatPageProps {
   user: User;
 }
 
-// メッセージコンテンツの変換処理を共通化
-const formatMessageContent = (content: string, references: Array<{title: string, url?: string}>, isAssistant: boolean): string => {
-  if (!isAssistant) {
-    return content;
-  }
-  return convertReferencesToNumberedLinks(
-    normalizeMarkdownSymbols(fixMarkdownTables(content)),
-    references || []
-  );
-};
+// formatMessageContentはmarkdown-utils.tsxからインポート
 
 const MessageCard = ({ msg }: { msg: Message }) => {
     const isAssistant = msg.role === 'assistant';

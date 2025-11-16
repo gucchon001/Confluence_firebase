@@ -11,44 +11,7 @@ import { GeminiConfig } from '@/config/ai-models-config';
 import { getAnswerCache } from '@/lib/answer-cache';
 import { removeBOM, checkStringForBOM } from '@/lib/bom-utils';
 import { extractRelevantContentMultiKeyword } from './content-extraction-utils';
-// 重複コード修正をロールバック
-
-// フォールバック回答生成関数
-function generateFallbackAnswer(question: string, context: any[]): string {
-  // 関連文書から主要な情報を抽出
-  const relevantDocs = context.slice(0, 3); // 上位3件の文書を使用
-  const titles = relevantDocs.map(doc => doc.title || 'タイトル不明').filter(Boolean);
-  
-  let answer = `申し訳ございませんが、現在AIサービスが一時的に利用できない状態です。\n\n`;
-  answer += `ご質問「${question}」に関連する情報を以下にまとめました：\n\n`;
-  
-  if (titles.length > 0) {
-    answer += `**関連するドキュメント：**\n`;
-    titles.forEach((title, index) => {
-      answer += `${index + 1}. ${title}\n`;
-    });
-    answer += `\n`;
-  }
-  
-  // 質問の種類に応じた基本的な回答
-  if (question.includes('ログイン') || question.includes('認証')) {
-    answer += `**ログイン機能について：**\n`;
-    answer += `- 会員ログイン機能\n`;
-    answer += `- クライアント企業ログイン機能\n`;
-    answer += `- 全体管理者ログイン機能\n`;
-    answer += `- パスワード再設定機能\n\n`;
-  } else if (question.includes('仕様') || question.includes('要件')) {
-    answer += `**仕様・要件について：**\n`;
-    answer += `関連するドキュメントを確認して詳細な仕様をご確認ください。\n\n`;
-  } else {
-    answer += `**一般的な回答：**\n`;
-    answer += `関連するドキュメントを確認して詳細な情報をご確認ください。\n\n`;
-  }
-  
-  answer += `AIサービスが復旧次第、より詳細な回答を提供いたします。`;
-  
-  return answer;
-}
+import { generateFallbackAnswer } from '@/lib/fallback-answer-generator';
 
 // ストリーミング応答のスキーマ
 const StreamingResponseSchema = z.object({
@@ -497,21 +460,6 @@ ${truncatedContent}`;
       references: []
     };
   }
-}
-
-/**
- * チャンクの完了判定
- */
-function isChunkComplete(chunk: string): boolean {
-  // 句読点、改行、または一定の長さで区切る
-  const lastChar = chunk[chunk.length - 1];
-  const punctuationMarks = ['。', '！', '？', '.', '!', '?', '\n'];
-  
-  return (
-    punctuationMarks.includes(lastChar) ||
-    chunk.length >= 150 || // 最大チャンクサイズ
-    chunk.includes('\n\n') // 段落区切り
-  );
 }
 
 /**
