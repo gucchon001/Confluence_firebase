@@ -6,8 +6,10 @@ import * as z from 'zod';
 import { searchLanceDB } from '@/lib/lancedb-search-client';
 import * as admin from 'firebase-admin';
 import { getStructuredLabels } from '@/lib/structured-label-service-admin';
-import { optimizedLanceDBClient } from '@/lib/optimized-lancedb-client';
+import { lancedbClient } from '@/lib/lancedb-client';
 import { getLanceDBCache } from '@/lib/lancedb-cache';
+import { getAllChunksByPageId as getAllChunksByPageIdUtil } from '@/lib/lancedb-utils';
+import { removeBOM } from '@/lib/bom-utils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -38,27 +40,6 @@ function writeLogToFile(level: 'info' | 'warn' | 'error', category: string, mess
     // ログファイルへの書き込みに失敗しても処理は継続
     console.error('[writeLogToFile] Failed to write log:', error);
   }
-}
-
-/**
- * BOM文字（U+FEFF）を確実に削除するヘルパー関数
- * 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
- */
-function removeBOM(text: string): string {
-  if (!text || typeof text !== 'string') {
-    return text;
-  }
-  // 複数の方法でBOMを除去して確実性を高める
-  let cleanText = text;
-  // 1. 文字列全体からBOMを削除
-  cleanText = cleanText.replace(/\uFEFF/g, '');
-  // 2. 文字列の先頭からBOMを削除（念のため）
-  if (cleanText.length > 0 && cleanText.charCodeAt(0) === 0xFEFF) {
-    cleanText = cleanText.slice(1);
-  }
-  // 3. trim()の前に再度BOMを削除
-  cleanText = cleanText.replace(/^\uFEFF+|\uFEFF+$/g, '').trim();
-  return cleanText;
 }
 
 /**
@@ -594,110 +575,36 @@ async function getAllChunksByPageId(pageId: string): Promise<any[]> {
   }
   
   // キャッシュミス: DBから取得してキャッシュに保存
-  const chunks = await getAllChunksByPageIdInternal(pageId);
+  const scanStartTime = Date.now();
+  const connection = await lancedbClient.getConnection();
+  const table = connection.table;
+  const chunks = await getAllChunksByPageIdUtil(table, pageId);
+  const scanDuration = Date.now() - scanStartTime;
+  
+  // 詳細ログ: クエリ時間と結果数
+  if (scanDuration > 100 || process.env.NODE_ENV === 'development') {
+    writeLogToFile('info', 'chunks_query', 'Query completed', {
+      pageId,
+      durationMs: scanDuration,
+      resultCount: chunks.length
+    });
+  }
+  
+  if (scanDuration > 1000) {
+    console.warn(`[getAllChunksByPageId] ⚠️ Slow query: ${scanDuration}ms (expected < 100ms with indexes)`);
+  }
+  
+  if (chunks.length === 0 && scanDuration > 100) {
+    writeLogToFile('warn', 'chunks_query', 'No chunks found', {
+      pageId,
+      durationMs: scanDuration
+    });
+  }
   cache.setChunks(pageId, chunks);
   
   return chunks;
 }
 
-async function getAllChunksByPageIdInternal(pageId: string): Promise<any[]> {
-  try {
-    const scanStartTime = Date.now();
-    const connection = await optimizedLanceDBClient.getConnection();
-    const table = connection.table;
-
-    // ★★★ CRITICAL PERF FIX: スカラーインデックスを活用した最適化 ★★★
-    // Phase 2では .search().where() が推奨されていましたが、
-    // テスト結果では .query().where() の方が正しく動作することが確認されました
-    // スカラーインデックス（pageId）が作成されていれば、.query().where() でも高速です
-    
-    // ★★★ FIX: pageIdが "718373062-0" のような形式の場合、"-0"を削除して数値としてパース ★★★
-    // APIレスポンスのidフィールドが `${pageId}-0` という形式になっているため
-    let cleanedPageId = pageId;
-    if (pageId.includes('-')) {
-      // "718373062-0" のような形式の場合、最初の部分（数値部分）を抽出
-      const parts = pageId.split('-');
-      cleanedPageId = parts[0];
-    }
-    
-    const numericPageId = Number(cleanedPageId);
-    if (isNaN(numericPageId)) {
-      console.error(`[getAllChunksByPageIdInternal] Invalid pageId (not a number): ${pageId} (cleaned: ${cleanedPageId})`);
-      return [];
-    }
-    
-    // スカラーインデックスを使用した数値型での完全一致検索
-    // スカラーインデックス（B-Tree）が作成されていれば、O(log n)で高速
-    // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
-    const results = await table
-      .query()
-      .where(`\`page_id\` = ${numericPageId}`)
-      .limit(1000)
-      .toArray();
-    
-    const scanDuration = Date.now() - scanStartTime;
-
-    // 詳細ログ: クエリ時間と結果数
-    if (scanDuration > 100 || process.env.NODE_ENV === 'development') {
-      writeLogToFile('info', 'chunks_query', 'Query completed', {
-        pageId,
-        durationMs: scanDuration,
-        resultCount: results.length
-      });
-    }
-    
-    if (scanDuration > 1000) {
-      console.warn(`[getAllChunksByPageIdInternal] ⚠️ Slow query: ${scanDuration}ms (expected < 100ms with indexes)`);
-    }
-    
-    if (results.length > 0) {
-      // chunkIndexでソート
-      results.sort((a: any, b: any) => {
-        const aIndex = a.chunkIndex || 0;
-        const bIndex = b.chunkIndex || 0;
-        return aIndex - bIndex;
-      });
-      
-      // ★★★ MIGRATION: データベースのpage_idをpageIdに変換（API互換性） ★★★
-      // 内部処理ではpage_idを使用、APIレスポンスではpageIdを維持
-      const { mapLanceDBRecordsToAPI } = await import('../../lib/pageid-migration-helper');
-      const mappedResults = mapLanceDBRecordsToAPI(results);
-      
-      // 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
-      // チャンクのコンテンツとタイトルにBOM除去を適用
-      const cleanedResults = mappedResults.map((chunk: any) => ({
-        ...chunk,
-        content: removeBOM(chunk.content || ''),
-        title: removeBOM(chunk.title || ''),
-      }));
-      
-      if (scanDuration > 100 || process.env.NODE_ENV === 'development') {
-        writeLogToFile('info', 'chunks_query', 'Chunks fetched', {
-          pageId,
-          durationMs: scanDuration,
-          chunkCount: results.length
-        });
-      }
-      
-      return cleanedResults;
-    }
-    
-    // 見つからない場合は空配列を返す
-    if (scanDuration > 100) {
-      writeLogToFile('warn', 'chunks_query', 'No chunks found', {
-        pageId,
-        durationMs: scanDuration
-      });
-    }
-    
-    return [];
-    
-  } catch (error: any) {
-    console.error(`[getAllChunksByPageId] ❌ Error fetching chunks for pageId ${pageId}:`, error.message);
-    console.error('   Stack:', error.stack);
-    return [];
-  }
-}
 
 /**
  * 空ページフィルター（Phase 0A-1.5、サーバー側）

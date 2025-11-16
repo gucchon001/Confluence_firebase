@@ -141,9 +141,9 @@ async function performInitializationAsync(): Promise<void> {
         const startTime = Date.now();
         
         try {
-          // OptimizedLanceDBClientを使用して接続を確立
-          const { optimizedLanceDBClient } = await import('./optimized-lancedb-client');
-          const connection = await optimizedLanceDBClient.getConnection();
+          // LanceDBClientを使用して接続を確立
+          const { lancedbClient } = await import('./lancedb-client');
+          const connection = await lancedbClient.getConnection();
           const connectionTime = Date.now() - startTime;
           console.log(`[StartupOptimizer] ✅ LanceDB connection established in ${connectionTime}ms`);
           

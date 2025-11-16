@@ -22,6 +22,7 @@
     "inspect:jira-firestore": "tsx src/scripts/inspect-jira-firestore.ts",
     "inspect:jira-firestore-detail": "tsx src/scripts/inspect-jira-firestore-detail.ts",
     "inspect:jira-api-response": "tsx src/scripts/inspect-jira-api-response.ts",
+    "check:jira-total": "tsx src/scripts/check-jira-total-count.ts",
     "sync:jira": "tsx src/scripts/sync-jira.ts",
     "init:jira-lunr": "tsx src/scripts/initialize-jira-lunr-index.ts",
     "test:vertex": "tsx src/scripts/test-vertex-ai.ts",

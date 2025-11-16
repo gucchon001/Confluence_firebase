@@ -110,6 +110,7 @@ interface JiraSearchBatchResponse {
   issues: JiraIssueResponse[];
   startAt?: number;
   maxResults?: number;
+  total?: number;
   isLast?: boolean;
 }
 
@@ -126,7 +127,15 @@ export class JiraSyncService {
     this.email = process.env.JIRA_USER_EMAIL || process.env.CONFLUENCE_USER_EMAIL || '';
     this.apiToken = process.env.JIRA_API_TOKEN || process.env.CONFLUENCE_API_TOKEN || '';
     this.projectKey = process.env.JIRA_PROJECT_KEY || '';
-    this.maxIssues = maxIssues || parseInt(process.env.JIRA_MAX_ISSUES || '1000', 10);
+    // maxIssuesが明示的に指定されている場合はそれを使用、そうでない場合は環境変数から取得
+    // 環境変数が'0'の場合は全件取得モード
+    if (maxIssues !== undefined) {
+      this.maxIssues = maxIssues;
+    } else if (process.env.JIRA_MAX_ISSUES !== undefined) {
+      this.maxIssues = parseInt(process.env.JIRA_MAX_ISSUES, 10);
+    } else {
+      this.maxIssues = 1000; // デフォルト値
+    }
 
     if (!this.baseUrl || !this.email || !this.apiToken || !this.projectKey) {
       throw new Error('Jira同期に必要な環境変数 (JIRA_BASE_URL, JIRA_USER_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY) が不足しています。');
@@ -222,22 +231,29 @@ export class JiraSyncService {
     const issues: JiraIssueResponse[] = [];
     let startAt = 0;
     let isLast = false;
+    let effectiveMaxIssues = this.maxIssues;
 
-    console.log(`📊 最大取得件数: ${this.maxIssues}件`);
+    // maxIssuesが0の場合は全件取得モード（isLastがtrueになるまで取得）
+    if (effectiveMaxIssues === 0) {
+      effectiveMaxIssues = Infinity;
+      console.log(`📊 全件取得モード: isLastがtrueになるまで取得します`);
+    } else {
+      console.log(`📊 最大取得件数: ${effectiveMaxIssues}件`);
+    }
 
-    while (!isLast && issues.length < this.maxIssues) {
+    while (!isLast && issues.length < effectiveMaxIssues) {
       const batch = await this.fetchIssuesBatch(startAt);
       const batchIssues = batch.issues || [];
       
       // 最大件数に達するまで追加
-      const remaining = this.maxIssues - issues.length;
+      const remaining = effectiveMaxIssues - issues.length;
       if (remaining > 0) {
         issues.push(...batchIssues.slice(0, remaining));
       }
       
-      console.log(`📥 Jira issues fetched: ${issues.length} / ${this.maxIssues}`);
+      console.log(`📥 Jira issues fetched: ${issues.length} / ${effectiveMaxIssues}`);
 
-      if (batchIssues.length === 0 || issues.length >= this.maxIssues) {
+      if (batchIssues.length === 0 || issues.length >= effectiveMaxIssues) {
         break;
       }
 
@@ -278,12 +294,14 @@ export class JiraSyncService {
 
     const data = (await res.json()) as any;
     
-    // Jira API v3のレスポンス構造に合わせて変換
+    // Jira API v3の新しいエンドポイント(/rest/api/3/search/jql)のレスポンス構造に合わせて変換
+    // このエンドポイントはtotalを返さず、nextPageTokenとisLastを使用
     return {
       issues: data.issues || [],
-      startAt: data.startAt,
-      maxResults: data.maxResults,
-      isLast: data.startAt + data.issues.length >= data.total
+      startAt: data.startAt || startAt,
+      maxResults: data.maxResults || this.pageSize,
+      total: data.total, // 新しいAPIではundefinedになる可能性がある
+      isLast: data.isLast === true
     };
   }
 
@@ -405,21 +423,25 @@ export class JiraSyncService {
     console.log(`🗃️ LanceDB テーブル '${tableName}' を作成中 (${records.length}件)`);
     console.log(`📊 ベクトル生成中... (${records.length}件)`);
     
-    // ベクトルを生成（並列処理で高速化、進捗ログ付き）
+    // ベクトル生成をバッチ処理で実行（並列数制限とリトライ付き）
+    const BATCH_SIZE = 50; // 1バッチあたりの件数
+    const CONCURRENCY = 10; // バッチ内の並列数
+    const MAX_RETRIES = 3; // 最大リトライ回数
+    const RETRY_DELAY = 1000; // リトライ待機時間（ミリ秒）
+    
     let processedCount = 0;
     const totalRecords = records.length;
-    const progressInterval = Math.max(1, Math.floor(totalRecords / 10)); // 10回に分けて進捗表示
+    const progressInterval = Math.max(1, Math.floor(totalRecords / 20)); // 20回に分けて進捗表示
+    const recordsWithVectors: LanceDbRecord[] = [];
     
-    const recordsWithVectors = await Promise.all(
-      records.map(async (record, index) => {
+    // リトライ付きでベクトル生成を実行する関数
+    const generateEmbeddingWithRetry = async (
+      record: LanceDbRecord & { _vectorText?: string },
+      retryCount = 0
+    ): Promise<LanceDbRecord> => {
+      try {
         const vectorText = record._vectorText || `${record.title}\n${record.content}`;
         const vector = await getEmbeddings(vectorText);
-        
-        // スレッドセーフな進捗カウント
-        const currentCount = ++processedCount;
-        if (currentCount % progressInterval === 0 || currentCount === totalRecords) {
-          console.log(`📊 ベクトル生成進捗: ${currentCount} / ${totalRecords} (${Math.round(currentCount / totalRecords * 100)}%)`);
-        }
         
         // _vectorTextフィールドを削除してベクトルを追加
         const { _vectorText, ...recordWithoutVectorText } = record;
@@ -427,8 +449,54 @@ export class JiraSyncService {
           ...recordWithoutVectorText,
           vector
         } as LanceDbRecord;
-      })
-    );
+      } catch (error) {
+        if (retryCount < MAX_RETRIES) {
+          console.warn(`⚠️ ベクトル生成エラー (リトライ ${retryCount + 1}/${MAX_RETRIES}): ${error instanceof Error ? error.message : String(error)}`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1))); // 指数バックオフ
+          return generateEmbeddingWithRetry(record, retryCount + 1);
+        } else {
+          console.error(`❌ ベクトル生成失敗 (最大リトライ回数に達しました): ${error instanceof Error ? error.message : String(error)}`);
+          throw error;
+        }
+      }
+    };
+    
+    // 並列数を制限して処理する関数
+    const processBatchWithConcurrency = async (
+      batch: (LanceDbRecord & { _vectorText?: string })[]
+    ): Promise<LanceDbRecord[]> => {
+      const results: LanceDbRecord[] = [];
+      for (let i = 0; i < batch.length; i += CONCURRENCY) {
+        const chunk = batch.slice(i, i + CONCURRENCY);
+        const chunkResults = await Promise.all(
+          chunk.map(record => generateEmbeddingWithRetry(record))
+        );
+        results.push(...chunkResults);
+        
+        // 進捗ログ
+        processedCount += chunkResults.length;
+        if (processedCount % progressInterval === 0 || processedCount === totalRecords) {
+          console.log(`📊 ベクトル生成進捗: ${processedCount} / ${totalRecords} (${Math.round(processedCount / totalRecords * 100)}%)`);
+        }
+      }
+      return results;
+    };
+    
+    // バッチ処理で実行
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      const batch = records.slice(i, i + BATCH_SIZE);
+      const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(records.length / BATCH_SIZE);
+      console.log(`📦 バッチ ${batchNumber}/${totalBatches} を処理中... (${batch.length}件)`);
+      
+      const batchResults = await processBatchWithConcurrency(batch);
+      recordsWithVectors.push(...batchResults);
+      
+      // バッチ間で少し待機（APIレート制限対策）
+      if (i + BATCH_SIZE < records.length) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // 0.5秒待機
+      }
+    }
     
     console.log(`✅ ベクトル生成完了 (${recordsWithVectors.length}件)`);
     console.log(`🗃️ LanceDB テーブル '${tableName}' を作成中...`);

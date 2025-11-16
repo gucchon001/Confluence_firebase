@@ -10,7 +10,7 @@ import { calculateHybridScore } from './score-utils';
 import { unifiedKeywordExtractionService } from './unified-keyword-extraction-service';
 import { getDeploymentInfo } from './deployment-info';
 import { removeBOM } from './bom-utils';
-import { getRowsByPageId, getRowsByPageIdViaUrl } from './lancedb-utils';
+import { getRowsByPageId, getRowsByPageIdViaUrl, fetchPageFromLanceDB } from './lancedb-utils';
 import { lunrSearchClient, LunrDocument } from './lunr-search-client';
 import { lunrInitializer } from './lunr-initializer';
 import { tokenizeJapaneseText } from './japanese-tokenizer';
@@ -260,8 +260,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     const connectionStartTime = Date.now();
     const connectionPromise = (async () => {
-      const { optimizedLanceDBClient } = await import('./optimized-lancedb-client');
-      const conn = await optimizedLanceDBClient.getConnection();
+      const { lancedbClient } = await import('./lancedb-client');
+      const conn = await lancedbClient.getConnection();
       const connectionDuration = Date.now() - connectionStartTime;
       if (connectionDuration > 2000) {
         console.warn(`⚠️ [searchLanceDB] Slow LanceDB connection: ${connectionDuration}ms (${(connectionDuration / 1000).toFixed(2)}s)`);
@@ -1700,46 +1700,7 @@ function generateTitleCandidates(keywords: string[]): string[] {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Phase 4: Knowledge Graph統合
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/**
- * LanceDBからpageIdでページを取得
- * 
- * 注意: LanceDBのSQL方言ではフィールド名をバッククォート（`）で囲む必要があります
- * ダブルクォート（"）では動作しません
- * 
- * @param tbl LanceDBテーブル
- * @param pageId ページID（string型: "718373062"）
- * @returns ページデータまたはnull
- */
-async function fetchPageFromLanceDB(tbl: any, pageId: string): Promise<any | null> {
-  try {
-    if (!pageId || pageId === 'undefined') {
-      console.error(`[fetchPageFromLanceDB] Invalid pageId: ${pageId}`);
-      return null;
-    }
-    
-    // バッククォートを使用してフィールド名を囲む（LanceDB SQL方言）
-    // ★★★ MIGRATION: pageId → page_id (スカラーインデックス対応) ★★★
-    const results = await tbl.query()
-      .where(`\`page_id\` = '${pageId}'`)
-      .limit(1)
-      .toArray();
-    
-    if (results.length > 0) {
-      // ★★★ MIGRATION: データベースのpage_idをpageIdに変換（API互換性） ★★★
-      const { mapLanceDBRecordToAPI } = await import('./pageid-migration-helper');
-      const mappedResult = mapLanceDBRecordToAPI(results[0]);
-      console.log(`[fetchPageFromLanceDB] Found page ${pageId}: ${mappedResult.title}`);
-      return mappedResult;
-    }
-    
-    console.log(`[fetchPageFromLanceDB] Page ${pageId} not found in LanceDB`);
-    return null;
-  } catch (error) {
-    console.error(`[fetchPageFromLanceDB] Error fetching page ${pageId}:`, error);
-    return null;
-  }
-}
+// 注意: fetchPageFromLanceDB は lancedb-utils.ts に移動済み
 
 /**
  * タイトル検索結果をKGで拡張（Phase 4）

@@ -4,11 +4,16 @@ import { JiraSyncService } from '../lib/jira-sync-service';
 
 async function main() {
   // 最大取得件数を環境変数またはデフォルト1000件に設定
-  const maxIssues = process.env.JIRA_MAX_ISSUES 
-    ? parseInt(process.env.JIRA_MAX_ISSUES, 10) 
+  // JIRA_MAX_ISSUES=0 の場合は全件取得モード
+  const maxIssues = process.env.JIRA_MAX_ISSUES !== undefined
+    ? parseInt(process.env.JIRA_MAX_ISSUES, 10)
     : 1000;
 
-  console.log(`🚀 Jira 同期を開始します（最大${maxIssues}件）`);
+  if (maxIssues === 0) {
+    console.log(`🚀 Jira 同期を開始します（全件取得モード）`);
+  } else {
+    console.log(`🚀 Jira 同期を開始します（最大${maxIssues}件）`);
+  }
 
   const jiraSyncService = new JiraSyncService(maxIssues);
 

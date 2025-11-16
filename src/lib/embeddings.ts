@@ -82,7 +82,7 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   // Phase 0A-4: 埋め込み生成の開始ログ（本番環境でも遅延検知のため）
   const generationStartTime = Date.now();
   
-  const EMBEDDING_TIMEOUT = 30000; // 30秒
+  const EMBEDDING_TIMEOUT = 60000; // 60秒（大量処理時のタイムアウトを延長）
   const embedding = await Promise.race([
     getGeminiEmbeddings(finalTextForEmbedding),
     new Promise<never>((_, reject) =>
