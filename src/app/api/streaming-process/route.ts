@@ -122,7 +122,17 @@ async function ensureServerInitialized() {
     return 0; // 待ち時間なし
   }
   
-  // まだ初期化中の場合は完了を待つ
+  // 初期化が開始されていない場合は開始する
+  // instrumentation.jsで既に開始されている可能性があるが、念のため確認
+  const { initializeStartupOptimizations } = await import('@/lib/startup-optimizer');
+  if (!isStartupInitialized()) {
+    // 非同期で開始（完了を待たない）
+    initializeStartupOptimizations().catch((error) => {
+      console.warn('[ensureServerInitialized] Startup optimization failed:', error);
+    });
+  }
+  
+  // まだ初期化中の場合は完了を待つ（最大3秒でタイムアウト）
   await waitForInitialization();
   const waitTime = Date.now() - startTime;
   return waitTime;

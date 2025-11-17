@@ -19,13 +19,29 @@ export function isStartupInitialized(): boolean {
 /**
  * 初期化完了を待つ
  * すでに完了していれば即座にreturn
+ * ⚡ 最適化: タイムアウトを追加して、長時間待機しないようにする
  */
 export async function waitForInitialization(): Promise<void> {
   if (isInitialized) {
     return;
   }
   if (initializationPromise) {
-    await initializationPromise;
+    // ⚡ 最適化: 最大3秒でタイムアウト（initializeStartupOptimizationsと同じタイムアウト時間）
+    // これにより、Lunrインデックスのロードなどの重い処理でブロックされない
+    try {
+      await Promise.race([
+        initializationPromise,
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            console.log('[StartupOptimizer] waitForInitialization: Timeout reached, continuing without waiting');
+            resolve();
+          }, 3000);
+        })
+      ]);
+    } catch (error) {
+      // エラーが発生しても処理を継続（初期化エラーでアプリケーションを停止させない）
+      console.warn('[StartupOptimizer] waitForInitialization: Error during initialization, continuing anyway:', error);
+    }
   }
 }
 
