@@ -169,36 +169,29 @@ export class HybridSearchEngine {
       const lunrSearchClient = LunrSearchClient.getInstance();
       
       // ⚡ 最適化: Lunrインデックスの遅延初期化（オンデマンド）
-      // 必要になった時だけ初期化を試行
+      // 必要になった時だけ初期化を試行（バックグラウンドで開始、完了を待たない）
       if (!lunrSearchClient.isReady(tableName)) {
-        console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready, initializing...`);
+        console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready, initializing in background...`);
         
-        // 初期化を開始（既に初期化中の場合は待機）
+        // バックグラウンドで初期化を開始（結果を待たずに返す）
         const { lunrInitializer } = await import('./lunr-initializer');
         
-        // ⚡ 修正: 初期化が完了するまで最大5秒待機（キャッシュからロードの場合は高速）
-        // タイムアウト後も検索を試行（初期化が完了していれば検索可能）
-        try {
-          await Promise.race([
-            lunrInitializer.initializeAsync(tableName),
-            new Promise<void>((resolve) => {
-              setTimeout(() => {
-                console.log(`[HybridSearchEngine] Lunr initialization timeout (5s) for ${tableName}, checking if ready...`);
-                resolve();
-              }, 5000); // 5秒でタイムアウト
-            })
-          ]);
-        } catch (error) {
+        // ⚡ 最適化: タイムアウトを設定して、初期化が完了するまで待たない
+        Promise.race([
+          lunrInitializer.initializeAsync(tableName),
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              console.log(`[HybridSearchEngine] Lunr initialization timeout for ${tableName}, continuing without waiting`);
+              resolve();
+            }, 100); // 100msでタイムアウト（初期化開始のみ確認）
+          })
+        ]).catch((error) => {
           console.warn(`[HybridSearchEngine] Lunr initialization failed for ${tableName}:`, error);
-        }
+        });
         
-        // 初期化が完了したか確認
-        if (!lunrSearchClient.isReady(tableName)) {
-          console.log(`[HybridSearchEngine] Skipping BM25 search for ${tableName} (initialization still in progress)`);
-          return [];
-        }
-        
-        console.log(`[HybridSearchEngine] Lunr index ready for ${tableName}, proceeding with BM25 search`);
+        // 初回はBM25検索をスキップ（ベクトル検索のみ）
+        console.log(`[HybridSearchEngine] Skipping BM25 search for now (initialization in progress), will be available on next request`);
+        return [];
       }
 
       console.log(`[HybridSearchEngine] Performing BM25 search for ${tableName}: "${query}"`);

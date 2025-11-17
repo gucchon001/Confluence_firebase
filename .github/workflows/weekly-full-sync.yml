@@ -42,17 +42,35 @@ jobs:
           CONFLUENCE_USER_EMAIL: kanri@jukust.jp
           CONFLUENCE_SPACE_KEY: CLIENTTOMO
       
+      - name: Create LanceDB indexes
+        id: create_indexes
+        run: npm run lancedb:create-indexes
+        env:
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+        continue-on-error: true
+      
+      - name: Rebuild Lunr index
+        id: rebuild_lunr
+        run: npm run rebuild:lunr
+        env:
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+        continue-on-error: true
+      
       - name: Upload data to Cloud Storage
+        id: upload_data
         run: npm run upload:production-data
         env:
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
       
       - name: Notify completion
-        if: success()
+        if: steps.upload_data.outcome == 'success'
         run: |
           echo "✅ Weekly full sync completed successfully"
           echo "📊 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
           echo "🔄 Next sync: Next Sunday at 3:00 AM JST"
+          echo "📦 Index creation: ${{ steps.create_indexes.outcome }}"
+          echo "📦 Lunr rebuild: ${{ steps.rebuild_lunr.outcome }}"
+          echo "📦 Data upload: ${{ steps.upload_data.outcome }}"
       
       - name: Notify failure
         if: failure()

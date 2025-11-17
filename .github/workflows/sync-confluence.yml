@@ -72,17 +72,28 @@ jobs:
           CONFLUENCE_USER_EMAIL: kanri@jukust.jp
           CONFLUENCE_SPACE_KEY: CLIENTTOMO
       
+      - name: Create LanceDB indexes
+        id: create_indexes
+        if: steps.differential_sync.outcome == 'success' || steps.full_sync.outcome == 'success'
+        run: npm run lancedb:create-indexes
+        env:
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+        continue-on-error: true
+      
+      - name: Rebuild Lunr index
+        id: rebuild_lunr
+        if: steps.differential_sync.outcome == 'success' || steps.full_sync.outcome == 'success'
+        run: npm run rebuild:lunr
+        env:
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+        continue-on-error: true
+      
       - name: Upload data to Cloud Storage
+        id: upload_data
         if: steps.differential_sync.outcome == 'success' || steps.full_sync.outcome == 'success'
         run: npm run upload:production-data
         env:
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
-      
-      - name: Notify completion
-        if: success()
-        run: |
-          echo "✅ Confluence data sync completed successfully"
-          echo "📊 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
       
       - name: Check if sync step was executed
         if: always()
@@ -95,6 +106,15 @@ jobs:
             echo "Full sync outcome: ${{ steps.full_sync.outcome }}"
             exit 1
           fi
+      
+      - name: Notify completion
+        if: steps.upload_data.outcome == 'success'
+        run: |
+          echo "✅ Confluence data sync completed successfully"
+          echo "📊 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "📦 Index creation: ${{ steps.create_indexes.outcome }}"
+          echo "📦 Lunr rebuild: ${{ steps.rebuild_lunr.outcome }}"
+          echo "📦 Data upload: ${{ steps.upload_data.outcome }}"
       
       - name: Notify failure
         if: failure()

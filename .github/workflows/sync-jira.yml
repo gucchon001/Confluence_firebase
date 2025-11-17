@@ -1,0 +1,105 @@
+name: Sync Jira Data
+
+on:
+  # 毎週月曜日午前3時（JST = UTC 18:00日曜日）に自動実行
+  schedule:
+    - cron: '0 18 * * 0'  # UTC 18:00日曜日 = JST 3:00月曜日
+  
+  # 手動実行も可能
+  workflow_dispatch:
+    inputs:
+      max_issues:
+        description: 'Maximum number of issues to sync (0 for all)'
+        required: false
+        default: '0'
+        type: string
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
+      
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run Jira sync
+        id: jira_sync
+        run: npm run sync:jira
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL || secrets.CONFLUENCE_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL || secrets.CONFLUENCE_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN || secrets.CONFLUENCE_API_TOKEN }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+          JIRA_MAX_ISSUES: ${{ github.event.inputs.max_issues || '0' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+        continue-on-error: false
+      
+      - name: Initialize Jira Lunr index
+        id: init_lunr
+        if: steps.jira_sync.outcome == 'success'
+        run: npm run init:jira-lunr
+        env:
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+        continue-on-error: true
+      
+      - name: Create LanceDB indexes
+        id: create_indexes
+        if: steps.jira_sync.outcome == 'success'
+        run: npm run lancedb:create-indexes
+        env:
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+        continue-on-error: true
+      
+      - name: Upload data to Cloud Storage
+        id: upload_data
+        if: steps.jira_sync.outcome == 'success'
+        run: npm run upload:production-data
+        env:
+          GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
+      
+      - name: Notify completion
+        if: steps.upload_data.outcome == 'success'
+        run: |
+          echo "✅ Jira data sync completed successfully"
+          echo "📊 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "📦 Sync: ${{ steps.jira_sync.outcome }}"
+          echo "📦 Lunr index: ${{ steps.init_lunr.outcome }}"
+          echo "📦 Index creation: ${{ steps.create_indexes.outcome }}"
+          echo "📦 Data upload: ${{ steps.upload_data.outcome }}"
+      
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "❌ Jira data sync failed"
+          echo "Please check the logs above for details"
+          echo ""
+          echo "Common issues:"
+          echo "1. Check if environment variables are set correctly"
+          echo "2. Check if Jira API token is valid"
+          echo "3. Check if JIRA_PROJECT_KEY is set in GitHub Secrets"
+          echo "4. Check if Gemini API key is valid"
+          echo "5. Check the previous step logs for error messages"
+          echo ""
+          echo "Sync outcome: ${{ steps.jira_sync.outcome }}"
+          echo "Lunr index outcome: ${{ steps.init_lunr.outcome }}"
+          echo "Index creation outcome: ${{ steps.create_indexes.outcome }}"
+          echo "Upload outcome: ${{ steps.upload_data.outcome }}"
+

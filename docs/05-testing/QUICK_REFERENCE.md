@@ -64,6 +64,7 @@ npx tsx src/tests/test-api-performance.ts
 ## 🔗 関連ドキュメント
 
 - [`05.01-data-validation.md`](./05.01-data-validation.md): データ関連テストの詳細
-- [`TEST_EXECUTION_GUIDE.md`](./TEST_EXECUTION_GUIDE.md): 実行方法の詳細
+- [`05.08-test-execution-guide.md`](./05.08-test-execution-guide.md): 実行方法の詳細
+- [`05.14-test-coverage-analysis.md`](./05.14-test-coverage-analysis.md): テストカバレッジ分析（重要）
 - [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md): トラブルシューティング
 

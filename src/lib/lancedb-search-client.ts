@@ -1262,37 +1262,27 @@ async function executeBM25Search(
     console.log(`[BM25 Search] 🔍 DEBUG: Lunr ready status for ${tableName}: ${isLunrReady}`);
     
     if (!isLunrReady) {
-      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing...`);
+      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing in background...`);
       
-      // 初期化を開始（既に初期化中の場合は待機）
+      // バックグラウンドで初期化を開始（結果を待たずに返す）
       const { lunrInitializer } = await import('./lunr-initializer');
       
-      // ⚡ 修正: 初期化が完了するまで最大5秒待機（キャッシュからロードの場合は高速）
-      // タイムアウト後も検索を試行（初期化が完了していれば検索可能）
-      try {
-        await Promise.race([
-          lunrInitializer.initializeAsync(tableName),
-          new Promise<void>((resolve) => {
-            setTimeout(() => {
-              console.log(`[BM25 Search] Lunr initialization timeout (5s) for ${tableName}, checking if ready...`);
-              resolve();
-            }, 5000); // 5秒でタイムアウト
-          })
-        ]);
-      } catch (error) {
+      // ⚡ 最適化: タイムアウトを設定して、初期化が完了するまで待たない
+      Promise.race([
+        lunrInitializer.initializeAsync(tableName),
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            console.log(`[BM25 Search] Lunr initialization timeout for ${tableName}, continuing without waiting`);
+            resolve();
+          }, 100); // 100msでタイムアウト（初期化開始のみ確認）
+        })
+      ]).catch((error) => {
         console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
-      }
+      });
       
-      // 初期化が完了したか確認
-      const isReadyAfterWait = lunrSearchClient.isReady(tableName);
-      if (!isReadyAfterWait) {
-        console.log(`[BM25 Search] ⏭️  Skipping BM25 search for ${tableName} (initialization still in progress after 5s timeout)`);
-        return [];
-      }
-      
-      console.log(`[BM25 Search] ✅ Lunr index ready for ${tableName}, proceeding with BM25 search`);
-    } else {
-      console.log(`[BM25 Search] ✅ Lunr index already ready for ${tableName}, proceeding with BM25 search`);
+      // 初回はBM25検索をスキップ（ベクトル検索のみ）
+      console.log(`[BM25 Search] Skipping BM25 search for now (initialization in progress), will be available on next request`);
+      return [];
     }
     
     // 🔍 デバッグ: Lunrインデックスの状態を確認
