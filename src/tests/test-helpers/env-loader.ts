@@ -17,8 +17,9 @@ import * as path from 'path';
 export function loadTestEnv(): void {
   try {
     // まず.env.localを読み込む（存在する場合）
+    // override: true を使用して、.env.localの値を優先的に使用
     const envPath = path.resolve(process.cwd(), '.env.local');
-    const envResult = dotenv.config({ path: envPath, override: false });
+    const envResult = dotenv.config({ path: envPath, override: true });
     
     // .env.localが読み込まれたか確認（デバッグ用）
     if (envResult.error) {
@@ -32,6 +33,23 @@ export function loadTestEnv(): void {
       // .env.localが正常に読み込まれた場合
       const loadedKeys = Object.keys(envResult.parsed).length;
       console.log(`[TestEnvLoader] ✅ .env.localから${loadedKeys}個の環境変数を読み込みました`);
+      
+      // .env.localから読み込んだ値を明示的にprocess.envに設定（確実に反映させるため）
+      // 特にGEMINI_API_KEYは重要なので、明示的に設定
+      for (const [key, value] of Object.entries(envResult.parsed)) {
+        if (value !== undefined && value !== null && value.trim() !== '') {
+          process.env[key] = value.trim();
+        }
+      }
+      
+      // GEMINI_API_KEYが.env.localから読み込まれたか確認
+      if (envResult.parsed.GEMINI_API_KEY) {
+        const geminiKey = envResult.parsed.GEMINI_API_KEY.trim();
+        if (geminiKey) {
+          process.env.GEMINI_API_KEY = geminiKey;
+          console.log(`[TestEnvLoader] ✅ GEMINI_API_KEYが.env.localから読み込みました: ${geminiKey.substring(0, 10)}...`);
+        }
+      }
     }
     
     // 必須環境変数が設定されていない場合のデフォルト値（テスト用）
@@ -81,16 +99,36 @@ export function loadTestEnv(): void {
     };
 
     // 環境変数が設定されていない場合のみデフォルト値を設定
+    // GEMINI_API_KEYは.env.localから読み込まれた値がある場合は使用する（既に設定済み）
     const missingVars: string[] = [];
     const safeDefaultVars = ['NODE_ENV']; // 警告を表示しない安全なデフォルト値
     for (const [key, defaultValue] of Object.entries(defaultEnv)) {
       const currentValue = process.env[key];
+      // .env.localから読み込まれた値がある場合はデフォルト値を設定しない（特にGEMINI_API_KEY）
       if (!currentValue || currentValue.trim() === '') {
+        // GEMINI_API_KEYの場合は.env.localから読み込まれているか確認
+        if (key === 'GEMINI_API_KEY' && envResult.parsed && envResult.parsed.GEMINI_API_KEY) {
+          // .env.localから読み込まれている場合はスキップ（既に設定済み）
+          continue;
+        }
         process.env[key] = defaultValue;
         if (!safeDefaultVars.includes(key)) {
           missingVars.push(key);
         }
       }
+    }
+    
+    // GEMINI_API_KEYが最終的に設定されているか確認（デバッグ用）
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (geminiApiKey && geminiApiKey.trim() !== '') {
+      // .env.localから読み込まれたかどうかを確認
+      if (envResult.parsed && envResult.parsed.GEMINI_API_KEY) {
+        console.log(`[TestEnvLoader] ✅ GEMINI_API_KEYが.env.localから読み込みました: ${geminiApiKey.substring(0, 10)}...`);
+      } else {
+        console.log(`[TestEnvLoader] ✅ GEMINI_API_KEYが環境変数から取得されました: ${geminiApiKey.substring(0, 10)}...`);
+      }
+    } else {
+      console.warn(`[TestEnvLoader] ⚠️  GEMINI_API_KEYが設定されていません。デフォルト値を使用します`);
     }
     
     if (missingVars.length > 0) {

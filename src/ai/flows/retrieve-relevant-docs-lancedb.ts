@@ -134,7 +134,8 @@ async function lancedbRetrieverTool(
     source?: 'confluence' | 'jira';
   }
 ): Promise<any[]> {
-  const searchStartTime = Date.now();
+  const functionStartTime = Date.now();
+  const searchStartTime = functionStartTime; // 後方互換性のため
   try {
     // ログファイルに検索開始を記録
     writeLogToFile('info', 'search_start', 'Search started', {
@@ -171,6 +172,7 @@ async function lancedbRetrieverTool(
 
     // Phase 0A-4: 詳細な検索パフォーマンス計測
     const searchLanceDBStartTime = Date.now();
+    console.log(`[PERF] 🔍 searchLanceDB呼び出し開始: ${Date.now() - functionStartTime}ms (累計)`);
     const tableName = filters?.source === 'jira' ? 'jira_issues' : 'confluence';
     const unifiedResults = await searchLanceDB({
       query: query, // 元のクエリを使用
@@ -183,6 +185,7 @@ async function lancedbRetrieverTool(
       tableName, // テーブル名を指定
     });
     const searchLanceDBDuration = Date.now() - searchLanceDBStartTime;
+    console.log(`[PERF] 🔍 searchLanceDB完了: ${searchLanceDBDuration}ms (累計: ${Date.now() - functionStartTime}ms)`);
     
     // Phase 0A-4 ROLLBACK: ログ出力を開発環境のみに制限（前のバージョンと同じ）
     if (process.env.NODE_ENV === 'development' && searchLanceDBDuration > 10000) {
@@ -247,6 +250,8 @@ async function lancedbRetrieverTool(
           distance: (r as any).distance,
           source: r.source as any,
           scoreText: r.scoreText,
+          // スコアを設定（_compositeScore > _rrfScore > distance の優先順位）
+          score: (r as any)._compositeScore ?? (r as any)._rrfScore ?? (r as any).distance ?? 0,
           // Jira特有のフィールド
           issue_key: issueKey,
           status: (r as any).status,
@@ -291,6 +296,8 @@ async function lancedbRetrieverTool(
           distance: (r as any).distance,
           source: r.source as any,
           scoreText: r.scoreText,
+          // スコアを設定（_compositeScore > _rrfScore > distance の優先順位）
+          score: (r as any)._compositeScore ?? (r as any)._rrfScore ?? (r as any).distance ?? 0,
         };
       }
     });

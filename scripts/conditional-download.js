@@ -54,6 +54,7 @@ async function main() {
   // ダウンロードが必要な場合
   console.log('📥 データダウンロードが必要です');
   console.log('🚀 download-production-data.ts を自動実行します');
+  console.log('ℹ️  ConfluenceテーブルとJiraテーブル（存在する場合）をダウンロードします');
 
   const downloadScript = path.join(process.cwd(), 'scripts', 'download-production-data.ts');
   if (!fs.existsSync(downloadScript)) {

@@ -150,17 +150,85 @@ export function loadStartupState(): Record<string, boolean> | null {
 
 /**
  * キャッシュのクリア
+ * @param clearFiles - trueの場合、キャッシュファイルも削除（デフォルト: true）
+ *                     falseの場合、メモリ状態のみクリア（キャッシュファイルは保持）
  */
-export function clearCache(): void {
+export function clearCache(clearFiles: boolean = true): void {
   memoryCache.clear();
   
   try {
+    // トークナイザーとスタートアップ状態のキャッシュをクリア
     if (fs.existsSync(TOKENIZER_CACHE_FILE)) {
       fs.unlinkSync(TOKENIZER_CACHE_FILE);
     }
     if (fs.existsSync(STARTUP_STATE_FILE)) {
       fs.unlinkSync(STARTUP_STATE_FILE);
     }
+    
+    // キャッシュファイルのクリア（オプション）
+    if (clearFiles) {
+      // Lunrインデックスのキャッシュファイルをクリア
+      // 環境に応じたキャッシュパスを決定
+      const { appConfig } = require('../config/app-config');
+      const isCloudRun = appConfig.deployment.isCloudRun;
+      const cacheDir = isCloudRun 
+        ? path.join(process.cwd(), '.next', 'standalone', '.cache')
+        : path.join(process.cwd(), '.cache');
+      
+      // ConfluenceとJiraの両方のLunrインデックスキャッシュをクリア
+      // .json と .msgpack の両方の形式をサポート
+      const lunrCacheFiles = [
+        path.join(cacheDir, 'lunr-index.json'), // Confluence (JSON)
+        path.join(cacheDir, 'lunr-index.msgpack'), // Confluence (MessagePack)
+        path.join(cacheDir, 'lunr-index-jira_issues.json'), // Jira (JSON)
+        path.join(cacheDir, 'lunr-index-jira_issues.msgpack'), // Jira (MessagePack)
+      ];
+      
+      for (const cacheFile of lunrCacheFiles) {
+        if (fs.existsSync(cacheFile)) {
+          fs.unlinkSync(cacheFile);
+          console.log(`[PersistentCache] Deleted Lunr cache: ${cacheFile}`);
+        }
+      }
+      
+      // keyword-cache.json もクリア
+      const keywordCacheFile = path.join(cacheDir, 'keyword-cache.json');
+      if (fs.existsSync(keywordCacheFile)) {
+        fs.unlinkSync(keywordCacheFile);
+        console.log(`[PersistentCache] Deleted keyword cache: ${keywordCacheFile}`);
+      }
+    } else {
+      console.log('[PersistentCache] Cache files preserved (only memory state cleared)');
+    }
+    
+    // ⚡ 最適化: clearFiles=trueの場合のみ、メモリキャッシュもクリア
+    // clearFiles=falseの場合は、キャッシュファイルが存在するため、メモリ状態も保持して
+    // 次回の初期化時にキャッシュから高速にロードできるようにする
+    if (clearFiles) {
+      // キャッシュファイルを削除した場合のみ、メモリキャッシュもクリア
+      try {
+        const { lunrSearchClient } = require('./lunr-search-client');
+        if (lunrSearchClient && typeof lunrSearchClient.destroy === 'function') {
+          lunrSearchClient.destroy(); // すべてのテーブルのインデックスをクリア
+          console.log('[PersistentCache] Cleared LunrSearchClient memory cache');
+        }
+        
+        // LunrInitializerの初期化状態もリセット
+        const { lunrInitializer } = require('./lunr-initializer');
+        if (lunrInitializer && typeof lunrInitializer.reset === 'function') {
+          lunrInitializer.reset();
+          console.log('[PersistentCache] Reset LunrInitializer state');
+        }
+      } catch (lunrError) {
+        // LunrSearchClient/LunrInitializerのクリアに失敗しても続行
+        console.warn('[PersistentCache] Failed to clear Lunr caches:', lunrError);
+      }
+    } else {
+      // clearFiles=falseの場合: キャッシュファイルは保持されるため、
+      // メモリ状態も保持して、次回の初期化時にキャッシュから高速にロードできるようにする
+      console.log('[PersistentCache] Memory cache preserved (cache files exist, will be reused on next initialization)');
+    }
+    
     console.log('[PersistentCache] All caches cleared');
   } catch (error) {
     console.error('[PersistentCache] Failed to clear file caches:', error);
@@ -177,6 +245,28 @@ export function getCacheStats(): { memorySize: number; fileCount: number } {
   try {
     if (fs.existsSync(TOKENIZER_CACHE_FILE)) fileCount++;
     if (fs.existsSync(STARTUP_STATE_FILE)) fileCount++;
+    
+    // Lunrインデックスのキャッシュファイルもカウント
+    const { appConfig } = require('../config/app-config');
+    const isCloudRun = appConfig.deployment.isCloudRun;
+    const cacheDir = isCloudRun 
+      ? path.join(process.cwd(), '.next', 'standalone', '.cache')
+      : path.join(process.cwd(), '.cache');
+    
+    const lunrCacheFiles = [
+      path.join(cacheDir, 'lunr-index.json'),
+      path.join(cacheDir, 'lunr-index.msgpack'),
+      path.join(cacheDir, 'lunr-index-jira_issues.json'),
+      path.join(cacheDir, 'lunr-index-jira_issues.msgpack'),
+    ];
+    
+    for (const cacheFile of lunrCacheFiles) {
+      if (fs.existsSync(cacheFile)) fileCount++;
+    }
+    
+    // keyword-cache.json もカウント
+    const keywordCacheFile = path.join(cacheDir, 'keyword-cache.json');
+    if (fs.existsSync(keywordCacheFile)) fileCount++;
   } catch (error) {
     // ファイルアクセスエラーは無視
   }

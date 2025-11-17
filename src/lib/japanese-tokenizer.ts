@@ -7,12 +7,31 @@ import kuromoji from 'kuromoji';
 import * as path from 'path';
 import { saveTokenizerState, loadTokenizerState } from './persistent-cache';
 
-// kuromojiの辞書パス
-const DIC_PATH = path.resolve(process.cwd(), 'node_modules/kuromoji/dict');
+/**
+ * kuromojiの辞書パスを環境に応じて決定
+ * - ローカル環境: node_modules/kuromoji/dict
+ * - 本番環境（Cloud Run）: .next/standalone/node_modules/kuromoji/dict
+ */
+function getDictionaryPath(): string {
+  // 環境判定を動的に行う（循環依存を避けるため、直接インポートしない）
+  const isCloudRun = !!process.env.K_SERVICE;
+  
+  if (isCloudRun) {
+    // Cloud Run環境: standaloneディレクトリ内の辞書を使用
+    const standalonePath = path.resolve(process.cwd(), '.next/standalone/node_modules/kuromoji/dict');
+    return standalonePath;
+  } else {
+    // ローカル環境: 通常のnode_modules内の辞書を使用
+    const localPath = path.resolve(process.cwd(), 'node_modules/kuromoji/dict');
+    return localPath;
+  }
+}
 
 // シングルトンでTokenizerを管理
 let tokenizer: kuromoji.Tokenizer<kuromoji.IpadicFeatures> | null = null;
 let tokenizerPromise: Promise<kuromoji.Tokenizer<kuromoji.IpadicFeatures>> | null = null;
+let dictionaryChecked: boolean = false; // 辞書ファイルの存在確認を一度だけ行う
+let verifiedDictionaryPath: string | null = null; // 検証済みの辞書パスを保持（再計算を防ぐ）
 
 /**
  * kuromojiトークナイザーを事前初期化
@@ -21,9 +40,16 @@ let tokenizerPromise: Promise<kuromoji.Tokenizer<kuromoji.IpadicFeatures>> | nul
  * 理由: キャッシュ状態だけでは、実際のトークナイザーインスタンスが保持されない
  */
 export async function preInitializeTokenizer(): Promise<void> {
-  // 既に初期化されている場合は早期リターン
+  // ⚡ 最優先: 既に初期化済みの場合は即座に返す
   if (tokenizer) {
     console.log('[JapaneseTokenizer] 🚀 Tokenizer already initialized');
+    return;
+  }
+  
+  // ⚡ 初期化中の場合は、既存のPromiseを待つ（重複初期化を完全に防止）
+  if (tokenizerPromise) {
+    console.log('[JapaneseTokenizer] ⏳ Tokenizer initialization in progress, waiting...');
+    await tokenizerPromise;
     return;
   }
   
@@ -71,26 +97,88 @@ export function isTokenizerInitialized(): boolean {
 
 /**
  * kuromojiトークナイザーを初期化（シングルトン）
+ * ⚡ 最適化: 既に初期化済みの場合は一切の処理をスキップ（デグレード防止）
  */
 async function getTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.IpadicFeatures>> {
+  // ⚡ 最優先: 既に初期化済みの場合は即座に返す（辞書ファイルのチェックも含めて一切の処理をスキップ）
   if (tokenizer) {
     return tokenizer;
   }
 
+  // 初期化中の場合は、既存のPromiseを返す
   if (tokenizerPromise) {
     return tokenizerPromise;
   }
 
+  // ⚡ 最適化: 辞書ファイルの存在確認を一度だけ行う（ダウンロードを防ぐ）
+  // 検証済みのパスがあればそれを使用、なければ環境に応じて決定
+  let dicPath: string;
+  
+  if (verifiedDictionaryPath) {
+    // 既に検証済みのパスを使用（再計算を防ぐ）
+    dicPath = verifiedDictionaryPath;
+  } else {
+    // 初回のみ: 環境に応じて辞書パスを決定
+    dicPath = getDictionaryPath();
+    
+    if (!dictionaryChecked) {
+      const fs = await import('fs');
+      
+      // フォールバック: 本番環境でstandaloneパスが見つからない場合、通常のnode_modulesを試す
+      if (!fs.existsSync(dicPath)) {
+        const fallbackPath = path.resolve(process.cwd(), 'node_modules/kuromoji/dict');
+        if (fs.existsSync(fallbackPath)) {
+          dicPath = fallbackPath;
+          console.log(`[JapaneseTokenizer] ⚠️  Primary path not found, using fallback: ${fallbackPath}`);
+        } else {
+          const errorMsg = `Kuromoji dictionary directory not found at ${dicPath} or ${fallbackPath}. Please ensure kuromoji is properly installed with 'npm install kuromoji'`;
+          console.error(`[JapaneseTokenizer] ❌ ${errorMsg}`);
+          throw new Error(errorMsg);
+        }
+      }
+
+      // 辞書ファイルの存在確認（主要なファイルをチェック）
+      const requiredFiles = ['base.dat.gz', 'check.dat.gz', 'cc.dat.gz'];
+      const missingFiles = requiredFiles.filter(file => !fs.existsSync(path.join(dicPath, file)));
+      if (missingFiles.length > 0) {
+        const errorMsg = `Kuromoji dictionary files missing: ${missingFiles.join(', ')}. Please ensure kuromoji is properly installed with 'npm install kuromoji'`;
+        console.error(`[JapaneseTokenizer] ❌ ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      // 検証済みパスを保存（次回以降は再計算・再チェックをスキップ）
+      verifiedDictionaryPath = dicPath;
+      dictionaryChecked = true;
+      console.log(`[JapaneseTokenizer] ✅ Dictionary files verified at: ${dicPath}`);
+    }
+  }
+
   tokenizerPromise = new Promise((resolve, reject) => {
-    console.log('[JapaneseTokenizer] Initializing kuromoji tokenizer...');
-    kuromoji.builder({ dicPath: DIC_PATH }).build((err, t) => {
+    // ⚡ 最適化: ログを1回だけ出力（重複ログを防止）
+    // dictionaryCheckedがfalseの場合のみログを出力（初回のみ）
+    // 注意: dictionaryCheckedは辞書ファイルの存在確認が完了したことを示すフラグ
+    // tokenizerがnullの場合でも、dictionaryCheckedがtrueの可能性がある（前回の初期化試行でチェック済み）
+    if (!dictionaryChecked) {
+      console.log(`[JapaneseTokenizer] 🔧 Initializing kuromoji tokenizer with path: ${dicPath}...`);
+      console.log(`[JapaneseTokenizer] 📦 This is the FIRST initialization - dictionary files will be loaded once`);
+    } else {
+      // 既に辞書ファイルがチェック済みの場合（前回の初期化試行でチェック済みだが、tokenizerがnullの場合）
+      // これは正常なケース（エラーで初期化が失敗した場合など）
+      console.log(`[JapaneseTokenizer] 🔧 Initializing kuromoji tokenizer (dictionary already verified at: ${verifiedDictionaryPath || dicPath})...`);
+    }
+    kuromoji.builder({ dicPath: dicPath }).build((err, t) => {
       if (err) {
-        console.error('[JapaneseTokenizer] Failed to initialize kuromoji:', err);
+        console.error('[JapaneseTokenizer] ❌ Failed to initialize kuromoji:', err);
+        tokenizerPromise = null; // エラー時はPromiseをリセット
         reject(err);
         return;
       }
-      console.log('[JapaneseTokenizer] Kuromoji tokenizer initialized successfully');
+      if (!dictionaryChecked) {
+        console.log('[JapaneseTokenizer] ✅ Kuromoji tokenizer initialized successfully (FIRST TIME ONLY)');
+        console.log('[JapaneseTokenizer] 🚀 Tokenizer is now cached in memory - no more dictionary loading');
+      }
       tokenizer = t;
+      tokenizerPromise = null; // 初期化完了後はPromiseをリセット
       resolve(t);
     });
   });
@@ -122,7 +210,11 @@ export async function tokenizeJapaneseText(text: string): Promise<string> {
     // 全ての単語（名詞、動詞、助詞など）をそのままスペースで連結
     const tokenizedText = tokens.map(t => t.surface_form).join(' ');
     
-    console.log(`[JapaneseTokenizer] Tokenized: "${text}" -> "${tokenizedText}"`);
+    // ⚡ 最適化: バッチ処理時はログを抑制（パフォーマンス向上）
+    // デバッグ時のみログを出力（環境変数で制御可能）
+    if (process.env.DEBUG_TOKENIZATION === 'true') {
+      console.log(`[JapaneseTokenizer] Tokenized: "${text}" -> "${tokenizedText}"`);
+    }
     return tokenizedText;
   } catch (error) {
     console.error('[JapaneseTokenizer] Tokenization failed:', error);
@@ -146,7 +238,10 @@ function performLightweightTokenization(text: string): string {
     .filter(token => token.length > 0);
   
   const result = tokens.join(' ');
-  console.log(`[JapaneseTokenizer] ⚡ Lightweight tokenized: "${text}" -> "${result}"`);
+  // ⚡ 最適化: バッチ処理時はログを抑制（パフォーマンス向上）
+  if (process.env.DEBUG_TOKENIZATION === 'true') {
+    console.log(`[JapaneseTokenizer] ⚡ Lightweight tokenized: "${text}" -> "${result}"`);
+  }
   return result;
 }
 
@@ -201,7 +296,10 @@ export async function tokenizeJapaneseNouns(text: string): Promise<string> {
       .map(t => t.surface_form);
     
     const tokenizedText = nouns.join(' ');
-    console.log(`[JapaneseTokenizer] Nouns only: "${text}" -> "${tokenizedText}"`);
+    // ⚡ 最適化: バッチ処理時はログを抑制（パフォーマンス向上）
+    if (process.env.DEBUG_TOKENIZATION === 'true') {
+      console.log(`[JapaneseTokenizer] Nouns only: "${text}" -> "${tokenizedText}"`);
+    }
     return tokenizedText;
   } catch (error) {
     console.error('[JapaneseTokenizer] Noun tokenization failed:', error);

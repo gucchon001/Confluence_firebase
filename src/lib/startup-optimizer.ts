@@ -26,7 +26,7 @@ export async function waitForInitialization(): Promise<void> {
     return;
   }
   if (initializationPromise) {
-    // ⚡ 最適化: 最大3秒でタイムアウト（initializeStartupOptimizationsと同じタイムアウト時間）
+    // ⚡ 最適化: 最大5秒でタイムアウト（initializeStartupOptimizationsと同じタイムアウト時間）
     // これにより、Lunrインデックスのロードなどの重い処理でブロックされない
     try {
       await Promise.race([
@@ -35,7 +35,7 @@ export async function waitForInitialization(): Promise<void> {
           setTimeout(() => {
             console.log('[StartupOptimizer] waitForInitialization: Timeout reached, continuing without waiting');
             resolve();
-          }, 3000);
+          }, 5000); // 3秒 → 5秒に延長
         })
       ]);
     } catch (error) {
@@ -96,14 +96,14 @@ export async function initializeStartupOptimizations(): Promise<void> {
   initializationPromise = performInitializationAsync();
   
   try {
-    // ⚡ 最適化: 最大3秒でタイムアウト
+    // ⚡ 最適化: 最大5秒でタイムアウト（Lunrインデックスのロードを確実に完了させる）
     await Promise.race([
       initializationPromise,
       new Promise<void>((resolve) => {
         setTimeout(() => {
           console.log('[StartupOptimizer] ⚡ Background initialization started (timeout reached)');
           resolve();
-        }, 3000);
+        }, 5000); // 3秒 → 5秒に延長
       })
     ]);
     
@@ -143,8 +143,14 @@ async function performInitializationAsync(): Promise<void> {
         console.log('[StartupOptimizer] Pre-initializing Japanese tokenizer...');
         const startTime = Date.now();
         
-        // Phase 6修正: 実際にkuromojiを初期化する（品質維持のため）
-        await preInitializeTokenizer();
+        // ⚡ 最適化: 既に初期化されている場合はスキップ（重複初期化を防止）
+        const { isTokenizerInitialized } = await import('./japanese-tokenizer');
+        if (!isTokenizerInitialized()) {
+          // Phase 6修正: 実際にkuromojiを初期化する（品質維持のため）
+          await preInitializeTokenizer();
+        } else {
+          console.log('[StartupOptimizer] Tokenizer already initialized, skipping re-initialization');
+        }
         
         const endTime = Date.now();
         console.log(`[StartupOptimizer] Japanese tokenizer initialized in ${endTime - startTime}ms`);
@@ -197,10 +203,24 @@ async function performInitializationAsync(): Promise<void> {
           // Lunrインデックスをバックグラウンドでロード
           const { lunrInitializer } = await import('./lunr-initializer');
           
-          // ConfluenceとJiraの両方のインデックスをロード
+          // テーブル存在確認を事前に行う（存在しないテーブルの初期化をスキップ）
+          const path = await import('path');
+          const dbPath = path.resolve(process.cwd(), '.lancedb');
+          const lancedb = await import('@lancedb/lancedb');
+          const db = await lancedb.connect(dbPath);
+          const availableTables = await db.tableNames();
+          console.log(`[StartupOptimizer] Available LanceDB tables: ${availableTables.join(', ')}`);
+          
+          // ConfluenceとJiraの両方のインデックスをロード（存在するテーブルのみ）
           const tables = ['confluence', 'jira_issues'];
           
           for (const tableName of tables) {
+            // テーブルが存在しない場合はスキップ
+            if (!availableTables.includes(tableName)) {
+              console.log(`[StartupOptimizer] ⏭️ Skipping ${tableName} (table not found in LanceDB)`);
+              continue;
+            }
+            
             try {
               console.log(`[StartupOptimizer] Preloading Lunr index for ${tableName}...`);
               await lunrInitializer.initializeAsync(tableName);
@@ -226,8 +246,27 @@ async function performInitializationAsync(): Promise<void> {
     }
   ];
 
-  // 並列で初期化処理を実行
-  const promises = optimizations.map(async (opt) => {
+  // ⚡ 最適化: Lunrインデックスの事前ロードを優先的に実行（検索パフォーマンス向上のため）
+  // 1. Lunrインデックスの事前ロードを最初に実行（検索に必要）
+  // 2. その他の初期化処理（トークナイザー、LanceDB）を並列実行
+  
+  const lunrOptimization = optimizations.find(opt => opt.name === 'Lunr Index Preload');
+  const otherOptimizations = optimizations.filter(opt => opt.name !== 'Lunr Index Preload');
+  
+  // Lunrインデックスの事前ロードを優先的に実行
+  if (lunrOptimization) {
+    try {
+      console.log(`[StartupOptimizer] 🚀 Priority: Starting ${lunrOptimization.name} first...`);
+      await lunrOptimization.fn();
+      console.log(`[StartupOptimizer] ✅ ${lunrOptimization.name} initialization completed`);
+    } catch (error) {
+      console.error(`[StartupOptimizer] ❌ ${lunrOptimization.name} initialization failed:`, error);
+      console.warn(`[StartupOptimizer] ⚠️ Continuing without ${lunrOptimization.name} optimization`);
+    }
+  }
+  
+  // その他の初期化処理を並列実行
+  const otherPromises = otherOptimizations.map(async (opt) => {
     try {
       await opt.fn();
       console.log(`[StartupOptimizer] ✅ ${opt.name} initialization completed`);
@@ -238,7 +277,7 @@ async function performInitializationAsync(): Promise<void> {
     }
   });
 
-  await Promise.all(promises);
+  await Promise.all(otherPromises);
 }
 
 /**

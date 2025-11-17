@@ -301,24 +301,20 @@ export const POST = async (req: NextRequest) => {
           const userAgent = req.headers.get('user-agent') || 'unknown';
           const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
           
-          // デバッグ: ユーザーID取得状況を確認
-          console.log('🔍 ユーザーID取得:', {
-            'x-user-id': req.headers.get('x-user-id'),
-            'authorization': req.headers.get('authorization') ? '存在' : 'なし',
-            finalUserId: userId,
-            environment: process.env.NODE_ENV
-          });
-          
           // ステップ更新: 検索開始
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
 
           // 検索処理とユーザー情報取得を並行実行（パフォーマンス最適化）
-          // Phase 0A-4 FIX: 検索時間は処理開始時刻から計測（TTFB後の処理時間）
-          const searchStartTime = processingStartTime;
+          // ユーザーがボタンを押してから検索完了までの時間を計測（リクエスト受信時点から）
+          const searchStartTime = apiStartTime; // リクエスト受信時点から計測開始
+          console.log(`[PERF] 🔍 検索処理開始（ユーザー認識時間）: ${new Date(searchStartTime).toISOString()}`);
           let userDisplayName = 'anonymous';
           
           let searchResults: any[] = [];
           try {
+            const retrieveStartTime = Date.now();
+            console.log(`[PERF] 📥 retrieveRelevantDocs呼び出し開始: ${Date.now() - searchStartTime}ms (リクエスト受信からの経過時間)`);
+            
             const [results, userInfo] = await Promise.all([
               retrieveRelevantDocs({
                 question,
@@ -334,19 +330,19 @@ export const POST = async (req: NextRequest) => {
                     const adminApp = initializeFirebaseAdmin();
                     const auth = admin.auth(adminApp);
                     const userRecord = await auth.getUser(userId);
-                    const displayName = userRecord.displayName || userRecord.email || 'unknown';
-                    console.log('✅ ユーザー情報取得成功:', { userId, displayName });
-                    return displayName;
+                    return userRecord.displayName || userRecord.email || 'unknown';
                   } catch (userError) {
-                    console.warn('⚠️ ユーザー情報取得失敗:', { userId, error: userError });
+                    console.warn('⚠️ ユーザー情報取得失敗:', userError);
                     return 'anonymous';
                   }
-                } else {
-                  console.log('⚠️ ユーザーIDがanonymousまたは未設定:', { userId });
                 }
                 return 'anonymous';
               })()
             ]);
+            
+            const retrieveEndTime = Date.now();
+            const retrieveDuration = retrieveEndTime - retrieveStartTime;
+            console.log(`[PERF] 📥 retrieveRelevantDocs完了: ${retrieveDuration}ms (累計: ${retrieveEndTime - searchStartTime}ms)`);
             
             searchResults = results || [];
             userDisplayName = userInfo;
@@ -357,9 +353,10 @@ export const POST = async (req: NextRequest) => {
           }
           
           relevantDocs = searchResults;
-          // Phase 0A-4 FIX: 検索時間は検索開始から検索完了まで
+          // ユーザーがボタンを押してから検索完了までの時間（リクエスト受信時点から検索完了まで）
           const searchEndTime = Date.now();
           searchTime = searchEndTime - searchStartTime;
+          console.log(`[PERF] 🔍 検索処理完了（ユーザー認識時間）: 総時間 ${searchTime}ms (リクエスト受信から検索完了まで)`);
           
           // 検索ソース別の集計
           const searchSourceStats = (relevantDocs || []).reduce((acc: Record<string, number>, doc) => {
@@ -664,7 +661,9 @@ export const POST = async (req: NextRequest) => {
               // ログ記録
               screenTestLogger.logAIPerformance(question, aiGenerationTime, fullAnswer.length, {
                 streamingChunks: totalChunks,
-                references: result.references.length,
+                referencesBeforeFiltering: relevantDocs.length, // フィルタリング前の参照元数
+                referencesAfterFiltering: result.references.length, // フィルタリング後の参照元数（LLMが使用した参照元）
+                references: result.references.length, // 後方互換性のため残す
                 isStreaming: true,
                 processingSteps: 4,
                 postLogId: savedPostLogId

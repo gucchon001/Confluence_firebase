@@ -299,20 +299,6 @@ function stripMarkdown(text: string): string {
 export default function ChatPage({ user }: ChatPageProps) {
   const { signOut, user: authUser } = useAuthWrapper();
   const { isAdmin, isLoading: isAdminLoading } = useAdmin();
-  
-  // デバッグ: ユーザー情報を確認（propsとuseAuthWrapperの両方）
-  useEffect(() => {
-    if (!user) {
-      console.warn('⚠️ ChatPage: propsのuserがnull/undefinedです');
-    } else {
-      console.log('✅ ChatPage: propsのuser', { uid: user.uid, displayName: user.displayName, email: user.email });
-    }
-    if (!authUser) {
-      console.warn('⚠️ ChatPage: useAuthWrapperのuserがnull/undefinedです');
-    } else {
-      console.log('✅ ChatPage: useAuthWrapperのuser', { uid: authUser.uid, displayName: authUser.displayName, email: authUser.email });
-    }
-  }, [user, authUser]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -605,22 +591,6 @@ export default function ChatPage({ user }: ChatPageProps) {
     try {
       // ユーザーIDの取得（propsのuserを優先、なければuseAuthWrapperのauthUserを使用）
       const effectiveUser = user || authUser;
-      
-      // デバッグ: ユーザー情報を確認
-      if (!effectiveUser?.uid) {
-        console.warn('⚠️ ユーザーIDが取得できません:', { 
-          propsUser: user, 
-          authUser: authUser,
-          effectiveUser: effectiveUser 
-        });
-      } else {
-        console.log('✅ ユーザーID:', { 
-          uid: effectiveUser.uid, 
-          displayName: effectiveUser.displayName, 
-          email: effectiveUser.email,
-          source: user ? 'props' : 'useAuthWrapper'
-        });
-      }
       
       // ストリーミング処理を開始（開始時刻を渡す）
       await streamingProcessClient.startStreaming(

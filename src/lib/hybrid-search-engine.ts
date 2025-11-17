@@ -3,6 +3,7 @@
  * ベクトル検索（LanceDB）+ BM25検索（Lunr）の組み合わせ
  */
 
+import * as path from 'path';
 import { getEmbeddings } from './embeddings';
 import { searchLanceDB } from './lancedb-search-client';
 import { lunrSearchClient } from './lunr-search-client';
@@ -168,29 +169,36 @@ export class HybridSearchEngine {
       const lunrSearchClient = LunrSearchClient.getInstance();
       
       // ⚡ 最適化: Lunrインデックスの遅延初期化（オンデマンド）
-      // 必要になった時だけ初期化を試行（バックグラウンドで開始、完了を待たない）
+      // 必要になった時だけ初期化を試行
       if (!lunrSearchClient.isReady(tableName)) {
-        console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready, initializing in background...`);
+        console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready, initializing...`);
         
-        // バックグラウンドで初期化を開始（結果を待たずに返す）
+        // 初期化を開始（既に初期化中の場合は待機）
         const { lunrInitializer } = await import('./lunr-initializer');
         
-        // ⚡ 最適化: タイムアウトを設定して、初期化が完了するまで待たない
-        Promise.race([
-          lunrInitializer.initializeAsync(tableName),
-          new Promise<void>((resolve) => {
-            setTimeout(() => {
-              console.log(`[HybridSearchEngine] Lunr initialization timeout for ${tableName}, continuing without waiting`);
-              resolve();
-            }, 100); // 100msでタイムアウト（初期化開始のみ確認）
-          })
-        ]).catch((error) => {
+        // ⚡ 修正: 初期化が完了するまで最大5秒待機（キャッシュからロードの場合は高速）
+        // タイムアウト後も検索を試行（初期化が完了していれば検索可能）
+        try {
+          await Promise.race([
+            lunrInitializer.initializeAsync(tableName),
+            new Promise<void>((resolve) => {
+              setTimeout(() => {
+                console.log(`[HybridSearchEngine] Lunr initialization timeout (5s) for ${tableName}, checking if ready...`);
+                resolve();
+              }, 5000); // 5秒でタイムアウト
+            })
+          ]);
+        } catch (error) {
           console.warn(`[HybridSearchEngine] Lunr initialization failed for ${tableName}:`, error);
-        });
+        }
         
-        // 初回はBM25検索をスキップ（ベクトル検索のみ）
-        console.log(`[HybridSearchEngine] Skipping BM25 search for now (initialization in progress), will be available on next request`);
+        // 初期化が完了したか確認
+        if (!lunrSearchClient.isReady(tableName)) {
+          console.log(`[HybridSearchEngine] Skipping BM25 search for ${tableName} (initialization still in progress)`);
           return [];
+        }
+        
+        console.log(`[HybridSearchEngine] Lunr index ready for ${tableName}, proceeding with BM25 search`);
       }
 
       console.log(`[HybridSearchEngine] Performing BM25 search for ${tableName}: "${query}"`);
@@ -324,12 +332,14 @@ export class HybridSearchEngine {
 
   /**
    * Lunrクライアントを初期化（lunrInitializerを使用）
+   * 二重初期化を避けるため、lunrInitializerのみを使用
    */
   private async initializeLunrClient(lunrSearchClient: any, tableName: string = 'confluence'): Promise<void> {
     try {
       console.log(`[HybridSearchEngine] Starting ${tableName} Lunr client initialization via lunrInitializer...`);
       
       // lunrInitializerを使用して初期化（統一された初期化処理）
+      // lunrInitializer内部でキャッシュの確認とロードが行われるため、ここでは追加の処理は不要
       const { lunrInitializer } = await import('./lunr-initializer');
       await lunrInitializer.initializeAsync(tableName);
       
@@ -339,18 +349,8 @@ export class HybridSearchEngine {
         return;
       }
       
-      // 初期化が完了していない場合は、直接キャッシュから読み込みを試行
-      console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready after initialization, trying direct cache load...`);
-      const cachePath = tableName === 'confluence' 
-        ? '.cache/lunr-index.json'
-        : `.cache/lunr-index-${tableName}.json`;
-      const loaded = await lunrSearchClient.loadFromCache(cachePath, tableName);
-      if (loaded) {
-        console.log(`[HybridSearchEngine] ${tableName} Lunr client loaded from cache successfully`);
-        return;
-      }
-      
-      console.warn(`[HybridSearchEngine] ${tableName} Lunr client initialization failed - cache not found and initialization not ready`);
+      // 初期化が完了していない場合は警告のみ（lunrInitializerが適切に処理する）
+      console.warn(`[HybridSearchEngine] ${tableName} Lunr client not ready after initialization - BM25 search will be skipped`);
       
     } catch (error) {
       console.error(`[HybridSearchEngine] Failed to initialize ${tableName} Lunr client:`, error);

@@ -22,6 +22,7 @@ interface TestConfig {
   file: string;
   description: string;
   category: 'search' | 'summary' | 'hybrid' | 'label';
+  args?: string[]; // テストに渡す引数（オプション）
 }
 
 // 機能テスト一覧（05.02-feature-tests.md に対応）
@@ -35,15 +36,10 @@ const tests: TestConfig[] = [
   },
   {
     name: '教室削除キーワード品質',
-    file: 'classroom-deletion-keyword-quality-test.ts',
+    file: 'keyword-quality-test.ts',
     description: '1.1.2 教室削除キーワード品質テスト',
-    category: 'search'
-  },
-  {
-    name: '教室管理検索',
-    file: 'classroom-management-search-test.ts',
-    description: '1.2 教室管理検索品質テスト',
-    category: 'search'
+    category: 'search',
+    args: ['教室削除問題'] // 統合されたテストで特定のテストケースを実行
   },
   // 2. 回答生成テスト
   {
@@ -54,21 +50,21 @@ const tests: TestConfig[] = [
   },
   // 3. ハイブリッド検索テスト
   {
+    name: 'ハイブリッド検索コンポーネント',
+    file: 'hybrid-search-components-test.ts',
+    description: '3.1 ハイブリッド検索コンポーネントテスト（ベクトル・BM25・RRF）',
+    category: 'hybrid'
+  },
+  {
     name: 'ハイブリッド検索',
     file: 'real-hybrid-search-test.ts',
     description: '3.3 ハイブリッド統合テスト',
     category: 'hybrid'
   },
   {
-    name: 'ベクトル検索品質',
-    file: 'vector-search-quality-test.ts',
-    description: '3.1 ベクトル検索テスト',
-    category: 'hybrid'
-  },
-  {
     name: 'ベクトル検索一貫性',
     file: 'vector-search-consistency-test.ts',
-    description: '3.1 ベクトル検索一貫性テスト',
+    description: '3.2 ベクトル検索一貫性テスト',
     category: 'hybrid'
   },
   // 4. ラベル・タイトルマッチングテスト
@@ -89,6 +85,119 @@ interface TestResult {
 }
 
 /**
+ * テスト出力を解析してステータスを判定
+ */
+function parseTestStatus(output: string): 'PASS' | 'FAIL' | 'SKIP' {
+  const outputText = output;
+  
+  // 1. 品質テストの結果をチェック（最優先）
+  // 「❌ 品質テスト: FAIL」または「品質テスト: FAIL」のパターンを検出
+  if (outputText.includes('品質テスト: FAIL') || 
+      /❌\s*品質テスト:\s*FAIL/.test(outputText) ||
+      /品質テスト:\s*FAIL/.test(outputText)) {
+    return 'FAIL';
+  }
+  
+  // 2. テスト結果サマリーやテストケースの失敗パターンをチェック
+  // 「❌ テスト名: 失敗」や「Test Name: ❌ FAIL」のパターン
+  const testFailurePatterns = [
+    /❌\s*[\d.]+\s+.*?テスト.*?:?\s*失敗/i,  // ❌ 1.1.1 教室削除検索テスト: 失敗
+    /Test\s+Result\s+Summary.*?❌.*?FAIL/ims, // Test Result Summary にFAIL
+    /===.*?Test\s+Result\s+Summary.*?❌.*?FAIL/ims, // === Test Result Summary === にFAIL
+    /===.*?Overall\s+Test\s+Result.*?❌/ims, // === Overall Test Result === に❌
+    /テスト完了.*?❌.*?不合格/i,  // ❌ テスト完了: 一部のテストが不合格です
+    /一部のテストが不合格/i,  // 「一部のテストが不合格です」
+    /.*?:\s*❌\s*FAIL/i,  // テスト名: ❌ FAIL
+    /.*?test.*?:\s*❌\s*FAIL/i,  // test: ❌ FAIL
+    /Quality\s+metrics.*?❌\s*FAIL/ims,  // Quality metrics: ❌ FAIL
+  ];
+  
+  for (const pattern of testFailurePatterns) {
+    if (pattern.test(outputText)) {
+      return 'FAIL';
+    }
+  }
+  
+  // 3. 複数のテストケースが失敗している場合をチェック
+  // 「❌ FAIL」が複数回出現する場合
+  const failMatches = outputText.match(/❌\s*FAIL/g);
+  const passMatches = outputText.match(/✅\s*PASS/g);
+  
+  // ❌ FAILが✅ PASSより多い、または❌ FAILが2つ以上ある場合はFAIL
+  if (failMatches && failMatches.length > 0) {
+    const failCount = failMatches.length;
+    const passCount = passMatches ? passMatches.length : 0;
+    
+    // FAILが2つ以上、またはFAILがPASSより多い場合はFAIL
+    if (failCount >= 2 || (failCount > 0 && failCount > passCount)) {
+      return 'FAIL';
+    }
+    
+    // テスト結果サマリーセクションでFAILがある場合もFAIL
+    if (outputText.includes('Test Result Summary') || 
+        outputText.includes('テスト結果サマリー') ||
+        outputText.includes('Test Case')) {
+      if (outputText.match(/❌\s*FAIL.*?Test\s+Result/ims) ||
+          outputText.match(/Test\s+Case.*?❌\s*FAIL/ims)) {
+        return 'FAIL';
+      }
+    }
+  }
+  
+  // 4. PARTIAL PASSをチェック
+  if (outputText.includes('品質テスト: PARTIAL PASS') || 
+      /⚠️\s*品質テスト:\s*PARTIAL\s*PASS/.test(outputText)) {
+    // PARTIAL PASSは一応PASSとして扱うが、警告として記録
+    return 'PASS';
+  }
+  
+  // 5. PASSをチェック
+  if (outputText.includes('品質テスト: PASS') || 
+      /🎉\s*品質テスト:\s*PASS/.test(outputText)) {
+    return 'PASS';
+  }
+  
+  // 6. その他の失敗パターンをチェック
+  // 「❌ テスト完了」や「❌ エラー」などがある場合
+  const hasFailPattern = /❌.*?(テスト|test|FAIL|失敗|エラー)/i.test(outputText);
+  const hasErrorPattern = /(エラー|ERROR|FAILED|失敗).*?テスト/i.test(outputText) && 
+                          !/(成功|PASS|SUCCESS).*?テスト/i.test(outputText);
+  
+  if (hasFailPattern || hasErrorPattern) {
+    // ただし、「✅ PASS」も含まれている場合は、より詳しく確認
+    if (outputText.includes('✅') && outputText.includes('PASS')) {
+      // ✅ PASSと❌ FAILのバランスを確認
+      const failLines = outputText.match(/.*❌.*/g) || [];
+      const passLines = outputText.match(/.*✅.*PASS.*/g) || [];
+      
+      // FAIL行がPASS行より多い場合はFAIL
+      if (failLines.length > passLines.length) {
+        return 'FAIL';
+      }
+    } else {
+      return 'FAIL';
+    }
+  }
+  
+  // 7. 成功パターンをチェック（❌がない、または❌が明らかに少ない場合のみ）
+  if (outputText.includes('✅') && outputText.includes('PASS')) {
+    // ❌ FAILがない場合、または✅ PASSが❌ FAILより明らかに多い場合
+    if (!outputText.includes('❌') || 
+        (passMatches && failMatches && passMatches.length > failMatches.length * 2)) {
+      return 'PASS';
+    }
+  }
+  
+  // 8. デフォルトはPASS（既存の動作を維持、ただし警告として記録）
+  // ただし、❌マークが多く含まれている場合は警告を出すためFAIL
+  if (outputText.match(/❌/g)?.length || 0 > 3) {
+    return 'FAIL';
+  }
+  
+  return 'PASS';
+}
+
+/**
  * テストを実行
  */
 function runTest(test: TestConfig): TestResult {
@@ -105,24 +214,32 @@ function runTest(test: TestConfig): TestResult {
     // execSyncで実行される子プロセスに環境変数を確実に引き継ぐため、
     // process.envをスプレッド構文でコピーして明示的に渡す
     // これにより、loadTestEnv()で設定された環境変数が子プロセスでも利用可能になる
-    const env = { ...process.env };
+    const env: NodeJS.ProcessEnv = { ...process.env };
     
-    const output = execSync(`npx tsx "${testPath}"`, {
+    const execOptions: Parameters<typeof execSync>[1] = {
       cwd: process.cwd(),
       encoding: 'utf-8',
       stdio: 'pipe',
       env: env, // 明示的に環境変数を引き継ぐ
-      shell: true,
+      shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/sh',
       maxBuffer: 10 * 1024 * 1024 // 10MB
-    });
+    };
+    
+    // 引数がある場合は追加
+    const args = (test as any).args ? (test as any).args.join(' ') : '';
+    const command = args ? `npx tsx "${testPath}" ${args}` : `npx tsx "${testPath}"`;
+    const output = execSync(command, execOptions) as string;
     
     console.log(output);
     
     const duration = Date.now() - startTime;
     
+    // テスト出力を解析してステータスを判定
+    const status = parseTestStatus(output);
+    
     return {
       test,
-      status: 'PASS',
+      status,
       duration,
       output: output || ''
     };

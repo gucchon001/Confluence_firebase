@@ -103,36 +103,17 @@ export class LunrSearchClient {
     return this.isInitialized(tableName);
   }
 
-  async initializeFromCache(): Promise<void> {
-    try {
-      console.log('[LunrSearchClient] Initializing from cache...');
-      
-      // トークナイザーを事前初期化
-      const { preInitializeTokenizer } = await import('./japanese-tokenizer');
-      await preInitializeTokenizer();
-      
-      // キャッシュから読み込み
-      const cacheExists = await this.loadFromCache();
-      if (cacheExists) {
-        console.log('[LunrSearchClient] Initialized from cache successfully');
-        return;
-      }
-      
-      console.log('[LunrSearchClient] No cache found, initialization skipped');
-    } catch (error) {
-      console.error('[LunrSearchClient] Cache initialization failed:', error);
-      throw error;
-    }
-  }
+  // ⚡ 削除: initializeFromCache()は使われていないため削除
+  // キャッシュからのロードはloadFromCache()を直接使用する
+  // トークナイザーの初期化は、実際にトークン化が必要になった時（検索時など）に行われる
 
   async initialize(documents: LunrDocument[], tableName: string = 'confluence'): Promise<void> {
     try {
       console.log(`[LunrSearchClient] Initializing ${tableName} index with ${documents.length} documents`);
       
-      // トークナイザーを事前初期化（並列処理）
-      const tokenizerInit = import('./japanese-tokenizer').then(({ preInitializeTokenizer }) => 
-        preInitializeTokenizer()
-      );
+      // ⚡ 最適化: このメソッドは既にトークン化済みのドキュメントを受け取るため、
+      // トークナイザーの初期化は不要（トークン化は呼び出し元で既に完了している）
+      // トークナイザーは、tokenizeJapaneseText()が呼ばれた時点で自動的に初期化される
       
       // ドキュメントをMapに保存（テーブルごとに管理）
       if (!this.documents.has(tableName)) {
@@ -143,9 +124,6 @@ export class LunrSearchClient {
       for (const doc of documents) {
         tableDocuments.set(doc.id, doc);
       }
-      
-      // トークナイザーの初期化完了を待つ
-      await tokenizerInit;
 
       // Lunrインデックスを日本語用に正しく構築
       const index = lunr(function() {
@@ -202,11 +180,21 @@ export class LunrSearchClient {
   async loadFromCache(cachePath: string = this.defaultCachePath, tableName: string = 'confluence'): Promise<boolean> {
     try {
       const startTime = Date.now();
+      console.log(`[LunrSearchClient] Attempting to load cache for ${tableName} from: ${cachePath}`);
       
       // Phase 6最適化: MessagePack形式を優先的に試行（10倍高速）
       const msgpackPath = path.resolve(cachePath.replace('.json', '.msgpack'));
+      console.log(`[LunrSearchClient] Trying MessagePack cache: ${msgpackPath}`);
       
       try {
+        // ファイルの存在確認
+        try {
+          await fs.access(msgpackPath);
+        } catch (accessError) {
+          console.log(`[LunrSearchClient] MessagePack file does not exist: ${msgpackPath}`);
+          throw new Error('MessagePack file not found');
+        }
+        
         const buffer = await fs.readFile(msgpackPath);
         const loadTime = Date.now() - startTime;
         console.log(`[Phase 6 LunrCache] MessagePack読み込み完了: ${(buffer.length / 1024 / 1024).toFixed(2)}MB, ${loadTime}ms`);
@@ -227,11 +215,15 @@ export class LunrSearchClient {
         }
         const tableDocuments = this.documents.get(tableName)!;
         tableDocuments.clear();
+        
+        // ⚡ 最適化: ドキュメントの復元を並列化（大量のドキュメントがある場合のパフォーマンス向上）
+        // ただし、Mapへの追加は順次実行（Mapはスレッドセーフではないため）
+        // 大量のドキュメントがある場合でも、メモリ効率を考慮して順次処理を維持
         for (const doc of data.documents) {
           tableDocuments.set(doc.id, doc);
         }
         const indexLoadTime = Date.now() - indexLoadStartTime;
-        console.log(`[Phase 6 LunrCache] Lunrインデックス復元完了: ${indexLoadTime}ms`);
+        console.log(`[Phase 6 LunrCache] Lunrインデックス復元完了: ${indexLoadTime}ms (docs=${tableDocuments.size})`);
         
         this.indices.set(tableName, index);
         this.initializedTables.add(tableName);
@@ -240,11 +232,20 @@ export class LunrSearchClient {
         return true;
         
       } catch (msgpackError) {
-        console.log(`[Phase 6 LunrCache] MessagePack not found, trying JSON...`);
+        console.log(`[Phase 6 LunrCache] MessagePack not found or failed: ${msgpackError instanceof Error ? msgpackError.message : String(msgpackError)}, trying JSON...`);
       }
       
       // フォールバック: 従来のJSON形式でロード
       const filePath = path.resolve(cachePath);
+      console.log(`[LunrSearchClient] Trying JSON cache: ${filePath}`);
+      
+      try {
+        await fs.access(filePath);
+      } catch (accessError) {
+        console.log(`[LunrSearchClient] JSON file does not exist: ${filePath}`);
+        throw new Error('JSON file not found');
+      }
+      
       const json = JSON.parse(await fs.readFile(filePath, 'utf-8')) as {
         index: any;
         documents: LunrDocument[];
@@ -266,7 +267,8 @@ export class LunrSearchClient {
       console.log(`[Phase 5 LunrCache] ✅ ${tableName}キャッシュから索引をメモリに読み込み - 構築時間0ms`);
       return true;
     } catch (error) {
-      console.log('[LunrSearchClient] No cache found or failed to load. Will rebuild.');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log(`[LunrSearchClient] No cache found or failed to load (${errorMessage}). Will rebuild.`);
       return false;
     }
   }

@@ -282,10 +282,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // Phase 5: ベクトル検索とBM25検索の並列実行（品質影響なし）
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
-    // ★★★ PERF LOG: 並列検索の開始時間を記録 ★★★
+    // ★★★ PERF LOG: 並列検索の開始時間を記録（実際の検索処理の開始時点） ★★★
     console.log('[Phase 5] 🚀 並列検索開始: ベクトル検索 + BM25検索\n');
     const parallelSearchStart = Date.now();
     const phase5StartTime = Date.now();
+    console.log(`[PERF] 🔍 実際の検索処理開始: ${parallelSearchStart}ms (初期化時間を除外)`);
     
     // Promise.allSettledで並列実行（一方が失敗しても継続）
     const [vectorSearchResult, bm25SearchResult] = await Promise.allSettled([
@@ -1243,13 +1244,15 @@ async function executeBM25Search(
   tableName: string = 'confluence'
 ): Promise<any[]> {
   const bm25SearchStart = Date.now();
+  console.log(`[BM25 Search] 🚀 executeBM25Search called for table: ${tableName}, keywords: ${finalKeywords.length}, topK: ${topK}`);
+  
   try {
     // Phase 6修正: lunrSearchClientの状態を直接チェック（lunrInitializerの間接チェックは信頼性が低い）
     const isLunrIndexEnabled = params.useLunrIndex !== false; // デフォルトはtrue
     
     // ⚡ 最適化: BM25検索が無効な場合は即座にスキップ
     if (!isLunrIndexEnabled) {
-      console.log(`[BM25 Search] Skipping BM25 search: useLunrIndex=${params.useLunrIndex}`);
+      console.log(`[BM25 Search] ⏭️  Skipping BM25 search: useLunrIndex=${params.useLunrIndex}`);
       return [];
     }
     
@@ -1259,27 +1262,37 @@ async function executeBM25Search(
     console.log(`[BM25 Search] 🔍 DEBUG: Lunr ready status for ${tableName}: ${isLunrReady}`);
     
     if (!isLunrReady) {
-      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing in background...`);
+      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing...`);
       
-      // バックグラウンドで初期化を開始（結果を待たずに返す）
+      // 初期化を開始（既に初期化中の場合は待機）
       const { lunrInitializer } = await import('./lunr-initializer');
       
-      // ⚡ 最適化: タイムアウトを設定して、初期化が完了するまで待たない
-      Promise.race([
-        lunrInitializer.initializeAsync(tableName),
-        new Promise<void>((resolve) => {
-          setTimeout(() => {
-            console.log(`[BM25 Search] Lunr initialization timeout for ${tableName}, continuing without waiting`);
-            resolve();
-          }, 100); // 100msでタイムアウト（初期化開始のみ確認）
-        })
-      ]).catch((error) => {
+      // ⚡ 修正: 初期化が完了するまで最大5秒待機（キャッシュからロードの場合は高速）
+      // タイムアウト後も検索を試行（初期化が完了していれば検索可能）
+      try {
+        await Promise.race([
+          lunrInitializer.initializeAsync(tableName),
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              console.log(`[BM25 Search] Lunr initialization timeout (5s) for ${tableName}, checking if ready...`);
+              resolve();
+            }, 5000); // 5秒でタイムアウト
+          })
+        ]);
+      } catch (error) {
         console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
-      });
+      }
       
-      // 初回はBM25検索をスキップ（ベクトル検索のみ）
-      console.log(`[BM25 Search] Skipping BM25 search for now (initialization in progress), will be available on next request`);
-      return [];
+      // 初期化が完了したか確認
+      const isReadyAfterWait = lunrSearchClient.isReady(tableName);
+      if (!isReadyAfterWait) {
+        console.log(`[BM25 Search] ⏭️  Skipping BM25 search for ${tableName} (initialization still in progress after 5s timeout)`);
+        return [];
+      }
+      
+      console.log(`[BM25 Search] ✅ Lunr index ready for ${tableName}, proceeding with BM25 search`);
+    } else {
+      console.log(`[BM25 Search] ✅ Lunr index already ready for ${tableName}, proceeding with BM25 search`);
     }
     
     // 🔍 デバッグ: Lunrインデックスの状態を確認
@@ -1295,6 +1308,8 @@ async function executeBM25Search(
     } catch (statusError) {
       console.warn(`[BM25 Search] ⚠️ Failed to get Lunr status:`, statusError);
     }
+    
+    console.log(`[BM25 Search] 🔍 Starting BM25 search with ${finalKeywords.length} keywords: [${finalKeywords.slice(0, 3).join(', ')}${finalKeywords.length > 3 ? '...' : ''}]`);
     
     // ★★★ 最適化: BM25検索のlimitを調整（パフォーマンス向上） ★★★
     // 最適化: kwCapを削減して、適切な件数を取得（200 → 150、topK * 3 → topK * 2.5、25%削減）
@@ -1354,6 +1369,8 @@ async function executeBM25Search(
     
     // スコアでソート（降順）
     allLunrResults.sort((a, b) => (b.score || 0) - (a.score || 0));
+    
+    console.log(`[BM25 Search] ✅ BM25 search completed: found ${allLunrResults.length} results (top ${Math.min(topK, allLunrResults.length)} will be returned)`);
 
     // LanceDB側の詳細情報を取得してStructuredLabelなどを補完
     const lanceDbRecordMap = new Map<number | string, any>();
@@ -1576,18 +1593,18 @@ async function executeBM25Search(
     });
     
     const bm25SearchDuration = Date.now() - bm25SearchStart;
-    console.log(`[PERF] 📝 BM25 search completed in ${bm25SearchDuration}ms`);
-    console.log(`[BM25 Search] Completed with ${bm25Results.length} results`);
+    const finalResults = bm25Results.slice(0, topK);
+    console.log(`[BM25 Search] ✅ BM25 search completed in ${bm25SearchDuration}ms, returning ${finalResults.length} results`);
     
     if (bm25SearchDuration > 5000) {
       console.warn(`⚠️ [PERF] Slow BM25 search detected: ${bm25SearchDuration}ms`);
     }
     
-    return bm25Results;
+    return finalResults;
     
   } catch (error) {
     const bm25SearchDuration = Date.now() - bm25SearchStart;
-    console.error(`[BM25 Search] Error after ${bm25SearchDuration}ms:`, error);
+    console.error(`[BM25 Search] ❌ Error after ${bm25SearchDuration}ms:`, error);
     return [];
   }
 }

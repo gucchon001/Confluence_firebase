@@ -27,11 +27,11 @@
    - 実行方法: `npx tsx src/tests/check-lancedb-schema.ts`
    - 説明: LanceDBのスキーマ構造を確認するテスト
 
-4. **教室管理検索品質テスト**
-   - ファイル: `src/tests/classroom-management-search-test.ts`
+4. **教室削除検索テスト**
+   - ファイル: `src/tests/classroom-deletion-issue-search-test.ts`
    - 状態: ✅ 存在確認済み
-   - 実行方法: `npx tsx src/tests/classroom-management-search-test.ts`
-   - 説明: 教室管理検索の品質を評価するテスト
+   - 実行方法: `npx tsx src/tests/classroom-deletion-issue-search-test.ts`
+   - 説明: 教室削除問題の検索品質を評価するテスト
 
 5. **APIパフォーマンステスト**
    - ファイル: `src/tests/test-api-performance.ts`
@@ -95,18 +95,16 @@
 - LanceDBデータベースへの接続が必要
 - `lancedb-client` モジュールが必要
 
-### 4. 教室管理検索品質テスト (`classroom-management-search-test.ts`)
+### 4. 教室削除検索テスト (`classroom-deletion-issue-search-test.ts`)
 
 **構造:**
-- 理想の抽出ページ定義（優先度別）
-- 除外されるべきページ定義
-- ハイブリッド検索エンジンの使用
+- 期待されるページ定義（実際のデータベースに存在するページ）
+- 検索結果の評価
 - 品質メトリクス計算（Precision, Recall, F1 Score）
 - 検索結果の評価とレポート生成
 
 **実行要件:**
-- `hybridSearchEngine` モジュールが必要
-- `summarizeConfluenceDocs` モジュールが必要
+- `retrieveRelevantDocs` モジュールが必要
 - LanceDB検索機能が必要
 
 ### 5. APIパフォーマンステスト (`test-api-performance.ts`)
@@ -188,9 +186,9 @@ npm run dev
    npx tsx src/tests/code-quality-checker.ts
    ```
 
-4. **教室管理検索品質テスト** - 検索品質の確認
+4. **教室削除検索テスト** - 検索品質の確認
    ```bash
-   npx tsx src/tests/classroom-management-search-test.ts
+   npx tsx src/tests/classroom-deletion-issue-search-test.ts
    ```
 
 5. **APIパフォーマンステスト** - パフォーマンスの測定（開発サーバー起動後）

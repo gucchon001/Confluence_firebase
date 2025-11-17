@@ -13,8 +13,6 @@
 import { loadTestEnv } from './test-helpers/env-loader';
 loadTestEnv();
 
-import { searchLanceDB } from '../lib/lancedb-search-client';
-
 interface ConsistencyTestQuery {
   query: string;
   category: string;
@@ -157,6 +155,9 @@ async function testQueryConsistency(testQuery: ConsistencyTestQuery): Promise<Co
   console.log(`説明: ${testQuery.description}`);
   
   try {
+    // 動的インポートを使用（loadTestEnv()実行後にインポート）
+    const { searchLanceDB } = await import('../lib/lancedb-search-client.js');
+    
     // ベクトル検索を実行
     const searchResults = await searchLanceDB({
       query: testQuery.query,
