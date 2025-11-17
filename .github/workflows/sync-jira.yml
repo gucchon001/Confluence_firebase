@@ -39,15 +39,48 @@ jobs:
       - name: Install dependencies
         run: npm install
       
+      - name: Validate environment variables
+        run: |
+          echo "🔍 環境変数の検証を開始します..."
+          
+          if [ -z "${{ secrets.JIRA_PROJECT_KEY }}" ]; then
+            echo "❌ JIRA_PROJECT_KEY が設定されていません"
+            echo "GitHub Secrets に JIRA_PROJECT_KEY を設定してください"
+            exit 1
+          fi
+          
+          JIRA_TOKEN="${{ secrets.JIRA_API_TOKEN || secrets.CONFLUENCE_API_TOKEN }}"
+          if [ -z "$JIRA_TOKEN" ]; then
+            echo "❌ JIRA_API_TOKEN または CONFLUENCE_API_TOKEN が設定されていません"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
+            echo "❌ GEMINI_API_KEY が設定されていません"
+            exit 1
+          fi
+          
+          echo "✅ 環境変数の検証が完了しました"
+          echo "  JIRA_PROJECT_KEY: 設定済み"
+          echo "  JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL || secrets.CONFLUENCE_BASE_URL }}"
+          echo "  JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL || secrets.CONFLUENCE_USER_EMAIL }}"
+      
       - name: Run Jira sync
         id: jira_sync
         run: npm run sync:jira
         env:
+          # Confluence環境変数（app-config.tsで必須）
+          CONFLUENCE_BASE_URL: ${{ secrets.CONFLUENCE_BASE_URL }}
+          CONFLUENCE_USER_EMAIL: ${{ secrets.CONFLUENCE_USER_EMAIL }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+          CONFLUENCE_SPACE_KEY: ${{ secrets.CONFLUENCE_SPACE_KEY }}
+          # Jira環境変数
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL || secrets.CONFLUENCE_BASE_URL }}
           JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL || secrets.CONFLUENCE_USER_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN || secrets.CONFLUENCE_API_TOKEN }}
           JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
           JIRA_MAX_ISSUES: ${{ github.event.inputs.max_issues || '0' }}
+          # その他の環境変数
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
         continue-on-error: false
@@ -57,6 +90,10 @@ jobs:
         if: steps.jira_sync.outcome == 'success'
         run: npm run init:jira-lunr
         env:
+          CONFLUENCE_BASE_URL: ${{ secrets.CONFLUENCE_BASE_URL }}
+          CONFLUENCE_USER_EMAIL: ${{ secrets.CONFLUENCE_USER_EMAIL }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+          CONFLUENCE_SPACE_KEY: ${{ secrets.CONFLUENCE_SPACE_KEY }}
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
         continue-on-error: true
       
@@ -65,6 +102,10 @@ jobs:
         if: steps.jira_sync.outcome == 'success'
         run: npm run lancedb:create-indexes
         env:
+          CONFLUENCE_BASE_URL: ${{ secrets.CONFLUENCE_BASE_URL }}
+          CONFLUENCE_USER_EMAIL: ${{ secrets.CONFLUENCE_USER_EMAIL }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+          CONFLUENCE_SPACE_KEY: ${{ secrets.CONFLUENCE_SPACE_KEY }}
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
         continue-on-error: true
       
@@ -73,6 +114,10 @@ jobs:
         if: steps.jira_sync.outcome == 'success'
         run: npm run upload:production-data
         env:
+          CONFLUENCE_BASE_URL: ${{ secrets.CONFLUENCE_BASE_URL }}
+          CONFLUENCE_USER_EMAIL: ${{ secrets.CONFLUENCE_USER_EMAIL }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+          CONFLUENCE_SPACE_KEY: ${{ secrets.CONFLUENCE_SPACE_KEY }}
           GOOGLE_CLOUD_PROJECT: confluence-copilot-ppjye
       
       - name: Notify completion
