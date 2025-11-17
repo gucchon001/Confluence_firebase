@@ -12,6 +12,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const LANCEDB_PATH = path.join(process.cwd(), '.lancedb');
 const SKIP_ENV = process.env.SKIP_DATA_DOWNLOAD;
@@ -52,21 +53,35 @@ async function main() {
   
   // ダウンロードが必要な場合
   console.log('📥 データダウンロードが必要です');
-  console.log('ℹ️  download-production-data.ts を実行してください');
-  console.log('ℹ️  または、SKIP_DATA_DOWNLOAD=true を設定してスキップできます');
-  
-  // ダウンロードスクリプトが存在する場合は実行
+  console.log('🚀 download-production-data.ts を自動実行します');
+
   const downloadScript = path.join(process.cwd(), 'scripts', 'download-production-data.ts');
-  if (fs.existsSync(downloadScript)) {
-    console.log('🚀 ダウンロードスクリプトを実行します...');
-    // ここでは実際のダウンロードは行わず、メッセージのみ表示
-    // 実際のダウンロードは別のスクリプトで実行される想定
-    console.log('⚠️  注意: ダウンロードスクリプトは別途実行してください');
+  if (!fs.existsSync(downloadScript)) {
+    console.error('❌ ダウンロードスクリプトが見つかりませんでした:', downloadScript);
+    process.exit(1);
   }
-  
-  // ダウンロードが必要な場合は、エラーコードを返さずに終了
-  // （ビルドプロセスを続行させるため）
-  process.exit(0);
+
+  try {
+    console.log('⏳ LanceDBデータをダウンロード中...');
+    execSync('npx tsx scripts/download-production-data.ts', { stdio: 'inherit' });
+  } catch (error) {
+    console.error('❌ ダウンロードスクリプトの実行に失敗しました');
+    console.error(error.message || error);
+    process.exit(1);
+  }
+
+  // ダウンロード後にキャッシュが生成されたかを検証
+  if (fs.existsSync(LANCEDB_PATH)) {
+    const files = fs.readdirSync(LANCEDB_PATH);
+    if (files.length > 0) {
+      console.log('✅ LanceDBデータのダウンロードが完了しました');
+      console.log(`📄 ダウンロード済みファイル数: ${files.length}`);
+      process.exit(0);
+    }
+  }
+
+  console.error('❌ LanceDBキャッシュが確認できませんでした。ダウンロードが失敗した可能性があります');
+  process.exit(1);
 }
 
 main().catch((error) => {

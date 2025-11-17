@@ -165,27 +165,9 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       return cachedResults;
     }
     
-    // 最適化されたLunr初期化を使用（重複初期化を防止）
-    // ★★★ PERF LOG: Lunr初期化の時間計測 ★★★
-    const lunrInitStartTime = Date.now();
-    try {
-      // optimized-lunr-initializerはアーカイブに移動済み。代わりにlunr-initializerを使用
-      const { lunrInitializer } = await import('./lunr-initializer');
-      const tableName = params.tableName || 'confluence';
-      await lunrInitializer.initializeAsync(tableName);
-      
-      // パフォーマンス最適化: 不要な遅延を削除（100ms削減）
-      // 初期化は完了しているため、追加の待機は不要
-      
-      const lunrInitDuration = Date.now() - lunrInitStartTime;
-      if (lunrInitDuration > 1000) {
-        console.warn(`⚠️ [PERF] Slow Lunr initialization: ${lunrInitDuration}ms`);
-      }
-    } catch (error) {
-      const lunrInitDuration = Date.now() - lunrInitStartTime;
-      // エラー時のみログ（本番環境でも出力）
-      console.error(`⚠️ [PERF] Lunr initialization failed after ${lunrInitDuration}ms:`, error);
-    }
+    // ⚡ 最適化: Lunr初期化を遅延（BM25検索が必要になった時のみロード）
+    // これにより、初回リクエスト時のブロックを回避
+    // BM25検索が実際に必要になった時（executeBM25Search内）で初期化する
     
     // デフォルト値の設定
     const topK = params.topK || 5;
@@ -1080,6 +1062,28 @@ async function executeVectorSearch(
     // ★★★ PERF LOG: ベクトル検索の時間計測 ★★★
     const vectorSearchStart = Date.now();
     
+    // 🔍 デバッグ: テーブルの行数を確認（0件検出の原因特定）
+    try {
+      const rowCount = await tbl.countRows();
+      console.log(`[Vector Search] 🔍 DEBUG: Table row count: ${rowCount}`);
+      if (rowCount === 0) {
+        console.error(`[Vector Search] ❌ CRITICAL: Table is empty! This is the root cause of 0 results.`);
+        // テーブル名を確認
+        const tableName = params.tableName || 'confluence';
+        console.error(`[Vector Search] ❌ Table name: ${tableName}`);
+        return [];
+      }
+    } catch (countError) {
+      console.warn(`[Vector Search] ⚠️ Failed to count rows:`, countError);
+    }
+    
+    // 🔍 デバッグ: ベクトルの有効性を確認
+    if (!vector || vector.length === 0) {
+      console.error(`[Vector Search] ❌ CRITICAL: Vector is empty or invalid!`);
+      return [];
+    }
+    console.log(`[Vector Search] 🔍 DEBUG: Vector dimension: ${vector.length}`);
+    
     let vectorQuery = tbl.search(vector);
     if (params.filter) {
       vectorQuery = vectorQuery.where(params.filter);
@@ -1089,11 +1093,19 @@ async function executeVectorSearch(
     // 理由: 距離が100位以内に入るはずのドキュメントが検索結果に含まれない問題に対処
     // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
     // 最適化: 30倍 → 15倍に削減（パフォーマンス向上、topK=20の場合、600件→300件、50%削減）
-    let vectorResults = await vectorQuery.limit(topK * 15).toArray(); // 30倍 → 15倍に削減（フェーズ1最適化）
+    const searchLimit = topK * 15;
+    console.log(`[Vector Search] 🔍 DEBUG: Search limit: ${searchLimit} (topK=${topK})`);
+    let vectorResults = await vectorQuery.limit(searchLimit).toArray(); // 30倍 → 15倍に削減（フェーズ1最適化）
     const vectorSearchDuration = Date.now() - vectorSearchStart;
     
     console.log(`[PERF] 🔍 Vector search completed in ${vectorSearchDuration}ms`);
     console.log(`[Vector Search] Found ${vectorResults.length} results`);
+    
+    // 🔍 デバッグ: 0件の場合の詳細情報
+    if (vectorResults.length === 0) {
+      console.error(`[Vector Search] ❌ CRITICAL: Vector search returned 0 results!`);
+      console.error(`[Vector Search] ❌ DEBUG: topK=${topK}, searchLimit=${searchLimit}, filter=${params.filter || 'none'}`);
+    }
     
     // 距離閾値でフィルタリング
     const distanceThreshold = params.maxDistance || 2.0;
@@ -1234,11 +1246,54 @@ async function executeBM25Search(
   try {
     // Phase 6修正: lunrSearchClientの状態を直接チェック（lunrInitializerの間接チェックは信頼性が低い）
     const isLunrIndexEnabled = params.useLunrIndex !== false; // デフォルトはtrue
-    const isLunrReady = lunrSearchClient.isReady(tableName);
     
-    if (!isLunrIndexEnabled || !isLunrReady) {
-      console.log(`[BM25 Search] Skipping BM25 search: useLunrIndex=${params.useLunrIndex}, isLunrIndexEnabled=${isLunrIndexEnabled}, isLunrReady=${isLunrReady}`);
+    // ⚡ 最適化: BM25検索が無効な場合は即座にスキップ
+    if (!isLunrIndexEnabled) {
+      console.log(`[BM25 Search] Skipping BM25 search: useLunrIndex=${params.useLunrIndex}`);
       return [];
+    }
+    
+    // ⚡ 最適化: Lunrインデックスの遅延初期化（オンデマンド）
+    // 必要になった時だけ初期化を試行（バックグラウンドで開始、完了を待たない）
+    const isLunrReady = lunrSearchClient.isReady(tableName);
+    console.log(`[BM25 Search] 🔍 DEBUG: Lunr ready status for ${tableName}: ${isLunrReady}`);
+    
+    if (!isLunrReady) {
+      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing in background...`);
+      
+      // バックグラウンドで初期化を開始（結果を待たずに返す）
+      const { lunrInitializer } = await import('./lunr-initializer');
+      
+      // ⚡ 最適化: タイムアウトを設定して、初期化が完了するまで待たない
+      Promise.race([
+        lunrInitializer.initializeAsync(tableName),
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            console.log(`[BM25 Search] Lunr initialization timeout for ${tableName}, continuing without waiting`);
+            resolve();
+          }, 100); // 100msでタイムアウト（初期化開始のみ確認）
+        })
+      ]).catch((error) => {
+        console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
+      });
+      
+      // 初回はBM25検索をスキップ（ベクトル検索のみ）
+      console.log(`[BM25 Search] Skipping BM25 search for now (initialization in progress), will be available on next request`);
+      return [];
+    }
+    
+    // 🔍 デバッグ: Lunrインデックスの状態を確認
+    try {
+      const lunrStatus = lunrSearchClient.getStatus(tableName);
+      console.log(`[BM25 Search] 🔍 DEBUG: Lunr index status:`, {
+        tableName,
+        isReady: isLunrReady,
+        documentCount: lunrStatus?.documentCount || 'unknown',
+        hasIndex: lunrStatus?.hasIndex || 'unknown',
+        initialized: lunrStatus?.initialized || 'unknown'
+      });
+    } catch (statusError) {
+      console.warn(`[BM25 Search] ⚠️ Failed to get Lunr status:`, statusError);
     }
     
     // ★★★ 最適化: BM25検索のlimitを調整（パフォーマンス向上） ★★★

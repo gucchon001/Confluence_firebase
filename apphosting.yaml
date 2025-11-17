@@ -82,21 +82,25 @@ env:
   - variable: CONFLUENCE_BASE_URL
     value: https://giginc.atlassian.net
     availability:
+      - BUILD
       - RUNTIME
   
   - variable: CONFLUENCE_USER_EMAIL
     value: kanri@jukust.jp
     availability:
+      - BUILD
       - RUNTIME
   
   - variable: CONFLUENCE_API_TOKEN
     secret: confluence_api_token
     availability:
+      - BUILD
       - RUNTIME
   
   - variable: CONFLUENCE_SPACE_KEY
     value: CLIENTTOMO
     availability:
+      - BUILD
       - RUNTIME
   
   # Google Cloud（ビルド時とランタイムの両方）
