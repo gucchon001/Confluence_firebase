@@ -95,6 +95,8 @@
 - **[04.08-network-sharing-guide.md](./04-operations/04.08-network-sharing-guide.md)** - ネットワーク共有ガイド
 - **[04.12-environment-setup.md](./04-operations/04.12-environment-setup.md)** - 環境別設定ガイド
 - **[04.13-environment-variables.md](./04-operations/04.13-environment-variables.md)** - 環境変数設定ガイド
+- **[04.15-jira-production-deployment-guide.md](./04-operations/04.15-jira-production-deployment-guide.md)** - Jira本番環境デプロイガイド
+- **[04.16-github-cli-and-actions-guide.md](./04-operations/04.16-github-cli-and-actions-guide.md)** ⚡ **NEW** - GitHub CLIとGitHub Actions運用ガイド
 - **[14-quick-start.md](./04-operations/14-quick-start.md)** - クイックスタートガイド
 
 詳細は [`04-operations/README.md`](./04-operations/README.md) を参照してください。
