@@ -5,6 +5,7 @@
 import { getDeploymentInfo } from './deployment-info';
 import { removeBOM, checkStringForBOM } from './bom-utils';
 import { appConfig } from '@/config/app-config';
+import { EmbeddingConfig } from '@/config/ai-models-config';
 import { GeminiApiKeyLeakedError, GeminiApiFatalError } from './gemini-api-errors';
 // embedding-cacheはアーカイブに移動済み。簡易キャッシュ実装を使用
 
@@ -16,8 +17,9 @@ export function clearEmbeddingCache(): void {
   embeddingCache.clear();
 }
 
+// 一元化された設定から埋め込みエンドポイントを構築
 const GEMINI_EMBEDDING_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent';
+  `https://generativelanguage.googleapis.com/v1/models/${EmbeddingConfig.modelId}:embedContent`;
 
 export async function getEmbeddings(text: string): Promise<number[]> {
   const startTime = Date.now();

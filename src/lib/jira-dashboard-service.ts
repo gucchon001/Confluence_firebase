@@ -66,6 +66,22 @@ export interface JiraDashboardData {
 }
 
 class JiraDashboardService {
+  // フィルタオプションのキャッシュ（5分間有効）
+  private filterOptionsCache: {
+    data: {
+      statuses: string[];
+      statusCategories: string[];
+      assignees: string[];
+      priorities: string[];
+      issueTypes: string[];
+    } | null;
+    timestamp: number;
+  } = {
+    data: null,
+    timestamp: 0
+  };
+  private readonly FILTER_OPTIONS_CACHE_TTL = 5 * 60 * 1000; // 5分
+
   /**
    * ダッシュボードデータを取得
    */
@@ -238,30 +254,40 @@ class JiraDashboardService {
     const granularity = filters.granularity || 'week';
     const trendsMap = new Map<string, JiraTrendData>();
 
-    // Firestoreから完了日を取得
+    // Firestoreから完了日を取得（最適化: getAll()を使用してバッチ取得）
     const completedDatesMap = new Map<string, string>();
     try {
       const issueKeys = issues.map((issue: any) => issue.issue_key || issue.id).filter(Boolean);
       if (issueKeys.length > 0) {
-        // バッチで取得（500件ずつ）
-        const batchSize = 500;
+        const startTime = Date.now();
+        // FirestoreのgetAll()を使用してバッチ取得（最大10件ずつ）
+        // これにより、個別のget()呼び出しよりも大幅に高速化
+        const batchSize = 10; // FirestoreのgetAll()の制限
         for (let i = 0; i < issueKeys.length; i += batchSize) {
           const batch = issueKeys.slice(i, i + batchSize);
-          const promises = batch.map(async (key: string) => {
-            try {
-              const doc = await firestore.collection('jiraIssues').doc(key).get();
+          try {
+            // ドキュメント参照の配列を作成
+            const docRefs = batch.map(key => firestore.collection('jiraIssues').doc(key));
+            // バッチで一括取得
+            const docs = await firestore.getAll(...docRefs);
+            
+            // 完了日を抽出
+            docs.forEach(doc => {
               if (doc.exists) {
                 const data = doc.data();
-                // completedDateフィールドを確認
                 if (data?.completedDate) {
-                  completedDatesMap.set(key, data.completedDate);
+                  completedDatesMap.set(doc.id, data.completedDate);
                 }
               }
-            } catch (error) {
-              // エラーは無視（データが存在しない場合など）
-            }
-          });
-          await Promise.all(promises);
+            });
+          } catch (error) {
+            // バッチエラーは無視（データが存在しない場合など）
+            console.warn(`[JiraDashboardService] バッチ取得エラー（続行）:`, error);
+          }
+        }
+        const duration = Date.now() - startTime;
+        if (duration > 1000) {
+          console.warn(`[JiraDashboardService] 完了日取得に時間がかかりました: ${duration}ms (${issueKeys.length}件)`);
         }
       }
     } catch (error) {
@@ -368,7 +394,7 @@ class JiraDashboardService {
   }
 
   /**
-   * 利用可能なフィルタオプションを取得
+   * 利用可能なフィルタオプションを取得（キャッシュ付き）
    */
   async getFilterOptions(): Promise<{
     statuses: string[];
@@ -377,7 +403,14 @@ class JiraDashboardService {
     priorities: string[];
     issueTypes: string[];
   }> {
+    // キャッシュをチェック
+    const now = Date.now();
+    if (this.filterOptionsCache.data && (now - this.filterOptionsCache.timestamp) < this.FILTER_OPTIONS_CACHE_TTL) {
+      return this.filterOptionsCache.data;
+    }
+
     try {
+      const startTime = Date.now();
       const db = await lancedbClient.getDatabase();
       const jiraTable = await db.openTable('jira_issues');
       const allIssues = await jiraTable.query().toArray();
@@ -396,13 +429,26 @@ class JiraDashboardService {
         if (issue.issue_type) issueTypes.add(issue.issue_type);
       });
 
-      return {
+      const result = {
         statuses: Array.from(statuses).sort(),
         statusCategories: Array.from(statusCategories).sort(),
         assignees: Array.from(assignees).sort(),
         priorities: Array.from(priorities).sort(),
         issueTypes: Array.from(issueTypes).sort()
       };
+
+      // キャッシュに保存
+      this.filterOptionsCache = {
+        data: result,
+        timestamp: now
+      };
+
+      const duration = Date.now() - startTime;
+      if (duration > 1000) {
+        console.warn(`[JiraDashboardService] フィルタオプション取得に時間がかかりました: ${duration}ms`);
+      }
+
+      return result;
     } catch (error) {
       console.error('[JiraDashboardService] フィルタオプション取得エラー:', error);
       throw error;

@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { loadDomainKnowledge, findDomainCandidates, findTermCandidates } from '@/lib/domain-knowledge-loader';
 import { StructuredLabelHelper } from '@/types/structured-label';
 import { removeBOM, checkStringForBOM } from '@/lib/bom-utils';
+import { GeminiConfig } from '@/config/ai-models-config';
 import type { StructuredLabel, DocumentCategory, DocumentStatus } from '@/types/structured-label';
 
 // 入力スキーマ
@@ -214,13 +215,15 @@ export const autoLabelFlow = ai.defineFlow(
         });
       }
       
-      // Gemini 2.0 Flash実行
+      // Gemini実行（一元化された設定を使用）
+      // 注意: 自動ラベル付けは一貫性を重視するため、温度を低く設定
       const { text } = await ai.generate({
-        model: 'googleai/gemini-2.0-flash',
+        model: GeminiConfig.model,
         prompt,
         config: {
-          temperature: 0.1,  // 低温度で一貫性を重視
-          maxOutputTokens: 500,
+          ...GeminiConfig.config,
+          temperature: 0.1,  // 低温度で一貫性を重視（GeminiConfigより低く設定）
+          maxOutputTokens: 500,  // 自動ラベル付けは短い出力で十分
         },
       });
       

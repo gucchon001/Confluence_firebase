@@ -43,7 +43,8 @@ import {
   ThumbsDown,
   Database,
   Trash2,
-  Loader2
+  Loader2,
+  User as UserIcon
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -64,8 +65,10 @@ import { adminService } from '@/lib/admin-service';
 import { postLogService } from '@/lib/post-log-service';
 import { performanceAlertService } from '@/lib/performance-alert-service';
 import { errorAnalysisService } from '@/lib/error-analysis-service';
-import { systemHealthService } from '@/lib/system-health-service';
+// system-health-serviceはサーバーサイドのみのため、API経由で使用
+// import { systemHealthService } from '@/lib/system-health-service';
 import { useAdmin } from '@/hooks/use-admin';
+import { useAuthWrapper } from '@/hooks/use-auth-wrapper';
 import { JiraDashboard } from '@/components/jira-dashboard';
 import type { AdminUser, PostLog, Reference, SatisfactionRating, PerformanceAlert, ErrorLog, SystemHealth } from '@/types';
 import type { ErrorAnalysis } from '@/lib/error-analysis-service';
@@ -123,6 +126,7 @@ const mockPostLogs: PostLog[] = [
 // Markdown components are now imported from @/lib/markdown-utils
 
 const AdminDashboard: React.FC = () => {
+  const { user: currentUser } = useAuthWrapper();
   const { isAdmin, isLoading: isAdminLoading } = useAdmin();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [postLogs, setPostLogs] = useState<PostLog[]>([]);
@@ -464,6 +468,60 @@ const AdminDashboard: React.FC = () => {
       .map(log => log.userId)
   ).size;
 
+  // 環境・データソースのヘルパー関数
+  const getEnvironment = (log: PostLog): 'development' | 'staging' | 'production' => {
+    return log.metadata?.environment || 'production';
+  };
+
+  const getDataSource = (log: PostLog): 'confluence' | 'jira' | 'mixed' | 'unknown' => {
+    const dataSource = log.metadata?.dataSource;
+    if (dataSource) {
+      return dataSource as 'confluence' | 'jira' | 'mixed' | 'unknown';
+    }
+    const hasConfluence = log.references?.some(r => r.url?.includes('confluence'));
+    const hasJira = log.references?.some(r => r.url?.includes('jira'));
+    if (hasConfluence && hasJira) return 'mixed';
+    if (hasConfluence) return 'confluence';
+    if (hasJira) return 'jira';
+    return 'unknown';
+  };
+
+  const getEnvironmentColor = (env: 'development' | 'staging' | 'production'): string => {
+    switch (env) {
+      case 'development': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'staging': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'production': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getDataSourceColor = (source: 'confluence' | 'jira' | 'mixed' | 'unknown'): string => {
+    switch (source) {
+      case 'confluence': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'jira': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'mixed': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getEnvironmentName = (env: 'development' | 'staging' | 'production'): string => {
+    switch (env) {
+      case 'development': return '開発環境';
+      case 'staging': return 'ステージング';
+      case 'production': return '本番環境';
+      default: return '不明';
+    }
+  };
+
+  const getDataSourceName = (source: 'confluence' | 'jira' | 'mixed' | 'unknown'): string => {
+    switch (source) {
+      case 'confluence': return 'Confluence';
+      case 'jira': return 'Jira';
+      case 'mixed': return 'Confluence + Jira';
+      default: return '不明';
+    }
+  };
+
   // パフォーマンス分析用データ処理
   const getPerformanceData = () => {
     // 時間帯別データ（過去24時間、2時間間隔）
@@ -620,6 +678,17 @@ const AdminDashboard: React.FC = () => {
             <h2 className="text-2xl font-bold">管理ダッシュボード</h2>
             <p className="text-sm text-muted-foreground">
               最終更新: {lastUpdateTime.toLocaleString('ja-JP')}
+              {currentUser && (
+                <span className="ml-2">
+                  • ログインユーザー: {currentUser.displayName || currentUser.email}
+                  {isAdmin && (
+                    <Badge variant="default" className="ml-2 bg-blue-500">
+                      <Shield className="h-3 w-3 mr-1" />
+                      管理者
+                    </Badge>
+                  )}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -711,13 +780,505 @@ const AdminDashboard: React.FC = () => {
 
       {/* タブコンテンツ */}
       <Tabs defaultValue="jira" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="jira">開発進捗ダッシュボード</TabsTrigger>
+          <TabsTrigger value="performance">パフォーマンス分析</TabsTrigger>
+          <TabsTrigger value="users">ユーザー管理</TabsTrigger>
           <TabsTrigger value="errors">エラー分析</TabsTrigger>
         </TabsList>
 
         <TabsContent value="jira" className="space-y-4">
           <JiraDashboard />
+        </TabsContent>
+
+        <TabsContent value="users" className="space-y-4">
+          {/* ユーザー管理 */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+              <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    ユーザー管理 ({users.length}人)
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    ユーザー一覧と管理者権限の管理
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefresh}
+                    disabled={isLoading}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                    更新
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {users.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>ユーザーが登録されていません</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ユーザー名</TableHead>
+                        <TableHead>メールアドレス</TableHead>
+                        <TableHead>登録日</TableHead>
+                        <TableHead>管理者権限</TableHead>
+                        <TableHead>権限付与日時</TableHead>
+                        <TableHead>操作</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users.map((user) => (
+                        <TableRow key={user.uid}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <span className="text-sm font-medium">
+                                  {user.displayName?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium">
+                                  {user.displayName || '名前未設定'}
+                                </p>
+                                {user.displayName && (
+                                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <code className="text-sm">{user.email}</code>
+                          </TableCell>
+                          <TableCell>
+                            {new Date(user.createdAt).toLocaleDateString('ja-JP')}
+                          </TableCell>
+                          <TableCell>
+                            {user.isAdmin ? (
+                              <Badge variant="default" className="bg-blue-500">
+                                <Shield className="h-3 w-3 mr-1" />
+                                管理者
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">一般ユーザー</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {user.isAdmin && user.adminGrantedAt ? (
+                              <div>
+                                <p className="text-sm">
+                                  {new Date(user.adminGrantedAt).toLocaleDateString('ja-JP')}
+                                </p>
+                                {user.adminGrantedBy && (
+                                  <p className="text-xs text-muted-foreground">
+                                    付与者: {users.find(u => u.uid === user.adminGrantedBy)?.displayName || user.adminGrantedBy}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant={user.isAdmin ? "destructive" : "default"}
+                              size="sm"
+                              onClick={() => handleToggleAdmin(user.uid, user.isAdmin)}
+                              disabled={isLoading}
+                            >
+                              {user.isAdmin ? (
+                                <>
+                                  <XCircle className="h-4 w-4 mr-1" />
+                                  管理者権限を削除
+                                </>
+                              ) : (
+                                <>
+                                  <Shield className="h-4 w-4 mr-1" />
+                                  管理者権限を付与
+                                </>
+                              )}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 統計情報 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">総ユーザー数</p>
+                    <p className="text-2xl font-bold">{users.length}</p>
+                  </div>
+                  <Users className="h-8 w-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">管理者数</p>
+                    <p className="text-2xl font-bold">
+                      {users.filter(u => u.isAdmin).length}
+                    </p>
+                  </div>
+                  <Shield className="h-8 w-8 text-green-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">一般ユーザー数</p>
+                    <p className="text-2xl font-bold">
+                      {users.filter(u => !u.isAdmin).length}
+                    </p>
+                  </div>
+                  <UserIcon className="h-8 w-8 text-gray-500" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="performance" className="space-y-4">
+          {/* 投稿ログ一覧 */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    投稿ログ ({filteredPostLogs.length}件)
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    ページ {currentPage} / {totalPages} (1ページあたり {pageSize}件)
+                    {lastUpdateTime && (
+                      <span className="ml-2">
+                        • 最終更新: {lastUpdateTime.toLocaleTimeString('ja-JP')}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefresh}
+                    disabled={isLoading}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                    更新
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* フィルター */}
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Filter className="h-4 w-4" />
+                フィルター
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+                <div>
+                  <label className="text-sm font-medium">日付</label>
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべて</SelectItem>
+                      <SelectItem value="today">今日</SelectItem>
+                      <SelectItem value="week">過去1週間</SelectItem>
+                      <SelectItem value="month">過去1ヶ月</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">ユーザー</label>
+                  <Select value={userFilter} onValueChange={setUserFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべて</SelectItem>
+                      {users.map(user => (
+                        <SelectItem key={user.uid} value={user.uid}>
+                          {user.displayName || user.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                      <label className="text-sm font-medium">環境</label>
+                      <Select value={environmentFilter} onValueChange={setEnvironmentFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべて</SelectItem>
+                          <SelectItem value="development">開発環境</SelectItem>
+                          <SelectItem value="staging">ステージング</SelectItem>
+                          <SelectItem value="production">本番環境</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium">データソース</label>
+                      <Select value={dataSourceFilter} onValueChange={setDataSourceFilter}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">すべて</SelectItem>
+                          <SelectItem value="confluence">Confluence</SelectItem>
+                          <SelectItem value="jira">Jira</SelectItem>
+                          <SelectItem value="mixed">Confluence + Jira</SelectItem>
+                          <SelectItem value="unknown">不明</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">検索</label>
+                  <Input
+                    placeholder="質問や回答を検索..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex items-end">
+                      <Button variant="outline" onClick={resetFilters} className="w-full">
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    リセット
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+              {paginatedLogs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>フィルター条件に一致する投稿ログがありません</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>日時</TableHead>
+                        <TableHead>環境</TableHead>
+                        <TableHead>データソース</TableHead>
+                        <TableHead>ユーザー</TableHead>
+                        <TableHead>質問</TableHead>
+                        <TableHead>応答時間</TableHead>
+                        <TableHead>参照数</TableHead>
+                        <TableHead>ステータス</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedLogs.map((log) => {
+                        const env = getEnvironment(log);
+                        const dataSource = getDataSource(log);
+                        return (
+                        <TableRow 
+                          key={log.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleLogClick(log)}
+                        >
+                          <TableCell>
+                            {new Date(log.timestamp).toLocaleString('ja-JP')}
+                          </TableCell>
+                            <TableCell>
+                              <Badge className={getEnvironmentColor(env)} variant="outline">
+                                {getEnvironmentName(env)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={getDataSourceColor(dataSource)} variant="outline">
+                                {getDataSourceName(dataSource)}
+                              </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {log.metadata?.userDisplayName || 
+                             users.find(u => u.uid === log.userId)?.displayName || 
+                             users.find(u => u.uid === log.userId)?.email || 
+                             log.userId}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {log.question}
+                          </TableCell>
+                          <TableCell>
+                            {(log.totalTime / 1000).toFixed(1)}s
+                          </TableCell>
+                          <TableCell>
+                            {log.referencesCount}
+                          </TableCell>
+                          <TableCell>
+                            {log.errors && log.errors.length > 0 ? (
+                              <Badge variant="destructive">エラー</Badge>
+                            ) : (
+                              <Badge variant="default">成功</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+
+                  {/* ページネーション */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          前へ
+                        </Button>
+                        <span className="text-sm">
+                          {currentPage} / {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          次へ
+                        </Button>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm">表示件数:</span>
+                        <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(Number(value))}>
+                          <SelectTrigger className="w-20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 評価フィードバック */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5" />
+                評価フィードバック ({feedbacks.length}件)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {feedbacks.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Star className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>評価フィードバックがありません</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[400px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>日時</TableHead>
+                        <TableHead>ユーザー</TableHead>
+                        <TableHead>評価</TableHead>
+                        <TableHead>コメント</TableHead>
+                        <TableHead>投稿ログID</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {feedbacks.map((feedback) => (
+                        <TableRow key={feedback.id}>
+                          <TableCell>
+                            {new Date(feedback.timestamp).toLocaleString('ja-JP')}
+                          </TableCell>
+                          <TableCell>
+                            {users.find(u => u.uid === feedback.userId)?.displayName || 
+                             users.find(u => u.uid === feedback.userId)?.email || 
+                             feedback.userId}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`h-4 w-4 ${
+                                    star <= feedback.rating
+                                      ? 'fill-yellow-400 text-yellow-400'
+                                      : 'text-gray-300'
+                                  }`}
+                                />
+                              ))}
+                              <span className="ml-2 text-sm font-medium">
+                                {feedback.rating}/5
+                              </span>
+                          </div>
+                          </TableCell>
+                          <TableCell className="max-w-md">
+                            {feedback.comment ? (
+                              <p className="text-sm truncate" title={feedback.comment}>
+                                {feedback.comment}
+                              </p>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">コメントなし</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <code className="text-xs bg-muted px-2 py-1 rounded">
+                              {feedback.postLogId}
+                            </code>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="errors" className="space-y-4">
@@ -737,9 +1298,9 @@ const AdminDashboard: React.FC = () => {
                            errorAnalysis.byCategory.system.count +
                            errorAnalysis.byCategory.auth.count}
                         </p>
-                      </div>
+                  </div>
                       <AlertCircle className="h-8 w-8 text-red-500" />
-                    </div>
+                </div>
                   </CardContent>
                 </Card>
 
@@ -751,9 +1312,9 @@ const AdminDashboard: React.FC = () => {
                         <p className="text-2xl font-bold text-red-600">
                           {errorAnalysis.resolutionStatus.unresolved}
                         </p>
-                      </div>
+                  </div>
                       <XCircle className="h-8 w-8 text-red-500" />
-                    </div>
+                </div>
                   </CardContent>
                 </Card>
 
@@ -765,9 +1326,9 @@ const AdminDashboard: React.FC = () => {
                         <p className="text-2xl font-bold text-green-600">
                           {errorAnalysis.resolutionStatus.resolved}
                         </p>
-                      </div>
+                  </div>
                       <CheckCircle className="h-8 w-8 text-green-500" />
-                    </div>
+                </div>
                   </CardContent>
                 </Card>
 
@@ -779,7 +1340,7 @@ const AdminDashboard: React.FC = () => {
                         <p className="text-2xl font-bold text-yellow-600">
                           {errorAnalysis.resolutionStatus.investigating}
                         </p>
-                      </div>
+                  </div>
                       <AlertTriangle className="h-8 w-8 text-yellow-500" />
                     </div>
                   </CardContent>
@@ -818,89 +1379,89 @@ const AdminDashboard: React.FC = () => {
                                     {error.message.substring(0, 50)}...
                                   </p>
                                 ))}
-                              </div>
+                </div>
                             )}
                           </CardContent>
                         </Card>
                       );
                     })}
-                  </div>
-                </CardContent>
-              </Card>
+              </div>
+            </CardContent>
+          </Card>
 
               {/* エラー発生率グラフ */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* 時間別エラー発生率 */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
                       <Clock className="h-5 w-5" />
                       時間別エラー発生率（過去24時間）
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={errorAnalysis.errorRateByHour}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="time" />
-                          <YAxis />
-                          <Tooltip 
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" />
+                    <YAxis />
+                    <Tooltip 
                             formatter={(value: any) => [`${value.toFixed(1)}%`, 'エラー率']}
                             labelFormatter={(label) => `時刻: ${label}`}
-                          />
-                          <Legend />
-                          <Line 
-                            type="monotone" 
+                    />
+                    <Legend />
+                    <Line 
+                      type="monotone" 
                             dataKey="errorRate" 
                             stroke="#ef4444" 
-                            strokeWidth={2}
+                      strokeWidth={2}
                             name="エラー率"
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
 
                 {/* 日別エラー発生率 */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
                       <BarChart className="h-5 w-5" />
                       日別エラー発生率（過去7日間）
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
                         <RechartsBarChart data={errorAnalysis.errorRateByDay}>
-                          <CartesianGrid strokeDasharray="3 3" />
+                      <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="time" />
-                          <YAxis />
-                          <Tooltip 
+                      <YAxis />
+                      <Tooltip 
                             formatter={(value: any) => [`${value.toFixed(1)}%`, 'エラー率']}
                             labelFormatter={(label) => `日付: ${label}`}
-                          />
-                          <Legend />
+                      />
+                      <Legend />
                           <Bar dataKey="errorRate" fill="#ef4444" name="エラー率" />
-                        </RechartsBarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
               </div>
 
               {/* エラーパターン分析 */}
               {errorAnalysis.errorPatterns.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
                       <Target className="h-5 w-5" />
                       エラーパターン分析（上位10パターン）
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                     <div className="space-y-3">
                       {errorAnalysis.errorPatterns.map((pattern, index) => (
                         <Card key={index} className="border-l-4 border-l-orange-500">
@@ -922,48 +1483,48 @@ const AdminDashboard: React.FC = () => {
                                   最終: {pattern.lastOccurrence.toLocaleString('ja-JP')}
                                 </p>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
+                </div>
+              </CardContent>
+            </Card>
                       ))}
-                    </div>
+          </div>
                   </CardContent>
                 </Card>
               )}
 
               {/* 最近のエラー一覧 */}
               {errorAnalysis.recentErrors.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
                       <FileText className="h-5 w-5" />
                       最近のエラー（上位20件）
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
                     <ScrollArea className="h-[400px]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
                             <TableHead>日時</TableHead>
                             <TableHead>種別</TableHead>
                             <TableHead>レベル</TableHead>
                             <TableHead>メッセージ</TableHead>
                             <TableHead>ステータス</TableHead>
                             <TableHead>操作</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                           {errorAnalysis.recentErrors.map((error) => (
                             <TableRow key={error.id}>
-                              <TableCell>
+                            <TableCell>
                                 {new Date(error.timestamp).toLocaleString('ja-JP')}
                               </TableCell>
                               <TableCell>
                                 <Badge variant="outline">
                                   {errorAnalysisService.getCategoryName(error.category)}
-                                </Badge>
-                              </TableCell>
+                              </Badge>
+                            </TableCell>
                               <TableCell>
                                 <Badge 
                                   variant={error.level === 'error' ? 'destructive' : error.level === 'warning' ? 'default' : 'secondary'}
@@ -989,9 +1550,9 @@ const AdminDashboard: React.FC = () => {
                               </TableCell>
                               <TableCell>
                                 {!error.resolved && (
-                                  <Button
+                                      <Button 
                                     variant="outline"
-                                    size="sm"
+                                        size="sm" 
                                     onClick={() => {
                                       const resolvedError = errorAnalysisService.resolveError(error, 'admin');
                                       // TODO: Firestoreに保存する処理を追加
@@ -1007,37 +1568,37 @@ const AdminDashboard: React.FC = () => {
                                     }}
                                   >
                                     解決済み
-                                  </Button>
-                                )}
+                                      </Button>
+                                    )}
                               </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
+                  </ScrollArea>
+            </CardContent>
+          </Card>
               )}
 
               {/* エラーがない場合 */}
               {errorAnalysis.recentErrors.length === 0 && (
-                <Card>
+          <Card>
                   <CardContent className="p-12 text-center">
                     <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">エラーはありません</h3>
                     <p className="text-muted-foreground">現在、エラーは発生していません。</p>
-                  </CardContent>
-                </Card>
-              )}
+                    </CardContent>
+                  </Card>
+                )}
             </>
           ) : (
-            <Card>
+                  <Card>
               <CardContent className="p-12 text-center">
                 <Loader2 className="h-12 w-12 text-muted-foreground mx-auto mb-4 animate-spin" />
                 <p className="text-muted-foreground">エラー分析を実行中...</p>
-              </CardContent>
-            </Card>
-          )}
+                    </CardContent>
+                  </Card>
+                )}
         </TabsContent>
       </Tabs>
 

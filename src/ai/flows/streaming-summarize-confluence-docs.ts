@@ -388,15 +388,40 @@ ${truncatedContent}`;
       // フォールバック結果を返す
       // URLを再構築（共通ユーティリティを使用）
       const { buildConfluenceUrl } = await import('../../lib/url-utils');
+      const { buildJiraUrl } = await import('../../lib/jira-url-utils');
       
-      const references = context.map((doc, index) => ({
-        id: doc.id || `${doc.pageId || doc.page_id}-${index}`,
-        title: doc.title || 'タイトル不明',
-        url: buildConfluenceUrl(doc.page_id || doc.pageId, doc.spaceName || doc.space_key, doc.url),
-        distance: doc.distance || 0.5,
-        score: doc.score || 0,
-        source: doc.source || 'vector'
-      }));
+      const references = context.map((doc, index) => {
+        // JiraとConfluenceを判定（issue_keyの存在で判定）
+        const isJira = !!(doc as any).issue_key;
+        
+        // URLを構築（既存のURLが有効な場合は優先的に使用）
+        let url: string;
+        if (isJira) {
+          // Jiraの場合
+          const issueKey = (doc as any).issue_key || doc.id || '';
+          url = buildJiraUrl(issueKey, doc.url);
+        } else {
+          // Confluenceの場合
+          // spaceNameが'Unknown'の場合は無視（有効なspace_keyのみを使用）
+          const spaceKey = (doc.spaceName && doc.spaceName !== 'Unknown') 
+            ? doc.spaceName 
+            : (doc.space_key && doc.space_key !== 'Unknown' ? doc.space_key : undefined);
+          url = buildConfluenceUrl(doc.page_id || doc.pageId, spaceKey, doc.url);
+        }
+        
+        // データソースを判定（フロントエンドでの表示用）
+        const dataSource: 'confluence' | 'jira' = isJira ? 'jira' : 'confluence';
+        
+        return {
+          id: doc.id || `${doc.pageId || doc.page_id}-${index}`,
+          title: doc.title || 'タイトル不明',
+          url: url,
+          distance: doc.distance || 0.5,
+          score: doc.score || 0,
+          source: doc.source || 'vector', // 検索方法（vector/bm25/keyword/hybrid）
+          dataSource: dataSource // データソース（confluence/jira）- フロントエンドでの表示用
+        };
+      });
 
       yield {
         chunk: fallbackAnswer,
@@ -408,48 +433,83 @@ ${truncatedContent}`;
       return;
     }
 
-    // 参照元の準備（LLMに渡されたcontextのみを参照元として表示）
-    // 注意: contextは既にMAX_CONTEXT_DOCS（12件）に制限されているため、全てを参照元として表示
+    // 参照元の準備
     // URLを再構築（共通ユーティリティを使用）
     const { buildConfluenceUrl } = await import('../../lib/url-utils');
+    const { buildJiraUrl } = await import('../../lib/jira-url-utils');
+    const { extractUsedReferenceIndices } = await import('../../lib/markdown-utils');
     
-    const references = context.map((doc, index) => ({
-      id: doc.id || `${doc.pageId || doc.page_id}-${index}`,
-      title: doc.title || 'タイトル不明',
-      url: buildConfluenceUrl(doc.page_id || doc.pageId, doc.spaceName || doc.space_key, doc.url),
-      distance: doc.distance || 0.5,
-      score: doc.score || 0,
-      source: doc.source || 'vector'
-    }));
-
+    // 全ての参照元を準備（URL構築）
+    const allReferences = context.map((doc, index) => {
+      // JiraとConfluenceを判定（issue_keyの存在で判定）
+      const isJira = !!(doc as any).issue_key;
+      
+      // URLを構築（既存のURLが有効な場合は優先的に使用）
+      let url: string;
+      if (isJira) {
+        // Jiraの場合
+        const issueKey = (doc as any).issue_key || doc.id || '';
+        url = buildJiraUrl(issueKey, doc.url);
+      } else {
+        // Confluenceの場合
+        // spaceNameが'Unknown'の場合は無視（有効なspace_keyのみを使用）
+        const spaceKey = (doc.spaceName && doc.spaceName !== 'Unknown') 
+          ? doc.spaceName 
+          : (doc.space_key && doc.space_key !== 'Unknown' ? doc.space_key : undefined);
+        url = buildConfluenceUrl(doc.page_id || doc.pageId, spaceKey, doc.url);
+      }
+      
+      // データソースを判定（フロントエンドでの表示用）
+      const dataSource: 'confluence' | 'jira' = isJira ? 'jira' : 'confluence';
+      
+      return {
+        id: doc.id || `${doc.pageId || doc.page_id}-${index}`,
+        title: doc.title || 'タイトル不明',
+        url: url,
+        distance: doc.distance || 0.5,
+        score: doc.score || 0,
+        source: doc.source || 'vector', // 検索方法（vector/bm25/keyword/hybrid）
+        dataSource: dataSource // データソース（confluence/jira）- フロントエンドでの表示用
+      };
+    });
+    
     // ストリーミングをシミュレート（元のコードに戻す）
     let answer = result.text;
     
     const chunks = splitIntoChunks(answer, 100);
     
-    // チャンクを順次出力
+    // チャンクを順次出力（ストリーミング中は全ての参照元を返す）
     for (let i = 0; i < chunks.length; i++) {
       yield {
         chunk: chunks[i],
         isComplete: false,
         chunkIndex: i,
-        references: references
+        references: allReferences // ストリーミング中は全ての参照元を返す
       };
       
       // Phase 5最適化: チャンク間の遅延を削除（人為的な遅延は不要）
       // 旧: await new Promise(resolve => setTimeout(resolve, 50));
     }
 
-    // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
-    answerCache.set(sanitizedQuestion, context, answer, references);
+    // LLMの出力から実際に使用された参照元のインデックスを抽出（完了時に実行）
+    const usedIndices = extractUsedReferenceIndices(answer, allReferences);
+    
+    // 使用された参照元のみをフィルタリング
+    // 使用された参照元がない場合は、全ての参照元を表示（フォールバック）
+    const finalReferences = usedIndices.size > 0
+      ? Array.from(usedIndices).map(index => allReferences[index]).filter(Boolean)
+      : allReferences;
 
-    // 完了チャンク
+    // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
+    answerCache.set(sanitizedQuestion, context, answer, finalReferences);
+
+    // 完了チャンク（使用された参照元のみを返す）
     yield {
       chunk: '',
       isComplete: true,
       chunkIndex: chunks.length,
       totalChunks: chunks.length,
-      references: references
+      references: finalReferences // 完了時は使用された参照元のみを返す
     };
 
   } catch (error) {

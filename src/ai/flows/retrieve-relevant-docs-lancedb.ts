@@ -284,7 +284,8 @@ async function lancedbRetrieverTool(
           content: removeBOM(r.content || ''),
           url: url,
           lastUpdated: (r as any).lastUpdated || null,
-          spaceName: (r as any).space_key || 'Unknown',
+          spaceName: (r as any).space_key || undefined, // 'Unknown'ではなくundefinedを使用
+          space_key: (r as any).space_key || undefined, // space_keyも明示的に設定
           title: removeBOM(r.title || 'No Title'),
           labels: r.labels || [],
           distance: (r as any).distance,
@@ -295,7 +296,19 @@ async function lancedbRetrieverTool(
     });
 
     // Phase 0A-1.5: 全チャンク統合（サーバー側で実装）
+    const enrichStartTime = Date.now();
     const enriched = await enrichWithAllChunks(mapped);
+    const enrichDuration = Date.now() - enrichStartTime;
+    
+    // enrichWithAllChunksの処理時間をログ出力
+    if (enrichDuration > 1000) {
+      console.warn(`⚠️ [lancedbRetrieverTool] Slow enrichWithAllChunks: ${enrichDuration}ms (${(enrichDuration / 1000).toFixed(2)}s) for ${mapped.length} results`);
+      writeLogToFile('warn', 'slow_enrich', 'Slow enrichWithAllChunks detected', {
+        duration: enrichDuration,
+        resultCount: mapped.length,
+        enrichedCount: enriched.length,
+      });
+    }
     
     // Phase 0A-1.5: 空ページフィルター（サーバー側で実装）
     const filterStartTime = Date.now();
@@ -317,10 +330,24 @@ async function lancedbRetrieverTool(
     writeLogToFile('info', 'search_complete', 'Search completed successfully', {
       query,
       totalDuration,
+      searchLanceDBDuration,
+      enrichDuration,
+      filterDuration,
       finalResultCount: filtered.length,
       enrichedCount: enriched.length,
       rawResultCount: unifiedResults.length,
     });
+    
+    // パフォーマンスサマリーをコンソールに出力（1秒以上かかった場合）
+    if (totalDuration > 1000) {
+      console.log(`[PERF] 🔍 Search performance breakdown:`, {
+        searchLanceDB: `${searchLanceDBDuration}ms`,
+        enrichWithAllChunks: `${enrichDuration}ms`,
+        filterInvalidPages: `${filterDuration}ms`,
+        total: `${totalDuration}ms`,
+        query: query.substring(0, 50)
+      });
+    }
 
     return filtered;
   } catch (error: any) {

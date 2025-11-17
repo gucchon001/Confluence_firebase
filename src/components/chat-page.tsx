@@ -218,26 +218,33 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                             <AccordionContent className="pt-2">
                                 <div className="flex flex-col gap-2 w-full">
                                     {msg.sources.map((source: any, index) => {
-                                      // 各参照元のデータソースを推測
-                                      const sourceType: 'confluence' | 'jira' | 'unknown' = 
-                                        source.url?.includes('jira') || source.url?.includes('atlassian.net/jira') ? 'jira' :
-                                        source.url?.includes('confluence') || source.url?.includes('atlassian.net') ? 'confluence' :
-                                        'unknown';
+                                      // 各参照元のデータソースを判定
+                                      // 優先順位: 1. dataSourceフィールド（サーバー側で設定） 2. URLから推測
+                                      let sourceType: 'confluence' | 'jira' | 'unknown';
+                                      if (source.dataSource === 'confluence' || source.dataSource === 'jira') {
+                                        sourceType = source.dataSource;
+                                      } else {
+                                        // URLから推測（フォールバック）
+                                        sourceType = 
+                                          source.url?.includes('jira') || source.url?.includes('atlassian.net/jira') ? 'jira' :
+                                          source.url?.includes('confluence') || source.url?.includes('atlassian.net') ? 'confluence' :
+                                          'unknown';
+                                      }
                                       
                                       return (
-                                        <a
-                                          key={index}
-                                          href={source.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-xs text-primary hover:underline flex items-center gap-2 w-full p-2 rounded-md hover:bg-gray-50 transition-colors"
-                                          id={`reference-${index + 1}`}
-                                        >
-                                          <span className="flex-shrink-0 w-6 h-6 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-medium">
-                                              {index + 1}
-                                          </span>
-                                          <LinkIcon className="h-3 w-3 shrink-0" />
-                                          <span className="truncate flex-1">{source.title}</span>
+                                    <a
+                                        key={index}
+                                        href={source.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-primary hover:underline flex items-center gap-2 w-full p-2 rounded-md hover:bg-gray-50 transition-colors"
+                                        id={`reference-${index + 1}`}
+                                    >
+                                        <span className="flex-shrink-0 w-6 h-6 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-medium">
+                                            {index + 1}
+                                        </span>
+                                        <LinkIcon className="h-3 w-3 shrink-0" />
+                                        <span className="truncate flex-1">{source.title}</span>
                                           <Badge 
                                             className={getDataSourceColor(sourceType)} 
                                             variant="outline" 
@@ -245,10 +252,10 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                                           >
                                             {getDataSourceName(sourceType)}
                                           </Badge>
-                                          <span className="text-xs ml-1 font-bold shrink-0" style={{color: 'blue'}}>
-                                              {source.source === 'keyword' ? '⌨️' : '🔍'}
-                                          </span>
-                                        </a>
+                                        <span className="text-xs ml-1 font-bold shrink-0" style={{color: 'blue'}}>
+                                            {source.source === 'keyword' ? '⌨️' : '🔍'}
+                                        </span>
+                                    </a>
                                       );
                                     })}
                                 </div>
@@ -613,9 +620,9 @@ export default function ChatPage({ user }: ChatPageProps) {
     <div className="flex h-screen">
       {/* サイドバー - デスクトップ: 常に表示、モバイル: 切り替え可能（管理画面では非表示） */}
       {!showAdminDashboard && (
-        <div className={`w-72 bg-gray-50 border-r overflow-hidden flex flex-col transition-transform duration-200 ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0 fixed md:static inset-y-0 left-0 z-40`}>
+      <div className={`w-72 bg-gray-50 border-r overflow-hidden flex flex-col transition-transform duration-200 ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      } md:translate-x-0 fixed md:static inset-y-0 left-0 z-40`}>
         <div className="p-4 border-b">
           <Button className="w-full" onClick={async () => {
             // 新しい会話を開始
@@ -747,14 +754,14 @@ export default function ChatPage({ user }: ChatPageProps) {
           <div className="flex items-center gap-2">
             {/* ハンバーガーメニュー（モバイルのみ、管理画面では非表示） */}
             {!showAdminDashboard && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
             )}
             <Bot className="h-6 w-6 text-primary" />
             <h1 className="text-lg font-semibold">
