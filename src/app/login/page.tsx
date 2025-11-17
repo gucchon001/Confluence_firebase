@@ -10,7 +10,6 @@ import { showErrorToast, handleNetworkError } from '@/lib/toast-helpers';
 
 // Disable static generation for this page
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
 
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg role="img" viewBox="0 0 24 24" {...props}>

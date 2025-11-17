@@ -31,10 +31,16 @@ export async function GET(request: NextRequest) {
     // ダッシュボードデータを取得
     const data = await jiraDashboardService.getDashboardData(filters);
 
-    return NextResponse.json({
+    // キャッシュヘッダーを設定（3分間）
+    const response = NextResponse.json({
       success: true,
       data
     });
+    
+    // ブラウザとCDNのキャッシュを設定（3分間）
+    response.headers.set('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=300');
+    
+    return response;
   } catch (error) {
     console.error('[API] Jiraダッシュボードデータ取得エラー:', error);
     return NextResponse.json(

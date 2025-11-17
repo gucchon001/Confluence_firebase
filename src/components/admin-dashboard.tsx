@@ -167,6 +167,14 @@ const AdminDashboard: React.FC = () => {
   // システムヘルス状態
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [isLoadingHealth, setIsLoadingHealth] = useState(false);
+  
+  // Jira完了数統計
+  const [jiraCompletedStats, setJiraCompletedStats] = useState({
+    thisMonth: 0,
+    thisWeek: 0,
+    today: 0,
+    yesterday: 0
+  });
 
   // データ取得関数をuseCallbackなしで定義
   const loadData = async () => {
@@ -192,21 +200,132 @@ const AdminDashboard: React.FC = () => {
         }
       };
       
-      const [userList, recentLogs, feedbackList] = await Promise.all([
+      // 投稿ログの上限を解除（全件取得）
+      const [userList, allLogs, feedbackList] = await Promise.all([
         adminService.getAllUsers(),
-        postLogService.getRecentPostLogs(100), // より多くのログを取得
+        postLogService.getRecentPostLogs(10000), // 上限を大幅に増やす
         fetchFeedbacks() // 評価フィードバックを取得
       ]);
       
+      // Jiraの完了数を取得（今月、今週、本日、昨日）
+      let jiraCompletedStats = {
+        thisMonth: 0,
+        thisWeek: 0,
+        today: 0,
+        yesterday: 0
+      };
+      
+      try {
+        const params = new URLSearchParams();
+        params.append('period', '3months'); // より長い期間で取得してデータを確認
+        params.append('granularity', 'day');
+        const jiraResponse = await fetch(`/api/admin/jira-dashboard?${params.toString()}`);
+        if (jiraResponse.ok) {
+          const jiraData = await jiraResponse.json();
+          console.log('📊 JiraダッシュボードAPI レスポンス:', {
+            success: jiraData.success,
+            trendsCount: jiraData.data?.trends?.length || 0,
+            trendsSample: jiraData.data?.trends?.slice(0, 5) || [],
+            stats: jiraData.data?.stats
+          });
+          
+          if (jiraData.success && jiraData.data?.trends) {
+            const trends = jiraData.data.trends || [];
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            startOfMonth.setHours(0, 0, 0, 0);
+            
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - now.getDay());
+            startOfWeek.setHours(0, 0, 0, 0);
+            
+            const startOfToday = new Date(now);
+            startOfToday.setHours(0, 0, 0, 0);
+            
+            const startOfYesterday = new Date(startOfToday);
+            startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+            startOfYesterday.setHours(0, 0, 0, 0);
+            
+            const endOfYesterday = new Date(startOfToday);
+            endOfYesterday.setHours(0, 0, 0, 0);
+            
+            // 日付比較のデバッグ
+            console.log('📅 日付範囲:', {
+              now: now.toISOString(),
+              startOfMonth: startOfMonth.toISOString(),
+              startOfWeek: startOfWeek.toISOString(),
+              startOfToday: startOfToday.toISOString(),
+              startOfYesterday: startOfYesterday.toISOString(),
+              trendsDates: trends.map((t: any) => ({ date: t.date, completed: t.completed }))
+            });
+            
+            // 今月の完了数をトレンドデータから集計
+            const monthTrends = trends.filter((t: any) => {
+              if (!t.date) return false;
+              const trendDate = new Date(t.date);
+              trendDate.setHours(0, 0, 0, 0);
+              return trendDate >= startOfMonth;
+            });
+            jiraCompletedStats.thisMonth = monthTrends.reduce((sum: number, t: any) => sum + (Number(t.completed) || 0), 0);
+            
+            // 今週の完了数を集計
+            const weekTrends = trends.filter((t: any) => {
+              if (!t.date) return false;
+              const trendDate = new Date(t.date);
+              trendDate.setHours(0, 0, 0, 0);
+              return trendDate >= startOfWeek;
+            });
+            jiraCompletedStats.thisWeek = weekTrends.reduce((sum: number, t: any) => sum + (Number(t.completed) || 0), 0);
+            
+            // 本日の完了数を集計
+            const todayTrend = trends.find((t: any) => {
+              if (!t.date) return false;
+              const trendDate = new Date(t.date);
+              trendDate.setHours(0, 0, 0, 0);
+              const todayStart = new Date(startOfToday);
+              todayStart.setHours(0, 0, 0, 0);
+              return trendDate.getTime() === todayStart.getTime();
+            });
+            jiraCompletedStats.today = todayTrend ? (Number(todayTrend.completed) || 0) : 0;
+            
+            // 昨日の完了数を集計
+            const yesterdayTrend = trends.find((t: any) => {
+              if (!t.date) return false;
+              const trendDate = new Date(t.date);
+              trendDate.setHours(0, 0, 0, 0);
+              const yesterdayStart = new Date(startOfYesterday);
+              yesterdayStart.setHours(0, 0, 0, 0);
+              return trendDate.getTime() === yesterdayStart.getTime();
+            });
+            jiraCompletedStats.yesterday = yesterdayTrend ? (Number(yesterdayTrend.completed) || 0) : 0;
+            
+            console.log('📊 Jira完了数統計:', jiraCompletedStats, {
+              monthTrendsCount: monthTrends.length,
+              weekTrendsCount: weekTrends.length,
+              todayTrend,
+              yesterdayTrend
+            });
+          } else {
+            console.warn('Jiraダッシュボードデータが不正:', jiraData);
+          }
+        } else {
+          console.warn('JiraダッシュボードAPIエラー:', jiraResponse.status, jiraResponse.statusText);
+        }
+      } catch (err) {
+        console.error('Jira完了数取得エラー:', err);
+      }
+      
       console.log('📊 管理ダッシュボード: データ取得完了', {
         userCount: userList.length,
-        postLogCount: recentLogs.length
+        postLogCount: allLogs.length,
+        jiraCompletedStats
       });
       
       
       setUsers(userList);
-      setPostLogs(recentLogs);
+      setPostLogs(allLogs);
       setFeedbacks(feedbackList);
+      setJiraCompletedStats(jiraCompletedStats);
       setLastUpdateTime(new Date());
       
       // データ取得後に即座にフィルター適用（useEffectを使わない）
@@ -437,11 +556,42 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // パフォーマンス統計の計算
+  // 日付ベースの統計計算
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const endOfYesterday = new Date(startOfToday);
+  
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  // 投稿数統計
+  const totalPosts = postLogs.length;
+  const postsThisMonth = postLogs.filter(log => new Date(log.timestamp) >= startOfMonth).length;
+  const postsThisWeek = postLogs.filter(log => new Date(log.timestamp) >= startOfWeek).length;
+  const postsToday = postLogs.filter(log => new Date(log.timestamp) >= startOfToday).length;
+  const postsYesterday = postLogs.filter(log => {
+    const logDate = new Date(log.timestamp);
+    return logDate >= startOfYesterday && logDate < endOfYesterday;
+  }).length;
+  
+  // 今月の検索時間統計
+  const logsThisMonth = postLogs.filter(log => new Date(log.timestamp) >= startOfMonth);
+  const avgSearchTimeThisMonth = logsThisMonth.length > 0 
+    ? logsThisMonth.reduce((sum, log) => sum + log.searchTime, 0) / logsThisMonth.length 
+    : 0;
+  const totalSearchTimeThisMonth = logsThisMonth.reduce((sum, log) => sum + log.searchTime, 0);
+  
+  // パフォーマンス統計の計算（全期間）
   const avgSearchTime = postLogs.length > 0 ? postLogs.reduce((sum, log) => sum + log.searchTime, 0) / postLogs.length : 0;
   const avgAiTime = postLogs.length > 0 ? postLogs.reduce((sum, log) => sum + log.aiGenerationTime, 0) / postLogs.length : 0;
   const avgTotalTime = postLogs.length > 0 ? postLogs.reduce((sum, log) => sum + log.totalTime, 0) / postLogs.length : 0;
-  const totalPosts = postLogs.length;
 
   // パフォーマンスアラートの生成
   useEffect(() => {
@@ -470,7 +620,22 @@ const AdminDashboard: React.FC = () => {
 
   // 環境・データソースのヘルパー関数
   const getEnvironment = (log: PostLog): 'development' | 'staging' | 'production' => {
-    return log.metadata?.environment || 'production';
+    // metadataから環境を取得
+    if (log.metadata?.environment) {
+      return log.metadata.environment;
+    }
+    // フォールバック: URLから判定（開発環境のURLパターンをチェック）
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname.includes('localhost') || hostname.includes('127.0.0.1') || hostname.includes('dev')) {
+        return 'development';
+      }
+      if (hostname.includes('staging') || hostname.includes('stg')) {
+        return 'staging';
+      }
+    }
+    // デフォルトは開発環境（実際の本番環境ではmetadataに保存されるため）
+    return 'development';
   };
 
   const getDataSource = (log: PostLog): 'confluence' | 'jira' | 'mixed' | 'unknown' => {
@@ -676,8 +841,10 @@ const AdminDashboard: React.FC = () => {
           <BarChart3 className="h-6 w-6 text-primary" />
           <div>
             <h2 className="text-2xl font-bold">管理ダッシュボード</h2>
-            <p className="text-sm text-muted-foreground">
-              最終更新: {lastUpdateTime.toLocaleString('ja-JP')}
+            <div className="text-sm text-muted-foreground">
+              <p className="inline">
+                最終更新: {lastUpdateTime.toLocaleString('ja-JP')}
+              </p>
               {currentUser && (
                 <span className="ml-2">
                   • ログインユーザー: {currentUser.displayName || currentUser.email}
@@ -689,7 +856,7 @@ const AdminDashboard: React.FC = () => {
                   )}
                 </span>
               )}
-            </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center space-x-2">
@@ -725,54 +892,69 @@ const AdminDashboard: React.FC = () => {
 
       {/* 統計カード */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* JIRA：今月完了数 */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-muted-foreground">JIRA完了数</p>
+                <p className="text-2xl font-bold">{jiraCompletedStats.thisMonth}</p>
+                <p className="text-xs text-muted-foreground mt-1">今月</p>
+                <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                  <span>今週: {jiraCompletedStats.thisWeek}</span>
+                  <span>本日: {jiraCompletedStats.today}</span>
+                  <span>昨日: {jiraCompletedStats.yesterday}</span>
+                </div>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-500 flex-shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 総投稿数・今月投稿数 */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">総投稿数</p>
                 <p className="text-2xl font-bold">{totalPosts}</p>
-                <p className="text-xs text-muted-foreground">全期間</p>
+                <p className="text-xs text-muted-foreground mt-1">今月: {postsThisMonth}</p>
+                <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                  <span>今週: {postsThisWeek}</span>
+                  <span>本日: {postsToday}</span>
+                  <span>昨日: {postsYesterday}</span>
+                </div>
               </div>
-              <MessageSquare className="h-8 w-8 text-blue-500" />
+              <MessageSquare className="h-8 w-8 text-blue-500 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
 
+        {/* 平均検索時間（今月）・総検索時間（今月） */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">アクティブユーザー</p>
-                <p className="text-2xl font-bold">{recentActiveUsers}</p>
-                <p className="text-xs text-muted-foreground">過去1時間以内</p>
-              </div>
-              <Users className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">平均検索時間</p>
-                <p className="text-2xl font-bold">{(avgSearchTime / 1000).toFixed(1)}s</p>
-                <p className="text-xs text-muted-foreground">全投稿の平均</p>
+                <p className="text-2xl font-bold">{(avgSearchTimeThisMonth / 1000).toFixed(1)}s</p>
+                <p className="text-xs text-muted-foreground mt-1">今月の平均</p>
+                <p className="text-xs text-muted-foreground mt-1">総検索時間: {(totalSearchTimeThisMonth / 1000).toFixed(0)}s</p>
               </div>
-              <Search className="h-8 w-8 text-purple-500" />
+              <Search className="h-8 w-8 text-purple-500 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
 
+        {/* ユーザー数 */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">平均AI生成時間</p>
-                <p className="text-2xl font-bold">{(avgAiTime / 1000).toFixed(1)}s</p>
-                <p className="text-xs text-muted-foreground">全投稿の平均</p>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-muted-foreground">ユーザー数</p>
+                <p className="text-2xl font-bold">{users.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">登録済みユーザー</p>
               </div>
-              <Brain className="h-8 w-8 text-orange-500" />
+              <Users className="h-8 w-8 text-green-500 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
@@ -826,93 +1008,97 @@ const AdminDashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>ユーザー名</TableHead>
-                        <TableHead>メールアドレス</TableHead>
-                        <TableHead>登録日</TableHead>
-                        <TableHead>管理者権限</TableHead>
-                        <TableHead>権限付与日時</TableHead>
-                        <TableHead>操作</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => (
-                        <TableRow key={user.uid}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                <span className="text-sm font-medium">
-                                  {user.displayName?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                  <ScrollArea className="w-full">
+                    <div className="min-w-[1000px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[200px]">ユーザー名</TableHead>
+                            <TableHead className="min-w-[250px]">メールアドレス</TableHead>
+                            <TableHead className="min-w-[120px]">登録日</TableHead>
+                            <TableHead className="min-w-[130px]">管理者権限</TableHead>
+                            <TableHead className="min-w-[180px]">権限付与日時</TableHead>
+                            <TableHead className="min-w-[180px]">操作</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {users.map((user) => (
+                            <TableRow key={user.uid}>
+                              <TableCell className="min-w-[200px]">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-sm font-medium">
+                                      {user.displayName?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium truncate" title={user.displayName || '名前未設定'}>
+                                      {user.displayName || '名前未設定'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="min-w-[250px]">
+                                <code className="text-sm break-all" title={user.email}>{user.email}</code>
+                              </TableCell>
+                              <TableCell className="min-w-[120px]">
+                                <span className="text-sm whitespace-nowrap">
+                                  {new Date(user.createdAt).toLocaleDateString('ja-JP')}
                                 </span>
-                              </div>
-                              <div>
-                                <p className="font-medium">
-                                  {user.displayName || '名前未設定'}
-                                </p>
-                                {user.displayName && (
-                                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                              </TableCell>
+                              <TableCell className="min-w-[130px]">
+                                {user.isAdmin ? (
+                                  <Badge variant="default" className="bg-blue-500 whitespace-nowrap">
+                                    <Shield className="h-3 w-3 mr-1" />
+                                    管理者
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="whitespace-nowrap">一般ユーザー</Badge>
                                 )}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <code className="text-sm">{user.email}</code>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(user.createdAt).toLocaleDateString('ja-JP')}
-                          </TableCell>
-                          <TableCell>
-                            {user.isAdmin ? (
-                              <Badge variant="default" className="bg-blue-500">
-                                <Shield className="h-3 w-3 mr-1" />
-                                管理者
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline">一般ユーザー</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {user.isAdmin && user.adminGrantedAt ? (
-                              <div>
-                                <p className="text-sm">
-                                  {new Date(user.adminGrantedAt).toLocaleDateString('ja-JP')}
-                                </p>
-                                {user.adminGrantedBy && (
-                                  <p className="text-xs text-muted-foreground">
-                                    付与者: {users.find(u => u.uid === user.adminGrantedBy)?.displayName || user.adminGrantedBy}
-                                  </p>
+                              </TableCell>
+                              <TableCell className="min-w-[180px]">
+                                {user.isAdmin && user.adminGrantedAt ? (
+                                  <div className="text-sm">
+                                    <p className="whitespace-nowrap">
+                                      {new Date(user.adminGrantedAt).toLocaleDateString('ja-JP')}
+                                    </p>
+                                    {user.adminGrantedBy && (
+                                      <p className="text-xs text-muted-foreground truncate" title={`付与者: ${users.find(u => u.uid === user.adminGrantedBy)?.displayName || user.adminGrantedBy}`}>
+                                        付与者: {users.find(u => u.uid === user.adminGrantedBy)?.displayName || user.adminGrantedBy}
+                                      </p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">-</span>
                                 )}
-                              </div>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant={user.isAdmin ? "destructive" : "default"}
-                              size="sm"
-                              onClick={() => handleToggleAdmin(user.uid, user.isAdmin)}
-                              disabled={isLoading}
-                            >
-                              {user.isAdmin ? (
-                                <>
-                                  <XCircle className="h-4 w-4 mr-1" />
-                                  管理者権限を削除
-                                </>
-                              ) : (
-                                <>
-                                  <Shield className="h-4 w-4 mr-1" />
-                                  管理者権限を付与
-                                </>
-                              )}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                              </TableCell>
+                              <TableCell className="min-w-[180px]">
+                                <Button
+                                  variant={user.isAdmin ? "destructive" : "default"}
+                                  size="sm"
+                                  onClick={() => handleToggleAdmin(user.uid, user.isAdmin)}
+                                  disabled={isLoading}
+                                  className="whitespace-nowrap"
+                                >
+                                  {user.isAdmin ? (
+                                    <>
+                                      <XCircle className="h-4 w-4 mr-1" />
+                                      権限削除
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Shield className="h-4 w-4 mr-1" />
+                                      権限付与
+                                    </>
+                                  )}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </ScrollArea>
                 </div>
               )}
             </CardContent>
@@ -1094,69 +1280,84 @@ const AdminDashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>日時</TableHead>
-                        <TableHead>環境</TableHead>
-                        <TableHead>データソース</TableHead>
-                        <TableHead>ユーザー</TableHead>
-                        <TableHead>質問</TableHead>
-                        <TableHead>応答時間</TableHead>
-                        <TableHead>参照数</TableHead>
-                        <TableHead>ステータス</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedLogs.map((log) => {
-                        const env = getEnvironment(log);
-                        const dataSource = getDataSource(log);
-                        return (
-                        <TableRow 
-                          key={log.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => handleLogClick(log)}
-                        >
-                          <TableCell>
-                            {new Date(log.timestamp).toLocaleString('ja-JP')}
-                          </TableCell>
-                            <TableCell>
-                              <Badge className={getEnvironmentColor(env)} variant="outline">
-                                {getEnvironmentName(env)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={getDataSourceColor(dataSource)} variant="outline">
-                                {getDataSourceName(dataSource)}
-                              </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {log.metadata?.userDisplayName || 
-                             users.find(u => u.uid === log.userId)?.displayName || 
-                             users.find(u => u.uid === log.userId)?.email || 
-                             log.userId}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {log.question}
-                          </TableCell>
-                          <TableCell>
-                            {(log.totalTime / 1000).toFixed(1)}s
-                          </TableCell>
-                          <TableCell>
-                            {log.referencesCount}
-                          </TableCell>
-                          <TableCell>
-                            {log.errors && log.errors.length > 0 ? (
-                              <Badge variant="destructive">エラー</Badge>
-                            ) : (
-                              <Badge variant="default">成功</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                  <ScrollArea className="w-full">
+                    <div className="min-w-[1200px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[160px]">日時</TableHead>
+                            <TableHead className="min-w-[120px]">環境</TableHead>
+                            <TableHead className="min-w-[140px]">データソース</TableHead>
+                            <TableHead className="min-w-[180px]">ユーザー</TableHead>
+                            <TableHead className="min-w-[300px]">質問</TableHead>
+                            <TableHead className="min-w-[100px]">応答時間</TableHead>
+                            <TableHead className="min-w-[80px]">参照数</TableHead>
+                            <TableHead className="min-w-[100px]">ステータス</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedLogs.map((log) => {
+                            const env = getEnvironment(log);
+                            const dataSource = getDataSource(log);
+                            return (
+                            <TableRow 
+                              key={log.id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => handleLogClick(log)}
+                            >
+                              <TableCell className="min-w-[160px]">
+                                <span className="text-sm whitespace-nowrap">
+                                  {new Date(log.timestamp).toLocaleString('ja-JP')}
+                                </span>
+                              </TableCell>
+                                <TableCell className="min-w-[120px]">
+                                  <Badge className={`${getEnvironmentColor(env)} whitespace-nowrap`} variant="outline">
+                                    {getEnvironmentName(env)}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="min-w-[140px]">
+                                  <Badge className={`${getDataSourceColor(dataSource)} whitespace-nowrap`} variant="outline">
+                                    {getDataSourceName(dataSource)}
+                                  </Badge>
+                              </TableCell>
+                              <TableCell className="min-w-[180px]">
+                                <span className="text-sm truncate block" title={log.metadata?.userDisplayName || 
+                                 users.find(u => u.uid === log.userId)?.displayName || 
+                                 users.find(u => u.uid === log.userId)?.email || 
+                                 log.userId}>
+                                  {log.metadata?.userDisplayName || 
+                                   users.find(u => u.uid === log.userId)?.displayName || 
+                                   users.find(u => u.uid === log.userId)?.email || 
+                                   log.userId}
+                                </span>
+                              </TableCell>
+                              <TableCell className="min-w-[300px] max-w-[400px]">
+                                <p className="text-sm truncate" title={log.question}>
+                                  {log.question}
+                                </p>
+                              </TableCell>
+                              <TableCell className="min-w-[100px]">
+                                <span className="text-sm whitespace-nowrap">
+                                  {(log.totalTime / 1000).toFixed(1)}s
+                                </span>
+                              </TableCell>
+                              <TableCell className="min-w-[80px]">
+                                <span className="text-sm">{log.referencesCount}</span>
+                              </TableCell>
+                              <TableCell className="min-w-[100px]">
+                                {log.errors && log.errors.length > 0 ? (
+                                  <Badge variant="destructive" className="whitespace-nowrap">エラー</Badge>
+                                ) : (
+                                  <Badge variant="default" className="whitespace-nowrap">成功</Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </ScrollArea>
 
                   {/* ページネーション */}
                   {totalPages > 1 && (

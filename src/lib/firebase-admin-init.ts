@@ -48,13 +48,21 @@ export function initializeFirebaseAdmin() {
             return admin.app();
           }
           
-          // ファイルを読み込む
-          const serviceAccountData = require(serviceAccountPath);
-          initializeApp({
-            credential: admin.credential.cert(serviceAccountData),
-            projectId: process.env.FIREBASE_PROJECT_ID || serviceAccountData.project_id
-          });
-          console.log('✅ Firebase Admin SDK initialized from file');
+          // ファイルを読み込む（requireではなくfs.readFileSyncを使用してビルド時エラーを回避）
+          try {
+            const fileContent = fs.readFileSync(serviceAccountPath, 'utf8');
+            const serviceAccountData = JSON.parse(fileContent);
+            initializeApp({
+              credential: admin.credential.cert(serviceAccountData),
+              projectId: process.env.FIREBASE_PROJECT_ID || serviceAccountData.project_id
+            });
+            console.log('✅ Firebase Admin SDK initialized from file');
+          } catch (readError) {
+            console.error(`❌ Failed to read service account file: ${serviceAccountPath}`, readError);
+            console.warn('⚠️ Falling back to default credentials');
+            initializeApp();
+            return admin.app();
+          }
         }
       } else {
         console.warn('⚠️ GOOGLE_APPLICATION_CREDENTIALS not set, using default credentials');

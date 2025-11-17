@@ -8,7 +8,6 @@ import { Bot } from 'lucide-react';
 
 // Disable static generation for this page
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
 
 function HomeContent() {
   const { user, loading } = useAuthWrapper();

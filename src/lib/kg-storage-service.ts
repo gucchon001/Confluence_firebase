@@ -4,27 +4,10 @@
 
 import * as admin from 'firebase-admin';
 import type { KGNode, KGEdge } from '@/types/knowledge-graph';
+import { initializeFirebaseAdmin } from './firebase-admin-init';
 
-// Firebase Admin SDKの初期化確認
-if (!admin.apps.length) {
-  try {
-    // 本番環境では環境変数から認証情報を取得
-    if (process.env.NODE_ENV === 'production') {
-      // Cloud RunやApp Engineでは自動的に認証情報が提供される
-      admin.initializeApp();
-    } else {
-      // 開発環境ではローカルキーファイルを使用
-      const serviceAccount = require('../../keys/firebase-adminsdk-key.json');
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-  } catch (error) {
-    console.error('[KGStorage] Firebase Admin SDK初期化エラー:', error);
-    // 本番環境での認証情報取得に失敗した場合は、デフォルト認証を試行
-    admin.initializeApp();
-  }
-}
+// Firebase Admin SDKの初期化（共通の初期化関数を使用）
+initializeFirebaseAdmin();
 
 const db = admin.firestore();
 

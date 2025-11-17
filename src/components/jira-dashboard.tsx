@@ -58,7 +58,7 @@ export const JiraDashboard: React.FC<JiraDashboardProps> = ({ className }) => {
 
   // フィルタ状態
   const [filters, setFilters] = useState<JiraDashboardFilters>({
-    period: 'all',
+    period: '1month',
     granularity: 'week'
   });
   const [searchQuery, setSearchQuery] = useState('');

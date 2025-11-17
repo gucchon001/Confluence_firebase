@@ -5,46 +5,61 @@ import { AuthProvider, useAuth } from './use-auth';
 import { MockAuthProvider, useMockAuth } from './use-mock-auth';
 import { initializeDefaultAdmin } from '@/scripts/initialize-default-admin';
 
-// 環境変数またはブラウザのURLパラメータでモックモードを切り替え
-const isUsingMockAuth = () => {
-  // ブラウザ環境かどうかをチェック
-  if (typeof window !== 'undefined') {
-    // テスト用のグローバル変数が設定されていればモック認証を使用
-    if (window.USE_MOCK_AUTH) {
-      return true;
-    }
-    
-    // URLパラメータで?mock=trueが指定されていればモック認証を使用
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('mock') === 'true') {
-      return true;
-    }
-    
-    // ローカルストレージにmockAuthUserが設定されていればモック認証を使用
-    if (localStorage.getItem('mockAuthUser')) {
-      return true;
-    }
-  }
-  
-  // 環境変数でもモック認証の使用が指定されていればtrue
-  return process.env.NEXT_PUBLIC_USE_MOCK_AUTH === 'true';
-};
-
 // 認証タイプを管理するコンテキスト
 type AuthType = 'real' | 'mock';
 const AuthTypeContext = createContext<AuthType>('real');
 
 export function AuthProviderWrapper({ children }: { children: ReactNode }) {
-  // モック認証を使用するかどうかを判定
-  const useMock = isUsingMockAuth();
-  const authType: AuthType = useMock ? 'mock' : 'real';
+  // モック認証を使用するかどうかを判定（クライアントサイドでのみ実行）
+  const [authType, setAuthType] = React.useState<AuthType>('real');
+  
+  React.useEffect(() => {
+    // ブラウザ環境でのみ実行（プリレンダリング時は実行されない）
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    // テスト用のグローバル変数が設定されていればモック認証を使用
+    if ((window as any).USE_MOCK_AUTH) {
+      setAuthType('mock');
+      return;
+    }
+    
+    // URLパラメータで?mock=trueが指定されていればモック認証を使用
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mock') === 'true') {
+      setAuthType('mock');
+      return;
+    }
+    
+    // ローカルストレージにmockAuthUserが設定されていればモック認証を使用
+    if (localStorage.getItem('mockAuthUser')) {
+      setAuthType('mock');
+      return;
+    }
+    
+    // 環境変数でもモック認証の使用が指定されていればtrue
+    // クライアントサイドでは、NEXT_PUBLIC_*環境変数はビルド時にインライン化される
+    try {
+      const useMockAuth = process.env.NEXT_PUBLIC_USE_MOCK_AUTH === 'true';
+      if (useMockAuth) {
+        setAuthType('mock');
+        return;
+      }
+    } catch {
+      // エラーが発生した場合はデフォルトの'real'を使用
+    }
+    
+    // デフォルトは'real'
+    setAuthType('real');
+  }, []);
   
   // デフォルト管理者の初期化（実際の認証でのみ）
   useEffect(() => {
-    if (!useMock) {
+    if (authType === 'real') {
       initializeDefaultAdmin();
     }
-  }, [useMock]);
+  }, [authType]);
   
   // React Hooksのルールに準拠するため、両方のプロバイダーを常に提供
   // ただし、authTypeに基づいて適切な方のみがアクティブに動作する

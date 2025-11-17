@@ -59,7 +59,14 @@ export class StreamingProcessClient {
     userId?: string,
     sessionId?: string,
     clientStartTime?: number,
-    source: 'confluence' | 'jira' = 'confluence'
+    source: 'confluence' | 'jira' = 'confluence',
+    filters?: {
+      dateFilter?: string;
+      startDate?: string;
+      endDate?: string;
+      assignee?: string;
+      cloneStatus?: string;
+    }
   ): Promise<void> {
     try {
       // 既存のストリーミングを停止
@@ -97,7 +104,8 @@ export class StreamingProcessClient {
           question,
           chatHistory,
           labelFilters,
-          source
+          source,
+          filters: filters || {}
         }),
         signal: this.controller.signal
       });

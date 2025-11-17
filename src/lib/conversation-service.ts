@@ -14,7 +14,10 @@ import {
   Timestamp,
   limit,
   where,
-  deleteDoc
+  deleteDoc,
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData
 } from 'firebase/firestore';
 import { app } from './firebase';
 import type { Message, MessageCreate, FirestoreConversation, FirestoreMessage } from '@/types';
@@ -105,27 +108,66 @@ export async function addMessageToConversation(userId: string, conversationId: s
 }
 
 /**
- * ユーザーの全会話を取得する
+ * ユーザーの全会話を取得する（ページネーション対応）
  * @param userId ユーザーID
  * @param maxResults 取得する最大件数（デフォルト: 10）
+ * @param lastDoc 前回のクエリの最後のドキュメント（ページネーション用）
+ * @returns 会話リストと最後のドキュメントスナップショット
  */
-export async function getConversations(userId: string, maxResults = 10) {
+export async function getConversations(
+  userId: string, 
+  maxResults = 10,
+  lastDoc?: QueryDocumentSnapshot<DocumentData>
+): Promise<{
+  conversations: Array<{ id: string; title: string; lastMessage: string; timestamp: string }>;
+  lastDocument: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+}> {
   return withRetry(
     async () => {
       const conversationsRef = collection(db, 'users', userId, 'conversations');
-      const q = query(
+      
+      // クエリを構築
+      let q = query(
         conversationsRef, 
         orderBy('updatedAt', 'desc'),
-        limit(maxResults)
+        limit(maxResults + 1) // 1件多く取得して、次があるかチェック
       );
       
+      // ページネーション：前回の最後のドキュメントから続きを取得
+      if (lastDoc) {
+        q = query(
+          conversationsRef, 
+          orderBy('updatedAt', 'desc'),
+          startAfter(lastDoc),
+          limit(maxResults + 1)
+        );
+      }
+      
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc: any) => ({
+      const docs = querySnapshot.docs;
+      const hasMore = docs.length > maxResults;
+      
+      // 1件多い場合は、最後の1件を除く
+      const conversationsToReturn = hasMore ? docs.slice(0, maxResults) : docs;
+      
+      const conversations = conversationsToReturn.map((doc: any) => ({
         id: doc.id,
         title: doc.data().title,
         lastMessage: doc.data().messages?.slice(-1)[0]?.content || '',
         timestamp: doc.data().updatedAt.toDate().toISOString()
       }));
+      
+      // 最後のドキュメント（次回のページネーション用）
+      const lastDocument = conversationsToReturn.length > 0 
+        ? conversationsToReturn[conversationsToReturn.length - 1] 
+        : null;
+      
+      return {
+        conversations,
+        lastDocument,
+        hasMore
+      };
     },
     {
       maxRetries: 2,

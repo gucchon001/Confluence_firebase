@@ -65,28 +65,56 @@ export interface JiraDashboardData {
   totalIssues?: number; // 総件数（検索結果）
 }
 
+// モジュールレベルのキャッシュ（サーバーレス環境でも共有される）
+// フィルタオプションのキャッシュ（5分間有効）
+let filterOptionsCache: {
+  data: {
+    statuses: string[];
+    statusCategories: string[];
+    assignees: string[];
+    priorities: string[];
+    issueTypes: string[];
+  } | null;
+  timestamp: number;
+} = {
+  data: null,
+  timestamp: 0
+};
+const FILTER_OPTIONS_CACHE_TTL = 5 * 60 * 1000; // 5分
+
+// ダッシュボードデータのキャッシュ（3分間有効）
+const dashboardDataCache: Map<string, {
+  data: JiraDashboardData;
+  timestamp: number;
+}> = new Map();
+const DASHBOARD_DATA_CACHE_TTL = 3 * 60 * 1000; // 3分
+
+// 完了日のキャッシュ（10分間有効）
+const completedDatesCache: Map<string, string> = new Map();
+let completedDatesCacheTimestamp: number = 0;
+const COMPLETED_DATES_CACHE_TTL = 10 * 60 * 1000; // 10分
+
 class JiraDashboardService {
-  // フィルタオプションのキャッシュ（5分間有効）
-  private filterOptionsCache: {
-    data: {
-      statuses: string[];
-      statusCategories: string[];
-      assignees: string[];
-      priorities: string[];
-      issueTypes: string[];
-    } | null;
-    timestamp: number;
-  } = {
-    data: null,
-    timestamp: 0
-  };
-  private readonly FILTER_OPTIONS_CACHE_TTL = 5 * 60 * 1000; // 5分
 
   /**
    * ダッシュボードデータを取得
    */
   async getDashboardData(filters: JiraDashboardFilters = {}): Promise<JiraDashboardData> {
     try {
+      // キャッシュキーを生成（フィルタ条件を文字列化）
+      const cacheKey = JSON.stringify(filters);
+      const now = Date.now();
+      
+      // キャッシュをチェック
+      const cached = dashboardDataCache.get(cacheKey);
+      if (cached && (now - cached.timestamp) < DASHBOARD_DATA_CACHE_TTL) {
+        console.log('[JiraDashboardService] キャッシュからダッシュボードデータを取得', {
+          cacheKey: cacheKey.substring(0, 100),
+          age: Math.round((now - cached.timestamp) / 1000) + '秒前'
+        });
+        return cached.data;
+      }
+
       // LanceDBから全データを取得
       const db = await lancedbClient.getDatabase();
       const jiraTable = await db.openTable('jira_issues');
@@ -107,13 +135,33 @@ class JiraDashboardService {
         issues = this.getIssuesList(filteredIssues, filters);
       }
 
-      return {
+      const result: JiraDashboardData = {
         stats,
         trends,
         filters,
         issues,
         totalIssues: filteredIssues.length
       };
+
+      // キャッシュに保存
+      dashboardDataCache.set(cacheKey, {
+        data: result,
+        timestamp: now
+      });
+
+      // 古いキャッシュをクリーンアップ（10件以上の場合）
+      if (dashboardDataCache.size > 10) {
+        const oldestKey = Array.from(dashboardDataCache.entries())
+          .sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0];
+        dashboardDataCache.delete(oldestKey);
+      }
+      
+      console.log('[JiraDashboardService] ダッシュボードデータをキャッシュに保存', {
+        cacheKey: cacheKey.substring(0, 100),
+        cacheSize: dashboardDataCache.size
+      });
+
+      return result;
     } catch (error) {
       console.error('[JiraDashboardService] データ取得エラー:', error);
       throw error;
@@ -254,37 +302,79 @@ class JiraDashboardService {
     const granularity = filters.granularity || 'week';
     const trendsMap = new Map<string, JiraTrendData>();
 
-    // Firestoreから完了日を取得（最適化: getAll()を使用してバッチ取得）
+    // Firestoreから完了日を取得（キャッシュを活用）
     const completedDatesMap = new Map<string, string>();
     try {
       const issueKeys = issues.map((issue: any) => issue.issue_key || issue.id).filter(Boolean);
       if (issueKeys.length > 0) {
         const startTime = Date.now();
-        // FirestoreのgetAll()を使用してバッチ取得（最大10件ずつ）
-        // これにより、個別のget()呼び出しよりも大幅に高速化
-        const batchSize = 10; // FirestoreのgetAll()の制限
-        for (let i = 0; i < issueKeys.length; i += batchSize) {
-          const batch = issueKeys.slice(i, i + batchSize);
-          try {
-            // ドキュメント参照の配列を作成
-            const docRefs = batch.map(key => firestore.collection('jiraIssues').doc(key));
-            // バッチで一括取得
-            const docs = await firestore.getAll(...docRefs);
-            
-            // 完了日を抽出
-            docs.forEach(doc => {
-              if (doc.exists) {
-                const data = doc.data();
-                if (data?.completedDate) {
-                  completedDatesMap.set(doc.id, data.completedDate);
+        const now = Date.now();
+        
+        // キャッシュをチェック
+        const useCache = (now - completedDatesCacheTimestamp) < COMPLETED_DATES_CACHE_TTL;
+        const uncachedKeys: string[] = [];
+        
+        if (useCache && completedDatesCache.size > 0) {
+          // キャッシュから取得
+          issueKeys.forEach(key => {
+            const cached = completedDatesCache.get(key);
+            if (cached) {
+              completedDatesMap.set(key, cached);
+            } else {
+              uncachedKeys.push(key);
+            }
+          });
+          const cacheHitCount = issueKeys.length - uncachedKeys.length;
+          console.log(`[JiraDashboardService] 完了日キャッシュヒット: ${cacheHitCount}/${issueKeys.length}件 (キャッシュサイズ: ${completedDatesCache.size}件)`);
+        } else {
+          // キャッシュが無効または空の場合、未キャッシュ分のみ取得
+          issueKeys.forEach(key => {
+            const cached = completedDatesCache.get(key);
+            if (cached) {
+              completedDatesMap.set(key, cached);
+            } else {
+              uncachedKeys.push(key);
+            }
+          });
+          console.log(`[JiraDashboardService] 完了日キャッシュ: ${issueKeys.length - uncachedKeys.length}/${issueKeys.length}件ヒット、${uncachedKeys.length}件を取得 (キャッシュサイズ: ${completedDatesCache.size}件)`);
+        }
+
+        // キャッシュにないキーのみFirestoreから取得
+        if (uncachedKeys.length > 0) {
+          // FirestoreのgetAll()を使用してバッチ取得（最大10件ずつ）
+          // これにより、個別のget()呼び出しよりも大幅に高速化
+          const batchSize = 10; // FirestoreのgetAll()の制限
+          for (let i = 0; i < uncachedKeys.length; i += batchSize) {
+            const batch = uncachedKeys.slice(i, i + batchSize);
+            try {
+              // ドキュメント参照の配列を作成
+              const docRefs = batch.map(key => firestore.collection('jiraIssues').doc(key));
+              // バッチで一括取得
+              const docs = await firestore.getAll(...docRefs);
+              
+              // 完了日を抽出してキャッシュに保存
+              docs.forEach(doc => {
+                if (doc.exists) {
+                  const data = doc.data();
+                  if (data?.completedDate) {
+                    completedDatesMap.set(doc.id, data.completedDate);
+                    completedDatesCache.set(doc.id, data.completedDate);
+                  }
                 }
-              }
-            });
-          } catch (error) {
-            // バッチエラーは無視（データが存在しない場合など）
-            console.warn(`[JiraDashboardService] バッチ取得エラー（続行）:`, error);
+              });
+            } catch (error) {
+              // バッチエラーは無視（データが存在しない場合など）
+              console.warn(`[JiraDashboardService] バッチ取得エラー（続行）:`, error);
+            }
+          }
+          
+          // キャッシュタイムスタンプを更新
+          if (uncachedKeys.length > 0) {
+            completedDatesCacheTimestamp = now;
+            console.log(`[JiraDashboardService] 完了日キャッシュを更新: ${uncachedKeys.length}件追加 (総キャッシュサイズ: ${completedDatesCache.size}件)`);
           }
         }
+        
         const duration = Date.now() - startTime;
         if (duration > 1000) {
           console.warn(`[JiraDashboardService] 完了日取得に時間がかかりました: ${duration}ms (${issueKeys.length}件)`);
@@ -405,8 +495,9 @@ class JiraDashboardService {
   }> {
     // キャッシュをチェック
     const now = Date.now();
-    if (this.filterOptionsCache.data && (now - this.filterOptionsCache.timestamp) < this.FILTER_OPTIONS_CACHE_TTL) {
-      return this.filterOptionsCache.data;
+    if (filterOptionsCache.data && (now - filterOptionsCache.timestamp) < FILTER_OPTIONS_CACHE_TTL) {
+      console.log('[JiraDashboardService] キャッシュからフィルタオプションを取得');
+      return filterOptionsCache.data;
     }
 
     try {
@@ -438,7 +529,7 @@ class JiraDashboardService {
       };
 
       // キャッシュに保存
-      this.filterOptionsCache = {
+      filterOptionsCache = {
         data: result,
         timestamp: now
       };
@@ -491,6 +582,18 @@ class JiraDashboardService {
     });
 
     return result;
+  }
+
+  /**
+   * キャッシュをクリア
+   */
+  clearCache(): void {
+    dashboardDataCache.clear();
+    completedDatesCache.clear();
+    completedDatesCacheTimestamp = 0;
+    filterOptionsCache.data = null;
+    filterOptionsCache.timestamp = 0;
+    console.log('[JiraDashboardService] キャッシュをクリアしました');
   }
 }
 

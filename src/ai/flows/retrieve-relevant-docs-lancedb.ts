@@ -396,6 +396,7 @@ export async function retrieveRelevantDocs({
   labels,
   labelFilters,
   source = 'confluence',
+  filters = {},
 }: {
   question: string;
   labels?: string[];
@@ -403,6 +404,13 @@ export async function retrieveRelevantDocs({
     includeMeetingNotes: boolean;
   };
   source?: 'confluence' | 'jira';
+  filters?: {
+    dateFilter?: string;
+    startDate?: string;
+    endDate?: string;
+    assignee?: string;
+    cloneStatus?: string;
+  };
 }): Promise<any[]> {
   try {
     // BOM文字（U+FEFF）を確実に削除（埋め込み生成エラーを防ぐため）
@@ -410,12 +418,19 @@ export async function retrieveRelevantDocs({
     
     // 検索処理ログ（開発環境のみ）
     if (process.env.NODE_ENV === 'development') {
-      writeLogToFile('info', 'retrieve_query', 'Searching for question', { question, source });
+      writeLogToFile('info', 'retrieve_query', 'Searching for question', { question, source, filters });
     }
-    const results = await lancedbRetrieverTool(question, { labels, labelFilters, source });
+    let results = await lancedbRetrieverTool(question, { labels, labelFilters, source });
+    
+    // フィルターを適用
+    if (filters && Object.keys(filters).length > 0) {
+      results = applyFilters(results, filters);
+    }
+    
     if (process.env.NODE_ENV === 'development') {
       writeLogToFile('info', 'retrieve_results', 'Retrieve completed', {
-        count: results.length
+        count: results.length,
+        filtersApplied: Object.keys(filters || {}).length > 0
       });
     }
     return results;
@@ -423,6 +438,92 @@ export async function retrieveRelevantDocs({
     console.error(`[retrieveRelevantDocs] Error: ${error.message}`);
     throw new Error(`Failed to retrieve relevant documents: ${error.message}`);
   }
+}
+
+/**
+ * 検索結果にフィルターを適用
+ */
+function applyFilters(results: any[], filters: {
+  dateFilter?: string;
+  startDate?: string;
+  endDate?: string;
+  assignee?: string;
+  cloneStatus?: string;
+}): any[] {
+  let filtered = [...results];
+
+  // 期間フィルター
+  if (filters.startDate || filters.endDate || filters.dateFilter) {
+    const now = new Date();
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    if (filters.startDate) {
+      startDate = new Date(filters.startDate);
+      startDate.setHours(0, 0, 0, 0);
+    } else if (filters.dateFilter && filters.dateFilter !== 'all') {
+      const filterDate = new Date();
+      switch (filters.dateFilter) {
+        case 'today':
+          filterDate.setHours(0, 0, 0, 0);
+          startDate = filterDate;
+          break;
+        case 'week':
+          filterDate.setDate(now.getDate() - 7);
+          startDate = filterDate;
+          break;
+        case 'month':
+          filterDate.setMonth(now.getMonth() - 1);
+          startDate = filterDate;
+          break;
+      }
+    }
+
+    if (filters.endDate) {
+      endDate = new Date(filters.endDate);
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    filtered = filtered.filter(doc => {
+      // lastUpdatedまたはcreatedDateがある場合
+      const docDate = doc.lastUpdated ? new Date(doc.lastUpdated) : (doc.createdDate ? new Date(doc.createdDate) : null);
+      if (!docDate) return true; // 日付がない場合はフィルターを適用しない
+
+      if (startDate && docDate < startDate) return false;
+      if (endDate && docDate > endDate) return false;
+      return true;
+    });
+  }
+
+  // Cloneステータスフィルター
+  if (filters.cloneStatus && filters.cloneStatus !== 'all') {
+    filtered = filtered.filter(doc => {
+      const title = doc.title || '';
+      const content = doc.content || '';
+      const hasClone = title.toUpperCase().includes('CLONE') || content.toUpperCase().includes('CLONE');
+      
+      if (filters.cloneStatus === 'clone') {
+        return hasClone;
+      } else if (filters.cloneStatus === 'non-clone') {
+        return !hasClone;
+      }
+      return true;
+    });
+  }
+
+  // 担当者フィルター（Jiraの場合のみ）
+  if (filters.assignee && filters.assignee !== 'all') {
+    filtered = filtered.filter(doc => {
+      // Jiraの場合、assigneeフィールドをチェック
+      if (doc.assignee) {
+        return doc.assignee === filters.assignee;
+      }
+      // 担当者情報がない場合はフィルターを適用しない
+      return true;
+    });
+  }
+
+  return filtered;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

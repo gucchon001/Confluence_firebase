@@ -16,6 +16,7 @@ loadTestEnv();
 
 import { execSync } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 
 interface TestConfig {
   name: string;
@@ -47,7 +48,7 @@ const tests: TestConfig[] = [
   // 3. ローカル環境テスト
   {
     name: 'ローカルビルドテスト',
-    command: 'npm run build',
+    command: 'npm run build', // .next削除はrunTest関数内で実行
     description: '3.1 ローカルビルドテスト',
     category: 'local',
     skipOnError: false // ビルドエラーは修正すべき問題なので、失敗として扱う
@@ -92,6 +93,21 @@ interface TestResult {
 }
 
 /**
+ * .nextディレクトリを削除（ビルド前のクリーンアップ用）
+ */
+function cleanNextDirectory(): void {
+  const nextDir = path.join(process.cwd(), '.next');
+  if (fs.existsSync(nextDir)) {
+    try {
+      fs.rmSync(nextDir, { recursive: true, force: true });
+      console.log('✅ .next directory cleaned');
+    } catch (error) {
+      console.warn('⚠️  Failed to clean .next directory:', error);
+    }
+  }
+}
+
+/**
  * テストを実行
  */
 function runTest(test: TestConfig): TestResult {
@@ -102,12 +118,27 @@ function runTest(test: TestConfig): TestResult {
   console.log(`実行: ${test.name}`);
   console.log('='.repeat(60));
   
+  // ビルドテストの場合は、実行前に.nextディレクトリをクリーンアップ
+  if (test.name === 'ローカルビルドテスト') {
+    cleanNextDirectory();
+  }
+  
   try {
-    const output = execSync(test.command, {
+    // ビルドテストの場合は、コマンドから.next削除部分を除去（既に削除済み）
+    const command = test.name === 'ローカルビルドテスト' 
+      ? 'npm run build'
+      : test.command;
+    
+    // ビルドテストの場合は、NODE_ENVをproductionに設定
+    const env = test.name === 'ローカルビルドテスト'
+      ? { ...process.env, NODE_ENV: 'production' }
+      : { ...process.env };
+    
+    const output = execSync(command, {
       cwd: process.cwd(),
       encoding: 'utf-8',
       stdio: 'pipe',
-      env: { ...process.env },
+      env: env,
       shell: true,
       maxBuffer: 10 * 1024 * 1024 // 10MB
     });

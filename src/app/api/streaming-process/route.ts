@@ -18,6 +18,7 @@ import type { PostLog, ProcessingStep } from '@/types';
 import { GeminiConfig } from '@/config/ai-models-config';
 import { removeBOM } from '@/lib/bom-utils';
 import { generateFallbackAnswer } from '@/lib/fallback-answer-generator';
+import { appConfig } from '@/config/app-config';
 // 重複コード修正をロールバック
 // screenTestLoggerのインポート（存在しない場合は無視）
 let screenTestLogger: any = null;
@@ -171,7 +172,13 @@ export const POST = async (req: NextRequest) => {
       }, { status: 400 });
     }
     
-    let { question, chatHistory = [], labelFilters = { includeMeetingNotes: false }, source = 'confluence' } = body;
+    let { 
+      question, 
+      chatHistory = [], 
+      labelFilters = { includeMeetingNotes: false }, 
+      source = 'confluence',
+      filters = {} 
+    } = body;
     
     // 🔍 原因特定: question変数にBOMが混入していないかチェック
     if (question && typeof question === 'string') {
@@ -299,7 +306,8 @@ export const POST = async (req: NextRequest) => {
                 question,
                 labels: [],
                 labelFilters,
-                source
+                source,
+                filters
               }),
               // ユーザー情報を並行取得（検索と同時実行）
               (async () => {
@@ -533,6 +541,36 @@ export const POST = async (req: NextRequest) => {
               
               let savedPostLogId: string | null = null;
               
+              // 環境情報を取得
+              const environment: 'development' | 'staging' | 'production' = 
+                appConfig.environment.isProduction ? 'production' :
+                appConfig.environment.isTest ? 'staging' :
+                'development';
+
+              // データソースを判定（検索結果から）
+              let dataSource: 'confluence' | 'jira' | 'mixed' | 'unknown' = 'unknown';
+              if (result.references && result.references.length > 0) {
+                const hasConfluence = result.references.some((ref: any) => 
+                  ref.url?.includes('confluence') || ref.source === 'confluence'
+                );
+                const hasJira = result.references.some((ref: any) => 
+                  ref.url?.includes('jira') || ref.source === 'jira'
+                );
+                if (hasConfluence && hasJira) {
+                  dataSource = 'mixed';
+                } else if (hasConfluence) {
+                  dataSource = 'confluence';
+                } else if (hasJira) {
+                  dataSource = 'jira';
+                } else {
+                  // sourceパラメータから判定
+                  dataSource = source === 'jira' ? 'jira' : 'confluence';
+                }
+              } else {
+                // 参照がない場合はsourceパラメータから判定
+                dataSource = source === 'jira' ? 'jira' : 'confluence';
+              }
+
               // PostLog保存データを準備
               const logData = {
                 userId,
@@ -544,6 +582,7 @@ export const POST = async (req: NextRequest) => {
                 aiGenerationTime,
                 totalTime,
                 referencesCount: result.references.length,
+                references: result.references, // 参照元の詳細情報を追加
                 answerLength: fullAnswer.length,
                 timestamp: new Date(),
                 processingSteps,
@@ -552,7 +591,9 @@ export const POST = async (req: NextRequest) => {
                   sessionId,
                   userAgent,
                   ipAddress,
-                  userDisplayName // ユーザー表示名を追加
+                  userDisplayName, // ユーザー表示名を追加
+                  environment, // 環境情報を追加
+                  dataSource // データソースを追加
                 }
               };
               

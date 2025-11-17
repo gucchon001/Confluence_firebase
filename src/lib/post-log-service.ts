@@ -16,6 +16,14 @@ export class PostLogService {
   private static instance: PostLogService;
   private queryBuilder = createQueryBuilder<PostLog>('postLogs', db);
 
+  // 投稿ログのキャッシュ（2分間有効）
+  private postLogsCache: {
+    data: PostLog[];
+    count: number;
+    timestamp: number;
+  } | null = null;
+  private readonly POST_LOGS_CACHE_TTL = 2 * 60 * 1000; // 2分
+
   public static getInstance(): PostLogService {
     if (!PostLogService.instance) {
       PostLogService.instance = new PostLogService();
@@ -31,6 +39,9 @@ export class PostLogService {
       const postLogsRef = collection(db, 'postLogs');
       const firestoreData = convertPostLogToFirestore(logData);
       const docRef = await addDoc(postLogsRef, firestoreData);
+      
+      // キャッシュをクリア（新しいログが追加されたため）
+      this.clearCache();
       
       console.log('Post log created with ID:', docRef.id);
       return docRef.id;
@@ -71,6 +82,10 @@ export class PostLogService {
       }
       
       await updateDoc(docRef, updateData);
+      
+      // キャッシュをクリア（ログが更新されたため）
+      this.clearCache();
+      
       console.log('Post log updated:', logId);
     } catch (error) {
       console.error('Error updating post log:', error);
@@ -83,17 +98,42 @@ export class PostLogService {
    */
   async getRecentPostLogs(count: number = 50): Promise<PostLog[]> {
     try {
+      const now = Date.now();
+      
+      // キャッシュをチェック
+      if (this.postLogsCache && 
+          (now - this.postLogsCache.timestamp) < this.POST_LOGS_CACHE_TTL &&
+          this.postLogsCache.count >= count) {
+        console.log('📝 PostLogService: キャッシュから投稿ログを取得', { 
+          count, 
+          cachedCount: this.postLogsCache.data.length 
+        });
+        // キャッシュから指定件数分を返す
+        return this.postLogsCache.data.slice(0, count);
+      }
+
       console.log('📝 PostLogService: 最近の投稿ログを取得開始', { count });
       
       const q = this.queryBuilder.recent(count);
       const querySnapshot = await getDocs(q);
+      
+      const postLogs = querySnapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
       
       console.log('📝 PostLogService: 投稿ログ取得完了', { 
         totalCount: querySnapshot.size,
         empty: querySnapshot.empty 
       });
       
-      return querySnapshot.docs.map(doc => convertFirestoreToPostLog(doc.id, doc.data()));
+      // キャッシュに保存（より多くの件数を取得した場合はキャッシュを更新）
+      if (!this.postLogsCache || this.postLogsCache.count < count) {
+        this.postLogsCache = {
+          data: postLogs,
+          count: count,
+          timestamp: now
+        };
+      }
+      
+      return postLogs;
     } catch (error) {
       console.error('Error getting recent post logs:', error);
       throw error;
@@ -192,6 +232,14 @@ export class PostLogService {
       console.error('Error getting performance stats:', error);
       throw error;
     }
+  }
+
+  /**
+   * キャッシュをクリア
+   */
+  clearCache(): void {
+    this.postLogsCache = null;
+    console.log('📝 PostLogService: キャッシュをクリアしました');
   }
 }
 

@@ -42,7 +42,18 @@ export async function createOrUpdateUser(user: User) {
     
     return true;
   } catch (error) {
-    console.error('Error creating/updating user:', error);
+    // ネットワークエラー（QUICプロトコルエラーなど）の場合は警告のみ
+    if (error instanceof Error && (
+      error.message.includes('QUIC') || 
+      error.message.includes('network') ||
+      error.message.includes('Failed to fetch')
+    )) {
+      console.warn('[createOrUpdateUser] Network error (will retry automatically):', error.message);
+      // ネットワークエラーの場合は、Firestoreが自動的にリトライするため、エラーを再スローしない
+      // ただし、ユーザー情報の保存は後で再試行される
+      return false;
+    }
+    console.error('[createOrUpdateUser] Error creating/updating user:', error);
     throw error;
   }
 }

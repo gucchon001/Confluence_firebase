@@ -2,10 +2,12 @@
 
 import type { User } from 'firebase/auth';
 import * as React from 'react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain, Shield, BarChart3, Menu } from 'lucide-react';
@@ -27,6 +29,7 @@ import {
   getConversation, 
   deleteConversation 
 } from '@/lib/conversation-service';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { showErrorToast, showSuccessToast, showApiErrorToast, handleNetworkError } from '@/lib/toast-helpers';
 import { EmptyStateHandler, NoResultsFound, ErrorState } from '@/components/empty-state-handler';
@@ -305,6 +308,17 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [conversations, setConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string }>>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  // 無限スクロール用の状態
+  const [lastConversationDoc, setLastConversationDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  // 会話履歴フィルター状態
+  const [historyDateFilter, setHistoryDateFilter] = useState<string>('all');
+  const [historyStartDate, setHistoryStartDate] = useState<string>('');
+  const [historyEndDate, setHistoryEndDate] = useState<string>('');
+  const [historyCloneFilter, setHistoryCloneFilter] = useState<string>('all'); // all, clone, non-clone
+  const [filteredConversations, setFilteredConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string }>>([]);
   
   // ストリーミング処理の状態
   const [isStreaming, setIsStreaming] = useState(false);
@@ -346,10 +360,17 @@ export default function ChatPage({ user }: ChatPageProps) {
     }
   };
   
-  // ラベルフィルタの状態
+  // Confluence用のフィルター状態（議事録を含む）
   const [labelFilters, setLabelFilters] = useState({
     includeMeetingNotes: false
   });
+  
+  // 入力フィールド用のフィルター状態（Jira特有のフィルター）
+  const [inputDateFilter, setInputDateFilter] = useState<string>('all');
+  const [inputStartDate, setInputStartDate] = useState<string>('');
+  const [inputEndDate, setInputEndDate] = useState<string>('');
+  const [inputAssigneeFilter, setInputAssigneeFilter] = useState<string>('all');
+  const [inputCloneFilter, setInputCloneFilter] = useState<string>('all'); // all, clone, non-clone
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -374,16 +395,19 @@ export default function ChatPage({ user }: ChatPageProps) {
   useEffect(() => {
     const fetchConversations = async () => {
       try {
+        setIsLoadingHistory(true);
         // 既存の会話一覧を取得
-        const userConversations = await getConversations(user.uid);
-        setConversations(userConversations);
+        const result = await getConversations(user.uid, 10);
+        setConversations(result.conversations);
+        setLastConversationDoc(result.lastDocument);
+        setHasMoreConversations(result.hasMore);
         
         // 会話が存在する場合は最新の会話を選択
-        if (userConversations.length > 0) {
-          setCurrentConversationId(userConversations[0].id);
+        if (result.conversations.length > 0) {
+          setCurrentConversationId(result.conversations[0].id);
           
           // 選択された会話のメッセージを取得
-          const conversation = await getConversation(user.uid, userConversations[0].id);
+          const conversation = await getConversation(user.uid, result.conversations[0].id);
           setMessages(conversation.messages);
         } else {
           // 会話が存在しない場合は空の配列をセット
@@ -409,6 +433,56 @@ export default function ChatPage({ user }: ChatPageProps) {
     fetchConversations();
   }, [user.uid, toast]);
 
+  // 無限スクロール：追加の会話を読み込む
+  const loadMoreConversations = useCallback(async () => {
+    if (isLoadingMoreConversations || !hasMoreConversations || !lastConversationDoc) {
+      return;
+    }
+
+    try {
+      setIsLoadingMoreConversations(true);
+      const result = await getConversations(user.uid, 10, lastConversationDoc);
+      
+      // 既存の会話リストに追加
+      setConversations((prev) => [...prev, ...result.conversations]);
+      setLastConversationDoc(result.lastDocument);
+      setHasMoreConversations(result.hasMore);
+    } catch (error) {
+      console.error("Failed to load more conversations:", error);
+      if (!handleNetworkError(error)) {
+        showErrorToast('database_read_error', '追加の会話履歴の読み込みに失敗しました。');
+      }
+    } finally {
+      setIsLoadingMoreConversations(false);
+    }
+  }, [isLoadingMoreConversations, hasMoreConversations, lastConversationDoc, user.uid]);
+
+  // Intersection Observerでスクロール検知
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreConversations && !isLoadingMoreConversations) {
+          loadMoreConversations();
+        }
+      },
+      {
+        threshold: 0.1,
+        rootMargin: '100px', // 少し早めに検知して読み込み開始
+      }
+    );
+
+    const currentRef = loadMoreRef.current;
+    observer.observe(currentRef);
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [hasMoreConversations, isLoadingMoreConversations, loadMoreConversations]);
+
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTo({
@@ -417,6 +491,61 @@ export default function ChatPage({ user }: ChatPageProps) {
       });
     }
   }, [messages, isLoading]);
+
+  // 会話履歴のフィルター処理
+  useEffect(() => {
+    let filtered = [...conversations];
+
+    // 期間フィルター
+    if (historyStartDate || historyEndDate) {
+      if (historyStartDate) {
+        const start = new Date(historyStartDate);
+        start.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(conv => new Date(conv.timestamp) >= start);
+      }
+      if (historyEndDate) {
+        const end = new Date(historyEndDate);
+        end.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(conv => new Date(conv.timestamp) <= end);
+      }
+    } else if (historyDateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = new Date();
+      
+      switch (historyDateFilter) {
+        case 'today':
+          filterDate.setHours(0, 0, 0, 0);
+          break;
+        case 'week':
+          filterDate.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          filterDate.setMonth(now.getMonth() - 1);
+          break;
+      }
+      
+      filtered = filtered.filter(conv => new Date(conv.timestamp) >= filterDate);
+    }
+
+    // Cloneステータスフィルター
+    if (historyCloneFilter !== 'all') {
+      filtered = filtered.filter(conv => {
+        // タイトルや最後のメッセージにCLONEが含まれているかチェック
+        const hasCloneInTitle = conv.title?.toUpperCase().includes('CLONE');
+        const hasCloneInMessage = conv.lastMessage?.toUpperCase().includes('CLONE');
+        const isClone = hasCloneInTitle || hasCloneInMessage;
+        
+        if (historyCloneFilter === 'clone') {
+          return isClone;
+        } else if (historyCloneFilter === 'non-clone') {
+          return !isClone;
+        }
+        return true;
+      });
+    }
+
+    setFilteredConversations(filtered);
+  }, [conversations, historyDateFilter, historyStartDate, historyEndDate, historyCloneFilter]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -520,8 +649,10 @@ export default function ChatPage({ user }: ChatPageProps) {
               
               // 会話一覧を更新
               try {
-                const updatedConversations = await getConversations(user.uid);
-                setConversations(updatedConversations);
+                const result = await getConversations(user.uid, 10);
+                setConversations(result.conversations);
+                setLastConversationDoc(result.lastDocument);
+                setHasMoreConversations(result.hasMore);
               } catch (error) {
                 console.error("Failed to refresh conversations:", error);
               }
@@ -580,11 +711,19 @@ export default function ChatPage({ user }: ChatPageProps) {
         },
         // オプションパラメータ
         messages,
-        labelFilters,
+        searchSource === 'confluence' ? labelFilters : { includeMeetingNotes: false }, // Confluenceの場合はlabelFiltersを使用
         user?.uid, // ユーザーID
         currentSessionId, // セッションID
         clientStartTime, // クライアント側の開始時刻
-        searchSource // 検索ソース
+        searchSource, // 検索ソース
+        searchSource === 'jira' ? {
+          // Jira用フィルターパラメータ
+          dateFilter: inputDateFilter !== 'all' ? inputDateFilter : undefined,
+          startDate: inputStartDate || undefined,
+          endDate: inputEndDate || undefined,
+          assignee: inputAssigneeFilter !== 'all' ? inputAssigneeFilter : undefined,
+          cloneStatus: inputCloneFilter !== 'all' ? inputCloneFilter : undefined
+        } : {} // Confluenceの場合はフィルターなし
       );
 
     } catch (error) {
@@ -623,7 +762,7 @@ export default function ChatPage({ user }: ChatPageProps) {
       <div className={`w-72 bg-gray-50 border-r overflow-hidden flex flex-col transition-transform duration-200 ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       } md:translate-x-0 fixed md:static inset-y-0 left-0 z-40`}>
-        <div className="p-4 border-b">
+        <div className="p-4 border-b space-y-2">
           <Button className="w-full" onClick={async () => {
             // 新しい会話を開始
             setMessages([]);
@@ -636,8 +775,10 @@ export default function ChatPage({ user }: ChatPageProps) {
             
             // 会話一覧を更新
             try {
-              const updatedConversations = await getConversations(user.uid);
-              setConversations(updatedConversations);
+              const result = await getConversations(user.uid, 10);
+              setConversations(result.conversations);
+              setLastConversationDoc(result.lastDocument);
+              setHasMoreConversations(result.hasMore);
             } catch (error) {
               console.error("Failed to refresh conversations:", error);
             }
@@ -645,15 +786,95 @@ export default function ChatPage({ user }: ChatPageProps) {
             <Plus className="mr-2 h-4 w-4" />
             新しいチャット
           </Button>
+
+          {/* フィルターUI */}
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">期間</label>
+              <Select value={historyDateFilter} onValueChange={(value) => {
+                setHistoryDateFilter(value);
+                if (value !== 'custom') {
+                  setHistoryStartDate('');
+                  setHistoryEndDate('');
+                }
+              }}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  <SelectItem value="today">今日</SelectItem>
+                  <SelectItem value="week">過去1週間</SelectItem>
+                  <SelectItem value="month">過去1ヶ月</SelectItem>
+                  <SelectItem value="custom">カスタム</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {historyDateFilter === 'custom' && (
+              <div className="space-y-1">
+                <div>
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">開始日</label>
+                  <Input
+                    type="date"
+                    value={historyStartDate}
+                    onChange={(e) => setHistoryStartDate(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">終了日</label>
+                  <Input
+                    type="date"
+                    value={historyEndDate}
+                    onChange={(e) => setHistoryEndDate(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">Cloneステータス</label>
+              <Select value={historyCloneFilter} onValueChange={setHistoryCloneFilter}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  <SelectItem value="clone">Cloneのみ</SelectItem>
+                  <SelectItem value="non-clone">Clone以外</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(historyDateFilter !== 'all' || historyStartDate || historyEndDate || historyCloneFilter !== 'all') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full h-7 text-xs"
+                onClick={() => {
+                  setHistoryDateFilter('all');
+                  setHistoryStartDate('');
+                  setHistoryEndDate('');
+                  setHistoryCloneFilter('all');
+                }}
+              >
+                フィルターリセット
+              </Button>
+            )}
+          </div>
         </div>
         <ScrollArea className="flex-1 h-0">
           <div className="p-4 space-y-2 pb-4">
 
-            {/* 通常の会話履歴 */}
-            {conversations.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-4">会話履歴がありません</p>
+            {/* フィルター済みの会話履歴 */}
+            {filteredConversations.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">
+                {conversations.length === 0 ? '会話履歴がありません' : 'フィルター条件に一致する会話がありません'}
+              </p>
             ) : (
-              conversations.map((conv: { id: string; title: string; lastMessage: string; timestamp: string }) => (
+              filteredConversations.map((conv: { id: string; title: string; lastMessage: string; timestamp: string }) => (
                 <div
                   key={conv.id}
                   className={`w-full cursor-pointer rounded-md p-3 transition-colors ${
@@ -735,6 +956,22 @@ export default function ChatPage({ user }: ChatPageProps) {
                 </div>
               ))
             )}
+            
+            {/* 無限スクロール用のトリガー要素とローディングUI */}
+            {hasMoreConversations && (historyDateFilter === 'all' && !historyStartDate && !historyEndDate && historyCloneFilter === 'all') && (
+              <div ref={loadMoreRef} className="py-4 flex justify-center">
+                {isLoadingMoreConversations ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>読み込み中...</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-400 text-center">
+                    スクロールしてさらに読み込む
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </ScrollArea>
       </div>
@@ -765,7 +1002,7 @@ export default function ChatPage({ user }: ChatPageProps) {
             )}
             <Bot className="h-6 w-6 text-primary" />
             <h1 className="text-lg font-semibold">
-              {showAdminDashboard ? '管理ダッシュボード' : 'JUKUST Confluence Spec Jira Development Status Chat'}
+              {showAdminDashboard ? '管理ダッシュボード' : 'JUKUST Confluence Spec Chat'}
             </h1>
           </div>
           
@@ -822,7 +1059,7 @@ export default function ChatPage({ user }: ChatPageProps) {
         </header>
       <main className="flex-1 overflow-hidden">
         <ScrollArea className="h-full" viewportRef={scrollAreaRef}>
-          <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
+          <div className={`p-4 md:p-6 space-y-6 mx-auto ${showAdminDashboard ? 'max-w-[98%]' : 'max-w-4xl'}`}>
             {showAdminDashboard ? (
               <AdminDashboard />
             ) : showSettings ? (
@@ -838,8 +1075,10 @@ export default function ChatPage({ user }: ChatPageProps) {
                                     // 移行完了後に会話一覧を更新
                                     const refreshConversations = async () => {
                                         try {
-                                            const userConversations = await getConversations(user.uid);
-                                            setConversations(userConversations);
+                                            const result = await getConversations(user.uid, 10);
+                                            setConversations(result.conversations);
+                                            setLastConversationDoc(result.lastDocument);
+                                            setHasMoreConversations(result.hasMore);
                                         } catch (error) {
                                             console.error("Failed to refresh conversations:", error);
                                         }
@@ -908,7 +1147,7 @@ export default function ChatPage({ user }: ChatPageProps) {
             ) : (
                 <div className="flex items-center justify-center min-h-[60vh]">
                     <div className="max-w-md mx-auto text-center">
-                        <h1 className="text-2xl font-bold mb-4">ようこそ！JUKUST Confluence Spec Jira Development Status Chatへ</h1>
+                        <h1 className="text-2xl font-bold mb-4">ようこそ！JUKUST Confluence Spec Chatへ</h1>
                         <p className="text-muted-foreground">このチャットボットは、Confluenceの仕様書に関する質問に回答します。</p>
                         <div className="mt-4 space-y-2">
                           <p className="text-xs text-muted-foreground">例えば、次のような質問ができます：</p>
@@ -980,28 +1219,155 @@ export default function ChatPage({ user }: ChatPageProps) {
       <footer className="border-t p-4 bg-white/80 backdrop-blur-sm">
         {!showSettings && !showAdminDashboard && (
           <div className="mx-auto max-w-3xl">
-            {/* ソース切替タブ */}
-            <div className="mb-3">
-              <Tabs value={searchSource} onValueChange={(value) => setSearchSource(value as 'confluence' | 'jira')}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="confluence">Confluence</TabsTrigger>
-                  <TabsTrigger value="jira">Jira</TabsTrigger>
-                </TabsList>
-              </Tabs>
+            {/* 検索ソース選択（視覚的にわかりやすく） */}
+            <div className="flex items-center gap-2 mb-3">
+              <label className="text-xs font-medium text-gray-700">検索ソース:</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={searchSource === 'confluence' ? 'default' : 'outline'}
+                  size="sm"
+                  className={`h-8 text-xs font-medium ${
+                    searchSource === 'confluence' 
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-600' 
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                  onClick={() => setSearchSource('confluence')}
+                >
+                  <span className={`w-2 h-2 rounded-full mr-2 ${
+                    searchSource === 'confluence' ? 'bg-purple-300' : 'bg-gray-300'
+                  }`} />
+                  Confluence
+                </Button>
+                <Button
+                  type="button"
+                  variant={searchSource === 'jira' ? 'default' : 'outline'}
+                  size="sm"
+                  className={`h-8 text-xs font-medium ${
+                    searchSource === 'jira' 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600' 
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                  onClick={() => setSearchSource('jira')}
+                >
+                  <span className={`w-2 h-2 rounded-full mr-2 ${
+                    searchSource === 'jira' ? 'bg-blue-300' : 'bg-gray-300'
+                  }`} />
+                  Jira
+                </Button>
+              </div>
             </div>
-            
-            {/* ラベルフィルタ */}
-            <div className="flex gap-4 mb-3 text-sm">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={labelFilters.includeMeetingNotes}
-                  onCheckedChange={(checked) => 
-                    setLabelFilters(prev => ({ ...prev, includeMeetingNotes: !!checked }))
+
+            {/* Confluence用フィルター（議事録を含む） */}
+            {searchSource === 'confluence' && (
+              <div className="flex gap-4 mb-3 text-sm">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={labelFilters.includeMeetingNotes}
+                    onCheckedChange={(checked) => 
+                      setLabelFilters(prev => ({ ...prev, includeMeetingNotes: !!checked }))
+                    }
+                  />
+                  <span>議事録を含める</span>
+                </label>
+              </div>
+            )}
+
+            {/* Jira特有のフィルター */}
+            {searchSource === 'jira' && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">期間</label>
+                <Select value={inputDateFilter} onValueChange={(value) => {
+                  setInputDateFilter(value);
+                  if (value !== 'custom') {
+                    setInputStartDate('');
+                    setInputEndDate('');
                   }
-                />
-                <span>議事録を含める</span>
-              </label>
+                }}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    <SelectItem value="today">今日</SelectItem>
+                    <SelectItem value="week">過去1週間</SelectItem>
+                    <SelectItem value="month">過去1ヶ月</SelectItem>
+                    <SelectItem value="custom">カスタム</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {inputDateFilter === 'custom' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 mb-1 block">開始日</label>
+                    <Input
+                      type="date"
+                      value={inputStartDate}
+                      onChange={(e) => setInputStartDate(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 mb-1 block">終了日</label>
+                    <Input
+                      type="date"
+                      value={inputEndDate}
+                      onChange={(e) => setInputEndDate(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">担当者</label>
+                <Select value={inputAssigneeFilter} onValueChange={setInputAssigneeFilter}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    <SelectItem value={user.uid}>自分</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Cloneステータス</label>
+                <Select value={inputCloneFilter} onValueChange={setInputCloneFilter}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    <SelectItem value="clone">Cloneのみ</SelectItem>
+                    <SelectItem value="non-clone">Clone以外</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(inputDateFilter !== 'all' || inputStartDate || inputEndDate || inputAssigneeFilter !== 'all' || inputCloneFilter !== 'all') && (
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => {
+                      setInputDateFilter('all');
+                      setInputStartDate('');
+                      setInputEndDate('');
+                      setInputAssigneeFilter('all');
+                      setInputCloneFilter('all');
+                    }}
+                  >
+                    リセット
+                  </Button>
+                </div>
+              )}
             </div>
+            )}
             
             <form onSubmit={handleSubmit} className="flex items-start gap-2">
               <Textarea
