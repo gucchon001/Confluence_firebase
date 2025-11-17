@@ -301,6 +301,14 @@ export const POST = async (req: NextRequest) => {
           const userAgent = req.headers.get('user-agent') || 'unknown';
           const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
           
+          // デバッグ: ユーザーID取得状況を確認
+          console.log('🔍 ユーザーID取得:', {
+            'x-user-id': req.headers.get('x-user-id'),
+            'authorization': req.headers.get('authorization') ? '存在' : 'なし',
+            finalUserId: userId,
+            environment: process.env.NODE_ENV
+          });
+          
           // ステップ更新: 検索開始
           await updateStep(controller, encoder, 0, 'search', '関連ドキュメントを検索しています...');
 
@@ -326,11 +334,15 @@ export const POST = async (req: NextRequest) => {
                     const adminApp = initializeFirebaseAdmin();
                     const auth = admin.auth(adminApp);
                     const userRecord = await auth.getUser(userId);
-                    return userRecord.displayName || userRecord.email || 'unknown';
+                    const displayName = userRecord.displayName || userRecord.email || 'unknown';
+                    console.log('✅ ユーザー情報取得成功:', { userId, displayName });
+                    return displayName;
                   } catch (userError) {
-                    console.warn('⚠️ ユーザー情報取得失敗:', userError);
+                    console.warn('⚠️ ユーザー情報取得失敗:', { userId, error: userError });
                     return 'anonymous';
                   }
+                } else {
+                  console.log('⚠️ ユーザーIDがanonymousまたは未設定:', { userId });
                 }
                 return 'anonymous';
               })()
@@ -616,6 +628,18 @@ export const POST = async (req: NextRequest) => {
               }
 
               // 完了メッセージ（保存されたpostLogIdを含める）
+              // フィルタリング前の参照元（検索結果全体）とフィルタリング後の参照元（LLMが使用した参照元）の両方を含める
+              const allReferences = relevantDocs.map((doc, index) => ({
+                id: doc.id || `${doc.pageId}-${index}`,
+                title: doc.title || 'タイトル不明',
+                url: doc.url || '',
+                spaceName: doc.spaceName || 'Unknown',
+                labels: doc.labels || [],
+                distance: doc.distance,
+                source: doc.source,
+                scoreText: doc.scoreText
+              }));
+              
               const completionMessage = {
                 type: 'completion',
                 step: 3,  // Phase 5修正: 完了はステップ3（0ベース）
@@ -624,7 +648,8 @@ export const POST = async (req: NextRequest) => {
                 description: '回答が生成されました',
                 chunkIndex: result.chunkIndex,
                 totalChunks: result.totalChunks,
-                references: result.references,
+                references: result.references, // フィルタリング後（LLMが使用した参照元）
+                allReferences: allReferences, // フィルタリング前（検索結果全体）
                 fullAnswer: fullAnswer,
                 postLogId: savedPostLogId || null
               };

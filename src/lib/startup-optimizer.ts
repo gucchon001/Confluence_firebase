@@ -186,6 +186,43 @@ async function performInitializationAsync(): Promise<void> {
           // エラーをスローしない（他の初期化処理を継続）
         }
       }
+    },
+    {
+      name: 'Lunr Index Preload',
+      fn: async () => {
+        console.log('[StartupOptimizer] 🔥 Starting Lunr index preload...');
+        const startTime = Date.now();
+        
+        try {
+          // Lunrインデックスをバックグラウンドでロード
+          const { lunrInitializer } = await import('./lunr-initializer');
+          
+          // ConfluenceとJiraの両方のインデックスをロード
+          const tables = ['confluence', 'jira_issues'];
+          
+          for (const tableName of tables) {
+            try {
+              console.log(`[StartupOptimizer] Preloading Lunr index for ${tableName}...`);
+              await lunrInitializer.initializeAsync(tableName);
+              const tableTime = Date.now() - startTime;
+              console.log(`[StartupOptimizer] ✅ Lunr index for ${tableName} preloaded in ${tableTime}ms`);
+            } catch (tableError: any) {
+              console.warn(`[StartupOptimizer] ⚠️ Lunr index preload failed for ${tableName}: ${tableError?.message || tableError}`);
+              // エラーをスローしない（他のテーブルのロードを継続）
+            }
+          }
+          
+          const endTime = Date.now();
+          const totalTime = endTime - startTime;
+          console.log(`[StartupOptimizer] 🚀 Lunr index preload completed in ${totalTime}ms`);
+          
+        } catch (error: any) {
+          // エラーが発生してもアプリケーションは起動を続行
+          console.error(`[StartupOptimizer] ⚠️ Lunr index preload failed: ${error?.message || error}`);
+          console.error(`[StartupOptimizer] ⚠️ Lunr index will be initialized on first request`);
+          // エラーをスローしない（他の初期化処理を継続）
+        }
+      }
     }
   ];
 

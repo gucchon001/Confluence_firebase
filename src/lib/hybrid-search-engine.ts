@@ -167,19 +167,30 @@ export class HybridSearchEngine {
       const { LunrSearchClient } = await import('./lunr-search-client');
       const lunrSearchClient = LunrSearchClient.getInstance();
       
-      // Lunrクライアントが初期化されていない場合は初期化を試行
+      // ⚡ 最適化: Lunrインデックスの遅延初期化（オンデマンド）
+      // 必要になった時だけ初期化を試行（バックグラウンドで開始、完了を待たない）
       if (!lunrSearchClient.isReady(tableName)) {
-        console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready, attempting initialization...`);
+        console.log(`[HybridSearchEngine] ${tableName} Lunr client not ready, initializing in background...`);
         
-        // 直接Lunrクライアントを初期化
-        await this.initializeLunrClient(lunrSearchClient, tableName);
+        // バックグラウンドで初期化を開始（結果を待たずに返す）
+        const { lunrInitializer } = await import('./lunr-initializer');
         
-        // 再確認
-        if (!lunrSearchClient.isReady(tableName)) {
-          console.warn(`[HybridSearchEngine] ${tableName} Lunr client still not ready after initialization, skipping BM25 search`);
-          console.log(`[HybridSearchEngine] ${tableName} Lunr status:`, lunrSearchClient.getStatus(tableName));
+        // ⚡ 最適化: タイムアウトを設定して、初期化が完了するまで待たない
+        Promise.race([
+          lunrInitializer.initializeAsync(tableName),
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              console.log(`[HybridSearchEngine] Lunr initialization timeout for ${tableName}, continuing without waiting`);
+              resolve();
+            }, 100); // 100msでタイムアウト（初期化開始のみ確認）
+          })
+        ]).catch((error) => {
+          console.warn(`[HybridSearchEngine] Lunr initialization failed for ${tableName}:`, error);
+        });
+        
+        // 初回はBM25検索をスキップ（ベクトル検索のみ）
+        console.log(`[HybridSearchEngine] Skipping BM25 search for now (initialization in progress), will be available on next request`);
           return [];
-        }
       }
 
       console.log(`[HybridSearchEngine] Performing BM25 search for ${tableName}: "${query}"`);

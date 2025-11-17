@@ -167,7 +167,7 @@ const AdminDashboard: React.FC = () => {
   // システムヘルス状態
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [isLoadingHealth, setIsLoadingHealth] = useState(false);
-  
+
   // Jira完了数統計
   const [jiraCompletedStats, setJiraCompletedStats] = useState({
     thisMonth: 0,
@@ -318,7 +318,11 @@ const AdminDashboard: React.FC = () => {
       console.log('📊 管理ダッシュボード: データ取得完了', {
         userCount: userList.length,
         postLogCount: allLogs.length,
-        jiraCompletedStats
+        jiraCompletedStats,
+        usersSample: userList.slice(0, 3).map(u => ({ uid: u.uid, displayName: u.displayName, email: u.email })),
+        logsUserIds: [...new Set(allLogs.map(log => log.userId))].slice(0, 10),
+        logsWithAnonymous: allLogs.filter(log => log.userId === 'anonymous' || log.metadata?.userDisplayName === 'anonymous').length,
+        logsWithUserDisplayName: allLogs.filter(log => log.metadata?.userDisplayName && log.metadata.userDisplayName !== 'anonymous').length
       });
       
       
@@ -904,7 +908,7 @@ const AdminDashboard: React.FC = () => {
                   <span>今週: {jiraCompletedStats.thisWeek}</span>
                   <span>本日: {jiraCompletedStats.today}</span>
                   <span>昨日: {jiraCompletedStats.yesterday}</span>
-                </div>
+              </div>
               </div>
               <CheckCircle className="h-8 w-8 text-green-500 flex-shrink-0" />
             </div>
@@ -923,7 +927,7 @@ const AdminDashboard: React.FC = () => {
                   <span>今週: {postsThisWeek}</span>
                   <span>本日: {postsToday}</span>
                   <span>昨日: {postsYesterday}</span>
-                </div>
+              </div>
               </div>
               <MessageSquare className="h-8 w-8 text-blue-500 flex-shrink-0" />
             </div>
@@ -945,14 +949,14 @@ const AdminDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* ユーザー数 */}
+        {/* アクティブユーザー数 */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground">ユーザー数</p>
-                <p className="text-2xl font-bold">{users.length}</p>
-                <p className="text-xs text-muted-foreground mt-1">登録済みユーザー</p>
+                <p className="text-sm font-medium text-muted-foreground">アクティブユーザー</p>
+                <p className="text-2xl font-bold">{activeUsers}</p>
+                <p className="text-xs text-muted-foreground mt-1">総ユーザー数: {users.length}</p>
               </div>
               <Users className="h-8 w-8 text-green-500 flex-shrink-0" />
             </div>
@@ -1321,15 +1325,25 @@ const AdminDashboard: React.FC = () => {
                                   </Badge>
                               </TableCell>
                               <TableCell className="min-w-[180px]">
-                                <span className="text-sm truncate block" title={log.metadata?.userDisplayName || 
-                                 users.find(u => u.uid === log.userId)?.displayName || 
-                                 users.find(u => u.uid === log.userId)?.email || 
-                                 log.userId}>
-                                  {log.metadata?.userDisplayName || 
-                                   users.find(u => u.uid === log.userId)?.displayName || 
-                                   users.find(u => u.uid === log.userId)?.email || 
-                                   log.userId}
+                                {(() => {
+                                  // ユーザー情報を取得（優先順位: metadata.userDisplayName > users配列から検索 > userId）
+                                  let displayName = log.metadata?.userDisplayName;
+                                  
+                                  // metadata.userDisplayNameが'anonymous'または存在しない場合、users配列から検索
+                                  if (!displayName || displayName === 'anonymous') {
+                                    const user = users.find(u => u.uid === log.userId);
+                                    displayName = user?.displayName || user?.email || null;
+                                  }
+                                  
+                                  // それでも見つからない場合、userIdを使用（'anonymous'の場合はそのまま表示）
+                                  const finalDisplayName = displayName || log.userId;
+                                  
+                                  return (
+                                    <span className="text-sm truncate block" title={finalDisplayName}>
+                                      {finalDisplayName}
                                 </span>
+                                  );
+                                })()}
                               </TableCell>
                               <TableCell className="min-w-[300px] max-w-[400px]">
                                 <p className="text-sm truncate" title={log.question}>
@@ -1953,7 +1967,20 @@ const AdminDashboard: React.FC = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {selectedLog.references.map((reference, index) => (
+                      {selectedLog.references.map((reference, index) => {
+                        // データソースを判定（優先順位: 1. dataSourceフィールド 2. URLから推測）
+                        let dataSource: 'confluence' | 'jira' | 'unknown' = 'unknown';
+                        if (reference.dataSource === 'confluence' || reference.dataSource === 'jira') {
+                          dataSource = reference.dataSource;
+                        } else if (reference.url) {
+                          // URLから推測（フォールバック）
+                          dataSource = 
+                            reference.url.includes('jira') || reference.url.includes('atlassian.net/jira') ? 'jira' :
+                            reference.url.includes('confluence') || reference.url.includes('atlassian.net') ? 'confluence' :
+                            'unknown';
+                        }
+                        
+                        return (
                         <div key={index} className="p-3 border rounded-lg hover:bg-muted/50 transition-colors">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1">
@@ -1973,7 +2000,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-2 ml-3">
                               <Badge variant="outline" className="text-xs">
-                                {reference.source}
+                                  {dataSource === 'jira' ? 'Jira' : dataSource === 'confluence' ? 'Confluence' : 'Unknown'}
                               </Badge>
                               <Badge variant="outline" className="text-xs">
                                 {(reference.score * 100).toFixed(1)}%
@@ -1981,7 +2008,8 @@ const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>

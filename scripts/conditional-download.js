@@ -86,7 +86,8 @@ async function main() {
 
 main().catch((error) => {
   console.error('❌ エラーが発生しました:', error);
-  // エラーが発生してもビルドプロセスを続行
-  process.exit(0);
+  console.error('❌ ビルドプロセスを中断します');
+  // エラーが発生した場合はビルドを停止
+  process.exit(1);
 });
 

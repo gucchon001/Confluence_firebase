@@ -71,7 +71,8 @@ export type Reference = {
   title: string;
   url: string;
   score: number;
-  source: 'vector' | 'bm25' | 'keyword';
+  source: 'vector' | 'bm25' | 'keyword'; // 検索方法
+  dataSource?: 'confluence' | 'jira'; // データソース（confluence/jira）
 };
 
 // 投稿ログ型（管理画面用）

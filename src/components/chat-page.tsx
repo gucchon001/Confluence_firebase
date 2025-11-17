@@ -297,8 +297,22 @@ function stripMarkdown(text: string): string {
 }
 
 export default function ChatPage({ user }: ChatPageProps) {
-  const { signOut } = useAuthWrapper();
+  const { signOut, user: authUser } = useAuthWrapper();
   const { isAdmin, isLoading: isAdminLoading } = useAdmin();
+  
+  // デバッグ: ユーザー情報を確認（propsとuseAuthWrapperの両方）
+  useEffect(() => {
+    if (!user) {
+      console.warn('⚠️ ChatPage: propsのuserがnull/undefinedです');
+    } else {
+      console.log('✅ ChatPage: propsのuser', { uid: user.uid, displayName: user.displayName, email: user.email });
+    }
+    if (!authUser) {
+      console.warn('⚠️ ChatPage: useAuthWrapperのuserがnull/undefinedです');
+    } else {
+      console.log('✅ ChatPage: useAuthWrapperのuser', { uid: authUser.uid, displayName: authUser.displayName, email: authUser.email });
+    }
+  }, [user, authUser]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -589,6 +603,25 @@ export default function ChatPage({ user }: ChatPageProps) {
 
     // ストリーミング処理を実行
     try {
+      // ユーザーIDの取得（propsのuserを優先、なければuseAuthWrapperのauthUserを使用）
+      const effectiveUser = user || authUser;
+      
+      // デバッグ: ユーザー情報を確認
+      if (!effectiveUser?.uid) {
+        console.warn('⚠️ ユーザーIDが取得できません:', { 
+          propsUser: user, 
+          authUser: authUser,
+          effectiveUser: effectiveUser 
+        });
+      } else {
+        console.log('✅ ユーザーID:', { 
+          uid: effectiveUser.uid, 
+          displayName: effectiveUser.displayName, 
+          email: effectiveUser.email,
+          source: user ? 'props' : 'useAuthWrapper'
+        });
+      }
+      
       // ストリーミング処理を開始（開始時刻を渡す）
       await streamingProcessClient.startStreaming(
         currentInput,
@@ -712,7 +745,7 @@ export default function ChatPage({ user }: ChatPageProps) {
         // オプションパラメータ
         messages,
         searchSource === 'confluence' ? labelFilters : { includeMeetingNotes: false }, // Confluenceの場合はlabelFiltersを使用
-        user?.uid, // ユーザーID
+        effectiveUser?.uid, // ユーザーID（propsのuserを優先、なければuseAuthWrapperのauthUserを使用）
         currentSessionId, // セッションID
         clientStartTime, // クライアント側の開始時刻
         searchSource, // 検索ソース
@@ -1257,20 +1290,20 @@ export default function ChatPage({ user }: ChatPageProps) {
                 </Button>
               </div>
             </div>
-
+            
             {/* Confluence用フィルター（議事録を含む） */}
             {searchSource === 'confluence' && (
-              <div className="flex gap-4 mb-3 text-sm">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={labelFilters.includeMeetingNotes}
-                    onCheckedChange={(checked) => 
-                      setLabelFilters(prev => ({ ...prev, includeMeetingNotes: !!checked }))
-                    }
-                  />
-                  <span>議事録を含める</span>
-                </label>
-              </div>
+            <div className="flex gap-4 mb-3 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={labelFilters.includeMeetingNotes}
+                  onCheckedChange={(checked) => 
+                    setLabelFilters(prev => ({ ...prev, includeMeetingNotes: !!checked }))
+                  }
+                />
+                <span>議事録を含める</span>
+              </label>
+            </div>
             )}
 
             {/* Jira特有のフィルター */}
