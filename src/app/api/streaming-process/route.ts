@@ -132,7 +132,8 @@ async function ensureServerInitialized() {
     });
   }
   
-  // まだ初期化中の場合は完了を待つ（最大3秒でタイムアウト）
+  // まだ初期化中の場合は完了を待つ（最大1秒でタイムアウト）
+  // 重い初期化処理はバックグラウンドで継続し、ユーザーリクエストをブロックしない
   await waitForInitialization();
   const waitTime = Date.now() - startTime;
   return waitTime;
@@ -648,7 +649,15 @@ export const POST = async (req: NextRequest) => {
                 references: result.references, // フィルタリング後（LLMが使用した参照元）
                 allReferences: allReferences, // フィルタリング前（検索結果全体）
                 fullAnswer: fullAnswer,
-                postLogId: savedPostLogId || null
+                postLogId: savedPostLogId || null,
+                // パフォーマンス情報を追加（テスト用）
+                performance: {
+                  serverStartupTime,
+                  ttfbTime,
+                  searchTime,
+                  aiGenerationTime,
+                  totalTime
+                }
               };
               
               // ストリームが閉じられていない場合のみ送信

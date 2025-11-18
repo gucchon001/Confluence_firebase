@@ -26,16 +26,18 @@ export async function waitForInitialization(): Promise<void> {
     return;
   }
   if (initializationPromise) {
-    // ⚡ 最適化: 最大5秒でタイムアウト（initializeStartupOptimizationsと同じタイムアウト時間）
+    // ⚡ 最適化: 最大1秒でタイムアウト（ユーザーリクエストをブロックしない）
     // これにより、Lunrインデックスのロードなどの重い処理でブロックされない
+    // 重い初期化処理はバックグラウンドで継続し、最初のリクエストは即座に処理を開始
     try {
       await Promise.race([
         initializationPromise,
         new Promise<void>((resolve) => {
           setTimeout(() => {
-            console.log('[StartupOptimizer] waitForInitialization: Timeout reached, continuing without waiting');
+            console.log('[StartupOptimizer] waitForInitialization: Timeout reached (1s), continuing without waiting');
+            console.log('[StartupOptimizer] Heavy initialization will continue in background');
             resolve();
-          }, 5000); // 3秒 → 5秒に延長
+          }, 1000); // 5秒 → 1秒に短縮（ユーザーリクエストをブロックしない）
         })
       ]);
     } catch (error) {
@@ -96,14 +98,16 @@ export async function initializeStartupOptimizations(): Promise<void> {
   initializationPromise = performInitializationAsync();
   
   try {
-    // ⚡ 最適化: 最大5秒でタイムアウト（Lunrインデックスのロードを確実に完了させる）
+    // ⚡ 最適化: 最大1秒でタイムアウト（ユーザーリクエストをブロックしない）
+    // 重い初期化処理（Lunrインデックスのロードなど）はバックグラウンドで継続
     await Promise.race([
       initializationPromise,
       new Promise<void>((resolve) => {
         setTimeout(() => {
-          console.log('[StartupOptimizer] ⚡ Background initialization started (timeout reached)');
+          console.log('[StartupOptimizer] ⚡ Background initialization started (timeout reached after 1s)');
+          console.log('[StartupOptimizer] Heavy initialization (Lunr index, etc.) will continue in background');
           resolve();
-        }, 5000); // 3秒 → 5秒に延長
+        }, 1000); // 5秒 → 1秒に短縮（ユーザーリクエストをブロックしない）
       })
     ]);
     
