@@ -124,3 +124,8 @@ performance-*.md
 # Build and server logs
 server.log
 build.log
+
+# 機密情報を含む可能性のある設定ファイル（ローカル開発用）
+# 注意: apphosting.yamlはGitにコミットされますが、実際のAPIキーは含めないでください
+apphosting.local.yaml
+apphosting.production.yaml

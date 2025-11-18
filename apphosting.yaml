@@ -29,8 +29,10 @@ runConfig:
 # 環境変数（runConfigと同じレベル）
 env:
   # Next.js Public環境変数（ビルド時とランタイム時に必要）
+  # 注意: 実際の値はFirebase ConsoleまたはSecret Managerで設定してください
+  # このファイルはGitリポジトリにコミットされるため、実際のAPIキーを記載しないでください
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: AIzaSyAgaGihnyshajIN2YC7CdJR_H0bJMg_hkI
+    value: your-firebase-api-key-here  # 実際の値に置き換えてください
     availability:
       - BUILD
       - RUNTIME

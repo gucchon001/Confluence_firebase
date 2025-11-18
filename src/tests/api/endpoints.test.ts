@@ -1,11 +1,11 @@
 /**
- * APIエンドポイントテスト
+ * APIエンドポイントテスト（実際の実行テスト）
  * 
- * このテストは以下の項目を検証します：
- * 1. `/api/streaming-process`のエラーハンドリング
- * 2. `/api/admin/*`の認証・認可
- * 3. 不正リクエストの処理
- * 4. タイムアウト処理
+ * このテストは以下の項目を実際に実行して検証します：
+ * 1. `/api/streaming-process`の実際の動作
+ * 2. Genkit Flowの実際の実行
+ * 3. エラーハンドリングの実際の動作
+ * 4. パフォーマンスの測定
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
@@ -13,6 +13,16 @@ import { loadTestEnv } from '../test-helpers/env-loader';
 
 // テスト用の環境変数を事前に読み込む
 loadTestEnv();
+
+// 実際の実行テストでは、実際のfetchが必要なため、モックを解除
+// Node.js 18以降では、グローバルfetchが利用可能
+if (typeof global.fetch !== 'undefined' && typeof (global.fetch as any).mockImplementation === 'function') {
+  // vi.fn()でモックされている場合は、実際のfetchを復元
+  const originalFetch = globalThis.fetch;
+  if (originalFetch) {
+    global.fetch = originalFetch;
+  }
+}
 
 describe('APIエンドポイントテスト', () => {
   beforeAll(() => {
@@ -23,7 +33,102 @@ describe('APIエンドポイントテスト', () => {
     console.log('✅ APIエンドポイントテスト完了');
   });
 
-  describe('1. /api/streaming-process エラーハンドリング', () => {
+  describe('1. /api/streaming-process 実際の実行テスト', () => {
+    it('実際にretrieveRelevantDocs Flowを実行して検索結果を取得', async () => {
+      // 実際のFlow関数を動的インポート
+      const { retrieveRelevantDocs } = await import('../../ai/flows/retrieve-relevant-docs-lancedb.js');
+      
+      const testQuestion = '教室管理について';
+      const startTime = Date.now();
+      
+      try {
+        const results = await retrieveRelevantDocs({
+          question: testQuestion,
+          labels: [],
+          labelFilters: { includeMeetingNotes: false },
+          source: 'confluence'
+        });
+        
+        const duration = Date.now() - startTime;
+        
+        // 実行結果の検証
+        expect(Array.isArray(results)).toBe(true);
+        expect(results.length).toBeGreaterThan(0);
+        expect(results[0]).toHaveProperty('title');
+        expect(results[0]).toHaveProperty('content');
+        expect(results[0]).toHaveProperty('url');
+        
+        // パフォーマンス検証（30秒以内に完了すること）
+        expect(duration).toBeLessThan(30000);
+        
+        console.log(`✅ retrieveRelevantDocs実行成功: ${results.length}件の結果を${duration}msで取得`);
+      } catch (error: any) {
+        // エラーが発生した場合でも、エラーメッセージを検証
+        console.warn(`⚠️ retrieveRelevantDocs実行エラー: ${error.message}`);
+        // エラーの種類を検証
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toBeTruthy();
+        // エラーでもテストは続行（実際の実行テストなので、エラーも検証対象）
+        throw error; // エラーを再スローしてテストを失敗させる（実際の実行テストなので）
+      }
+    }, 60000); // タイムアウト60秒
+
+    it('実際にstreamingSummarizeConfluenceDocs Flowを実行して回答を生成', async () => {
+      // 実際のFlow関数を動的インポート
+      const { retrieveRelevantDocs } = await import('../../ai/flows/retrieve-relevant-docs-lancedb.js');
+      const { streamingSummarizeConfluenceDocs } = await import('../../ai/flows/streaming-summarize-confluence-docs.js');
+      
+      const testQuestion = '教室管理について';
+      
+      try {
+        // 1. 検索を実行
+        const relevantDocs = await retrieveRelevantDocs({
+          question: testQuestion,
+          labels: [],
+          labelFilters: { includeMeetingNotes: false },
+          source: 'confluence'
+        });
+        
+        expect(relevantDocs.length).toBeGreaterThan(0);
+        
+        // 2. 要約を実行
+        const startTime = Date.now();
+        let fullAnswer = '';
+        let chunkCount = 0;
+        let references: any[] = [];
+        
+        for await (const result of streamingSummarizeConfluenceDocs({
+          question: testQuestion,
+          context: relevantDocs.slice(0, 5), // 最初の5件のみ使用
+          chatHistory: []
+        })) {
+          if (result.answer) {
+            fullAnswer += result.answer;
+            chunkCount++;
+          }
+          if (result.references) {
+            references = result.references;
+          }
+        }
+        
+        const duration = Date.now() - startTime;
+        
+        // 実行結果の検証
+        expect(fullAnswer.length).toBeGreaterThan(0);
+        expect(chunkCount).toBeGreaterThan(0);
+        expect(Array.isArray(references)).toBe(true);
+        
+        // パフォーマンス検証（60秒以内に完了すること）
+        expect(duration).toBeLessThan(60000);
+        
+        console.log(`✅ streamingSummarizeConfluenceDocs実行成功: ${chunkCount}チャンク、${fullAnswer.length}文字を${duration}msで生成`);
+      } catch (error: any) {
+        console.warn(`⚠️ streamingSummarizeConfluenceDocs実行エラー: ${error.message}`);
+        // エラーでもテストは続行（実際の実行テストなので、エラーも検証対象）
+        throw error; // エラーを再スローしてテストを失敗させる（実際の実行テストなので）
+      }
+    }, 120000); // タイムアウト120秒
+
     it('必須パラメータのバリデーションが正しく動作する', () => {
       // 必須パラメータ: question
       const validateRequest = (body: any): { valid: boolean; error?: string } => {

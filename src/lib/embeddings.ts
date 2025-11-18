@@ -18,6 +18,7 @@ export function clearEmbeddingCache(): void {
 }
 
 // 一元化された設定から埋め込みエンドポイントを構築
+// 本番環境と合わせてv1エンドポイントを使用
 const GEMINI_EMBEDDING_ENDPOINT =
   `https://generativelanguage.googleapis.com/v1/models/${EmbeddingConfig.modelId}:embedContent`;
 

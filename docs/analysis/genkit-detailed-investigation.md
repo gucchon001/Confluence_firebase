@@ -460,3 +460,4 @@ for await (const chunk of ai.generate({
 - 現在の実装: `src/ai/flows/streaming-summarize-confluence-docs.ts`
 - パフォーマンス分析: `docs/05-testing/05.11-ttfb-optimization-analysis.md`
 
+

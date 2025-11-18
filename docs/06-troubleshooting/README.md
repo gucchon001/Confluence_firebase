@@ -153,7 +153,7 @@ FirebaseError: Firebase: Error (auth/invalid-api-key)
    ```yaml
    env:
      - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-       value: AIzaSyAgaGihnyshajIN2YC7CdJR_H0bJMg_hkI
+       value: your-firebase-api-key
        availability:
          - BUILD      # ← これが重要
          - RUNTIME
@@ -507,7 +507,7 @@ npm run typecheck
 
 ```powershell
 # 環境変数を設定
-$env:NEXT_PUBLIC_FIREBASE_API_KEY="AIzaSyAgaGihnyshajIN2YC7CdJR_H0bJMg_hkI"
+$env:NEXT_PUBLIC_FIREBASE_API_KEY="your-firebase-api-key"
 $env:NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="confluence-copilot-ppjye.firebaseapp.com"
 $env:NEXT_PUBLIC_FIREBASE_PROJECT_ID="confluence-copilot-ppjye"
 $env:NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="confluence-copilot-ppjye.firebasestorage.app"
