@@ -93,8 +93,29 @@ export const JiraDashboard: React.FC<JiraDashboardProps> = ({ className }) => {
       if (filters.completedStatusFilter?.length) params.append('completedStatusFilter', filters.completedStatusFilter.join(','));
       if (filters.searchQuery?.trim()) params.append('searchQuery', filters.searchQuery.trim());
 
-      const response = await fetch(`/api/admin/jira-dashboard?${params.toString()}`);
-      if (!response.ok) throw new Error('ダッシュボードデータ取得に失敗しました');
+      // リトライロジック（503エラー対策）
+      let response: Response | null = null;
+      let retryCount = 0;
+      const maxRetries = 3;
+      const retryDelay = 1000; // 1秒
+      
+      while (retryCount < maxRetries) {
+        try {
+          response = await fetch(`/api/admin/jira-dashboard?${params.toString()}`);
+          if (response.ok || response.status !== 503) {
+            break; // 成功または503以外のエラーなら終了
+          }
+        } catch (error) {
+          console.warn(`[JiraDashboard] ダッシュボードデータ取得エラー（リトライ ${retryCount + 1}/${maxRetries}）:`, error);
+        }
+        
+        if (retryCount < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1))); // 指数バックオフ
+        }
+        retryCount++;
+      }
+      
+      if (!response || !response.ok) throw new Error('ダッシュボードデータ取得に失敗しました');
       
       const data = await response.json();
       if (data.success) {

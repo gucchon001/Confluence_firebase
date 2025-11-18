@@ -219,8 +219,30 @@ const AdminDashboard: React.FC = () => {
         const params = new URLSearchParams();
         params.append('period', '3months'); // より長い期間で取得してデータを確認
         params.append('granularity', 'day');
-        const jiraResponse = await fetch(`/api/admin/jira-dashboard?${params.toString()}`);
-        if (jiraResponse.ok) {
+        
+        // リトライロジック（503エラー対策）
+        let jiraResponse: Response | null = null;
+        let retryCount = 0;
+        const maxRetries = 3;
+        const retryDelay = 1000; // 1秒
+        
+        while (retryCount < maxRetries) {
+          try {
+            jiraResponse = await fetch(`/api/admin/jira-dashboard?${params.toString()}`);
+            if (jiraResponse.ok || jiraResponse.status !== 503) {
+              break; // 成功または503以外のエラーなら終了
+            }
+          } catch (error) {
+            console.warn(`[AdminDashboard] Jiraダッシュボード取得エラー（リトライ ${retryCount + 1}/${maxRetries}）:`, error);
+          }
+          
+          if (retryCount < maxRetries - 1) {
+            await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1))); // 指数バックオフ
+          }
+          retryCount++;
+        }
+        
+        if (jiraResponse && jiraResponse.ok) {
           const jiraData = await jiraResponse.json();
           console.log('📊 JiraダッシュボードAPI レスポンス:', {
             success: jiraData.success,
