@@ -32,7 +32,7 @@ env:
   # 注意: 実際の値はFirebase ConsoleまたはSecret Managerで設定してください
   # このファイルはGitリポジトリにコミットされるため、実際のAPIキーを記載しないでください
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: your-firebase-api-key-here  # 実際の値に置き換えてください
+    value: AIzaSyAgaGihnyshajIN2YC7CdJR_H0bJMg_hkI
     availability:
       - BUILD
       - RUNTIME
