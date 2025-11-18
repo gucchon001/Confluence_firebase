@@ -17,8 +17,22 @@ function getDictionaryPath(): string {
   const isCloudRun = !!process.env.K_SERVICE;
   
   if (isCloudRun) {
-    // Cloud Run環境: standaloneディレクトリ内の辞書を使用
-    const standalonePath = path.resolve(process.cwd(), '.next/standalone/node_modules/kuromoji/dict');
+    // Cloud Run環境: 実行時のprocess.cwd()は/workspace/.next/standalone
+    // そのため、相対パスで.node_modules/kuromoji/dictを探す
+    // または、/workspaceを基準にした絶対パスを使用
+    const cwd = process.cwd();
+    
+    // パターン1: 現在のディレクトリがstandalone内の場合
+    if (cwd.endsWith('.next/standalone') || cwd.includes('.next/standalone')) {
+      // standalone内のnode_modulesを探す
+      const standalonePath = path.resolve(cwd, 'node_modules/kuromoji/dict');
+      return standalonePath;
+    }
+    
+    // パターン2: /workspaceを基準にしたパス
+    // process.cwd()が/workspace/.next/standaloneの場合、/workspaceに戻る
+    const workspaceRoot = cwd.replace(/\.next\/standalone.*$/, '');
+    const standalonePath = path.resolve(workspaceRoot, '.next/standalone/node_modules/kuromoji/dict');
     return standalonePath;
   } else {
     // ローカル環境: 通常のnode_modules内の辞書を使用
