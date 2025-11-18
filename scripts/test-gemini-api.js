@@ -1,7 +1,12 @@
 // Gemini APIキーの動作確認スクリプト
 const https = require('https');
 
-const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyD6h4V0PENM6YiGHwlW3uq3hQB2JzwUAZM';
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+  console.error('❌ エラー: GEMINI_API_KEY環境変数が設定されていません');
+  console.error('   .env.localファイルにGEMINI_API_KEYを設定するか、環境変数として設定してください');
+  process.exit(1);
+}
 const testText = '教室管理について';
 
 const payload = JSON.stringify({
