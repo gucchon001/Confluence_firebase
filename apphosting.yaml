@@ -9,7 +9,9 @@ runConfig:
   
   # メモリ設定（Gemini Embeddings API使用 + 複数同時リクエスト対応）
   # 注意: Xenova Transformersは使用していないため、メモリ要件は低減済み
-  memoryMiB: 4096
+  # 2025-11-18: メモリ制限エラー対応（4096 MiB → 8192 MiBに増加）
+  # エラー: Memory limit of 4096 MiB exceeded with 4202 MiB used
+  memoryMiB: 8192
   
   # CPU設定
   cpu: 2
