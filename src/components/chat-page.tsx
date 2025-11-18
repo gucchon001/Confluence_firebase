@@ -492,60 +492,11 @@ export default function ChatPage({ user }: ChatPageProps) {
     }
   }, [messages, isLoading]);
 
-  // 会話履歴のフィルター処理
+  // 会話履歴のフィルター処理（期間とCloneフィルターを削除）
   useEffect(() => {
-    let filtered = [...conversations];
-
-    // 期間フィルター
-    if (historyStartDate || historyEndDate) {
-      if (historyStartDate) {
-        const start = new Date(historyStartDate);
-        start.setHours(0, 0, 0, 0);
-        filtered = filtered.filter(conv => new Date(conv.timestamp) >= start);
-      }
-      if (historyEndDate) {
-        const end = new Date(historyEndDate);
-        end.setHours(23, 59, 59, 999);
-        filtered = filtered.filter(conv => new Date(conv.timestamp) <= end);
-      }
-    } else if (historyDateFilter !== 'all') {
-      const now = new Date();
-      const filterDate = new Date();
-      
-      switch (historyDateFilter) {
-        case 'today':
-          filterDate.setHours(0, 0, 0, 0);
-          break;
-        case 'week':
-          filterDate.setDate(now.getDate() - 7);
-          break;
-        case 'month':
-          filterDate.setMonth(now.getMonth() - 1);
-          break;
-      }
-      
-      filtered = filtered.filter(conv => new Date(conv.timestamp) >= filterDate);
-    }
-
-    // Cloneステータスフィルター
-    if (historyCloneFilter !== 'all') {
-      filtered = filtered.filter(conv => {
-        // タイトルや最後のメッセージにCLONEが含まれているかチェック
-        const hasCloneInTitle = conv.title?.toUpperCase().includes('CLONE');
-        const hasCloneInMessage = conv.lastMessage?.toUpperCase().includes('CLONE');
-        const isClone = hasCloneInTitle || hasCloneInMessage;
-        
-        if (historyCloneFilter === 'clone') {
-          return isClone;
-        } else if (historyCloneFilter === 'non-clone') {
-          return !isClone;
-        }
-        return true;
-      });
-    }
-
-    setFilteredConversations(filtered);
-  }, [conversations, historyDateFilter, historyStartDate, historyEndDate, historyCloneFilter]);
+    // フィルターなしで全ての会話を表示
+    setFilteredConversations(conversations);
+  }, [conversations]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -622,7 +573,8 @@ export default function ChatPage({ user }: ChatPageProps) {
               title: ref.title || 'No Title',
               url: ref.url || '',
               distance: ref.distance !== undefined ? ref.distance : (ref.score !== undefined ? 1 - ref.score : 0.5),
-              source: ref.source
+              source: ref.source,
+              dataSource: ref.dataSource // ★★★ 追加: データソース（Confluence/Jira）を保持 ★★★
             })),
             postLogId: postLogId || undefined
           };
@@ -790,83 +742,7 @@ export default function ChatPage({ user }: ChatPageProps) {
             新しいチャット
           </Button>
 
-          {/* フィルターUI */}
-          <div className="space-y-2">
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">期間</label>
-              <Select value={historyDateFilter} onValueChange={(value) => {
-                setHistoryDateFilter(value);
-                if (value !== 'custom') {
-                  setHistoryStartDate('');
-                  setHistoryEndDate('');
-                }
-              }}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="today">今日</SelectItem>
-                  <SelectItem value="week">過去1週間</SelectItem>
-                  <SelectItem value="month">過去1ヶ月</SelectItem>
-                  <SelectItem value="custom">カスタム</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {historyDateFilter === 'custom' && (
-              <div className="space-y-1">
-                <div>
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">開始日</label>
-                  <Input
-                    type="date"
-                    value={historyStartDate}
-                    onChange={(e) => setHistoryStartDate(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">終了日</label>
-                  <Input
-                    type="date"
-                    value={historyEndDate}
-                    onChange={(e) => setHistoryEndDate(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">Cloneステータス</label>
-              <Select value={historyCloneFilter} onValueChange={setHistoryCloneFilter}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="clone">Cloneのみ</SelectItem>
-                  <SelectItem value="non-clone">Clone以外</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {(historyDateFilter !== 'all' || historyStartDate || historyEndDate || historyCloneFilter !== 'all') && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full h-7 text-xs"
-                onClick={() => {
-                  setHistoryDateFilter('all');
-                  setHistoryStartDate('');
-                  setHistoryEndDate('');
-                  setHistoryCloneFilter('all');
-                }}
-              >
-                フィルターリセット
-              </Button>
-            )}
-          </div>
+          {/* フィルターUI - 期間とCloneフィルターを削除 */}
         </div>
         <ScrollArea className="flex-1 h-0">
           <div className="p-4 space-y-2 pb-4">
@@ -961,7 +837,7 @@ export default function ChatPage({ user }: ChatPageProps) {
             )}
             
             {/* 無限スクロール用のトリガー要素とローディングUI */}
-            {hasMoreConversations && (historyDateFilter === 'all' && !historyStartDate && !historyEndDate && historyCloneFilter === 'all') && (
+            {hasMoreConversations && (
               <div ref={loadMoreRef} className="py-4 flex justify-center">
                 {isLoadingMoreConversations ? (
                   <div className="flex items-center gap-2 text-sm text-gray-500">
