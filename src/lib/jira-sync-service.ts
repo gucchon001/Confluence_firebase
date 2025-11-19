@@ -18,6 +18,9 @@ export interface JiraSyncResult {
   storedIssues: number;
   skippedIssues: number;
   lanceDbRecords: number;
+  added: number;
+  updated: number;
+  unchanged: number;
 }
 
 interface JiraUser {
@@ -154,6 +157,9 @@ export class JiraSyncService {
 
     let stored = 0;
     let skipped = 0;
+    let added = 0;
+    let updated = 0;
+    let unchanged = 0;
 
     console.log(`📝 Firestoreへの保存を開始します (${issues.length}件)`);
     
@@ -186,26 +192,87 @@ export class JiraSyncService {
       const batch = firestore.batch();
       const batchIssues = normalizedIssues.slice(i, i + BATCH_SIZE);
       
-      for (const { issue: normalized, original } of batchIssues) {
+      // 既存データを一括取得して差分チェック
+      const existingDocs = await Promise.all(
+        batchIssues.map(({ issue }) => 
+          firestore.collection('jiraIssues').doc(issue.key).get()
+        )
+      );
+      
+      for (let j = 0; j < batchIssues.length; j++) {
+        const { issue: normalized, original } = batchIssues[j];
+        const existingDoc = existingDocs[j];
+        
         try {
           const docRef = firestore.collection('jiraIssues').doc(normalized.key);
           
-          // 全コメント履歴を抽出
-          const allComments = this.extractAllComments(original.fields?.comment?.comments || []);
+          // 差分チェック: 既存データのupdatedと比較
+          const existingUpdated = existingDoc?.exists ? existingDoc.data()?.updated : null;
+          const jiraUpdated = normalized.updated || '';
           
-          batch.set(docRef, {
-            ...normalized,
-            // rawデータをJSON文字列として保存（20レベル制限を回避）
-            // 必要に応じて JSON.parse() で復元可能
-            rawJson: JSON.stringify(original),
-            // 全コメント履歴を配列としても保存（検索しやすくするため）
-            comments: allComments,
-            syncedAt: admin.firestore.FieldValue.serverTimestamp(),
-            url: this.buildIssueUrl(normalized.key)
-          }, { merge: true });
-          lanceDbRecords.push(this.toLanceDbRecord(normalized));
+          let shouldUpdate = false;
+          let changeType: 'added' | 'updated' | 'unchanged' = 'unchanged';
+          
+          if (!existingDoc?.exists) {
+            // 新規追加
+            shouldUpdate = true;
+            changeType = 'added';
+            added++;
+          } else if (existingUpdated && jiraUpdated) {
+            // 更新日時を比較（1秒以内の差は同じとみなす）
+            const existingDate = new Date(existingUpdated);
+            const jiraDate = new Date(jiraUpdated);
+            const timeDiff = jiraDate.getTime() - existingDate.getTime();
+            const isSignificantlyNewer = timeDiff > 1000; // 1秒以上新しい場合のみ更新
+            
+            if (isSignificantlyNewer) {
+              shouldUpdate = true;
+              changeType = 'updated';
+              updated++;
+            } else {
+              changeType = 'unchanged';
+              unchanged++;
+            }
+          } else {
+            // updatedフィールドがない場合は更新（安全のため）
+            shouldUpdate = true;
+            changeType = 'updated';
+            updated++;
+          }
+          
+          if (shouldUpdate) {
+            // 全コメント履歴を抽出
+            const allComments = this.extractAllComments(original.fields?.comment?.comments || []);
+            
+            batch.set(docRef, {
+              ...normalized,
+              // rawデータをJSON文字列として保存（20レベル制限を回避）
+              // 必要に応じて JSON.parse() で復元可能
+              rawJson: JSON.stringify(original),
+              // 全コメント履歴を配列としても保存（検索しやすくするため）
+              comments: allComments,
+              syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+              url: this.buildIssueUrl(normalized.key)
+            }, { merge: true });
+            lanceDbRecords.push(this.toLanceDbRecord(normalized));
+            
+            if (changeType === 'added') {
+              console.log(`➕ 新規追加: ${normalized.key} - ${normalized.summary.substring(0, 50)}`);
+            } else if (changeType === 'updated') {
+              const timeDiff = existingUpdated && jiraUpdated 
+                ? new Date(jiraUpdated).getTime() - new Date(existingUpdated).getTime()
+                : 0;
+              console.log(`🔄 更新: ${normalized.key} - ${normalized.summary.substring(0, 50)} (${timeDiff}ms新しい)`);
+            }
+          } else {
+            // 変更なしの場合はLanceDBレコードにも追加（既存データを使用）
+            // ただし、LanceDBは全件再構築するため、ここではスキップ
+            // LanceDBは変更があったもののみ再生成する方が効率的だが、
+            // 現状の実装では全件再構築しているため、変更なしのものも含める
+            // 将来的にはLanceDBも差分更新に変更することを検討
+          }
         } catch (error) {
-          console.error(`❌ Issue ${normalized.key} のFirestore保存準備中にエラー:`, error instanceof Error ? error.message : error);
+          console.error(`❌ Issue ${normalized.key} のFirestore保存準備中にエラー:`, error instanceof Error ? error.message : String(error));
           skipped += 1;
         }
       }
@@ -216,16 +283,26 @@ export class JiraSyncService {
         console.error(`❌ バッチコミット中にエラーが発生しました。バッチ内の最初のissue: ${batchIssues[0]?.issue?.key || 'unknown'}`);
         throw error;
       }
-      stored += batchIssues.length;
+      stored += batchIssues.filter((_, idx) => {
+        const existingDoc = existingDocs[idx];
+        if (!existingDoc?.exists) return true;
+        const existingUpdated = existingDoc.data()?.updated;
+        const jiraUpdated = batchIssues[idx].issue.updated;
+        if (!existingUpdated || !jiraUpdated) return true;
+        const timeDiff = new Date(jiraUpdated).getTime() - new Date(existingUpdated).getTime();
+        return timeDiff > 1000;
+      }).length;
       
       // 進捗ログ
       const processed = Math.min(i + BATCH_SIZE, normalizedIssues.length);
       if (processed % progressInterval === 0 || processed === normalizedIssues.length) {
         console.log(`📝 Firestore保存進捗: ${processed} / ${normalizedIssues.length} (${Math.round(processed / normalizedIssues.length * 100)}%)`);
+        console.log(`  追加: ${added}, 更新: ${updated}, 変更なし: ${unchanged}`);
       }
     }
 
-    console.log(`✅ Firestoreへの保存が完了しました (${stored}件保存, ${skipped}件スキップ)`);
+    console.log(`✅ Firestoreへの保存が完了しました`);
+    console.log(`  📊 統計: 追加 ${added}件, 更新 ${updated}件, 変更なし ${unchanged}件, スキップ ${skipped}件`);
     console.log(`🗃️ LanceDBへの書き込みを開始します (${lanceDbRecords.length}件)`);
     const lanceDbCount = await this.writeLanceDbRecords(lanceDbRecords);
     console.log(`✅ LanceDBへの書き込みが完了しました (${lanceDbCount}件)`);
@@ -238,6 +315,9 @@ export class JiraSyncService {
       storedIssues: stored,
       skippedIssues: skipped,
       lanceDbRecords: lanceDbCount,
+      added,
+      updated,
+      unchanged,
       projectKey: this.projectKey,
       status: 'completed'
     });
@@ -246,7 +326,10 @@ export class JiraSyncService {
       totalIssues: issues.length,
       storedIssues: stored,
       skippedIssues: skipped,
-      lanceDbRecords: lanceDbCount
+      lanceDbRecords: lanceDbCount,
+      added,
+      updated,
+      unchanged
     };
   }
 

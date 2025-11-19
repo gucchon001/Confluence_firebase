@@ -126,7 +126,7 @@ jobs:
           echo "✅ Jira data sync completed successfully"
           echo "📊 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
           echo "🔄 Next sync: 30 minutes from now"
-          echo "📦 Sync: ${{ steps.jira_sync.outcome }}"
+          echo "📦 Sync: ${{ steps.jira_sync.outcome }} (差分取得機能により、変更されたデータのみ更新されます)"
           echo "📦 Lunr index: ${{ steps.init_lunr.outcome }}"
           echo "📦 Index creation: ${{ steps.create_indexes.outcome }}"
           echo "📦 Data upload: ${{ steps.upload_data.outcome }}"

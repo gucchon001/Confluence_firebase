@@ -25,6 +25,7 @@ async function main() {
     console.log(`  保存件数: ${result.storedIssues}`);
     console.log(`  スキップ件数: ${result.skippedIssues}`);
     console.log(`  LanceDBレコード: ${result.lanceDbRecords}`);
+    console.log(`  追加: ${result.added}件, 更新: ${result.updated}件, 変更なし: ${result.unchanged}件`);
   } catch (error) {
     console.error('❌ Jira同期中にエラーが発生しました:', error);
     process.exit(1);
