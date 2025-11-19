@@ -13,31 +13,47 @@ import { confluenceSyncService } from '../lib/confluence-sync-service';
 import { GeminiApiKeyLeakedError, GeminiApiFatalError } from '../lib/gemini-api-errors';
 
 async function main() {
+  // コマンドライン引数を解析
+  const args = process.argv.slice(2);
+  const isDifferential = args.includes('--differential');
+  const isFull = args.includes('--all') || (!isDifferential && args.length === 0);
+  
+  if (isDifferential) {
+    console.log('🚀 統一Confluence同期を開始します...（差分取得モード）');
+  } else {
     console.log('🚀 統一Confluence同期を開始します...（全件実行）');
+  }
 
   try {
     // 1. テスト開始前のデータベース状態を表示
     console.log('\n📊 同期開始前の状態:');
     await confluenceSyncService.showDatabaseStatus();
 
-    // 2. Confluence APIから全ページを取得（ページネーション対応）
-    console.log('\n🔍 Confluence APIから全ページを取得中...');
-    const confluencePages = await confluenceSyncService.getAllConfluencePages(); // 全件取得（ページネーション対応）
+    // 2. Confluence APIからページを取得
+    console.log('\n🔍 Confluence APIからページを取得中...');
+    const confluencePages = await confluenceSyncService.getAllConfluencePages(1000, isDifferential);
     console.log(`取得したページ数: ${confluencePages.length}`);
 
     if (confluencePages.length === 0) {
-      console.error('❌ Confluence APIからページを取得できませんでした。同期を中断します。');
-      return;
+      if (isDifferential) {
+        console.log('✅ 前回同期以降に更新されたページはありません。同期を完了します。');
+        return;
+      } else {
+        console.error('❌ Confluence APIからページを取得できませんでした。同期を中断します。');
+        return;
+      }
     }
 
-    // 3. 同期を実行
+    // 3. 同期を実行（同期結果をFirestoreに記録）
     console.log('\n🔄 同期を実行...');
-    const syncResult = await confluenceSyncService.syncPages(confluencePages);
+    const syncResult = await confluenceSyncService.syncPages(confluencePages, true);
     
     console.log('\n📈 同期結果:');
+    console.log(`  取得ページ数: ${syncResult.fetchedPages || 0}ページ`);
     console.log(`  追加: ${syncResult.added}ページ`);
     console.log(`  更新: ${syncResult.updated}ページ`);
     console.log(`  変更なし: ${syncResult.unchanged}ページ`);
+    console.log(`  除外: ${syncResult.excluded}ページ`);
     console.log(`  エラー: ${syncResult.errors.length}件`);
 
     // 4. 同期後のデータベース状態を表示

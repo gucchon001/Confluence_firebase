@@ -17,7 +17,12 @@ import { flattenStructuredLabel, type ExtendedLanceDBRecord } from './lancedb-sc
 import { removeBOM } from './bom-utils';
 import { appConfig } from '@/config/app-config';
 import { GeminiApiKeyLeakedError, GeminiApiFatalError } from './gemini-api-errors';
+import { initializeFirebaseAdmin } from './firebase-admin-init';
+import admin from 'firebase-admin';
 import axios from 'axios';
+
+initializeFirebaseAdmin();
+const firestore = admin.firestore();
 
 export interface ConfluencePage {
   id: string;
@@ -48,6 +53,8 @@ export interface SyncResult {
   unchanged: number;
   excluded: number;
   errors: string[];
+  totalPages?: number;
+  fetchedPages?: number;
 }
 
 export class ConfluenceSyncService {
@@ -162,20 +169,33 @@ export class ConfluenceSyncService {
 
   /**
    * Confluence APIから全ページを取得（ページネーション対応）
+   * @param maxPages 最大取得件数
+   * @param differential 差分取得モード（trueの場合、前回同期以降に更新されたページのみ取得）
    */
-  async getAllConfluencePages(maxPages: number = 1000): Promise<ConfluencePage[]> {
+  async getAllConfluencePages(maxPages: number = 1000, differential: boolean = false): Promise<ConfluencePage[]> {
     const allPages: ConfluencePage[] = [];
     let start = 0;
     const limit = 50; // 50ページずつ取得
     let hasMore = true;
     
-    console.log(`🚀 全ページ取得を開始: 最大${maxPages}ページ`);
+    // 差分取得モードの場合、前回同期時刻を取得
+    let lastSyncTime: string | null = null;
+    if (differential) {
+      lastSyncTime = await this.getLastSyncTime();
+      if (lastSyncTime) {
+        console.log(`🔄 差分取得モード: 前回同期以降（${lastSyncTime}）に更新されたページを取得します`);
+      } else {
+        console.log(`🔄 差分取得モード: 前回同期時刻がないため、全ページを取得します`);
+      }
+    } else {
+      console.log(`🚀 全ページ取得を開始: 最大${maxPages}ページ`);
+    }
     
     while (hasMore && allPages.length < maxPages) {
       try {
         console.log(`📄 ページ ${start + 1}-${start + limit} を取得中...`);
         
-        const pages = await this.getConfluencePages(limit, start);
+        const pages = await this.getConfluencePages(limit, start, lastSyncTime);
         
         if (pages.length === 0) {
           hasMore = false;
@@ -203,21 +223,93 @@ export class ConfluenceSyncService {
       }
     }
     
-    console.log(`✅ 全ページ取得完了: ${allPages.length}ページ`);
+    if (differential && lastSyncTime) {
+      console.log(`✅ 差分取得完了: ${allPages.length}ページ（前回同期以降に更新されたページ）`);
+    } else {
+      console.log(`✅ 全ページ取得完了: ${allPages.length}ページ`);
+    }
     return allPages;
   }
 
   /**
-   * Confluence APIからページを取得（単一バッチ）
+   * 前回同期時刻を取得
    */
-  async getConfluencePages(limit: number = 10, start: number = 0): Promise<ConfluencePage[]> {
+  private async getLastSyncTime(): Promise<string | null> {
+    try {
+      const syncJobsRef = firestore.collection('confluenceSyncJobs');
+      const snapshot = await syncJobsRef.orderBy('startedAt', 'desc').limit(1).get();
+      
+      if (snapshot.empty) {
+        console.log('📅 前回同期時刻: なし（初回同期）');
+        return null;
+      }
+      
+      const latestJob = snapshot.docs[0].data();
+      const finishedAt = latestJob.finishedAt?.toDate();
+      
+      if (finishedAt) {
+        // 前回同期完了時刻から1秒引いて、確実に更新されたページを取得
+        const lastSyncTime = new Date(finishedAt.getTime() - 1000);
+        console.log(`📅 前回同期時刻: ${lastSyncTime.toISOString()}`);
+        return lastSyncTime.toISOString();
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('⚠️ 前回同期時刻の取得に失敗しました:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 同期結果をFirestoreに記録
+   */
+  private async saveSyncJob(result: SyncResult, startedAt: Date, finishedAt: Date): Promise<void> {
+    try {
+      const syncJobRef = firestore.collection('confluenceSyncJobs').doc(startedAt.toISOString());
+      await syncJobRef.set({
+        startedAt: admin.firestore.Timestamp.fromDate(startedAt),
+        finishedAt: admin.firestore.Timestamp.fromDate(finishedAt),
+        totalPages: result.totalPages || 0,
+        fetchedPages: result.fetchedPages || 0,
+        added: result.added,
+        updated: result.updated,
+        unchanged: result.unchanged,
+        excluded: result.excluded,
+        errors: result.errors.length,
+        spaceKey: this.spaceKey,
+        status: 'completed'
+      });
+      console.log('✅ 同期結果をFirestoreに記録しました');
+    } catch (error) {
+      console.warn('⚠️ 同期結果の記録に失敗しました:', error);
+    }
+  }
+
+  /**
+   * Confluence APIからページを取得（単一バッチ）
+   * @param limit 取得件数
+   * @param start 開始位置
+   * @param lastSyncTime 前回同期時刻（指定された場合、CQLクエリで差分取得）
+   */
+  async getConfluencePages(limit: number = 10, start: number = 0, lastSyncTime?: string | null): Promise<ConfluencePage[]> {
     const url = `${this.baseUrl}/wiki/rest/api/content`;
     const params = new URLSearchParams({
-      spaceKey: this.spaceKey,
       expand: 'body.storage,space,version,metadata.labels',
       limit: limit.toString(),
       start: start.toString()
     });
+
+    // 差分取得モード: CQLクエリを使用
+    if (lastSyncTime) {
+      // CQLクエリで前回同期以降に更新されたページのみを取得
+      const cql = `lastModified >= "${lastSyncTime}" AND space = "${this.spaceKey}" ORDER BY lastModified DESC`;
+      params.append('cql', cql);
+      console.log(`🔍 差分取得モード: CQL=${cql}`);
+    } else {
+      // 全件取得モード
+      params.append('spaceKey', this.spaceKey);
+    }
 
     console.log(`🔍 Confluence API URL: ${url}?${params}`);
 
@@ -474,12 +566,23 @@ export class ConfluenceSyncService {
 
   /**
    * 正しい仕様に基づく同期処理
+   * @param pages 同期するページのリスト
+   * @param saveJob 同期結果をFirestoreに記録するかどうか（デフォルト: false）
    */
-  async syncPages(pages: ConfluencePage[]): Promise<SyncResult> {
+  async syncPages(pages: ConfluencePage[], saveJob: boolean = false): Promise<SyncResult> {
+    const startedAt = new Date();
     await this.lancedbClient.connect();
     const table = await this.lancedbClient.getTable();
 
-    const results: SyncResult = { added: 0, updated: 0, unchanged: 0, excluded: 0, errors: [] };
+    const results: SyncResult = { 
+      added: 0, 
+      updated: 0, 
+      unchanged: 0, 
+      excluded: 0, 
+      errors: [],
+      totalPages: pages.length,
+      fetchedPages: pages.length
+    };
 
     console.log(`🔄 ${pages.length}ページの同期を開始します...`);
     
@@ -561,6 +664,13 @@ export class ConfluenceSyncService {
     }
     
     console.log(`✅ 全ページの処理が完了しました: ${pages.length}ページ`);
+    
+    // 同期結果をFirestoreに記録
+    if (saveJob) {
+      const finishedAt = new Date();
+      await this.saveSyncJob(results, startedAt, finishedAt);
+    }
+    
     return results;
   }
 

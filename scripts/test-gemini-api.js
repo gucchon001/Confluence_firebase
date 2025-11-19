@@ -1,4 +1,5 @@
 // Gemini APIキーの動作確認スクリプト
+require('dotenv').config({ path: '.env.local' });
 const https = require('https');
 
 const apiKey = process.env.GEMINI_API_KEY;
