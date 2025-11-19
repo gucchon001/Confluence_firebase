@@ -1267,22 +1267,29 @@ async function executeBM25Search(
       // バックグラウンドで初期化を開始（結果を待たずに返す）
       const { lunrInitializer } = await import('./lunr-initializer');
       
-      // ⚡ 最適化: タイムアウトを設定して、初期化が完了するまで待たない
-      Promise.race([
+      // ⚡ 修正: 初期化を待つ（タイムアウトを3秒に設定）
+      // BM25検索が動作するように初期化を待つ（3秒でタイムアウト）
+      try {
+        await Promise.race([
         lunrInitializer.initializeAsync(tableName),
         new Promise<void>((resolve) => {
           setTimeout(() => {
-            console.log(`[BM25 Search] Lunr initialization timeout for ${tableName}, continuing without waiting`);
+              console.warn(`[BM25 Search] Lunr initialization timeout for ${tableName} after 3s, continuing without BM25`);
             resolve();
-          }, 100); // 100msでタイムアウト（初期化開始のみ確認）
+            }, 3000); // 3秒でタイムアウト（初期化完了を待つ）
         })
-      ]).catch((error) => {
-        console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
-      });
-      
-      // 初回はBM25検索をスキップ（ベクトル検索のみ）
-      console.log(`[BM25 Search] Skipping BM25 search for now (initialization in progress), will be available on next request`);
+        ]);
+        
+        // 初期化完了後、再度確認
+        const isReadyAfterInit = lunrSearchClient.isReady(tableName);
+        if (!isReadyAfterInit) {
+          console.warn(`[BM25 Search] Lunr still not ready for ${tableName} after initialization attempt, skipping BM25`);
       return [];
+        }
+      } catch (error) {
+        console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
+        return [];
+      }
     }
     
     // 🔍 デバッグ: Lunrインデックスの状態を確認
