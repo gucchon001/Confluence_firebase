@@ -245,16 +245,19 @@ async function uploadProductionData(): Promise<void> {
       tableNames.forEach(name => console.log(`      - ${name}`));
     }
 
-    if (tableNames.length === 0) {
-      throw new Error('アップロードするテーブルが見つかりません');
-    }
-
-    // 各テーブルをアップロード
+    // テーブルが見つからない場合（差分がない場合など）は警告として処理
     let totalUploaded = 0;
-    for (const tableName of tableNames) {
-      const localTablePath = path.join(LOCAL_LANCEDB_PATH, `${tableName}.lance`);
-      const count = await uploadTable(bucket, tableName, localTablePath);
-      totalUploaded += count;
+    if (tableNames.length === 0) {
+      console.log('\n⚠️  アップロードするテーブルが見つかりません');
+      console.log('   これは正常な状態です（差分がない場合など）');
+      console.log('   Lunrキャッシュのアップロードを続行します...\n');
+    } else {
+      // 各テーブルをアップロード
+      for (const tableName of tableNames) {
+        const localTablePath = path.join(LOCAL_LANCEDB_PATH, `${tableName}.lance`);
+        const count = await uploadTable(bucket, tableName, localTablePath);
+        totalUploaded += count;
+      }
     }
 
     // Lunrキャッシュをアップロード
@@ -264,12 +267,18 @@ async function uploadProductionData(): Promise<void> {
     console.log('\n' + '='.repeat(80));
     console.log('📊 Upload Summary');
     console.log('='.repeat(80));
-    console.log(`   ✅ テーブル数: ${tableNames.length}`);
-    console.log(`   ✅ アップロードファイル数: ${totalUploaded}`);
+    console.log(`   ${tableNames.length === 0 ? '⚠️' : '✅'} テーブル数: ${tableNames.length}`);
+    if (tableNames.length > 0) {
+      console.log(`   ✅ アップロードファイル数: ${totalUploaded}`);
+    }
     console.log(`   ✅ Lunrキャッシュファイル数: ${cacheCount}`);
     console.log('='.repeat(80) + '\n');
 
-    console.log('✅ Production data upload completed successfully!\n');
+    if (tableNames.length === 0) {
+      console.log('✅ Production data upload completed (no tables to upload, but cache uploaded)!\n');
+    } else {
+      console.log('✅ Production data upload completed successfully!\n');
+    }
     
   } catch (error: any) {
     console.error('\n❌ Error uploading production data:');

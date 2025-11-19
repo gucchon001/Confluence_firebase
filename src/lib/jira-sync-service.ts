@@ -154,6 +154,7 @@ export class JiraSyncService {
 
     const issues = await this.fetchAllIssues();
     const lanceDbRecords: LanceDbRecord[] = [];
+    const unchangedKeys: string[] = []; // 変更なしのレコードのキーを記録
 
     let stored = 0;
     let skipped = 0;
@@ -266,10 +267,8 @@ export class JiraSyncService {
             }
           } else {
             // 変更なしの場合はLanceDBレコードにも追加（既存データを使用）
-            // ただし、LanceDBは全件再構築するため、ここではスキップ
-            // LanceDBは変更があったもののみ再生成する方が効率的だが、
-            // 現状の実装では全件再構築しているため、変更なしのものも含める
-            // 将来的にはLanceDBも差分更新に変更することを検討
+            // キーを記録して、後でFirestoreから読み込んでLanceDBレコードに変換
+            unchangedKeys.push(normalized.key);
           }
         } catch (error) {
           console.error(`❌ Issue ${normalized.key} のFirestore保存準備中にエラー:`, error instanceof Error ? error.message : String(error));
@@ -303,7 +302,17 @@ export class JiraSyncService {
 
     console.log(`✅ Firestoreへの保存が完了しました`);
     console.log(`  📊 統計: 追加 ${added}件, 更新 ${updated}件, 変更なし ${unchanged}件, スキップ ${skipped}件`);
-    console.log(`🗃️ LanceDBへの書き込みを開始します (${lanceDbRecords.length}件)`);
+    
+    // 変更なしのレコードをFirestoreから読み込んでLanceDBレコードに変換
+    const addedOrUpdatedCount = lanceDbRecords.length;
+    if (unchangedKeys.length > 0) {
+      console.log(`📖 変更なしのレコードをFirestoreから読み込み中... (${unchangedKeys.length}件)`);
+      const unchangedRecords = await this.loadUnchangedRecordsFromFirestore(unchangedKeys);
+      lanceDbRecords.push(...unchangedRecords);
+      console.log(`✅ 変更なしのレコードを読み込みました (${unchangedRecords.length}件)`);
+    }
+    
+    console.log(`🗃️ LanceDBへの書き込みを開始します (合計 ${lanceDbRecords.length}件: 追加/更新 ${addedOrUpdatedCount}件, 変更なし ${unchangedKeys.length}件)`);
     const lanceDbCount = await this.writeLanceDbRecords(lanceDbRecords);
     console.log(`✅ LanceDBへの書き込みが完了しました (${lanceDbCount}件)`);
 
@@ -526,6 +535,80 @@ export class JiraSyncService {
       url: this.buildIssueUrl(issue.key),
       _vectorText: vectorText // ベクトル生成用テキスト（一時的なフィールド）
     } as LanceDbRecord & { _vectorText: string };
+  }
+
+  /**
+   * 変更なしのレコードをFirestoreから読み込んでLanceDBレコードに変換
+   */
+  private async loadUnchangedRecordsFromFirestore(keys: string[]): Promise<(LanceDbRecord & { _vectorText?: string })[]> {
+    const records: (LanceDbRecord & { _vectorText?: string })[] = [];
+    const BATCH_SIZE = 50; // Firestoreのバッチ読み込みサイズ
+    
+    for (let i = 0; i < keys.length; i += BATCH_SIZE) {
+      const batchKeys = keys.slice(i, i + BATCH_SIZE);
+      
+      // Firestoreから一括取得
+      const docs = await Promise.all(
+        batchKeys.map(key => firestore.collection('jiraIssues').doc(key).get())
+      );
+      
+      for (const doc of docs) {
+        if (!doc.exists) {
+          console.warn(`⚠️ ドキュメントが存在しません: ${doc.id}`);
+          continue;
+        }
+        
+        try {
+          const data = doc.data();
+          if (!data) {
+            console.warn(`⚠️ ドキュメントデータが空です: ${doc.id}`);
+            continue;
+          }
+          
+          // rawJsonからJiraIssueResponseを復元
+          let originalIssue: JiraIssueResponse;
+          if (data.rawJson) {
+            try {
+              originalIssue = JSON.parse(data.rawJson);
+            } catch (error) {
+              console.warn(`⚠️ rawJsonのパースに失敗しました: ${doc.id}`, error);
+              continue;
+            }
+          } else {
+            // rawJsonがない場合は、Firestoreのデータから再構築
+            // これは不完全な可能性があるため、警告を出す
+            console.warn(`⚠️ rawJsonが存在しません: ${doc.id}。Firestoreデータから再構築します。`);
+            // 簡易的な再構築（完全ではない可能性がある）
+            originalIssue = {
+              key: data.key || doc.id,
+              fields: {
+                key: data.key || doc.id,
+                summary: data.summary || '',
+                description: data.description || null,
+                status: { name: data.status || '' },
+                priority: { name: data.priority || '' },
+                assignee: data.assignee ? { displayName: data.assignee } : null,
+                reporter: data.reporter ? { displayName: data.reporter } : null,
+                created: data.created || '',
+                updated: data.updated || '',
+                labels: data.labels ? (Array.isArray(data.labels) ? data.labels : []) : [],
+                issuetype: { name: data.issueType || '' },
+                project: { key: data.projectKey || '', name: data.projectName || '' }
+              }
+            } as JiraIssueResponse;
+          }
+          
+          // 正規化してLanceDBレコードに変換
+          const normalized = this.normalizeIssue(originalIssue);
+          const lanceDbRecord = this.toLanceDbRecord(normalized);
+          records.push(lanceDbRecord);
+        } catch (error) {
+          console.error(`❌ レコード変換エラー: ${doc.id}`, error instanceof Error ? error.message : String(error));
+        }
+      }
+    }
+    
+    return records;
   }
 
   private async writeLanceDbRecords(records: (LanceDbRecord & { _vectorText?: string })[]): Promise<number> {
