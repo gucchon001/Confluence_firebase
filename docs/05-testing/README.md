@@ -14,8 +14,18 @@
 
 - **[05.02-feature-tests.md](./05.02-feature-tests.md)**: 検索、要約、ストリーミング等の主要機能の動作確認テスト
   - **実行方法**: `scripts\run-feature-tests.bat` または `npx tsx src/tests/runners/feature-tests-runner.ts`
-  - **対象**: 検索品質、回答生成、ハイブリッド検索、ラベルマッチングなど
+  - **対象**: API疎通（Gemini API）、検索品質、回答生成、ハイブリッド検索、ラベルマッチングなど
   - **⚠️ 注意**: テストカバレッジが不十分です。詳細は[テストカバレッジ分析](./05.14-test-coverage-analysis.md)を参照してください。
+
+#### 個別テスト（推奨）
+
+- **Gemini API疎通テスト**: `npx tsx src/tests/test-gemini-api-connection.ts`
+  - Gemini API（Embedding APIとLLM生成API）が正常に動作しているか確認
+  - APIキーの問題が疑われる場合は、まずこのテストを実行してください
+
+- **ハイブリッド検索と参照元取得テスト**: `npx tsx src/tests/test-hybrid-search-references.ts`
+  - ハイブリッド検索が機能し、参照元が正しく取得されているか検証
+  - 参照元の品質（フィールドの完全性、URL構築、重複チェックなど）を確認
 
 ### デプロイ・整合性テスト
 
@@ -40,6 +50,15 @@
   - **重要**: 現在のテストスイートは機能要件・非機能要件を十分にカバーしていません
 
 ## 🚀 クイックスタート
+
+### Gemini API疎通テストを実行（推奨：最初に実行）
+
+```bash
+# 直接実行
+npx tsx src/tests/test-gemini-api-connection.ts
+```
+
+**重要**: APIキーの問題が疑われる場合は、まずこのテストを実行してください。他の機能テストの前提条件となります。
 
 ### データ検証テストを実行
 
