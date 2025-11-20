@@ -20,6 +20,7 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 720  # 12時間（初回同期で全ページ処理する場合に備えて延長）
     
     steps:
       - name: Checkout repository

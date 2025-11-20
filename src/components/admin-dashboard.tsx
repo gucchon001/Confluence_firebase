@@ -13,6 +13,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatMessageContent, sharedMarkdownComponents } from '@/lib/markdown-utils';
+import {
+  getEnvironment,
+  getDataSource,
+  getEnvironmentColor,
+  getDataSourceColor,
+  getEnvironmentName,
+  getDataSourceName
+} from '@/lib/environment-utils';
 import { 
   BarChart3, 
   Users, 
@@ -644,49 +652,14 @@ const AdminDashboard: React.FC = () => {
       .map(log => log.userId)
   ).size;
 
-  // 環境・データソースのヘルパー関数
-  const getEnvironment = (log: PostLog): 'development' | 'staging' | 'production' => {
-    // metadataから環境を取得
-    if (log.metadata?.environment) {
-      return log.metadata.environment;
-    }
-    // フォールバック: URLから判定（開発環境のURLパターンをチェック）
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      if (hostname.includes('localhost') || hostname.includes('127.0.0.1') || hostname.includes('dev')) {
-        return 'development';
-      }
-      if (hostname.includes('staging') || hostname.includes('stg')) {
-        return 'staging';
-      }
-    }
-    // デフォルトは開発環境（実際の本番環境ではmetadataに保存されるため）
-    return 'development';
+  // 環境・データソースのヘルパー関数（共通ユーティリティを使用）
+  const getEnvironmentForLog = (log: PostLog): 'development' | 'staging' | 'production' => {
+    return getEnvironment(log.metadata);
   };
 
-  const getDataSource = (log: PostLog): 'confluence' | 'jira' | 'mixed' | 'unknown' => {
-    const dataSource = log.metadata?.dataSource;
-    if (dataSource) {
-      return dataSource as 'confluence' | 'jira' | 'mixed' | 'unknown';
-    }
-    const hasConfluence = log.references?.some(r => r.url?.includes('confluence'));
-    const hasJira = log.references?.some(r => r.url?.includes('jira'));
-    if (hasConfluence && hasJira) return 'mixed';
-    if (hasConfluence) return 'confluence';
-    if (hasJira) return 'jira';
-    return 'unknown';
+  const getDataSourceForLog = (log: PostLog): 'confluence' | 'jira' | 'mixed' | 'unknown' => {
+    return getDataSource(log.metadata, log.references);
   };
-
-  const getEnvironmentColor = (env: 'development' | 'staging' | 'production'): string => {
-    switch (env) {
-      case 'development': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'staging': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'production': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getDataSourceColor = (source: 'confluence' | 'jira' | 'mixed' | 'unknown'): string => {
     switch (source) {
       case 'confluence': return 'bg-purple-100 text-purple-800 border-purple-200';
       case 'jira': return 'bg-blue-100 text-blue-800 border-blue-200';
@@ -1323,8 +1296,8 @@ const AdminDashboard: React.FC = () => {
                         </TableHeader>
                         <TableBody>
                           {paginatedLogs.map((log) => {
-                            const env = getEnvironment(log);
-                            const dataSource = getDataSource(log);
+                            const env = getEnvironmentForLog(log);
+                            const dataSource = getDataSourceForLog(log);
                             return (
                             <TableRow 
                               key={log.id}

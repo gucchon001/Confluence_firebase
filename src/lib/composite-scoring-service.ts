@@ -17,7 +17,7 @@ export interface SearchSignals {
   bm25Score: number;            // BM25スコア（大きいほど良い）
   titleMatchRatio: number;      // タイトルマッチ率（0-1）
   labelScore: number;           // ラベルスコア（0-1）
-  kgBoost?: number;             // KGブーストスコア（0-1、Phase 4）
+  kgBoost?: number;             // KGブーストスコア（Phase 7: 無効化済み、常に0）
   pageRank?: number;            // ページランク（オプション）
 }
 
@@ -28,7 +28,7 @@ export interface CompositeScore {
     bm25Contribution: number;
     titleContribution: number;
     labelContribution: number;
-    kgContribution?: number;  // Phase 4: KGブースト
+    kgContribution?: number;  // Phase 7: KG拡張無効化済み（常に0）
   };
 }
 
@@ -40,7 +40,7 @@ export interface CompositeScoreConfig {
   bm25Weight: number;       // デフォルト: 0.3
   titleWeight: number;      // デフォルト: 0.2
   labelWeight: number;      // デフォルト: 0.1
-  kgWeight: number;         // デフォルト: 0.05 (Phase 4)
+  kgWeight: number;         // デフォルト: 0.00 (Phase 7: 無効化済み)
   
   // 正規化パラメータ
   maxVectorDistance: number;  // デフォルト: 2.0
@@ -48,14 +48,14 @@ export interface CompositeScoreConfig {
 }
 
 const DEFAULT_CONFIG: CompositeScoreConfig = {
-  // Phase 0A-2改善: ベクトル空間変化対策
-  // BM25（50%）+ タイトル（25%）+ ラベル（15%）+ ベクトル（5%）+ KG（5%）= 100%
-  // 理由: 70ページ除外によりベクトル空間が変化したため、BM25とタイトルを最優先
+  // Phase 7最適化: KG拡張無効化に伴う重み再配分
+  // BM25（53%）+ タイトル（26%）+ ラベル（16%）+ ベクトル（5%）= 100%
+  // 理由: KG拡張を無効化（パフォーマンス悪化のため）し、KGの5%を他のコンポーネントに再配分
   vectorWeight: 0.05,   // ベクトル: 5%（最小化：空間変化の影響を軽減）
-  bm25Weight: 0.50,     // BM25: 50%（最優先：キーワード完全一致）
-  titleWeight: 0.25,    // タイトル: 25%（強化：タイトルマッチを重視）
-  labelWeight: 0.15,    // ラベル: 15%（強化：StructuredLabel活用）
-  kgWeight: 0.05,       // KG: 5%（Phase 4: 参照関係ブースト）
+  bm25Weight: 0.53,     // BM25: 53%（最優先：キーワード完全一致、KG分1%を追加）
+  titleWeight: 0.26,    // タイトル: 26%（強化：タイトルマッチを重視、KG分1%を追加）
+  labelWeight: 0.16,    // ラベル: 16%（強化：StructuredLabel活用、KG分1%を追加）
+  kgWeight: 0.00,       // KG: 0%（Phase 7: 無効化済み）
   maxVectorDistance: 2.0,
   maxBm25Score: 30.0,   // 10.0→30.0: BM25高スコア（keyword=22など）を適切に評価
 };
@@ -89,14 +89,15 @@ export class CompositeScoringService {
     const normalizedBm25 = Math.min(signals.bm25Score / maxBm25Score, 1.0);
     const normalizedTitle = signals.titleMatchRatio;
     const normalizedLabel = signals.labelScore;
-    const normalizedKg = signals.kgBoost || 0;  // Phase 4: KGブースト
+    // Phase 7: KG拡張無効化のため、kgBoostは常に0（互換性のため変数は保持）
+    const normalizedKg = 0;  // Phase 7: KG拡張無効化済み
     
     // 重み付き合計
     const vectorContribution = normalizedVector * vectorWeight;
     const bm25Contribution = normalizedBm25 * bm25Weight;
     const titleContribution = normalizedTitle * titleWeight;
     const labelContribution = normalizedLabel * labelWeight;
-    const kgContribution = normalizedKg * kgWeight;  // Phase 4
+    const kgContribution = 0;  // Phase 7: KG拡張無効化済み（kgWeightも0のため）
     
     const finalScore = vectorContribution + bm25Contribution + titleContribution + labelContribution + kgContribution;
     
@@ -107,7 +108,7 @@ export class CompositeScoringService {
         bm25Contribution,
         titleContribution,
         labelContribution,
-        kgContribution,  // Phase 4
+        kgContribution,  // Phase 7: KG拡張無効化済み（常に0）
       },
     };
   }
@@ -139,22 +140,15 @@ export class CompositeScoringService {
       
       const labelScore = this.calculateLabelScore(labels, keywords, structuredLabel);
       
-      // Phase 4: KGブーストスコアを抽出
-      let kgBoost = 0;
-      if (result._sourceType === 'kg-reference') {
-        // KG参照からの結果は0.7-1.0のブースト
-        kgBoost = result._kgWeight || 0.7;
-      } else if (result._kgRelated) {
-        // ドメイン関連の場合は0.3-0.5のブースト
-        kgBoost = 0.3;
-      }
+      // Phase 7: KG拡張無効化のため、kgBoostは常に0
+      const kgBoost = 0;  // Phase 7: KG拡張無効化済み
       
       const signals: SearchSignals = {
         vectorDistance,
         bm25Score,
         titleMatchRatio,
         labelScore,
-        kgBoost,  // Phase 4
+        kgBoost,  // Phase 7: KG拡張無効化済み（常に0）
       };
       
       let compositeScore = this.calculateCompositeScore(signals);

@@ -469,7 +469,9 @@ ${truncatedContent}`;
         distance: doc.distance || 0.5,
         score: doc.score || 0,
         source: doc.source || 'vector', // 検索方法（vector/bm25/keyword/hybrid）
-        dataSource: dataSource // データソース（confluence/jira）- フロントエンドでの表示用
+        dataSource: dataSource, // データソース（confluence/jira）- フロントエンドでの表示用
+        // Jira特有のフィールド
+        issue_key: isJira ? ((doc as any).issue_key || doc.id || '') : undefined
       };
     });
     

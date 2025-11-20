@@ -57,121 +57,15 @@ interface ChatPageProps {
 
 // formatMessageContentはmarkdown-utils.tsxからインポート
 
-// 環境を推測する関数
-function getEnvironmentFromSources(sources?: Array<{ url?: string }>): 'development' | 'staging' | 'production' {
-  if (!sources || sources.length === 0) {
-    // クライアント側のホスト名から推測
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
-        return 'development';
-      }
-      if (hostname.includes('staging') || hostname.includes('dev')) {
-        return 'staging';
-      }
-    }
-    return 'production';
-  }
-  
-  // 参照元URLから推測（将来的にmetadataから取得できるようにする）
-  // 現時点ではデフォルト値を返す
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
-      return 'development';
-    }
-    if (hostname.includes('staging') || hostname.includes('dev')) {
-      return 'staging';
-    }
-  }
-  return 'production';
-}
-
-// データソースを推測する関数
-function getDataSourceFromSources(sources?: Array<{ url?: string }>): 'confluence' | 'jira' | 'mixed' | 'unknown' {
-  if (!sources || sources.length === 0) {
-    return 'unknown';
-  }
-  
-  const hasConfluence = sources.some(source => 
-    source.url && (source.url.includes('confluence') || source.url.includes('atlassian.net'))
-  );
-  const hasJira = sources.some(source => 
-    source.url && (source.url.includes('jira') || source.url.includes('atlassian.net/jira'))
-  );
-  
-  if (hasConfluence && hasJira) {
-    return 'mixed';
-  }
-  if (hasConfluence) {
-    return 'confluence';
-  }
-  if (hasJira) {
-    return 'jira';
-  }
-  
-  return 'unknown';
-}
-
-// 環境の色を取得
-function getEnvironmentColor(env: 'development' | 'staging' | 'production'): string {
-  switch (env) {
-    case 'development':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'staging':
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'production':
-      return 'bg-green-100 text-green-800 border-green-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-}
-
-// データソースの色を取得
-function getDataSourceColor(source: 'confluence' | 'jira' | 'mixed' | 'unknown'): string {
-  switch (source) {
-    case 'confluence':
-      return 'bg-purple-100 text-purple-800 border-purple-200';
-    case 'jira':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'mixed':
-      return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-    case 'unknown':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-}
-
-// 環境の表示名を取得
-function getEnvironmentName(env: 'development' | 'staging' | 'production'): string {
-  switch (env) {
-    case 'development':
-      return '開発環境';
-    case 'staging':
-      return 'ステージング';
-    case 'production':
-      return '本番環境';
-    default:
-      return '不明';
-  }
-}
-
-// データソースの表示名を取得
-function getDataSourceName(source: 'confluence' | 'jira' | 'mixed' | 'unknown'): string {
-  switch (source) {
-    case 'confluence':
-      return 'Confluence';
-    case 'jira':
-      return 'Jira';
-    case 'mixed':
-      return 'Confluence + Jira';
-    case 'unknown':
-      return '不明';
-    default:
-      return '不明';
-  }
-}
+// 環境・データソース判定ユーティリティをインポート
+import {
+  getEnvironmentFromSources,
+  getDataSourceFromSources,
+  getEnvironmentColor,
+  getDataSourceColor,
+  getEnvironmentName,
+  getDataSourceName
+} from '@/lib/environment-utils';
 
 const MessageCard = ({ msg }: { msg: Message }) => {
     const isAssistant = msg.role === 'assistant';
@@ -247,7 +141,14 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                                             {index + 1}
                                         </span>
                                         <LinkIcon className="h-3 w-3 shrink-0" />
-                                        <span className="truncate flex-1">{source.title}</span>
+                                        <span className="truncate flex-1">
+                                          {source.issue_key && (
+                                            <span className="font-mono font-semibold text-blue-600 mr-1">
+                                              {source.issue_key}
+                                            </span>
+                                          )}
+                                          {source.title}
+                                        </span>
                                           <Badge 
                                             className={getDataSourceColor(sourceType)} 
                                             variant="outline" 
@@ -306,7 +207,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // モバイルでは初期状態は閉じる
   const [showSettings, setShowSettings] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-  const [conversations, setConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string }>>([]);
+  const [conversations, setConversations] = useState<Array<{ id: string; title: string; lastMessage: string; timestamp: string; dataSource?: 'confluence' | 'jira' | 'mixed' | 'unknown' }>>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   // 無限スクロール用の状態
   const [lastConversationDoc, setLastConversationDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
@@ -574,7 +475,8 @@ export default function ChatPage({ user }: ChatPageProps) {
               url: ref.url || '',
               distance: ref.distance !== undefined ? ref.distance : (ref.score !== undefined ? 1 - ref.score : 0.5),
               source: ref.source,
-              dataSource: ref.dataSource // ★★★ 追加: データソース（Confluence/Jira）を保持 ★★★
+              dataSource: ref.dataSource, // ★★★ 追加: データソース（Confluence/Jira）を保持 ★★★
+              issue_key: ref.issue_key // ★★★ 追加: JiraのIssue Key（CTJ-xxxxなど）を保持 ★★★
             })),
             postLogId: postLogId || undefined
           };
@@ -753,7 +655,7 @@ export default function ChatPage({ user }: ChatPageProps) {
                 {conversations.length === 0 ? '会話履歴がありません' : 'フィルター条件に一致する会話がありません'}
               </p>
             ) : (
-              filteredConversations.map((conv: { id: string; title: string; lastMessage: string; timestamp: string }) => (
+              filteredConversations.map((conv: { id: string; title: string; lastMessage: string; timestamp: string; dataSource?: 'confluence' | 'jira' | 'mixed' | 'unknown' }) => (
                 <div
                   key={conv.id}
                   className={`w-full cursor-pointer rounded-md p-3 transition-colors ${
@@ -787,17 +689,28 @@ export default function ChatPage({ user }: ChatPageProps) {
                 >
                   <div className="flex items-start gap-2">
                     <div className="flex-1 overflow-hidden text-left min-w-0">
-                      <p className="font-medium text-sm leading-tight" style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {(() => {
-                          const plainTitle = stripMarkdown(conv.title);
-                          return plainTitle.length > 12 ? `${plainTitle.substring(0, 12)}...` : plainTitle;
-                        })()}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1 leading-tight" style={{
+                      <div className="flex items-center gap-1 mb-1">
+                        <p className="font-medium text-sm leading-tight flex-1" style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {(() => {
+                            const plainTitle = stripMarkdown(conv.title);
+                            return plainTitle.length > 12 ? `${plainTitle.substring(0, 12)}...` : plainTitle;
+                          })()}
+                        </p>
+                        {conv.dataSource && conv.dataSource !== 'unknown' && (
+                          <Badge 
+                            className={getDataSourceColor(conv.dataSource)} 
+                            variant="outline" 
+                            style={{ fontSize: '0.6rem', padding: '0.1rem 0.3rem', lineHeight: '1', flexShrink: 0 }}
+                          >
+                            {getDataSourceName(conv.dataSource) === 'Confluence + Jira' ? 'Mixed' : getDataSourceName(conv.dataSource)}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 leading-tight" style={{
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'

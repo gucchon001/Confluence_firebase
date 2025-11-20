@@ -30,6 +30,46 @@ const getSearchCache = () => {
       maxSize: 5000,       // Phase 5: 1000 → 5000に拡大（より多くのクエリをキャッシュ）
       evictionStrategy: 'lru'
     });
+    
+    // キャッシュヒット率の計測: 定期的なログ出力（5分ごと）
+    // Phase 8: キャッシュ統計の可視化と最適化判断のため
+    if (typeof process !== 'undefined' && process.env.NEXT_RUNTIME === 'nodejs') {
+      // サーバーサイドでのみ実行（クライアントサイドでは実行しない）
+      if (!globalThis.__cacheStatsInterval) {
+        const CACHE_STATS_INTERVAL = 5 * 60 * 1000; // 5分ごと
+        
+        globalThis.__cacheStatsInterval = setInterval(() => {
+          try {
+            const stats = globalThis.__searchCache?.getStats();
+            if (stats) {
+              const hitRatePercent = (stats.hitRate * 100).toFixed(1);
+              const usagePercent = ((stats.size / 5000) * 100).toFixed(1);
+              console.log(
+                `[Cache Stats] 📊 検索結果キャッシュ統計: ` +
+                `サイズ=${stats.size}/${5000} (${usagePercent}%), ` +
+                `平均ヒット=${stats.avgHits.toFixed(2)}回, ` +
+                `ヒット率=${hitRatePercent}%`
+              );
+            }
+          } catch (error) {
+            // 統計取得エラーは無視（ログ出力の失敗でシステムに影響を与えない）
+            console.warn('[Cache Stats] 統計取得に失敗しました:', error);
+          }
+        }, CACHE_STATS_INTERVAL);
+        
+        // 初回は即座に統計を出力（起動時の状態を確認）
+        setTimeout(() => {
+          try {
+            const stats = globalThis.__searchCache?.getStats();
+            if (stats) {
+              console.log(`[Cache Stats] 📊 検索結果キャッシュ初期状態: サイズ=${stats.size}, 平均ヒット=${stats.avgHits.toFixed(2)}回, ヒット率=${(stats.hitRate * 100).toFixed(1)}%`);
+            }
+          } catch (error) {
+            // エラーは無視
+          }
+        }, 1000); // 1秒後に初回統計を出力
+      }
+    }
   }
   return globalThis.__searchCache;
 };
@@ -50,6 +90,7 @@ const getTitleSearchCache = () => {
 declare global {
   var __searchCache: GenericCache<any[]> | undefined;
   var __titleSearchCache: GenericCache<any[]> | undefined;
+  var __cacheStatsInterval: NodeJS.Timeout | undefined;
 }
 
 // 遅延初期化のため、モジュールレベルでの初期化を削除
@@ -162,6 +203,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const cachedResults = cacheInstance.get(cacheKey);
     
     if (cachedResults) {
+      // Phase 8: キャッシュヒット時のログ（デバッグ時のみ、パフォーマンスへの影響を最小化）
+      if (process.env.NODE_ENV === 'development' && Math.random() < 0.01) {
+        // 開発環境で1%の確率でログ出力（ログ量を抑制）
+        console.log(`[Cache Hit] ✅ 検索結果キャッシュから取得: "${params.query.substring(0, 50)}..."`);
+      }
       return cachedResults;
     }
     

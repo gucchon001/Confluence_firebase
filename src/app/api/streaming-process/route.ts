@@ -574,24 +574,39 @@ export const POST = async (req: NextRequest) => {
                 appConfig.environment.isTest ? 'staging' :
                 'development';
 
-              // データソースを判定（検索結果から）
+              // データソースを判定（dataSourceフィールドを優先、なければsourceパラメータを使用）
               let dataSource: 'confluence' | 'jira' | 'mixed' | 'unknown' = 'unknown';
               if (result.references && result.references.length > 0) {
-                const hasConfluence = result.references.some((ref: any) => 
-                  ref.url?.includes('confluence') || ref.source === 'confluence'
-                );
-                const hasJira = result.references.some((ref: any) => 
-                  ref.url?.includes('jira') || ref.source === 'jira'
-                );
-                if (hasConfluence && hasJira) {
-                  dataSource = 'mixed';
-                } else if (hasConfluence) {
-                  dataSource = 'confluence';
-                } else if (hasJira) {
-                  dataSource = 'jira';
+                // dataSourceフィールドを優先的に使用
+                const dataSources = result.references
+                  .map((ref: any) => ref.dataSource)
+                  .filter((ds: any): ds is 'confluence' | 'jira' => ds === 'confluence' || ds === 'jira');
+                
+                if (dataSources.length > 0) {
+                  const uniqueDataSources = new Set(dataSources);
+                  if (uniqueDataSources.size > 1) {
+                    dataSource = 'mixed';
+                  } else {
+                    dataSource = uniqueDataSources.values().next().value || 'unknown';
+                  }
                 } else {
-                  // sourceパラメータから判定
-                  dataSource = source === 'jira' ? 'jira' : 'confluence';
+                  // dataSourceフィールドがない場合はURLから判定（後方互換性のため）
+                  const hasConfluence = result.references.some((ref: any) => 
+                    ref.url?.includes('confluence') || ref.source === 'confluence'
+                  );
+                  const hasJira = result.references.some((ref: any) => 
+                    ref.url?.includes('jira') || ref.source === 'jira'
+                  );
+                  if (hasConfluence && hasJira) {
+                    dataSource = 'mixed';
+                  } else if (hasConfluence) {
+                    dataSource = 'confluence';
+                  } else if (hasJira) {
+                    dataSource = 'jira';
+                  } else {
+                    // sourceパラメータから判定
+                    dataSource = source === 'jira' ? 'jira' : 'confluence';
+                  }
                 }
               } else {
                 // 参照がない場合はsourceパラメータから判定

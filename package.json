@@ -62,6 +62,7 @@
     "label:generate:10": "tsx scripts/generate-structured-labels.ts 10",
     "label:generate:100": "tsx scripts/generate-structured-labels.ts 100",
     "label:generate:all": "tsx scripts/generate-structured-labels.ts 10000",
+    "label:analyze": "tsx scripts/analyze-structured-labels-status.ts",
     "kg:build": "tsx scripts/build-knowledge-graph.ts",
     "kg:visualize": "tsx scripts/visualize-kg.ts",
     "kg:visualize:dot": "tsx scripts/visualize-kg.ts 164 dot",

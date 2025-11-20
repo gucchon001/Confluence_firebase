@@ -22,6 +22,7 @@ import {
 import { app } from './firebase';
 import type { Message, MessageCreate, FirestoreConversation, FirestoreMessage } from '@/types';
 import { withRetry } from './retry-utils';
+import { getDataSourceFromSources } from './environment-utils';
 
 const db = getFirestore(app);
 
@@ -119,7 +120,7 @@ export async function getConversations(
   maxResults = 10,
   lastDoc?: QueryDocumentSnapshot<DocumentData>
 ): Promise<{
-  conversations: Array<{ id: string; title: string; lastMessage: string; timestamp: string }>;
+  conversations: Array<{ id: string; title: string; lastMessage: string; timestamp: string; dataSource?: 'confluence' | 'jira' | 'mixed' | 'unknown' }>;
   lastDocument: QueryDocumentSnapshot<DocumentData> | null;
   hasMore: boolean;
 }> {
@@ -151,12 +152,23 @@ export async function getConversations(
       // 1件多い場合は、最後の1件を除く
       const conversationsToReturn = hasMore ? docs.slice(0, maxResults) : docs;
       
-      const conversations = conversationsToReturn.map((doc: any) => ({
-        id: doc.id,
-        title: doc.data().title,
-        lastMessage: doc.data().messages?.slice(-1)[0]?.content || '',
-        timestamp: doc.data().updatedAt.toDate().toISOString()
-      }));
+      const conversations = conversationsToReturn.map((doc: any) => {
+        const messages = doc.data().messages || [];
+        // アシスタントの最初のメッセージのsourcesからデータソースを判定
+        const assistantMessage = messages.find((msg: any) => msg.role === 'assistant');
+        const sources = assistantMessage?.sources || [];
+        
+        // データソースを判定（共通ユーティリティを使用）
+        const dataSource = getDataSourceFromSources(sources);
+        
+        return {
+          id: doc.id,
+          title: doc.data().title,
+          lastMessage: doc.data().messages?.slice(-1)[0]?.content || '',
+          timestamp: doc.data().updatedAt.toDate().toISOString(),
+          dataSource // データソース情報を追加
+        };
+      });
       
       // 最後のドキュメント（次回のページネーション用）
       const lastDocument = conversationsToReturn.length > 0 
