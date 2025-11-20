@@ -168,7 +168,8 @@ export class LunrInitializer {
       const lunrDocs: LunrDocument[] = [];
       
       // ⚡ 最適化: トークン化処理を並列化（バッチ処理でメモリ使用量を制限）
-      const BATCH_SIZE = 50; // 並列処理するドキュメント数
+      // バッチサイズを100に増やして並列度を向上（初期化時間の短縮）
+      const BATCH_SIZE = 100; // 並列処理するドキュメント数（50 → 100に増加）
       const batches: typeof docs[] = [];
       for (let i = 0; i < docs.length; i += BATCH_SIZE) {
         batches.push(docs.slice(i, i + BATCH_SIZE));

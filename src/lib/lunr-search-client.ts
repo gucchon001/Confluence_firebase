@@ -216,9 +216,9 @@ export class LunrSearchClient {
         const tableDocuments = this.documents.get(tableName)!;
         tableDocuments.clear();
         
-        // ⚡ 最適化: ドキュメントの復元を並列化（大量のドキュメントがある場合のパフォーマンス向上）
-        // ただし、Mapへの追加は順次実行（Mapはスレッドセーフではないため）
-        // 大量のドキュメントがある場合でも、メモリ効率を考慮して順次処理を維持
+        // ⚡ 最適化: ドキュメントの復元を高速化
+        // Mapへの追加は順次実行（Mapはスレッドセーフではないため）
+        // MessagePackからロードしたデータは既に準備済みのため、そのまま追加
         for (const doc of data.documents) {
           tableDocuments.set(doc.id, doc);
         }
