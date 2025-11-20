@@ -1257,35 +1257,47 @@ async function executeBM25Search(
     }
     
     // ⚡ 最適化: Lunrインデックスの遅延初期化（オンデマンド）
-    // 必要になった時だけ初期化を試行（バックグラウンドで開始、完了を待たない）
+    // 必要になった時だけ初期化を試行（初期化完了を待つ）
     const isLunrReady = lunrSearchClient.isReady(tableName);
     console.log(`[BM25 Search] 🔍 DEBUG: Lunr ready status for ${tableName}: ${isLunrReady}`);
     
     if (!isLunrReady) {
-      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing in background...`);
+      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing...`);
       
-      // バックグラウンドで初期化を開始（結果を待たずに返す）
+      // 初期化を開始
       const { lunrInitializer } = await import('./lunr-initializer');
       
-      // ⚡ 修正: 初期化を待つ（タイムアウトを3秒に設定）
-      // BM25検索が動作するように初期化を待つ（3秒でタイムアウト）
+      // ⚡ 修正: 初期化を待つ（タイムアウトを3秒に設定、その後ポーリングで待つ）
+      // BM25検索が動作するように初期化完了を待つ
       try {
-        await Promise.race([
-        lunrInitializer.initializeAsync(tableName),
-        new Promise<void>((resolve) => {
-          setTimeout(() => {
-              console.warn(`[BM25 Search] Lunr initialization timeout for ${tableName} after 3s, continuing without BM25`);
-            resolve();
-            }, 3000); // 3秒でタイムアウト（初期化完了を待つ）
-        })
-        ]);
+        // 初期化を開始（バックグラウンドで実行される）
+        const initPromise = lunrInitializer.initializeAsync(tableName);
         
-        // 初期化完了後、再度確認
-        const isReadyAfterInit = lunrSearchClient.isReady(tableName);
-        if (!isReadyAfterInit) {
-          console.warn(`[BM25 Search] Lunr still not ready for ${tableName} after initialization attempt, skipping BM25`);
-      return [];
+        // 3秒でタイムアウト、その後ポーリングで待つ
+        const timeoutPromise = new Promise<void>((resolve) => {
+          setTimeout(() => {
+            console.warn(`[BM25 Search] Lunr initialization timeout for ${tableName} after 3s, polling for readiness...`);
+            resolve();
+          }, 3000);
+        });
+        
+        // タイムアウトまたは初期化完了を待つ
+        await Promise.race([initPromise, timeoutPromise]);
+        
+        // 初期化が完了するまでポーリングで待つ（最大2秒追加）
+        const maxPollingTime = 2000; // 追加の最大待機時間
+        const pollingInterval = 100; // ポーリング間隔（100ms）
+        const pollingStartTime = Date.now();
+        
+        while (!lunrSearchClient.isReady(tableName)) {
+          if (Date.now() - pollingStartTime > maxPollingTime) {
+            console.warn(`[BM25 Search] Lunr still not ready for ${tableName} after ${maxPollingTime}ms polling, skipping BM25`);
+            return [];
+          }
+          await new Promise(resolve => setTimeout(resolve, pollingInterval));
         }
+        
+        console.log(`[BM25 Search] ✅ Lunr ready for ${tableName} after initialization`);
       } catch (error) {
         console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
         return [];

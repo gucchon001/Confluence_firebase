@@ -421,16 +421,23 @@ export const POST = async (req: NextRequest) => {
             description: `検索結果 ${relevantDocs.length} 件を分析・整理しています...`,
             totalSteps: 4,
             icon: '📊',
-            references: relevantDocs.slice(0, 12).map((doc, index) => ({
-              id: doc.id || `${doc.pageId}-${index}`,
-              title: doc.title || 'タイトル不明',
-              url: doc.url || '',
-              spaceName: doc.spaceName || 'Unknown',
-              labels: doc.labels || [],
-              distance: doc.distance,
-              source: doc.source,
-              scoreText: doc.scoreText
-            }))
+            references: relevantDocs.slice(0, 12).map((doc, index) => {
+              // JiraとConfluenceを判定（issue_keyの存在で判定）
+              const isJira = !!(doc as any).issue_key;
+              const dataSource: 'confluence' | 'jira' = isJira ? 'jira' : 'confluence';
+              
+              return {
+                id: doc.id || `${doc.pageId}-${index}`,
+                title: doc.title || 'タイトル不明',
+                url: doc.url || '',
+                spaceName: doc.spaceName || 'Unknown',
+                labels: doc.labels || [],
+                distance: doc.distance,
+                source: doc.source,
+                scoreText: doc.scoreText,
+                dataSource: dataSource // データソース（confluence/jira）を追加
+              };
+            })
           };
           
           controller.enqueue(
@@ -627,16 +634,23 @@ export const POST = async (req: NextRequest) => {
 
               // 完了メッセージ（保存されたpostLogIdを含める）
               // フィルタリング前の参照元（検索結果全体）とフィルタリング後の参照元（LLMが使用した参照元）の両方を含める
-              const allReferences = relevantDocs.map((doc, index) => ({
-                id: doc.id || `${doc.pageId}-${index}`,
-                title: doc.title || 'タイトル不明',
-                url: doc.url || '',
-                spaceName: doc.spaceName || 'Unknown',
-                labels: doc.labels || [],
-                distance: doc.distance,
-                source: doc.source,
-                scoreText: doc.scoreText
-              }));
+              const allReferences = relevantDocs.map((doc, index) => {
+                // JiraとConfluenceを判定（issue_keyの存在で判定）
+                const isJira = !!(doc as any).issue_key;
+                const dataSource: 'confluence' | 'jira' = isJira ? 'jira' : 'confluence';
+                
+                return {
+                  id: doc.id || `${doc.pageId}-${index}`,
+                  title: doc.title || 'タイトル不明',
+                  url: doc.url || '',
+                  spaceName: doc.spaceName || 'Unknown',
+                  labels: doc.labels || [],
+                  distance: doc.distance,
+                  source: doc.source,
+                  scoreText: doc.scoreText,
+                  dataSource: dataSource // データソース（confluence/jira）を追加
+                };
+              });
               
               const completionMessage = {
                 type: 'completion',

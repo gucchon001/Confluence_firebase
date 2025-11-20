@@ -7,6 +7,7 @@ export type Message = {
     url: string;
     distance?: number;
     source?: 'vector' | 'keyword';
+    dataSource?: 'confluence' | 'jira'; // データソース（confluence/jira）
   }[];
   createdAt: string; // ISO string date
   user?: {
