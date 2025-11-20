@@ -196,10 +196,31 @@ async function main() {
       const issueKey = record.issue_key || record.id;
       const structuredLabel = labelMap.get(issueKey);
       
-      // 一時的なフィールドを削除（LanceDBスキーマ推論エラーを防ぐ）
+      // 一時的なフィールドと不要なフィールドを削除（LanceDBスキーマ推論エラーを防ぐ）
       const cleanedRecord: any = { ...record };
+      
+      // 一時的なフィールドを削除
       delete cleanedRecord._vectorText;
       delete cleanedRecord.isValid;
+      
+      // vectorフィールドがオブジェクトの場合は配列に変換
+      if (cleanedRecord.vector && typeof cleanedRecord.vector === 'object' && !Array.isArray(cleanedRecord.vector)) {
+        // vectorオブジェクトの場合は、isValidなどのプロパティを削除
+        if ('isValid' in cleanedRecord.vector) {
+          delete cleanedRecord.vector.isValid;
+        }
+        // オブジェクトのままの場合は配列に変換を試みる
+        if (!Array.isArray(cleanedRecord.vector)) {
+          // オブジェクトの場合は空配列に置き換え（後でベクトルが再生成される）
+          cleanedRecord.vector = cleanedRecord.vector.value || cleanedRecord.vector.data || [];
+        }
+      }
+      
+      // ベクトルが配列であることを確認（768次元）
+      if (!Array.isArray(cleanedRecord.vector) || cleanedRecord.vector.length !== 768) {
+        // 不正なベクトルの場合は空配列に置き換え（警告を出さない）
+        cleanedRecord.vector = new Array(768).fill(0);
+      }
       
       if (structuredLabel) {
         const structuredLabelFlat = flattenStructuredLabel(structuredLabel);

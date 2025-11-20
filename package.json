@@ -136,6 +136,7 @@
     "@genkit-ai/googleai": "^1.23.0",
     "@genkit-ai/next": "^1.23.0",
     "@google-cloud/aiplatform": "^5.13.0",
+    "@google-cloud/bigquery": "^8.1.1",
     "@google-cloud/storage": "^7.17.3",
     "@google/generative-ai": "0.23.0",
     "@hookform/resolvers": "^4.1.3",
