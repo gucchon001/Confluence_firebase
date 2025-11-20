@@ -222,6 +222,7 @@ export async function* streamingSummarizeConfluenceDocs(
     question: string;
     context: any[];
     chatHistory: any[];
+    source?: 'confluence' | 'jira';
   }
 ): AsyncGenerator<{
   chunk: string;
@@ -229,6 +230,7 @@ export async function* streamingSummarizeConfluenceDocs(
   chunkIndex: number;
   totalChunks?: number;
   references: any[];
+  allReferences?: any[]; // ★★★ 追加: 拡張されたallReferencesを返す ★★★
 }, void, unknown> {
   
   const { question: rawQuestion, context, chatHistory } = params;
@@ -498,9 +500,69 @@ ${truncatedContent}`;
     
     // 使用された参照元のみをフィルタリング
     // 使用された参照元がない場合は、全ての参照元を表示（フォールバック）
-    const finalReferences = usedIndices.size > 0
+    let finalReferences = usedIndices.size > 0
       ? Array.from(usedIndices).map(index => allReferences[index]).filter(Boolean)
       : allReferences;
+    
+    // 回答内で言及されているページを参照元に追加（バックグラウンド処理）
+    let enhancedReferences: any[] = [];
+    try {
+      const { enhanceReferences } = await import('../../lib/reference-enhancer');
+      const isJira = params.source === 'jira' || context.some((doc: any) => doc.issue_key);
+      const tableName = isJira ? 'jira_issues' : 'confluence';
+      
+      // 参照元を拡張（キャッシュヒット分のみ即座に追加）
+      // allReferencesに対して拡張を実行（リンク変換で使用されるため）
+      console.log(`[reference-enhancer] Enhancing allReferences (${allReferences.length} references)`);
+      const enhanced = await enhanceReferences(
+        answer,
+        allReferences, // ★★★ 修正: finalReferencesではなくallReferencesに対して拡張 ★★★
+        tableName,
+        {
+          maxSearches: 5,
+          timeout: 2000, // ★★★ 修正: 500ms → 2000ms ★★★
+          enableBackgroundSearch: true
+        }
+      );
+      
+      // 拡張された参照元を保存（allReferencesに追加された新しい参照元）
+      enhancedReferences = enhanced.immediateReferences;
+      console.log(`[reference-enhancer] Enhanced allReferences: ${allReferences.length} → ${enhancedReferences.length} references`);
+      
+      // finalReferencesも拡張（表示用の参照元リスト）
+      console.log(`[reference-enhancer] Enhancing finalReferences (${finalReferences.length} references)`);
+      const enhancedFinal = await enhanceReferences(
+        answer,
+        finalReferences,
+        tableName,
+        {
+          maxSearches: 5,
+          timeout: 2000, // ★★★ 修正: 500ms → 2000ms ★★★
+          enableBackgroundSearch: true
+        }
+      );
+      
+      // 拡張された参照元を使用（型を適合）
+      finalReferences = enhancedFinal.immediateReferences.map((ref: any) => ({
+        id: ref.id || ref.issue_key || '',
+        title: ref.title || 'No Title',
+        url: ref.url || '',
+        distance: ref.distance || 0,
+        score: ref.score || 0,
+        source: ref.source || 'vector',
+        dataSource: ref.dataSource || (tableName === 'jira_issues' ? 'jira' : 'confluence'),
+        issue_key: ref.issue_key
+      }));
+      
+      // バックグラウンド検索が必要なタイトルがある場合はログ出力（将来の拡張用）
+      if (enhanced.backgroundSearchTitles.length > 0 || enhancedFinal.backgroundSearchTitles.length > 0) {
+        console.log(`[reference-enhancer] Background search needed for ${enhanced.backgroundSearchTitles.length + enhancedFinal.backgroundSearchTitles.length} titles`);
+      }
+    } catch (error) {
+      // 参照元拡張に失敗しても処理は継続
+      console.warn('[reference-enhancer] Failed to enhance references:', error instanceof Error ? error.message : error);
+      enhancedReferences = allReferences; // エラー時は元のallReferencesを使用
+    }
 
     // Phase 5 Week 2: 回答をキャッシュに保存（品質影響なし）
     answerCache.set(sanitizedQuestion, context, answer, finalReferences);
@@ -511,7 +573,8 @@ ${truncatedContent}`;
       isComplete: true,
       chunkIndex: chunks.length,
       totalChunks: chunks.length,
-      references: finalReferences // 完了時は使用された参照元のみを返す
+      references: finalReferences, // 完了時は使用された参照元のみを返す
+      allReferences: enhancedReferences.length > 0 ? enhancedReferences : allReferences // ★★★ 追加: 拡張されたallReferencesを返す ★★★
     };
 
   } catch (error) {

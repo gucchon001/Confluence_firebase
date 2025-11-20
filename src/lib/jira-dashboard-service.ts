@@ -115,10 +115,14 @@ class JiraDashboardService {
         return cached.data;
       }
 
+      console.log('[JiraDashboardService] ダッシュボードデータ取得開始', { filters });
       // LanceDBから全データを取得
       const db = await lancedbClient.getDatabase();
+      console.log('[JiraDashboardService] LanceDB接続成功');
       const jiraTable = await db.openTable('jira_issues');
+      console.log('[JiraDashboardService] jira_issuesテーブルを開きました');
       const allIssues = await jiraTable.query().toArray();
+      console.log(`[JiraDashboardService] ${allIssues.length}件のIssueを取得しました`);
 
       // フィルタリング
       let filteredIssues = this.applyFilters(allIssues, filters);
@@ -164,6 +168,16 @@ class JiraDashboardService {
       return result;
     } catch (error) {
       console.error('[JiraDashboardService] データ取得エラー:', error);
+      if (error instanceof Error) {
+        console.error('[JiraDashboardService] エラー詳細:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
+      if (this.isJiraTableMissingError(error)) {
+        console.warn('[JiraDashboardService] jira_issuesテーブルが存在しないため、空のダッシュボードデータを返します。');
+        return this.createEmptyDashboardData(filters);
+      }
       throw error;
     }
   }
@@ -502,9 +516,13 @@ class JiraDashboardService {
 
     try {
       const startTime = Date.now();
+      console.log('[JiraDashboardService] フィルタオプション取得開始');
       const db = await lancedbClient.getDatabase();
+      console.log('[JiraDashboardService] LanceDB接続成功');
       const jiraTable = await db.openTable('jira_issues');
+      console.log('[JiraDashboardService] jira_issuesテーブルを開きました');
       const allIssues = await jiraTable.query().toArray();
+      console.log(`[JiraDashboardService] ${allIssues.length}件のIssueを取得しました`);
 
       const statuses = new Set<string>();
       const statusCategories = new Set<string>();
@@ -535,6 +553,7 @@ class JiraDashboardService {
       };
 
       const duration = Date.now() - startTime;
+      console.log(`[JiraDashboardService] フィルタオプション取得完了 (${duration}ms)`);
       if (duration > 1000) {
         console.warn(`[JiraDashboardService] フィルタオプション取得に時間がかかりました: ${duration}ms`);
       }
@@ -542,8 +561,27 @@ class JiraDashboardService {
       return result;
     } catch (error) {
       console.error('[JiraDashboardService] フィルタオプション取得エラー:', error);
+      if (this.isJiraTableMissingError(error)) {
+        console.warn('[JiraDashboardService] jira_issuesテーブルが存在しないため、空のフィルタオプションを返します。');
+        const fallback = this.createEmptyFilterOptions();
+        filterOptionsCache = {
+          data: fallback,
+          timestamp: Date.now()
+        };
+        return fallback;
+      }
       throw error;
     }
+  }
+
+  private createEmptyFilterOptions() {
+    return {
+      statuses: [],
+      statusCategories: [],
+      assignees: [],
+      priorities: [],
+      issueTypes: []
+    };
   }
 
   /**
@@ -594,6 +632,33 @@ class JiraDashboardService {
     filterOptionsCache.data = null;
     filterOptionsCache.timestamp = 0;
     console.log('[JiraDashboardService] キャッシュをクリアしました');
+  }
+
+  private isJiraTableMissingError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+    const message = error.message || '';
+    return message.includes("Table 'jira_issues' was not found") ||
+      message.includes('jira_issues.lance') ||
+      (message.includes('Dataset at path') && message.includes('jira_issues'));
+  }
+
+  private createEmptyDashboardData(filters: JiraDashboardFilters): JiraDashboardData {
+    return {
+      stats: {
+        total: 0,
+        byStatus: {},
+        byStatusCategory: {},
+        byAssignee: {},
+        byPriority: {},
+        byIssueType: {}
+      },
+      trends: [],
+      filters,
+      issues: [],
+      totalIssues: 0
+    };
   }
 }
 

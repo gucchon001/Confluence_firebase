@@ -575,38 +575,41 @@ export class JiraSyncService {
     const dbPath = path.resolve(process.cwd(), '.lancedb');
     const tableName = 'jira_issues';
     const db = await connectLanceDB(dbPath);
-    const tableNames = await db.tableNames();
-    
-    let table = tableNames.includes(tableName)
-      ? await db.openTable(tableName)
-      : null;
+    let tableNames = await db.tableNames();
+    let table: import('@lancedb/lancedb').Table | null = null;
 
-    if (!table) {
-      console.log(`🆕 LanceDBテーブル '${tableName}' が存在しないため新規作成します`);
-      table = await db.createTable(tableName, [{
-        id: 'dummy',
-        issue_key: 'dummy',
-        title: 'dummy',
-        content: 'dummy',
-        vector: new Array(768).fill(0),
-        status: 'dummy',
-        status_category: 'dummy',
-        priority: 'dummy',
-        assignee: 'dummy',
-        reporter: 'dummy',
-        updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        labels_text: '',
-        issue_type: 'dummy',
-        project_key: 'dummy',
-        project_name: 'dummy',
-        impact_domain: '',
-        impact_level: '',
-        dev_validation: '',
-        prod_validation: '',
-        url: ''
-      }]);
-      await table.delete('id = "dummy"');
+    if (!replaceAll) {
+      table = tableNames.includes(tableName)
+        ? await db.openTable(tableName)
+        : null;
+
+      if (!table) {
+        console.log(`🆕 LanceDBテーブル '${tableName}' が存在しないため新規作成します`);
+        table = await db.createTable(tableName, [{
+          id: 'dummy',
+          issue_key: 'dummy',
+          title: 'dummy',
+          content: 'dummy',
+          vector: new Array(768).fill(0),
+          status: 'dummy',
+          status_category: 'dummy',
+          priority: 'dummy',
+          assignee: 'dummy',
+          reporter: 'dummy',
+          updated_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          labels_text: '',
+          issue_type: 'dummy',
+          project_key: 'dummy',
+          project_name: 'dummy',
+          impact_domain: '',
+          impact_level: '',
+          dev_validation: '',
+          prod_validation: '',
+          url: ''
+        }]);
+        await table.delete('id = "dummy"');
+      }
     }
 
     console.log(`📊 ベクトル生成中... (${records.length}件)`);
@@ -690,6 +693,8 @@ export class JiraSyncService {
     
     if (replaceAll) {
       console.log('🧹 LanceDB jira_issuesテーブルを全件再構築します');
+      // 最新のテーブル一覧を取得し直す（この関数内で作成した可能性があるため）
+      tableNames = await db.tableNames();
       if (tableNames.includes(tableName)) {
         await db.dropTable(tableName);
       }

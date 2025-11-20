@@ -7,7 +7,7 @@ export type Message = {
     url: string;
     distance?: number;
     source?: 'vector' | 'keyword';
-    dataSource?: 'confluence' | 'jira'; // データソース（confluence/jira）
+    dataSource?: 'confluence' | 'jira' | 'google_drive'; // データソース（confluence/jira/google_drive）
   }[];
   createdAt: string; // ISO string date
   user?: {
@@ -15,6 +15,7 @@ export type Message = {
     photoURL: string | null;
   };
   postLogId?: string; // フィードバック用の投稿ログID
+  _allReferences?: any[]; // 参照元リンク変換用（検索結果全体、非表示フィールド）
 };
 
 // roleが'ai'ではなく'assistant'であることを保証する
@@ -73,7 +74,7 @@ export type Reference = {
   url: string;
   score: number;
   source: 'vector' | 'bm25' | 'keyword'; // 検索方法
-  dataSource?: 'confluence' | 'jira'; // データソース（confluence/jira）
+  dataSource?: 'confluence' | 'jira' | 'google_drive'; // データソース（confluence/jira/google_drive）
 };
 
 // 投稿ログ型（管理画面用）
@@ -100,7 +101,7 @@ export type PostLog = {
     sessionId: string;
     userDisplayName?: string; // ユーザー表示名
     environment?: 'development' | 'staging' | 'production'; // 環境情報
-    dataSource?: 'confluence' | 'jira' | 'mixed' | 'unknown'; // データソース
+    dataSource?: 'confluence' | 'jira' | 'google_drive' | 'mixed' | 'unknown'; // データソース
   };
 };
 

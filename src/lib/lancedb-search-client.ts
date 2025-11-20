@@ -1338,8 +1338,8 @@ async function executeBM25Search(
         while (!lunrSearchClient.isReady(tableName)) {
           if (Date.now() - pollingStartTime > maxPollingTime) {
             console.warn(`[BM25 Search] Lunr still not ready for ${tableName} after ${maxPollingTime}ms polling, skipping BM25`);
-            return [];
-          }
+      return [];
+        }
           await new Promise(resolve => setTimeout(resolve, pollingInterval));
         }
         

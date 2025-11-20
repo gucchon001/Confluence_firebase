@@ -83,11 +83,28 @@ export async function addMessageToConversation(userId: string, conversationId: s
       const now = Timestamp.now();
       
       // 新しいメッセージを作成
+      // undefinedを含むフィールドを除外
+      const cleanSources = message.sources?.map((source: any) => {
+        const clean: any = {
+          title: source.title,
+          url: source.url,
+          distance: source.distance,
+          source: source.source
+        };
+        if (source.dataSource) {
+          clean.dataSource = source.dataSource;
+        }
+        if (source.issue_key) {
+          clean.issue_key = source.issue_key;
+        }
+        return clean;
+      }).filter((source: any) => source.title && source.url);
+      
       const newMessage: FirestoreMessage = {
         role: message.role,
         content: message.content,
         timestamp: now,
-        ...(message.sources && { sources: message.sources }),
+        ...(cleanSources && cleanSources.length > 0 && { sources: cleanSources }),
         ...(message.user && { user: message.user })
       };
       

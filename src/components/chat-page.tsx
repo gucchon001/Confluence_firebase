@@ -99,7 +99,13 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                   remarkPlugins={[remarkGfm]}
                   components={createSharedMarkdownComponents(msg.sources || []) as any}
                 >
-                  {formatMessageContent(msg.content, msg.sources || [], isAssistant)}
+                  {formatMessageContent(
+                    msg.content, 
+                    (msg as any)._allReferences && (msg as any)._allReferences.length > 0 
+                      ? (msg as any)._allReferences 
+                      : (msg.sources || []), 
+                    isAssistant
+                  )}
                 </ReactMarkdown>
             </CardContent>
             {isAssistant && msg.sources && msg.sources.length > 0 && (
@@ -227,6 +233,7 @@ export default function ChatPage({ user }: ChatPageProps) {
   const [streamingError, setStreamingError] = useState<string | null>(null);
   const [streamingAnswer, setStreamingAnswer] = useState<string>('');
   const [streamingReferences, setStreamingReferences] = useState<any[]>([]);
+  const [streamingAllReferences, setStreamingAllReferences] = useState<any[]>([]); // 参照元リンク変換用（検索結果全体）
   const [currentPostLogId, setCurrentPostLogId] = useState<string | null>(null);
   const [isStreamingComplete, setIsStreamingComplete] = useState<boolean>(false);
   const [currentSessionId] = useState<string>(() => `session_${Date.now()}`);
@@ -438,6 +445,7 @@ export default function ChatPage({ user }: ChatPageProps) {
     setStreamingError(null);
     setStreamingAnswer('');
     setStreamingReferences([]);
+    setStreamingAllReferences([]);
 
     // ストリーミング処理を実行
     try {
@@ -456,13 +464,18 @@ export default function ChatPage({ user }: ChatPageProps) {
           updateStreamingAnswer(chunk);
         },
         // 完了コールバック
-        async (fullAnswer: string, references: any[], postLogId?: string) => {
+        async (fullAnswer: string, references: any[], postLogId?: string, allReferences?: any[]) => {
           setStreamingAnswerSafe(fullAnswer);
           setStreamingReferences(references);
+          setStreamingAllReferences(allReferences || []); // 参照元リンク変換用に保存
           setCurrentPostLogId(postLogId || null);
           
           // 最終的なメッセージを作成（テーブル処理を適用）
           let processedFullAnswer = fullAnswer;
+          
+          // 参照元リンク変換のため、allReferences（検索結果全体）を使用
+          // allReferencesがない場合はreferences（使用された参照元のみ）を使用
+          const referencesForLinkConversion = allReferences && allReferences.length > 0 ? allReferences : references;
           
           const messageId = `assistant-${Date.now()}`;
           const assistantMessage: Message = {
@@ -470,15 +483,36 @@ export default function ChatPage({ user }: ChatPageProps) {
             role: 'assistant',
             content: processedFullAnswer,
             createdAt: new Date().toISOString(),
-            sources: references.map((ref: any) => ({
-              title: ref.title || 'No Title',
-              url: ref.url || '',
-              distance: ref.distance !== undefined ? ref.distance : (ref.score !== undefined ? 1 - ref.score : 0.5),
-              source: ref.source,
-              dataSource: ref.dataSource, // ★★★ 追加: データソース（Confluence/Jira）を保持 ★★★
-              issue_key: ref.issue_key // ★★★ 追加: JiraのIssue Key（CTJ-xxxxなど）を保持 ★★★
-            })),
-            postLogId: postLogId || undefined
+            sources: references
+              .filter((ref: any) => ref != null) // null/undefinedを除外
+              .map((ref: any) => {
+                // undefinedを含むフィールドを除外してオブジェクトを作成
+                const source: any = {
+                  title: ref.title || 'No Title',
+                  url: ref.url || '',
+                  distance: ref.distance !== undefined ? ref.distance : (ref.score !== undefined ? 1 - ref.score : 0.5),
+                  source: ref.source || 'vector'
+                };
+                
+                // オプショナルフィールドは存在する場合のみ追加
+                if (ref.dataSource) {
+                  source.dataSource = ref.dataSource;
+                }
+                if (ref.issue_key) {
+                  source.issue_key = ref.issue_key;
+                }
+                
+                return source;
+              })
+              .filter((source: any) => {
+                // titleとurlが必須
+                return source.title && source.url;
+              }),
+            postLogId: postLogId || undefined,
+            // 参照元リンク変換用にallReferencesを保存（非表示フィールド、Firestoreには保存しない）
+            _allReferences: referencesForLinkConversion && referencesForLinkConversion.length > 0 
+              ? referencesForLinkConversion.filter((ref: any) => ref != null) 
+              : undefined
           };
 
           setMessages((prev: Message[]) => [...prev, assistantMessage]);
@@ -491,16 +525,20 @@ export default function ChatPage({ user }: ChatPageProps) {
               await addMessageToConversation(user.uid, currentConversationId, 
                 { role: 'user', content: userMessage.content, user: userMessage.user }
               );
+              // Firestoreに保存する際は_allReferencesを除外（undefinedエラーを防ぐため）
+              const { _allReferences, ...messageForFirestore } = assistantMessage;
               await addMessageToConversation(user.uid, currentConversationId, 
-                { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+                { role: 'assistant', content: messageForFirestore.content, sources: messageForFirestore.sources }
               );
             } else {
               // 新しい会話を作成
               const newConversationId = await createConversation(user.uid, 
                 { role: 'user', content: userMessage.content, user: userMessage.user }
               );
+              // Firestoreに保存する際は_allReferencesを除外（undefinedエラーを防ぐため）
+              const { _allReferences: _allRefs, ...messageForFirestore2 } = assistantMessage;
               await addMessageToConversation(user.uid, newConversationId, 
-                { role: 'assistant', content: assistantMessage.content, sources: assistantMessage.sources }
+                { role: 'assistant', content: messageForFirestore2.content, sources: messageForFirestore2.sources }
               );
               setCurrentConversationId(newConversationId);
               
@@ -528,6 +566,7 @@ export default function ChatPage({ user }: ChatPageProps) {
             setCurrentStep(null);
             setStreamingAnswer('');
             setStreamingReferences([]);
+            setStreamingAllReferences([]);
           }, 1000);
         },
         // エラーコールバック
@@ -992,7 +1031,11 @@ export default function ChatPage({ user }: ChatPageProps) {
                                 }
                                 
                                 // 共通の変換処理を使用
-                                return formatMessageContent(safeAnswer, streamingReferences || [], true);
+                                // 参照元リンク変換のため、allReferences（検索結果全体）を使用
+                                const refsForConversion = streamingAllReferences && streamingAllReferences.length > 0 
+                                  ? streamingAllReferences 
+                                  : (streamingReferences || []);
+                                return formatMessageContent(safeAnswer, refsForConversion, true);
                               })()}
                               </ReactMarkdown>
                             </div>

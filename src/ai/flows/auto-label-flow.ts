@@ -33,16 +33,73 @@ const OutputSchema = z.object({
 /**
  * ルールベースでStructuredLabelを生成（高速・高精度）
  */
+/**
+ * カテゴリを推測（既存ラベル + タイトル + コンテンツ）
+ * Phase 1改善: カテゴリ推測の強化
+ */
+function inferCategoryEnhanced(labels: string[], title: string, content: string): DocumentCategory {
+  // 既存のラベルを確認
+  if (labels.includes('機能要件')) return 'spec';
+  if (labels.includes('帳票')) return 'data';
+  if (labels.includes('メールテンプレート')) return 'template';
+  if (labels.includes('ワークフロー')) return 'workflow';
+  if (labels.includes('議事録') || labels.includes('meeting-notes')) return 'meeting';
+  
+  // タイトルから推測（既存ラベルがない場合）
+  const titleLower = title.toLowerCase();
+  if (titleLower.includes('機能') || titleLower.includes('仕様')) return 'spec';
+  if (titleLower.includes('帳票') || titleLower.includes('データ定義')) return 'data';
+  if (titleLower.includes('メール') || titleLower.includes('通知')) return 'template';
+  if (titleLower.includes('フロー') || titleLower.includes('ワークフロー')) return 'workflow';
+  if (titleLower.includes('議事録') || titleLower.includes('ミーティング') || titleLower.includes('meeting')) return 'meeting';
+  
+  // コンテンツから推測（フォールバック）
+  const contentLower = content.substring(0, 500).toLowerCase();
+  if (contentLower.includes('機能要件') || contentLower.includes('仕様書')) return 'spec';
+  if (contentLower.includes('議事録')) return 'meeting';
+  
+  return 'other';
+}
+
 function tryRuleBasedLabeling(input: z.infer<typeof InputSchema>): StructuredLabel | null {
   const status = StructuredLabelHelper.extractStatusFromTitle(input.title);
   const version = StructuredLabelHelper.extractVersionFromTitle(input.title);
-  const category = StructuredLabelHelper.inferCategoryFromLabels(input.labels);
+  
+  // Phase 1改善: カテゴリ推測の強化（タイトルとコンテンツも使用）
+  const category = inferCategoryEnhanced(input.labels, input.title, input.content);
   const domain = StructuredLabelHelper.inferDomainFromContent(input.title, input.content.substring(0, 1000));
   
-  // ルールで主要フィールドを決定できた場合
-  if (status !== 'unknown' && category !== 'other' && domain !== 'その他') {
+  // Phase 1改善: ルールベース生成の条件を緩和（2つ以上の条件が満たされれば生成）
+  const conditions = [
+    status !== 'unknown',
+    category !== 'other',
+    domain !== 'その他'
+  ];
+  const metConditions = conditions.filter(Boolean).length;
+  
+  // 2つ以上の条件が満たされればルールベース生成
+  if (metConditions >= 2) {
     const feature = StructuredLabelHelper.cleanTitle(input.title);
-    const priority = StructuredLabelHelper.inferPriority(category, status);
+    
+    // 不足している条件をデフォルト値で補完
+    const finalCategory = category === 'other' ? 'spec' : category; // フォールバック
+    const finalStatus = status === 'unknown' ? 'approved' : status; // フォールバック
+    
+    // ドメインが「その他」の場合は再推測を試行
+    let finalDomain = domain;
+    if (domain === 'その他' && metConditions === 2) {
+      // タイトルとコンテンツの両方から再推測
+      const titleLower = input.title.toLowerCase();
+      const contentLower = input.content.substring(0, 1000).toLowerCase();
+      
+      if (titleLower.includes('会員') || contentLower.includes('会員')) finalDomain = '会員管理';
+      else if (titleLower.includes('求人') || contentLower.includes('求人')) finalDomain = '求人管理';
+      else if (titleLower.includes('教室') || contentLower.includes('教室')) finalDomain = '教室管理';
+      else if (titleLower.includes('クライアント企業') || contentLower.includes('クライアント企業')) finalDomain = 'クライアント企業管理';
+      // 「その他」のままの場合もある
+    }
+    
+    const priority = StructuredLabelHelper.inferPriority(finalCategory, finalStatus);
     
     // タグをコンテンツから抽出（シンプルな方法） + 退会関連などを拡張
     const tags: string[] = [];
@@ -80,15 +137,18 @@ function tryRuleBasedLabeling(input: z.infer<typeof InputSchema>): StructuredLab
       }
     }
     
+    // Phase 1改善: 信頼度を条件数に応じて調整（0.8, 0.9, 1.0）
+    const confidence = 0.7 + (metConditions * 0.1); // 0.8, 0.9, 1.0
+    
     return {
-      category,
-      domain,
+      category: finalCategory,
+      domain: finalDomain,
       feature,
-      status,
+      status: finalStatus,
       version,
       priority,
       tags: tags.length > 0 ? tags : undefined,
-      confidence: 0.9,  // ルールベースの信頼度
+      confidence,  // Phase 1改善: 条件数に応じた信頼度
       content_length: input.content.length,  // Phase 0A-1.5: コンテンツ長
       is_valid: input.content.length >= 100   // Phase 0A-1.5: 100文字未満は無効
     };
@@ -105,14 +165,15 @@ function buildLLMPrompt(
   domainCandidates: string[],
   topDomains: string[]
 ): string {
+  // Phase 2改善: プロンプトの最適化（コンテンツ長を拡大、判定基準を簡略化）
   return `以下のConfluenceページを分析し、StructuredLabelを生成してJSON形式で出力してください。
 
 【ページ情報】
 タイトル: ${input.title}
-内容: ${input.content.substring(0, 1000)}...
+内容: ${input.content.substring(0, 1500)}...
 既存ラベル: ${input.labels.join(', ')}
 
-【参考: このページに関連するドメイン候補】
+【重要: このページに関連するドメイン候補（優先的に使用）】
 ${domainCandidates.length > 0 ? domainCandidates.join(', ') : '（該当なし）'}
 
 【参考: ドメイン一覧（上位30件）】
@@ -124,50 +185,43 @@ JSON形式のみ出力してください。説明文は不要です。
 \`\`\`json
 {
   "category": "spec|data|template|workflow|meeting|other",
-  "domain": "上記のドメイン一覧から選択（できるだけ既存のものを使用）",
+  "domain": "上記のドメイン候補から選択（できるだけ既存のものを使用）",
   "feature": "クリーンな機能名（バージョン番号やステータスマーカーを除く）",
   "priority": "high|medium|low",
   "status": "draft|review|approved|deprecated|unknown",
   "version": "タイトルから抽出（例: 168_【FIX】... → \"168\"）",
   "tags": ["関連キーワード（2-5個）"],
-  "confidence": 0.7
+  "confidence": 0.75
 }
 \`\`\`
 
-【判定基準】
-1. category（カテゴリ）:
-   - タイトルに「機能」「仕様」含む → "spec"
-   - タイトルに「帳票」「データ定義」含む → "data"
-   - タイトルに「メール」「通知」含む → "template"
-   - タイトルに「フロー」「ワークフロー」含む → "workflow"
-   - タイトルに「議事録」「ミーティング」含む → "meeting"
-   - その他 → "other"
+【判定基準（簡略化）】
+1. category（カテゴリ）: タイトルから推測
+   - 「機能」「仕様」→ spec
+   - 「帳票」「データ定義」→ data
+   - 「メール」「通知」→ template
+   - 「フロー」「ワークフロー」→ workflow
+   - 「議事録」「ミーティング」→ meeting
+   - その他 → other
 
-2. status（ステータス）:
-   - 【FIX】含む → "approved"
-   - 【作成中】含む → "draft"
-   - 【レビュー中】含む → "review"
-   - その他 → "unknown"
+2. domain（ドメイン）: ドメイン候補から選択（できるだけ既存のものを使用）
 
-3. priority（優先度）:
-   - category="spec" AND status="approved" → "high"
-   - category="spec" AND status="draft" → "medium"
-   - category="workflow" → "high"
-   - category="meeting" OR category="template" → "low"
-   - その他 → "medium"
+3. status（ステータス）: タイトルから推測
+   - 【FIX】→ approved
+   - 【作成中】→ draft
+   - 【レビュー中】→ review
+   - その他 → unknown
 
-4. domain（ドメイン）:
-   - 必ず上記のドメイン一覧から選択してください
-   - 新しいドメインを作成する場合は、既存のパターンに従ってください
-   
-5. feature（機能名）:
-   - タイトルから「168_」などのバージョン番号を除く
-   - 「【FIX】」「【作成中】」などのステータスマーカーを除く
-   - クリーンな機能名のみを抽出
+4. priority（優先度）: categoryとstatusから推測
+   - spec + approved → high
+   - spec + draft → medium
+   - workflow → high
+   - meeting/template → low
+   - その他 → medium
 
-6. tags（タグ）:
-   - コンテンツから関連キーワードを2-5個抽出
-   - 例: ["コピー", "一括処理", "管理画面"]
+5. feature（機能名）: タイトルからクリーンな機能名を抽出
+
+6. tags（タグ）: コンテンツから関連キーワードを2-5個抽出
 
 JSON形式のみ出力してください：`;
 }
@@ -182,9 +236,10 @@ export const autoLabelFlow = ai.defineFlow(
     outputSchema: OutputSchema,
   },
   async (input) => {
-    // Step 1: ルールベースで高速判定（80%のケースに対応）
+    // Step 1: ルールベースで高速判定（Phase 1改善: 条件を緩和して80%以上に対応）
     const ruleBasedLabel = tryRuleBasedLabeling(input);
-    if (ruleBasedLabel && ruleBasedLabel.confidence && ruleBasedLabel.confidence >= 0.85) {
+    // Phase 1改善: 信頼度0.8以上であればルールベース生成を使用（0.85 → 0.8に緩和）
+    if (ruleBasedLabel && ruleBasedLabel.confidence && ruleBasedLabel.confidence >= 0.8) {
       return ruleBasedLabel;
     }
     
@@ -239,8 +294,8 @@ export const autoLabelFlow = ai.defineFlow(
       }
       const result = parsed;
       
-      // 信頼度を設定（LLMベース）
-      result.confidence = result.confidence || 0.7;
+      // Phase 2改善: LLMベースの信頼度を0.75に向上（0.7 → 0.75）
+      result.confidence = result.confidence || 0.75;
       
       // version・tagsのnull対策（スキーマバリデーション用）
       if (result.version === null || result.version === undefined) {

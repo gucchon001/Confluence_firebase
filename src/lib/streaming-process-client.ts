@@ -24,6 +24,7 @@ export interface StreamingMessage {
   chunkIndex?: number;
   isComplete?: boolean;
   references?: any[];
+  allReferences?: any[]; // フィルタリング前（検索結果全体）
   fullAnswer?: string;
   error?: string;
   message?: string;
@@ -51,7 +52,7 @@ export class StreamingProcessClient {
     question: string,
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
-    onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
+    onCompletion: (fullAnswer: string, references: any[], postLogId?: string, allReferences?: any[]) => void,
     onError: (error: string) => void,
     onPostLogIdUpdate?: (postLogId: string) => void,
     chatHistory: any[] = [],
@@ -173,7 +174,7 @@ export class StreamingProcessClient {
     line: string,
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
-    onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
+    onCompletion: (fullAnswer: string, references: any[], postLogId?: string, allReferences?: any[]) => void,
     onError: (error: string) => void,
     onPostLogIdUpdate?: (postLogId: string) => void
   ): void {
@@ -210,7 +211,7 @@ export class StreamingProcessClient {
     message: StreamingMessage,
     onStepUpdate: (step: ProcessingStep) => void,
     onChunk: (chunk: string, chunkIndex: number) => void,
-    onCompletion: (fullAnswer: string, references: any[], postLogId?: string) => void,
+    onCompletion: (fullAnswer: string, references: any[], postLogId?: string, allReferences?: any[]) => void,
     onError: (error: string) => void,
     onPostLogIdUpdate?: (postLogId: string) => void
   ): void {

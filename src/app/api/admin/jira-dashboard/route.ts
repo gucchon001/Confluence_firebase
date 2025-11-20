@@ -43,10 +43,14 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('[API] Jiraダッシュボードデータ取得エラー:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Jiraダッシュボードデータ取得に失敗しました';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error('[API] エラー詳細:', { errorMessage, errorStack });
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Jiraダッシュボードデータ取得に失敗しました'
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorStack : undefined
       },
       { status: 500 }
     );

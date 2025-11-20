@@ -246,6 +246,30 @@ export function convertReferencesToNumberedLinks(markdown: string, references: A
         return true;
       }
       
+      // キーワードベースのマッチング（改善: より柔軟なマッチング）
+      // 例: 「全体管理者登録情報」と「全体管理者ログイン・ログアウト機能」を「全体管理者」でマッチング
+      // ただし、短すぎるキーワード（2文字以下）は除外
+      const extractKeywords = (text: string): string[] => {
+        // 【FIX】などのプレフィックスを除去
+        const cleaned = text.replace(/^[\d_]*[【（\(]?[A-Z]+[】）\)]?\s*/, '').trim();
+      // 日本語のキーワードを抽出（2文字以上の連続する文字列）
+      const keywords = cleaned.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}/g) || [];
+      return keywords.filter((k: string) => k.length >= 2);
+      };
+      
+      const refKeywords = extractKeywords(refTitle);
+      const contentKeywords = extractKeywords(contentTrimmed);
+      
+      if (refKeywords.length > 0 && contentKeywords.length > 0) {
+        // 共通のキーワードが2つ以上ある場合、または長いキーワード（3文字以上）が1つ以上ある場合にマッチ
+        const commonKeywords = refKeywords.filter(k => contentKeywords.includes(k));
+        const longCommonKeywords = commonKeywords.filter(k => k.length >= 3);
+        
+        if (longCommonKeywords.length >= 1 || commonKeywords.length >= 2) {
+          return true;
+        }
+      }
+      
       return false;
     });
 
@@ -282,7 +306,7 @@ export function extractUsedReferenceIndices(markdown: string, references: Array<
   for (const match of matches) {
     const content = match[1].trim();
     
-    // 参照元リストから該当するタイトルを探す
+    // 参照元リストから該当するタイトルを探す（convertReferencesToNumberedLinksと同じロジック）
     const matchedIndex = references.findIndex(ref => {
       const refTitle = (ref.title || '').trim();
       const contentTrimmed = content.trim();
@@ -319,6 +343,25 @@ export function extractUsedReferenceIndices(markdown: string, references: Array<
       }
       if (contentTrimmed.length >= refTitle.length && contentTrimmed.includes(refTitle)) {
         return true;
+      }
+      
+      // キーワードベースのマッチング（改善: より柔軟なマッチング）
+      const extractKeywords = (text: string): string[] => {
+        const cleaned = text.replace(/^[\d_]*[【（\(]?[A-Z]+[】）\)]?\s*/, '').trim();
+        const keywords = cleaned.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}/g) || [];
+        return keywords.filter((k: string) => k.length >= 2);
+      };
+      
+      const refKeywords = extractKeywords(refTitle);
+      const contentKeywords = extractKeywords(contentTrimmed);
+      
+      if (refKeywords.length > 0 && contentKeywords.length > 0) {
+        const commonKeywords = refKeywords.filter(k => contentKeywords.includes(k));
+        const longCommonKeywords = commonKeywords.filter(k => k.length >= 3);
+        
+        if (longCommonKeywords.length >= 1 || commonKeywords.length >= 2) {
+          return true;
+        }
       }
       
       return false;

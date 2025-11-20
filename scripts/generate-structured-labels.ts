@@ -12,10 +12,18 @@
  */
 
 import 'dotenv/config';
-import { optimizedLanceDBClient } from '@/lib/optimized-lancedb-client';
-import { autoLabelFlow } from '@/ai/flows/auto-label-flow';
-import { saveStructuredLabel, getStructuredLabelStats } from '@/lib/structured-label-service-admin';
-import { loadDomainKnowledge } from '@/lib/domain-knowledge-loader';
+import * as lancedb from '@lancedb/lancedb';
+import { autoLabelFlow } from '../src/ai/flows/auto-label-flow';
+import { saveStructuredLabel, getStructuredLabelStats } from '../src/lib/structured-label-service-admin';
+import { loadDomainKnowledge } from '../src/lib/domain-knowledge-loader';
+import * as admin from 'firebase-admin';
+
+// Firebase Admin SDK初期化
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
+}
 
 interface ConfluencePage {
   id: string;
@@ -40,8 +48,8 @@ async function main() {
     
     // Step 2: LanceDBに接続
     console.log('🔌 LanceDBに接続中...');
-    const connection = await optimizedLanceDBClient.getConnection();
-    const table = connection.table;
+    const lanceDb = await lancedb.connect('.lancedb');
+    const table = await lanceDb.openTable('confluence');
     console.log(`✅ LanceDB接続完了\n`);
     
     // Step 3: 全ページを取得

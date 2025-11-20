@@ -195,22 +195,116 @@ export class StructuredLabelHelper {
   }
   
   /**
-   * タイトルと内容からドメインを推測
+   * タイトルと内容からドメインを推測（Phase 2改善: 重み付きスコアリング）
    */
   static inferDomainFromContent(title: string, content: string): SystemDomain {
-    const text = title + ' ' + content;
+    const text = (title + ' ' + content).toLowerCase();
+    const titleLower = title.toLowerCase();
+    const contentLower = content.toLowerCase();
     
-    if (text.includes('会員') && !text.includes('クライアント企業')) return '会員管理';
-    if (text.includes('求人')) return '求人管理';
-    if (text.includes('教室')) return '教室管理';
-    if (text.includes('クライアント企業')) return 'クライアント企業管理';
-    if (text.includes('全体管理') || text.includes('サイト運営')) return '全体管理';
-    if (text.includes('オファー')) return 'オファー管理';
-    if (text.includes('応募') || text.includes('選考') || text.includes('採用')) return '採用フロー';
-    if (text.includes('口コミ') || text.includes('評価')) return '口コミ・評価';
-    if (text.includes('共通要件') || text.includes('インフラ')) return 'システム共通';
+    // Phase 2改善: 重み付きスコアリング
+    const domainScores: Record<string, number> = {
+      '会員管理': 0,
+      '求人管理': 0,
+      '教室管理': 0,
+      'クライアント企業管理': 0,
+      '全体管理': 0,
+      'オファー管理': 0,
+      '採用フロー': 0,
+      '口コミ・評価': 0,
+      'システム共通': 0,
+      'その他': 0,
+    };
     
-    return 'その他';
+    // タイトルのキーワードを重視（重み: 2.0）
+    if (titleLower.includes('会員') && !titleLower.includes('クライアント企業')) {
+      domainScores['会員管理'] += 2.0;
+    }
+    if (titleLower.includes('求人')) {
+      domainScores['求人管理'] += 2.0;
+    }
+    if (titleLower.includes('教室')) {
+      domainScores['教室管理'] += 2.0;
+    }
+    if (titleLower.includes('クライアント企業') || titleLower.includes('クライアント')) {
+      domainScores['クライアント企業管理'] += 2.0;
+    }
+    if (titleLower.includes('全体管理') || titleLower.includes('サイト運営')) {
+      domainScores['全体管理'] += 2.0;
+    }
+    if (titleLower.includes('オファー')) {
+      domainScores['オファー管理'] += 2.0;
+    }
+    if (titleLower.includes('応募') || titleLower.includes('選考') || titleLower.includes('採用')) {
+      domainScores['採用フロー'] += 2.0;
+    }
+    if (titleLower.includes('口コミ') || titleLower.includes('評価')) {
+      domainScores['口コミ・評価'] += 2.0;
+    }
+    if (titleLower.includes('共通要件') || titleLower.includes('インフラ') || titleLower.includes('システム共通')) {
+      domainScores['システム共通'] += 2.0;
+    }
+    
+    // コンテンツのキーワード（重み: 1.0）
+    if (contentLower.includes('会員') && !contentLower.includes('クライアント企業')) {
+      domainScores['会員管理'] += 1.0;
+    }
+    if (contentLower.includes('求人')) {
+      domainScores['求人管理'] += 1.0;
+    }
+    if (contentLower.includes('教室')) {
+      domainScores['教室管理'] += 1.0;
+    }
+    if (contentLower.includes('クライアント企業') || contentLower.includes('クライアント')) {
+      domainScores['クライアント企業管理'] += 1.0;
+    }
+    if (contentLower.includes('全体管理') || contentLower.includes('サイト運営')) {
+      domainScores['全体管理'] += 1.0;
+    }
+    if (contentLower.includes('オファー')) {
+      domainScores['オファー管理'] += 1.0;
+    }
+    if (contentLower.includes('応募') || contentLower.includes('選考') || contentLower.includes('採用')) {
+      domainScores['採用フロー'] += 1.0;
+    }
+    if (contentLower.includes('口コミ') || contentLower.includes('評価')) {
+      domainScores['口コミ・評価'] += 1.0;
+    }
+    if (contentLower.includes('共通要件') || contentLower.includes('インフラ') || contentLower.includes('システム共通')) {
+      domainScores['システム共通'] += 1.0;
+    }
+    
+    // 複合キーワード（重み: 1.5）
+    if ((text.includes('応募') && text.includes('選考')) || 
+        (text.includes('選考') && text.includes('採用')) ||
+        (text.includes('応募') && text.includes('採用'))) {
+      domainScores['採用フロー'] += 1.5;
+    }
+    if (text.includes('オファー') && (text.includes('受信') || text.includes('送信') || text.includes('通知'))) {
+      domainScores['オファー管理'] += 1.5;
+    }
+    if ((text.includes('会員') && text.includes('登録')) ||
+        (text.includes('会員') && text.includes('退会')) ||
+        (text.includes('会員') && text.includes('アカウント'))) {
+      domainScores['会員管理'] += 1.5;
+    }
+    if ((text.includes('教室') && (text.includes('登録') || text.includes('作成') || text.includes('管理')))) {
+      domainScores['教室管理'] += 1.5;
+    }
+    if ((text.includes('求人') && (text.includes('登録') || text.includes('作成') || text.includes('検索')))) {
+      domainScores['求人管理'] += 1.5;
+    }
+    
+    // 最大スコアのドメインを返す
+    const maxScore = Math.max(...Object.values(domainScores));
+    if (maxScore === 0) {
+      return 'その他';
+    }
+    
+    const topDomain = Object.entries(domainScores)
+      .find(([_, score]) => score === maxScore)?.[0] as SystemDomain;
+    
+    return topDomain || 'その他';
   }
   
   /**

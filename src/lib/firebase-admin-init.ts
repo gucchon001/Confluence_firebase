@@ -22,9 +22,16 @@ export function initializeFirebaseAdmin() {
         try {
           // JSON文字列として解析を試みる
           const serviceAccountData = JSON.parse(serviceAccount);
+          // FirestoreにアクセスするプロジェクトIDを決定
+          // 1. 環境変数FIREBASE_PROJECT_IDが指定されている場合はそれを使用
+          // 2. 次にNEXT_PUBLIC_FIREBASE_PROJECT_IDを確認（Firestoreのデータが存在するプロジェクト）
+          // 3. 最後にサービスアカウントキーのproject_idを使用
+          const firebaseProjectId = process.env.FIREBASE_PROJECT_ID 
+            || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID 
+            || serviceAccountData.project_id;
           initializeApp({
             credential: admin.credential.cert(serviceAccountData),
-            projectId: process.env.FIREBASE_PROJECT_ID || serviceAccountData.project_id
+            projectId: firebaseProjectId
           });
           console.log('✅ Firebase Admin SDK initialized from JSON');
         } catch (parseError) {
@@ -52,9 +59,16 @@ export function initializeFirebaseAdmin() {
           try {
             const fileContent = fs.readFileSync(serviceAccountPath, 'utf8');
             const serviceAccountData = JSON.parse(fileContent);
+            // FirestoreにアクセスするプロジェクトIDを決定
+            // 1. 環境変数FIREBASE_PROJECT_IDが指定されている場合はそれを使用
+            // 2. 次にNEXT_PUBLIC_FIREBASE_PROJECT_IDを確認（Firestoreのデータが存在するプロジェクト）
+            // 3. 最後にサービスアカウントキーのproject_idを使用
+            const firebaseProjectId = process.env.FIREBASE_PROJECT_ID 
+              || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID 
+              || serviceAccountData.project_id;
             initializeApp({
               credential: admin.credential.cert(serviceAccountData),
-              projectId: process.env.FIREBASE_PROJECT_ID || serviceAccountData.project_id
+              projectId: firebaseProjectId
             });
             console.log('✅ Firebase Admin SDK initialized from file');
           } catch (readError) {

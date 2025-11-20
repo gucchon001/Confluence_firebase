@@ -7,7 +7,7 @@
 export type Environment = 'development' | 'staging' | 'production';
 
 // データソース型定義
-export type DataSource = 'confluence' | 'jira' | 'mixed' | 'unknown';
+export type DataSource = 'confluence' | 'jira' | 'google_drive' | 'mixed' | 'unknown';
 
 // 参照元の型定義
 export interface SourceReference {
@@ -105,7 +105,7 @@ export function getDataSourceFromSources(
   // dataSourceフィールドを優先的に使用
   const dataSources = sources
     .map(s => s.dataSource)
-    .filter((ds): ds is 'confluence' | 'jira' => ds === 'confluence' || ds === 'jira');
+    .filter((ds): ds is 'confluence' | 'jira' | 'google_drive' => ds === 'confluence' || ds === 'jira' || ds === 'google_drive');
 
   if (dataSources.length > 0) {
     const uniqueDataSources = new Set(dataSources);
@@ -122,8 +122,12 @@ export function getDataSourceFromSources(
   const hasJira = sources.some(source =>
     source.url && (source.url.includes('jira') || source.url.includes('atlassian.net/jira'))
   );
+  const hasGoogleDrive = sources.some(source =>
+    source.url && (source.url.includes('drive.google.com') || source.url.includes('docs.google.com'))
+  );
 
-  if (hasConfluence && hasJira) {
+  const sourceCount = [hasConfluence, hasJira, hasGoogleDrive].filter(Boolean).length;
+  if (sourceCount > 1) {
     return 'mixed';
   }
   if (hasConfluence) {
@@ -131,6 +135,9 @@ export function getDataSourceFromSources(
   }
   if (hasJira) {
     return 'jira';
+  }
+  if (hasGoogleDrive) {
+    return 'google_drive';
   }
 
   return 'unknown';
@@ -161,6 +168,8 @@ export function getDataSourceColor(source: DataSource): string {
       return 'bg-purple-100 text-purple-800 border-purple-200';
     case 'jira':
       return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'google_drive':
+      return 'bg-green-100 text-green-800 border-green-200';
     case 'mixed':
       return 'bg-indigo-100 text-indigo-800 border-indigo-200';
     case 'unknown':
@@ -195,8 +204,10 @@ export function getDataSourceName(source: DataSource): string {
       return 'Confluence';
     case 'jira':
       return 'Jira';
+    case 'google_drive':
+      return 'Google Drive';
     case 'mixed':
-      return 'Confluence + Jira';
+      return '複数ソース';
     case 'unknown':
       return '不明';
     default:

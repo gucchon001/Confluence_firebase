@@ -488,7 +488,8 @@ export const POST = async (req: NextRequest) => {
             for await (const result of streamingSummarizeConfluenceDocs({
               question,
               context: contextDocsForLLM, // LLMに渡す件数を制限
-              chatHistory
+              chatHistory,
+              source // データソース（confluence/jira）を渡す
             })) {
             
             if (result.isComplete) {
@@ -676,7 +677,7 @@ export const POST = async (req: NextRequest) => {
                 chunkIndex: result.chunkIndex,
                 totalChunks: result.totalChunks,
                 references: result.references, // フィルタリング後（LLMが使用した参照元）
-                allReferences: allReferences, // フィルタリング前（検索結果全体）
+                allReferences: (result as any).allReferences || allReferences, // ★★★ 修正: 拡張されたallReferencesを優先的に使用 ★★★
                 fullAnswer: fullAnswer,
                 postLogId: savedPostLogId || null,
                 // パフォーマンス情報を追加（テスト用）

@@ -78,6 +78,7 @@ import { errorAnalysisService } from '@/lib/error-analysis-service';
 import { useAdmin } from '@/hooks/use-admin';
 import { useAuthWrapper } from '@/hooks/use-auth-wrapper';
 import { JiraDashboard } from '@/components/jira-dashboard';
+import { GoogleDriveImportSection } from '@/components/google-drive-import-section';
 import type { AdminUser, PostLog, Reference, SatisfactionRating, PerformanceAlert, ErrorLog, SystemHealth } from '@/types';
 import type { ErrorAnalysis } from '@/lib/error-analysis-service';
 
@@ -660,31 +661,6 @@ const AdminDashboard: React.FC = () => {
   const getDataSourceForLog = (log: PostLog): 'confluence' | 'jira' | 'mixed' | 'unknown' => {
     return getDataSource(log.metadata, log.references);
   };
-    switch (source) {
-      case 'confluence': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'jira': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'mixed': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getEnvironmentName = (env: 'development' | 'staging' | 'production'): string => {
-    switch (env) {
-      case 'development': return '開発環境';
-      case 'staging': return 'ステージング';
-      case 'production': return '本番環境';
-      default: return '不明';
-    }
-  };
-
-  const getDataSourceName = (source: 'confluence' | 'jira' | 'mixed' | 'unknown'): string => {
-    switch (source) {
-      case 'confluence': return 'Confluence';
-      case 'jira': return 'Jira';
-      case 'mixed': return 'Confluence + Jira';
-      default: return '不明';
-    }
-  };
 
   // パフォーマンス分析用データ処理
   const getPerformanceData = () => {
@@ -961,11 +937,12 @@ const AdminDashboard: React.FC = () => {
 
       {/* タブコンテンツ */}
       <Tabs defaultValue="jira" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="jira">開発進捗ダッシュボード</TabsTrigger>
           <TabsTrigger value="performance">パフォーマンス分析</TabsTrigger>
           <TabsTrigger value="users">ユーザー管理</TabsTrigger>
           <TabsTrigger value="errors">エラー分析</TabsTrigger>
+          <TabsTrigger value="data-sources">データソース管理</TabsTrigger>
         </TabsList>
 
         <TabsContent value="jira" className="space-y-4">
@@ -1487,6 +1464,20 @@ const AdminDashboard: React.FC = () => {
                   </Table>
                 </ScrollArea>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="data-sources" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Google Driveインポート
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GoogleDriveImportSection />
             </CardContent>
           </Card>
         </TabsContent>
