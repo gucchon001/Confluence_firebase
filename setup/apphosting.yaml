@@ -59,6 +59,20 @@ env:
       - BUILD
       - RUNTIME
   
+  # Google Picker API（ビルド時とランタイムの両方）
+  # 注意: NEXT_PUBLIC_* 変数はクライアントサイドで使用されるため、ブラウザに公開されます
+  - variable: NEXT_PUBLIC_GOOGLE_API_KEY
+    value: AIzaSyAyW-nOH2DQu-5GdHqALhGp264jiSjAJ1k
+    availability:
+      - BUILD
+      - RUNTIME
+  
+  - variable: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    value: 122015916118-erbk5824ul8aenq5unpknhpu0aenkr7f.apps.googleusercontent.com
+    availability:
+      - BUILD
+      - RUNTIME
+  
   # Confluence API（ランタイムのみ）
   - variable: CONFLUENCE_BASE_URL
     value: https://giginc.atlassian.net

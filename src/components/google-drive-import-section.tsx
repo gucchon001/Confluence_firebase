@@ -37,6 +37,7 @@ export const GoogleDriveImportSection: React.FC = () => {
   const [isListing, setIsListing] = useState(false);
   const [fileList, setFileList] = useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Array<{ id: string; name: string; mimeType: string }>>([]);
+  const [checkedFileIds, setCheckedFileIds] = useState<Set<string>>(new Set()); // ファイル一覧でチェックされたファイルID
 
   // Google Picker API設定
   const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '';
@@ -190,6 +191,7 @@ export const GoogleDriveImportSection: React.FC = () => {
 
       const result = await response.json();
       setFileList(result.files || []);
+      setCheckedFileIds(new Set()); // ファイル一覧を取得したらチェック状態をリセット
     } catch (error: any) {
       console.error('❌ ファイル一覧取得エラー:', error);
       alert(`ファイル一覧取得エラー: ${error.message}`);
@@ -294,67 +296,120 @@ export const GoogleDriveImportSection: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          {/* Google Pickerボタン */}
-          {googleApiKey && googleClientId ? (
+        {/* セクション1: ファイル選択 */}
+        <div className="border rounded-lg p-4 bg-blue-50/50">
+          <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <Folder className="h-4 w-4" />
+            ステップ1: ファイルを選択
+          </h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            インポートしたいファイルやフォルダを選択します。ファイルIDフィールドに自動入力されます。
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {/* Google Pickerボタン */}
+            {googleApiKey && googleClientId ? (
+              <Button
+                onClick={showPicker}
+                disabled={!isPickerLoaded || isPickerLoading}
+                variant="default"
+                className="bg-blue-600 hover:bg-blue-700"
+                title={!isPickerLoaded ? 'Google Picker APIの読み込み中...' : 'Google Driveからファイルやフォルダを選択'}
+              >
+                {isPickerLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    読み込み中...
+                  </>
+                ) : !isPickerLoaded ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    初期化中...
+                  </>
+                ) : (
+                  <>
+                    <Folder className="h-4 w-4 mr-2" />
+                    Google Driveから選択
+                  </>
+                )}
+              </Button>
+            ) : (
+              <div className="text-xs text-muted-foreground p-2 border rounded bg-yellow-50">
+                ⚠️ Google Picker APIを使用するには、環境変数（NEXT_PUBLIC_GOOGLE_API_KEY、NEXT_PUBLIC_GOOGLE_CLIENT_ID）の設定が必要です
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* セクション2: ファイル一覧の確認（オプション） */}
+        <div className="border rounded-lg p-4 bg-gray-50/50">
+          <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <FolderOpen className="h-4 w-4" />
+            ステップ2: ファイル一覧を確認（オプション）
+          </h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            <strong>フォルダIDを入力</strong>して、フォルダ内のファイル一覧を<strong>表示するだけ</strong>です。
+            ファイルの内容は取得せず、検索可能にもなりません。どのファイルがあるか確認したい場合に使用します。
+          </p>
+          <div className="flex gap-2 flex-wrap items-center">
             <Button
-              onClick={showPicker}
-              disabled={!isPickerLoaded || isPickerLoading}
-              variant="default"
-              className="bg-blue-600 hover:bg-blue-700"
+              onClick={handleListFiles}
+              disabled={isListing || (!useServiceAccount && !accessToken) || !folderId}
+              variant="outline"
+              title="フォルダIDを入力してからクリックしてください"
             >
-              {isPickerLoading ? (
+              {isListing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  読み込み中...
+                  取得中...
                 </>
               ) : (
                 <>
-                  <Folder className="h-4 w-4 mr-2" />
-                  Google Driveから選択
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  フォルダ内のファイル一覧を表示
                 </>
               )}
             </Button>
-          ) : (
-            <div className="text-xs text-muted-foreground p-2 border rounded bg-yellow-50">
-              ⚠️ Google Picker APIを使用するには、環境変数（NEXT_PUBLIC_GOOGLE_API_KEY、NEXT_PUBLIC_GOOGLE_CLIENT_ID）の設定が必要です
-            </div>
-          )}
+            <span className="text-xs text-muted-foreground">
+              ※ フォルダIDを入力してからクリックしてください
+            </span>
+          </div>
+        </div>
 
-          <Button
-            onClick={handleListFiles}
-            disabled={isListing || (!useServiceAccount && !accessToken)}
-            variant="outline"
-          >
-            {isListing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                取得中...
-              </>
-            ) : (
-              <>
-                <FolderOpen className="h-4 w-4 mr-2" />
-                ファイル一覧を取得
-              </>
-            )}
-          </Button>
-
-          <Button
-            onClick={handleImport}
-            disabled={isImporting || (!useServiceAccount && !accessToken) || (!fileIds && !folderId)}
-          >
-            {isImporting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                インポート中...
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                インポート
-              </>
-            )}
-          </Button>
+        {/* セクション3: インポート実行 */}
+        <div className="border rounded-lg p-4 bg-green-50/50">
+          <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            ステップ3: インポート実行
+          </h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            <strong>ファイルIDまたはフォルダIDを指定</strong>して、実際にファイルの内容を取得し、
+            <strong>Firestoreに保存</strong>して<strong>LanceDBにインデックス</strong>を作成します。
+            これにより、ファイルが検索可能になります。
+          </p>
+          <div className="flex gap-2 flex-wrap items-center">
+            <Button
+              onClick={handleImport}
+              disabled={isImporting || (!useServiceAccount && !accessToken) || (!fileIds && !folderId)}
+              variant="default"
+              className="bg-green-600 hover:bg-green-700"
+              title={(!fileIds && !folderId) ? 'ファイルIDまたはフォルダIDを入力してください' : 'ファイルをインポートして検索可能にします'}
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  インポート中...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  ファイルをインポート（検索可能にする）
+                </>
+              )}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              ※ ファイルIDまたはフォルダIDを入力してからクリックしてください
+            </span>
+          </div>
         </div>
 
         {/* 選択されたファイル表示 */}
@@ -402,7 +457,68 @@ export const GoogleDriveImportSection: React.FC = () => {
       {fileList.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">ファイル一覧 ({fileList.length}件)</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm">
+                ファイル一覧 ({fileList.length}件)
+                {checkedFileIds.size > 0 && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    ({checkedFileIds.size}件選択中)
+                  </span>
+                )}
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (checkedFileIds.size === fileList.length) {
+                      // すべて選択解除
+                      setCheckedFileIds(new Set());
+                    } else {
+                      // すべて選択
+                      setCheckedFileIds(new Set(fileList.map(f => f.id)));
+                    }
+                  }}
+                >
+                  {checkedFileIds.size === fileList.length ? 'すべて解除' : 'すべて選択'}
+                </Button>
+                {checkedFileIds.size > 0 && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => {
+                      // 選択されたファイルをファイルIDフィールドに追加
+                      const checkedFiles = fileList.filter(f => checkedFileIds.has(f.id));
+                      const newFileIds = checkedFiles.map(f => f.id);
+                      
+                      // 既存のIDとマージ（重複を除去）
+                      const existingIds = fileIds ? fileIds.split(',').map(id => id.trim()).filter(Boolean) : [];
+                      const mergedIds = [...new Set([...existingIds, ...newFileIds])];
+                      
+                      setFileIds(mergedIds.join(', '));
+                      setFolderId('');
+                      
+                      // 選択されたファイルをselectedFilesに追加
+                      const newSelectedFiles = checkedFiles.map(f => ({
+                        id: f.id,
+                        name: f.name,
+                        mimeType: f.mimeType,
+                      }));
+                      setSelectedFiles(prev => {
+                        const existing = prev.map(f => f.id);
+                        const toAdd = newSelectedFiles.filter(f => !existing.includes(f.id));
+                        return [...prev, ...toAdd];
+                      });
+                      
+                      // チェックを解除
+                      setCheckedFileIds(new Set());
+                    }}
+                  >
+                    選択したファイルを追加 ({checkedFileIds.size}件)
+                  </Button>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -412,6 +528,20 @@ export const GoogleDriveImportSection: React.FC = () => {
                   className="flex items-center justify-between p-2 border rounded hover:bg-muted/50"
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={checkedFileIds.has(file.id)}
+                      onChange={(e) => {
+                        const newChecked = new Set(checkedFileIds);
+                        if (e.target.checked) {
+                          newChecked.add(file.id);
+                        } else {
+                          newChecked.delete(file.id);
+                        }
+                        setCheckedFileIds(newChecked);
+                      }}
+                      className="rounded"
+                    />
                     <span className="text-lg">{getMimeTypeIcon(file.mimeType)}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{file.name}</p>
@@ -429,11 +559,24 @@ export const GoogleDriveImportSection: React.FC = () => {
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      setFileIds(file.id);
-                      setFolderId('');
+                      // 既存のIDに追加（重複を除去）
+                      const existingIds = fileIds ? fileIds.split(',').map(id => id.trim()).filter(Boolean) : [];
+                      if (!existingIds.includes(file.id)) {
+                        const newIds = [...existingIds, file.id];
+                        setFileIds(newIds.join(', '));
+                        setFolderId('');
+                        
+                        // selectedFilesにも追加
+                        setSelectedFiles(prev => {
+                          if (prev.some(f => f.id === file.id)) {
+                            return prev;
+                          }
+                          return [...prev, { id: file.id, name: file.name, mimeType: file.mimeType }];
+                        });
+                      }
                     }}
                   >
-                    選択
+                    追加
                   </Button>
                 </div>
               ))}

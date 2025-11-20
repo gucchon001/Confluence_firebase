@@ -16,7 +16,7 @@ declare global {
           };
         };
       };
-      picker: {
+      picker?: {
         ViewId: {
           DOCS: string;
           DOCS_IMAGES: string;
@@ -65,9 +65,14 @@ declare global {
           GRID: string;
         };
       };
-      load: (api: string, version: string, callback: () => void) => void;
     };
-    gapi?: any;
+    gapi?: {
+      load: (api: string, config: {
+        callback?: () => void;
+        onerror?: (error: any) => void;
+      }) => void;
+      picker?: any;
+    };
   }
 }
 
@@ -99,30 +104,149 @@ export const useGooglePicker = (options: UseGooglePickerOptions) => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // APIキーとクライアントIDが設定されていない場合はスキップ
+    if (!apiKey || !clientId) {
+      console.warn('[Google Picker] APIキーまたはクライアントIDが設定されていません', { apiKey: !!apiKey, clientId: !!clientId });
+      return;
+    }
+
     // 既に読み込まれている場合はスキップ
-    if (window.google?.picker) {
+    if (window.google?.picker || (window.gapi && window.gapi.picker)) {
+      console.log('[Google Picker] 既に読み込まれています');
       setIsLoaded(true);
       return;
     }
 
-    // Google APIスクリプトを動的に読み込む
-    const script = document.createElement('script');
-    script.src = 'https://apis.google.com/js/api.js';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      if (window.google) {
-        window.google.load('picker', '1', () => {
+    // 既にスクリプトが追加されているか確認
+    const existingApiScript = document.querySelector('script[src="https://apis.google.com/js/api.js"]');
+    const existingGisScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    
+    if (existingApiScript && existingGisScript) {
+      console.log('[Google Picker] スクリプトは既に追加されています。読み込み完了を待機...');
+      // スクリプトが既に追加されている場合、読み込み完了を待つ
+      const checkInterval = setInterval(() => {
+        if (window.google?.picker || (window.gapi && window.gapi.picker)) {
+          console.log('[Google Picker] Google Picker APIが利用可能になりました');
           setIsLoaded(true);
-        });
+          clearInterval(checkInterval);
+        } else if (window.gapi && window.gapi.load) {
+          // gapi.loadが利用可能な場合、Picker APIを読み込む
+          try {
+            window.gapi.load('picker', {
+              callback: () => {
+                console.log('[Google Picker] Google Picker APIの初期化完了 (既存スクリプト経由)');
+                setIsLoaded(true);
+                clearInterval(checkInterval);
+              },
+            });
+          } catch (error) {
+            console.error('[Google Picker] 初期化エラー:', error);
+          }
+        }
+      }, 100);
+      
+      // 10秒後にタイムアウト
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!window.google?.picker && !(window.gapi && window.gapi.picker)) {
+          console.error('[Google Picker] タイムアウト: Google Picker APIの読み込みが完了しませんでした');
+        }
+      }, 10000);
+      
+      return () => clearInterval(checkInterval);
+    }
+
+    console.log('[Google Picker] Google APIスクリプトを読み込み中...');
+
+    // Google Identity Services (GIS) を読み込む（OAuth2認証用）
+    const gisScript = document.createElement('script');
+    gisScript.src = 'https://accounts.google.com/gsi/client';
+    gisScript.async = true;
+    gisScript.defer = true;
+    
+    // Google Picker APIを読み込む
+    const pickerScript = document.createElement('script');
+    pickerScript.src = 'https://apis.google.com/js/api.js';
+    pickerScript.async = true;
+    pickerScript.defer = true;
+    
+    let gisLoaded = false;
+    let pickerLoaded = false;
+
+    const checkAndInit = () => {
+      if (gisLoaded && pickerLoaded) {
+        console.log('[Google Picker] Google APIスクリプトの読み込み完了');
+        // Google Picker APIを初期化
+        try {
+          // gapi.loadを使用する方法（推奨）
+          if (window.gapi && window.gapi.load) {
+            console.log('[Google Picker] gapi.loadを使用してPicker APIを読み込み中...');
+            window.gapi.load('picker', {
+              callback: () => {
+                console.log('[Google Picker] Google Picker APIの初期化完了 (gapi.load)');
+                setIsLoaded(true);
+              },
+              onerror: (error: any) => {
+                console.error('[Google Picker] Google Picker APIの初期化エラー:', error);
+              },
+            });
+          } else if (window.google?.picker) {
+            // window.google.pickerが直接利用可能な場合
+            console.log('[Google Picker] Google Picker APIが直接利用可能です');
+            setIsLoaded(true);
+          } else {
+            // 少し待ってから再試行
+            console.log('[Google Picker] Google Picker APIの利用可能性を確認中...');
+            setTimeout(() => {
+              if (window.google?.picker || (window.gapi && window.gapi.picker)) {
+                console.log('[Google Picker] Google Picker APIが利用可能になりました');
+                setIsLoaded(true);
+              } else if (window.gapi && window.gapi.load) {
+                // 再試行: gapi.loadを使用
+                window.gapi.load('picker', {
+                  callback: () => {
+                    console.log('[Google Picker] Google Picker APIの初期化完了 (再試行)');
+                    setIsLoaded(true);
+                  },
+                });
+              } else {
+                console.error('[Google Picker] Google Picker APIが利用できません');
+              }
+            }, 500);
+          }
+        } catch (error) {
+          console.error('[Google Picker] Google Picker APIの初期化エラー:', error);
+        }
       }
     };
-    document.head.appendChild(script);
+
+    gisScript.onload = () => {
+      console.log('[Google Picker] Google Identity Services読み込み完了');
+      gisLoaded = true;
+      checkAndInit();
+    };
+
+    pickerScript.onload = () => {
+      console.log('[Google Picker] Google API読み込み完了');
+      pickerLoaded = true;
+      checkAndInit();
+    };
+
+    gisScript.onerror = (error) => {
+      console.error('[Google Picker] Google Identity Services読み込みエラー:', error);
+    };
+
+    pickerScript.onerror = (error) => {
+      console.error('[Google Picker] Google API読み込みエラー:', error);
+    };
+
+    document.head.appendChild(gisScript);
+    document.head.appendChild(pickerScript);
 
     return () => {
       // クリーンアップはしない（他のコンポーネントでも使用される可能性があるため）
     };
-  }, []);
+  }, [apiKey, clientId]);
 
   // OAuth2トークンを取得
   const getAccessToken = useCallback((): Promise<string> => {
@@ -165,11 +289,13 @@ export const useGooglePicker = (options: UseGooglePickerOptions) => {
       setIsLoading(true);
       const token = await getAccessToken();
 
-      if (!window.google?.picker) {
+      // window.google.pickerまたはwindow.gapi.pickerを使用
+      const pickerApi = window.google?.picker || (window.gapi && window.gapi.picker);
+      if (!pickerApi) {
         throw new Error('Google Picker APIが利用できません');
       }
 
-      const { ViewId, Action, PickerBuilder, DocsView, DocsViewMode } = window.google.picker;
+      const { ViewId, Action, PickerBuilder, DocsView, DocsViewMode } = pickerApi;
 
       // ドキュメントビューを作成
       const docsView = new DocsView();
