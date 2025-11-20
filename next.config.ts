@@ -10,6 +10,12 @@ const nextConfig = {
   // ★★★ Firebase App Hosting用のスタンドアロン出力設定 ★★★
   output: 'standalone',
   
+  // 環境変数のマッピング: GEMINI_API_KEYをNEXT_PUBLIC_GOOGLE_API_KEYとして公開
+  // これにより、Google APIキーをGEMINI_API_KEYに一元化できます
+  env: {
+    NEXT_PUBLIC_GOOGLE_API_KEY: process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '',
+  },
+  
   reactStrictMode: true,
   typescript: {
     ignoreBuildErrors: false,

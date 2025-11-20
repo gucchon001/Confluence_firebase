@@ -624,7 +624,7 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         resultWithScore._hybridScore = hybridScore;
         // タイトル救済検索（_sourceType: 'title-exact'）の場合は保持、それ以外は通常のロジック
         if (!resultWithScore._sourceType || resultWithScore._sourceType !== 'title-exact') {
-          resultWithScore._sourceType = keywordScore > 0 ? 'hybrid' : 'vector';
+        resultWithScore._sourceType = keywordScore > 0 ? 'hybrid' : 'vector';
         }
         resultWithScore._matchDetails = {
           titleMatches,
@@ -765,6 +765,18 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
       console.log(`[searchLanceDB] Top 3 results after RRF:`);
       for (let i = 0; i < Math.min(3, vectorResults.length); i++) {
         console.log(`  ${i+1}. ${vectorResults[i].title} (rrf: ${(vectorResults[i]._rrfScore ?? 0).toFixed(4)})`);
+      }
+      // デバッグ: 045ページが検索結果に含まれているか確認
+      const page045 = vectorResults.find(r => {
+        const pageId = getPageIdFromRecord(r);
+        return pageId === 703594590 || pageId === '703594590' || r.title?.includes('045') || r.title?.includes('パスワード再設定');
+      });
+      if (page045) {
+        const pageId = getPageIdFromRecord(page045);
+        const rank = vectorResults.findIndex(r => getPageIdFromRecord(r) === pageId) + 1;
+        console.log(`[DEBUG] 045ページが見つかりました: pageId=${pageId}, title=${page045.title}, rank=${rank}, rrf=${(page045._rrfScore ?? 0).toFixed(4)}`);
+      } else {
+        console.log(`[DEBUG] 045ページは検索結果に含まれていません（RRF段階、${vectorResults.length}件中）`);
       }
       
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1145,10 +1157,12 @@ async function executeVectorSearch(
     // ★★★ 近似検索（IVF_PQ）の誤差を考慮して、より多くの結果を取得 ★★★
     // 理由: 距離が100位以内に入るはずのドキュメントが検索結果に含まれない問題に対処
     // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
-    // 最適化: 30倍 → 15倍に削減（パフォーマンス向上、topK=20の場合、600件→300件、50%削減）
-    const searchLimit = topK * 15;
+    // 修正: 20倍 → 30倍に拡大（Phase 0A-4設定に復帰、045ページを確実に含める）
+    // 理由: 045ページ（query7）が9位から12位以下にデグレードした問題に対処
+    //       20倍でも045ページが含まれなかったため、30倍に拡大（Phase 0A-4設定）
+    const searchLimit = topK * 30;
     console.log(`[Vector Search] 🔍 DEBUG: Search limit: ${searchLimit} (topK=${topK})`);
-    let vectorResults = await vectorQuery.limit(searchLimit).toArray(); // 30倍 → 15倍に削減（フェーズ1最適化）
+    let vectorResults = await vectorQuery.limit(searchLimit).toArray(); // 30倍に復帰（Phase 0A-4設定、045ページ対応）
     const vectorSearchDuration = Date.now() - vectorSearchStart;
     
     console.log(`[PERF] 🔍 Vector search completed in ${vectorSearchDuration}ms`);
@@ -1250,11 +1264,13 @@ async function executeVectorSearch(
       
       
       if (matchedKeywords.length > 0) {
+        // ★★★ 調整: タイトルブーストを弱める（タグマッチページが相対的に強くなるように） ★★★
+        // 変更: 10.0倍 → 5.0倍、5.0倍 → 3.0倍
         let boostFactor = 1.0;
         if (titleMatchRatio >= 0.66) {
-          boostFactor = 10.0;
+          boostFactor = 5.0; // 10.0倍 → 5.0倍に削減
         } else if (titleMatchRatio >= 0.33) {
-          boostFactor = 5.0;
+          boostFactor = 3.0; // 5.0倍 → 3.0倍に削減
         }
         
         return { 
@@ -1276,6 +1292,19 @@ async function executeVectorSearch(
     });
     
     console.log(`[Vector Search] Title boost applied: ${vectorResults.filter(r => r._titleBoosted).length} results`);
+    
+    // デバッグ: 045ページがベクトル検索結果に含まれているか確認
+    const page045Vector = vectorResults.find(r => {
+      const pageId = getPageIdFromRecord(r);
+      return pageId === 703594590 || pageId === '703594590' || r.title?.includes('045') || r.title?.includes('パスワード再設定');
+    });
+    if (page045Vector) {
+      const pageId = getPageIdFromRecord(page045Vector);
+      const rank = vectorResults.findIndex(r => getPageIdFromRecord(r) === pageId) + 1;
+      console.log(`[DEBUG Vector] 045ページが見つかりました: pageId=${pageId}, title=${page045Vector.title}, rank=${rank}, distance=${(page045Vector._distance ?? 0).toFixed(4)}`);
+    } else {
+      console.log(`[DEBUG Vector] 045ページはベクトル検索結果に含まれていません（${vectorResults.length}件中）`);
+    }
     
     return vectorResults;
     
@@ -1428,10 +1457,35 @@ async function executeBM25Search(
       });
     }
     
-    // スコアでソート（降順）
+    // スコアでソート（降順）- タイトルブースト適用前の元のBM25スコアでソート
     allLunrResults.sort((a, b) => (b.score || 0) - (a.score || 0));
     
+    // デバッグ: 045ページがソート後の順位を確認（タイトルブースト適用前）
+    const page045BeforeBoost = allLunrResults.find(r => {
+      return r.title?.includes('045_【FIX】パスワード再設定機能');
+    });
+    if (page045BeforeBoost) {
+      const rank = allLunrResults.findIndex(r => r.title?.includes('045_【FIX】パスワード再設定機能')) + 1;
+      console.log(`[DEBUG BM25 Before Boost] 045ページの順位（タイトルブースト適用前）: title=${page045BeforeBoost.title}, rank=${rank}/${allLunrResults.length}, score=${(page045BeforeBoost.score || 0).toFixed(4)}`);
+    } else {
+      console.log(`[DEBUG BM25 Before Boost] ⚠️ 045ページはBM25検索結果（${allLunrResults.length}件）に含まれていません`);
+    }
+    
     console.log(`[BM25 Search] ✅ BM25 search completed: found ${allLunrResults.length} results (top ${Math.min(topK, allLunrResults.length)} will be returned)`);
+
+    // デバッグ: 045ページがBM25検索結果に含まれているか確認（スコア統合後、上位取得前）
+    const { getPageIdFromRecord: getPageIdFromRecordBM25 } = await import('./pageid-migration-helper');
+    const page045BM25 = allLunrResults.find(r => {
+      const pageId = getPageIdFromRecordBM25(r);
+      return pageId === 703594590 || pageId === '703594590' || r.title?.includes('045_【FIX】パスワード再設定機能');
+    });
+    if (page045BM25) {
+      const pageId = getPageIdFromRecordBM25(page045BM25);
+      const rank = allLunrResults.findIndex(r => getPageIdFromRecordBM25(r) === pageId) + 1;
+      console.log(`[DEBUG BM25] 045ページが見つかりました: pageId=${pageId}, title=${page045BM25.title}, rank=${rank}/${allLunrResults.length}, score=${(page045BM25.score ?? 0).toFixed(4)}`);
+    } else {
+      console.log(`[DEBUG BM25] 045ページはBM25検索結果に含まれていません（${allLunrResults.length}件中）`);
+    }
 
     // LanceDB側の詳細情報を取得してStructuredLabelなどを補完
     const lanceDbRecordMap = new Map<number | string, any>();
@@ -1579,21 +1633,35 @@ async function executeBM25Search(
     const bm25Results = allLunrResults.map((r: any) => {
       const { matchedKeywords, titleMatchRatio } = calculateTitleMatch(r.title, finalKeywords);
       
-      let boostedScore = r.score || 1.0;
+      // 元のBM25スコアを保持（RRF段階で使用）
+      const originalBM25Score = r.score || 1.0;
+      
+      // タイトルブーストスコアを計算（表示用、RRF段階では使用しない）
+      // ★★★ 調整: タイトルブーストを弱める（タグマッチページが相対的に強くなるように） ★★★
+      // 変更: 5.0倍 → 2.5倍、3.0倍 → 2.0倍
+      let boostedScore = originalBM25Score;
       if (titleMatchRatio >= 0.66) {
-        boostedScore *= 5.0;
+        boostedScore *= 2.5; // 5.0倍 → 2.5倍に削減
       } else if (titleMatchRatio >= 0.33) {
-        boostedScore *= 3.0;
+        boostedScore *= 2.0; // 3.0倍 → 2.0倍に削減
       }
       
       const pageId = getPageIdFromRecord(r) || r.pageId;
       const numericPageId = Number(pageId);
-      const page_id = r.page_id ?? pageId; // ★★★ MIGRATION: page_idを確実に保持 ★★★
       
       // Jiraテーブルの場合、id（issue_key）で取得、Confluenceテーブルの場合、page_idで取得
       const enrichedRecord = tableName === 'jira_issues'
         ? lanceDbRecordMap.get(r.id || r.issue_key)
         : (Number.isFinite(numericPageId) ? lanceDbRecordMap.get(numericPageId) : undefined);
+      
+      // ★★★ 修正: page_idを確実に設定（enrichedRecordから優先的に取得） ★★★
+      const finalPageId = enrichedRecord?.page_id ?? enrichedRecord?.pageId ?? r.pageId ?? pageId;
+      const finalPage_id = enrichedRecord?.page_id ?? r.page_id ?? finalPageId;
+      
+      // デバッグ: 045ページの場合、pageId取得状況を確認
+      if (r.title?.includes('045_【FIX】パスワード再設定機能')) {
+        console.log(`[DEBUG BM25 Enrich] 045ページ: r.pageId=${r.pageId}, r.page_id=${r.page_id}, getPageIdFromRecord=${getPageIdFromRecord(r)}, numericPageId=${numericPageId}, enrichedRecord=${enrichedRecord ? 'found' : 'not found'}, enrichedPageId=${enrichedRecord?.page_id || enrichedRecord?.pageId || 'N/A'}, finalPageId=${finalPageId}, finalPage_id=${finalPage_id}`);
+      }
 
       const normalizedLabels = enrichedRecord
         ? getLabelsAsArray(enrichedRecord.labels)
@@ -1629,13 +1697,14 @@ async function executeBM25Search(
         title: (r.title || '').replace(/\uFEFF/g, ''),
         content: (r.content || '').replace(/\uFEFF/g, ''),
         labels: normalizedLabels,
-        pageId: enrichedRecord?.pageId ?? pageId,
-        page_id: page_id, // ★★★ MIGRATION: page_idを確実に保持 ★★★
+        pageId: finalPageId,
+        page_id: finalPage_id, // ★★★ 修正: page_idを確実に設定（enrichedRecordから優先的に取得） ★★★
         isChunked: r.isChunked,
         url: enrichedRecord?.url ?? r.url,
         space_key: spaceKey,
         lastUpdated: enrichedRecord?.lastUpdated ?? r.lastUpdated,
-        _bm25Score: boostedScore,
+        _bm25Score: originalBM25Score, // ★★★ 修正: 元のBM25スコアを保持（RRF段階で使用） ★★★
+        _bm25BoostedScore: boostedScore, // タイトルブーストスコア（表示用）
         _titleMatchRatio: titleMatchRatio,
         _titleMatchedKeywords: matchedKeywords.length,
         structured_category: enrichedRecord?.structured_category,
@@ -1653,8 +1722,50 @@ async function executeBM25Search(
       };
     });
     
+    // ★★★ 修正: 元のBM25スコアで再ソート（タイトルブーストを無視） ★★★
+    // 理由: タイトルブーストは表示用であり、RRF段階では元のBM25スコアを使用する必要がある
+    //       045ページのようにタグでマッチする重要なページが除外されないようにする
+    bm25Results.sort((a, b) => {
+      // 元のBM25スコア（タイトルブースト適用前）で比較
+      const scoreA = a._bm25Score || a.score || 0;
+      const scoreB = b._bm25Score || b.score || 0;
+      return scoreB - scoreA;
+    });
+    
+    // デバッグ: 045ページがタイトルブースト適用後の順位を確認
+    const { getPageIdFromRecord: getPageIdFromRecordBM25Sorted } = await import('./pageid-migration-helper');
+    const page045AfterBoost = bm25Results.find(r => {
+      const pageId = getPageIdFromRecordBM25Sorted(r);
+      return pageId === 703594590 || pageId === '703594590' || r.title?.includes('045_【FIX】パスワード再設定機能');
+    });
+    if (page045AfterBoost) {
+      const pageId = getPageIdFromRecordBM25Sorted(page045AfterBoost);
+      const rank = bm25Results.findIndex(r => getPageIdFromRecordBM25Sorted(r) === pageId) + 1;
+      console.log(`[DEBUG BM25 After Boost] 045ページの順位（タイトルブースト後）: pageId=${pageId}, title=${page045AfterBoost.title}, rank=${rank}/${bm25Results.length}, score=${(page045AfterBoost._bm25Score || page045AfterBoost.score || 0).toFixed(4)}, titleMatchRatio=${(page045AfterBoost._titleMatchRatio || 0).toFixed(2)}`);
+    } else {
+      console.log(`[DEBUG BM25 After Boost] ⚠️ 045ページはタイトルブースト後のBM25検索結果（${bm25Results.length}件）に含まれていません`);
+    }
+    
     const bm25SearchDuration = Date.now() - bm25SearchStart;
-    const finalResults = bm25Results.slice(0, topK);
+    // ★★★ 修正: BM25検索結果の取得件数を拡大（045ページなどの重要ページを含めるため） ★★★
+    // 理由: 045ページが26位だった場合でも、RRF段階で使用できるようにする
+    //       元のBM25スコアでソート済みなので、上位30件を返す
+    const bm25ResultLimit = Math.max(topK * 3, 30); // 10件 → 30件に拡大
+    const finalResults = bm25Results.slice(0, bm25ResultLimit);
+    
+    // デバッグ: 045ページがBM25検索結果の上位10件に含まれているか確認
+    const page045InTop10 = finalResults.find(r => {
+      const pageId = getPageIdFromRecordBM25(r);
+      return pageId === 703594590 || pageId === '703594590' || r.title?.includes('045_【FIX】パスワード再設定機能');
+    });
+    if (page045InTop10) {
+      const pageId = getPageIdFromRecordBM25(page045InTop10);
+      const rank = finalResults.findIndex(r => getPageIdFromRecordBM25(r) === pageId) + 1;
+      console.log(`[DEBUG BM25 Top${bm25ResultLimit}] 045ページが上位${bm25ResultLimit}件に含まれています: pageId=${pageId}, title=${page045InTop10.title}, rank=${rank}/${finalResults.length}, score=${(page045InTop10._bm25Score || page045InTop10.score || 0).toFixed(4)}`);
+    } else {
+      console.log(`[DEBUG BM25 Top${bm25ResultLimit}] ⚠️ 045ページは上位${bm25ResultLimit}件に含まれていません（BM25検索で1位なのに！）`);
+    }
+    
     console.log(`[BM25 Search] ✅ BM25 search completed in ${bm25SearchDuration}ms, returning ${finalResults.length} results`);
     
     if (bm25SearchDuration > 5000) {

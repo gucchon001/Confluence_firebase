@@ -40,8 +40,14 @@ export const GoogleDriveImportSection: React.FC = () => {
   const [checkedFileIds, setCheckedFileIds] = useState<Set<string>>(new Set()); // ファイル一覧でチェックされたファイルID
 
   // Google Picker API設定
+  // next.config.tsでGEMINI_API_KEYからNEXT_PUBLIC_GOOGLE_API_KEYにマッピングされています
   const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '';
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+  
+  // デバッグ用（開発環境のみ）
+  if (process.env.NODE_ENV === 'development' && !googleApiKey) {
+    console.warn('[Google Drive Import] NEXT_PUBLIC_GOOGLE_API_KEYが設定されていません。next.config.tsのenv設定を確認してください。');
+  }
 
   // Google Pickerフック
   const { isLoaded: isPickerLoaded, isLoading: isPickerLoading, showPicker } = useGooglePicker({

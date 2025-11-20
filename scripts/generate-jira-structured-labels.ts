@@ -140,8 +140,11 @@ async function main() {
         
         successCount++;
         
-        if ((i + 1) % 10 === 0) {
-          console.log(`${progress} ${i + 1}課題完了 (成功: ${successCount}件, ルールベース: ${ruleBasedCount}件, LLM: ${llmBasedCount}件)`);
+        // 進捗をより頻繁に表示（毎件または10件ごと）
+        if ((i + 1) % 10 === 0 || i === 0) {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          const avgTime = (parseFloat(elapsed) / (i + 1)).toFixed(2);
+          console.log(`${progress} ${i + 1}課題完了 (成功: ${successCount}件, ルールベース: ${ruleBasedCount}件, LLM: ${llmBasedCount}件) - 経過時間: ${elapsed}秒, 平均: ${avgTime}秒/件`);
         }
       } catch (error: any) {
         errorCount++;

@@ -61,14 +61,16 @@ env:
   
   # Google Picker API（ビルド時とランタイムの両方）
   # 注意: NEXT_PUBLIC_* 変数はクライアントサイドで使用されるため、ブラウザに公開されます
-  - variable: NEXT_PUBLIC_GOOGLE_API_KEY
-    value: AIzaSyAyW-nOH2DQu-5GdHqALhGp264jiSjAJ1k
+  # 重要: GEMINI_API_KEYから自動的に設定されます（next.config.ts参照）
+  # 実際の値はFirebase ConsoleでGEMINI_API_KEYを設定してください
+  - variable: GEMINI_API_KEY
+    secret: gemini_api_key  # Secret Managerから取得
     availability:
       - BUILD
       - RUNTIME
   
   - variable: NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    value: 122015916118-erbk5824ul8aenq5unpknhpu0aenkr7f.apps.googleusercontent.com
+    value: your-google-client-id-here  # Firebase Consoleで実際の値に置き換えてください
     availability:
       - BUILD
       - RUNTIME

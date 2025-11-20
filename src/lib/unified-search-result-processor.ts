@@ -314,6 +314,7 @@ export class UnifiedSearchResultProcessor {
           const tagsLower = tagsArray.map((t: string) => String(t).toLowerCase());
           let matchedTagCount = 0;
           const matchedTagsSet = new Set<string>(); // 重複を避けるためSetを使用
+          const matchedTagsList: string[] = []; // デバッグ用: マッチしたタグのリスト
           
           for (const keyword of keywords) {
             const keywordLower = keyword.toLowerCase();
@@ -324,6 +325,7 @@ export class UnifiedSearchResultProcessor {
               if (!matchedTagsSet.has(matchedTag)) {
                 matchedTagCount++;
                 matchedTagsSet.add(matchedTag);
+                matchedTagsList.push(matchedTag); // デバッグ用
               }
             }
           }
@@ -331,6 +333,11 @@ export class UnifiedSearchResultProcessor {
           if (matchedTagCount > 0) {
             // 1つのタグマッチ: 2.0倍、2つ以上: 3.0倍（複数タグマッチで大幅ボーナス、タグマッチングを大幅に重視）
             const tagBoost = matchedTagCount === 1 ? 2.0 : 3.0;
+            const pageId = (result as any).page_id || (result as any).pageId;
+            // デバッグログ: 特に045ページを追跡
+            if (pageId === 703594590 || pageId === '703594590' || (result as any).title?.includes('045') || (result as any).title?.includes('パスワード再設定')) {
+              console.log(`[Tag Boost RRF] pageId=${pageId}, title=${(result as any).title}, tags=[${tagsArray.join(', ')}], matchedTags=[${matchedTagsList.join(', ')}], matchedCount=${matchedTagCount}, boost=${tagBoost}, rrf=${rrf.toFixed(4)} → ${(rrf * tagBoost).toFixed(4)}`);
+            }
             rrf *= tagBoost;
           }
         }

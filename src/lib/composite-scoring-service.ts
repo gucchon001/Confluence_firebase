@@ -158,15 +158,29 @@ export class CompositeScoringService {
       if (tagsArray.length > 0) {
         const tagsLower = tagsArray.map((t: string) => String(t).toLowerCase());
         let matchedTagCount = 0;
+        const matchedTagsList: string[] = []; // デバッグ用: マッチしたタグのリスト
         for (const keyword of keywords) {
           const keywordLower = keyword.toLowerCase();
-          if (tagsLower.some((tag: string) => tag.includes(keywordLower) || keywordLower.includes(tag))) {
+          const matchedTags = tagsLower.filter((tag: string) => tag.includes(keywordLower) || keywordLower.includes(tag));
+          if (matchedTags.length > 0) {
             matchedTagCount++;
+            // デバッグ用: マッチしたタグを記録（重複は除外）
+            matchedTags.forEach(tag => {
+              if (!matchedTagsList.includes(tag)) {
+                matchedTagsList.push(tag);
+              }
+            });
           }
         }
         if (matchedTagCount > 0) {
           // 1つのタグマッチ: 3.0倍、2つ以上: 6.0倍（Composite Scoreに直接反映、タグマッチングを極めて重視）
           const tagBoost = matchedTagCount === 1 ? 3.0 : 6.0;
+          const pageId = (result as any).page_id || (result as any).pageId;
+          const beforeScore = compositeScore.finalScore;
+          // デバッグログ: 特に045ページを追跡
+          if (pageId === 703594590 || pageId === '703594590' || (result as any).title?.includes('045') || (result as any).title?.includes('パスワード再設定')) {
+            console.log(`[Tag Boost Composite] pageId=${pageId}, title=${(result as any).title}, tags=[${tagsArray.join(', ')}], matchedTags=[${matchedTagsList.join(', ')}], matchedCount=${matchedTagCount}, boost=${tagBoost}, score=${beforeScore.toFixed(4)} → ${(beforeScore * tagBoost).toFixed(4)}`);
+          }
           compositeScore.finalScore *= tagBoost;
         }
       }
