@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useAuthWrapper } from '@/hooks/use-auth-wrapper';
-import { Loader2, Upload, FileText, CheckCircle2, XCircle, FolderOpen } from 'lucide-react';
+import { useGooglePicker } from '@/hooks/use-google-picker';
+import { Loader2, Upload, FileText, CheckCircle2, XCircle, FolderOpen, Folder } from 'lucide-react';
 
 interface ImportResult {
   fileId: string;
@@ -35,6 +36,46 @@ export const GoogleDriveImportSection: React.FC = () => {
   const [importResult, setImportResult] = useState<ImportResponse | null>(null);
   const [isListing, setIsListing] = useState(false);
   const [fileList, setFileList] = useState<any[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ id: string; name: string; mimeType: string }>>([]);
+
+  // Google Picker API設定
+  const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '';
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+
+  // Google Pickerフック
+  const { isLoaded: isPickerLoaded, isLoading: isPickerLoading, showPicker } = useGooglePicker({
+    apiKey: googleApiKey,
+    clientId: googleClientId,
+    enableMultiSelect: true,
+    allowFolders: true,
+    onPicked: (files) => {
+      // 選択されたファイルを処理
+      const folderIdsArray = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder').map(f => f.id);
+      const documentFiles = files.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+
+      if (folderIdsArray.length > 0 && documentFiles.length === 0) {
+        // フォルダのみ選択された場合（複数フォルダの場合は最初の1つを使用）
+        setFolderId(folderIdsArray[0]);
+        setFileIds('');
+        setSelectedFiles([]);
+      } else if (documentFiles.length > 0) {
+        // ファイルが選択された場合（フォルダとファイルが混在する場合はファイルのみ）
+        const fileIdsArray = documentFiles.map(f => f.id);
+        setFileIds(fileIdsArray.join(', '));
+        setFolderId('');
+        setSelectedFiles(documentFiles.map(f => ({ id: f.id, name: f.name, mimeType: f.mimeType })));
+      } else if (folderIdsArray.length > 0 && documentFiles.length > 0) {
+        // フォルダとファイルが混在する場合は、ファイルのみをインポート
+        const fileIdsArray = documentFiles.map(f => f.id);
+        setFileIds(fileIdsArray.join(', '));
+        setFolderId('');
+        setSelectedFiles(documentFiles.map(f => ({ id: f.id, name: f.name, mimeType: f.mimeType })));
+      }
+    },
+    onCancel: () => {
+      console.log('ファイル選択がキャンセルされました');
+    },
+  });
 
   const handleImport = async () => {
     if (!useServiceAccount && !accessToken) {
@@ -57,7 +98,10 @@ export const GoogleDriveImportSection: React.FC = () => {
       setImportResult(null);
 
       // 認証トークンを取得
-      const idToken = await user.getIdToken();
+      if (!user || 'getIdToken' in user === false) {
+        throw new Error('ユーザーが認証されていません');
+      }
+      const idToken = await (user as { getIdToken: () => Promise<string> }).getIdToken();
 
       const requestBody: any = {
         useServiceAccount,
@@ -115,7 +159,10 @@ export const GoogleDriveImportSection: React.FC = () => {
       setFileList([]);
 
       // 認証トークンを取得
-      const idToken = await user.getIdToken();
+      if (!user || 'getIdToken' in user === false) {
+        throw new Error('ユーザーが認証されていません');
+      }
+      const idToken = await (user as { getIdToken: () => Promise<string> }).getIdToken();
 
       const params = new URLSearchParams({
         useServiceAccount: useServiceAccount.toString(),
@@ -210,12 +257,18 @@ export const GoogleDriveImportSection: React.FC = () => {
             </label>
             <Input
               type="text"
-              placeholder="fileId1, fileId2, ..."
+              placeholder="fileId1, fileId2, ... または「Google Driveから選択」ボタンを使用"
               value={fileIds}
-              onChange={(e) => setFileIds(e.target.value)}
+              onChange={(e) => {
+                setFileIds(e.target.value);
+                // 手動入力の場合は選択ファイルリストをクリア
+                if (e.target.value !== fileIds) {
+                  setSelectedFiles([]);
+                }
+              }}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              複数のファイルIDをカンマで区切って入力
+              複数のファイルIDをカンマで区切って入力、または「Google Driveから選択」ボタンでポップアップから選択
             </p>
           </div>
 
@@ -225,20 +278,52 @@ export const GoogleDriveImportSection: React.FC = () => {
             </label>
             <Input
               type="text"
-              placeholder="フォルダIDを入力"
+              placeholder="フォルダIDを入力 または「Google Driveから選択」ボタンでフォルダを選択"
               value={folderId}
-              onChange={(e) => setFolderId(e.target.value)}
+              onChange={(e) => {
+                setFolderId(e.target.value);
+                // 手動入力の場合は選択ファイルリストをクリア
+                if (e.target.value !== folderId) {
+                  setSelectedFiles([]);
+                }
+              }}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              フォルダ内のすべてのファイルをインポート
+              フォルダ内のすべてのファイルをインポート（Shiftキーを押しながらフォルダを選択可能）
             </p>
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Google Pickerボタン */}
+          {googleApiKey && googleClientId ? (
+            <Button
+              onClick={showPicker}
+              disabled={!isPickerLoaded || isPickerLoading}
+              variant="default"
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isPickerLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  読み込み中...
+                </>
+              ) : (
+                <>
+                  <Folder className="h-4 w-4 mr-2" />
+                  Google Driveから選択
+                </>
+              )}
+            </Button>
+          ) : (
+            <div className="text-xs text-muted-foreground p-2 border rounded bg-yellow-50">
+              ⚠️ Google Picker APIを使用するには、環境変数（NEXT_PUBLIC_GOOGLE_API_KEY、NEXT_PUBLIC_GOOGLE_CLIENT_ID）の設定が必要です
+            </div>
+          )}
+
           <Button
             onClick={handleListFiles}
-            disabled={isListing || !accessToken}
+            disabled={isListing || (!useServiceAccount && !accessToken)}
             variant="outline"
           >
             {isListing ? (
@@ -256,7 +341,7 @@ export const GoogleDriveImportSection: React.FC = () => {
 
           <Button
             onClick={handleImport}
-            disabled={isImporting || !accessToken || (!fileIds && !folderId)}
+            disabled={isImporting || (!useServiceAccount && !accessToken) || (!fileIds && !folderId)}
           >
             {isImporting ? (
               <>
@@ -271,6 +356,46 @@ export const GoogleDriveImportSection: React.FC = () => {
             )}
           </Button>
         </div>
+
+        {/* 選択されたファイル表示 */}
+        {selectedFiles.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">選択されたファイル ({selectedFiles.length}件)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {selectedFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    className="flex items-center justify-between p-2 border rounded bg-blue-50"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-lg">{getMimeTypeIcon(file.mimeType)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{file.name}</p>
+                        <Badge variant="outline" className="text-xs mt-1">
+                          {getMimeTypeName(file.mimeType)}
+                        </Badge>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setSelectedFiles(selectedFiles.filter(f => f.id !== file.id));
+                        const remainingIds = selectedFiles.filter(f => f.id !== file.id).map(f => f.id);
+                        setFileIds(remainingIds.join(', '));
+                      }}
+                    >
+                      削除
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* ファイル一覧 */}

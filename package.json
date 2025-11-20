@@ -25,6 +25,7 @@
     "check:jira-total": "tsx src/scripts/check-jira-total-count.ts",
     "check:jira-firestore-count": "tsx scripts/check-jira-firestore-count.ts",
     "test:jira-sync-termination": "tsx scripts/test-jira-sync-termination.ts",
+    "test:firestore-write-permission": "tsx scripts/test-firestore-write-permission.ts",
     "list:jira-issues": "tsx src/scripts/list-jira-issues.ts",
     "sync:jira": "tsx src/scripts/sync-jira.ts",
     "init:jira-lunr": "tsx src/scripts/initialize-jira-lunr-index.ts",

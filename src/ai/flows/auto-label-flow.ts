@@ -16,6 +16,11 @@ const InputSchema = z.object({
   title: z.string(),
   content: z.string(),
   labels: z.array(z.string()),
+  // Jira対応: ソースとJira特有フィールドを追加
+  source: z.enum(['confluence', 'jira']).optional().default('confluence'),
+  issueType: z.string().optional(),      // Jira特有
+  status: z.string().optional(),          // Jira特有（既存statusとの重複注意）
+  priority: z.string().optional(),        // Jira特有
 });
 
 // 出力スキーマ
@@ -62,7 +67,11 @@ function inferCategoryEnhanced(labels: string[], title: string, content: string)
 }
 
 function tryRuleBasedLabeling(input: z.infer<typeof InputSchema>): StructuredLabel | null {
-  const status = StructuredLabelHelper.extractStatusFromTitle(input.title);
+  // Jira対応: ソースに応じてステータス抽出方法を変更
+  const source = input.source || 'confluence';
+  const status = source === 'jira' 
+    ? mapJiraStatusToStructuredStatus(input.status)
+    : StructuredLabelHelper.extractStatusFromTitle(input.title);
   const version = StructuredLabelHelper.extractVersionFromTitle(input.title);
   
   // Phase 1改善: カテゴリ推測の強化（タイトルとコンテンツも使用）
@@ -158,22 +167,66 @@ function tryRuleBasedLabeling(input: z.infer<typeof InputSchema>): StructuredLab
 }
 
 /**
+ * JiraステータスをStructuredLabelのステータスにマッピング
+ * Jira対応: 新規関数
+ */
+function mapJiraStatusToStructuredStatus(jiraStatus?: string): DocumentStatus {
+  if (!jiraStatus) return 'unknown';
+  
+  const statusLower = jiraStatus.toLowerCase();
+  
+  // 完了状態（approved）
+  if (statusLower.includes('完了') || statusLower.includes('done') || 
+      statusLower.includes('クローズ') || statusLower.includes('close') ||
+      statusLower.includes('解決済み') || statusLower.includes('resolved')) {
+    return 'approved';
+  }
+  
+  // 進行中状態（review）
+  if (statusLower.includes('進行中') || statusLower.includes('in progress') || 
+      statusLower.includes('処理中') || statusLower.includes('実行中') ||
+      statusLower.includes('作業中') || statusLower.includes('レビュー') || 
+      statusLower.includes('review') || statusLower.includes('修正待ち') ||
+      statusLower.includes('調査中') || statusLower.includes('調査')) {
+    return 'review';
+  }
+  
+  // 作成中状態（draft）
+  if (statusLower.includes('作成中') || statusLower.includes('to do') || 
+      statusLower.includes('未着手') || statusLower.includes('open') ||
+      statusLower.includes('新規') || statusLower.includes('backlog')) {
+    return 'draft';
+  }
+  
+  return 'unknown';
+}
+
+/**
  * LLMプロンプトを生成
  */
 function buildLLMPrompt(
   input: z.infer<typeof InputSchema>,
   domainCandidates: string[],
-  topDomains: string[]
+  topDomains: string[],
+  source: 'confluence' | 'jira' = 'confluence'
 ): string {
   // Phase 2改善: プロンプトの最適化（コンテンツ長を拡大、判定基準を簡略化）
-  return `以下のConfluenceページを分析し、StructuredLabelを生成してJSON形式で出力してください。
+  // Jira対応: ソースに応じてプロンプトを調整
+  const sourceName = source === 'jira' ? 'Jira課題' : 'Confluenceページ';
+  
+  return `以下の${sourceName}を分析し、StructuredLabelを生成してJSON形式で出力してください。
 
-【ページ情報】
+【${sourceName}情報】
 タイトル: ${input.title}
 内容: ${input.content.substring(0, 1500)}...
 既存ラベル: ${input.labels.join(', ')}
+${source === 'jira' && (input.issueType || input.status || input.priority) ? `
+【Jira特有情報】
+種別: ${input.issueType || 'N/A'}
+ステータス: ${input.status || 'N/A'}
+優先度: ${input.priority || 'N/A'}` : ''}
 
-【重要: このページに関連するドメイン候補（優先的に使用）】
+【重要: この${sourceName}に関連するドメイン候補（優先的に使用）】
 ${domainCandidates.length > 0 ? domainCandidates.join(', ') : '（該当なし）'}
 
 【参考: ドメイン一覧（上位30件）】
@@ -248,13 +301,16 @@ export const autoLabelFlow = ai.defineFlow(
       // Domain Knowledgeを読み込み
       const domainKnowledge = await loadDomainKnowledge();
       
-      // ドメイン候補を抽出
+      // ドメイン候補を抽出（Jira対応: ドメイン知識を使用）
       const fullText = input.title + ' ' + input.content.substring(0, 1000);
       const domainCandidates = findDomainCandidates(fullText, domainKnowledge, 5);
       const topDomains = domainKnowledge.domainNames.slice(0, 30);
       
-      // プロンプト生成
-      const promptRaw = buildLLMPrompt(input, domainCandidates, topDomains);
+      // ソースを取得（デフォルトは'confluence'）
+      const source = input.source || 'confluence';
+      
+      // プロンプト生成（Jira対応）
+      const promptRaw = buildLLMPrompt(input, domainCandidates, topDomains, source);
       const promptBomCheck = checkStringForBOM(promptRaw);
       if (promptBomCheck.hasBOM) {
         console.warn('  🚨 [auto-label-flow] BOM detected in prompt', {

@@ -44,16 +44,15 @@ export class GoogleDriveService {
       this.auth = new OAuth2Client();
       this.auth.setCredentials({ access_token: accessToken });
       
-      this.drive = google.drive({ version: 'v3', auth: this.auth });
-      this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+      this.drive = google.drive({ version: 'v3', auth: this.auth as any });
+      this.sheets = google.sheets({ version: 'v4', auth: this.auth as any });
       // Google Slides APIはオプション（APIが有効化されていない場合もある）
       try {
-        this.slides = google.slides({ version: 'v1', auth: this.auth });
+        this.slides = google.slides({ version: 'v1', auth: this.auth as any });
       } catch (error) {
         console.warn('⚠️ Google Slides APIの初期化に失敗しました（オプション）:', error);
         this.slides = null;
       }
-      this.slides = google.slides({ version: 'v1', auth: this.auth });
     } catch (error) {
       console.error('❌ Google Drive API初期化エラー:', error);
       throw new Error('Google Drive APIの初期化に失敗しました');
@@ -97,9 +96,9 @@ export class GoogleDriveService {
         ],
       });
 
-      this.drive = google.drive({ version: 'v3', auth: this.auth });
-      this.sheets = google.sheets({ version: 'v4', auth: this.auth });
-      this.slides = google.slides({ version: 'v1', auth: this.auth });
+      this.drive = google.drive({ version: 'v3', auth: this.auth as any });
+      this.sheets = google.sheets({ version: 'v4', auth: this.auth as any });
+      this.slides = google.slides({ version: 'v1', auth: this.auth as any });
       
       console.log('✅ Google Drive APIをサービスアカウントで初期化しました');
     } catch (error: any) {

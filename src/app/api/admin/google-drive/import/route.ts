@@ -4,29 +4,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin-init';
+import admin from 'firebase-admin';
 import { GoogleDriveService } from '@/lib/google-drive-service';
-import { saveGoogleDriveDocument } from '@/lib/google-drive-firestore-service';
-import { indexGoogleDriveDocumentsToLanceDB } from '@/lib/google-drive-lancedb-service';
-
-// Firebase Admin SDK初期化
-if (!getApps().length) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (serviceAccount) {
-    try {
-      const key = JSON.parse(serviceAccount);
-      initializeApp({
-        credential: cert(key),
-      });
-    } catch (error) {
-      console.error('❌ Firebase Admin SDK初期化エラー:', error);
-    }
-  }
-}
+import type { GoogleDriveDocument } from '@/lib/google-drive-service';
 
 export async function POST(req: NextRequest) {
   try {
+    // Firebase Admin SDK初期化（関数内で実行）
+    initializeFirebaseAdmin();
+    
     // 認証チェック
     const authHeader = req.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -39,6 +26,8 @@ export async function POST(req: NextRequest) {
     const idToken = authHeader.split('Bearer ')[1];
     let decodedToken;
     try {
+      // getAuth()を関数内でインポート（ビルド時のエラー回避）
+      const { getAuth } = await import('firebase-admin/auth');
       decodedToken = await getAuth().verifyIdToken(idToken);
     } catch (error) {
       return NextResponse.json(
@@ -89,13 +78,36 @@ export async function POST(req: NextRequest) {
     }
 
     // 各ファイルを処理
+    const db = admin.firestore();
     for (const fileId of filesToProcess) {
       try {
         // ファイル情報と内容を取得
         const document = await driveService.getDocument(fileId);
         
-        // Firestoreに保存
-        await saveGoogleDriveDocument(document, userId);
+        // Firestoreに保存（サーバーサイド用）
+        const docRef = db.collection('google_drive_documents').doc(document.fileId);
+        const now = admin.firestore.Timestamp.now();
+        
+        // 既存のドキュメントを確認
+        const existingDoc = await docRef.get();
+        const existingData = existingDoc.data();
+        
+        const record = {
+          fileId: document.fileId,
+          fileName: document.fileName,
+          mimeType: document.mimeType,
+          content: document.content,
+          url: document.url,
+          lastModified: document.lastModified,
+          size: document.size,
+          importedAt: existingData?.importedAt || now,
+          importedBy: existingData?.importedBy || userId,
+          lastSyncedAt: now,
+          version: (existingData?.version || 0) + 1,
+        };
+        
+        await docRef.set(record);
+        console.log(`✅ Google Driveドキュメントを保存しました: ${document.fileId}`);
         
         results.push({
           fileId,
@@ -123,6 +135,8 @@ export async function POST(req: NextRequest) {
     if (successfulFileIds.length > 0) {
       try {
         console.log(`📊 LanceDBへのインデックス化を開始... (${successfulFileIds.length}件)`);
+        // 動的インポート（ビルド時のエラー回避）
+        const { indexGoogleDriveDocumentsToLanceDB } = await import('@/lib/google-drive-lancedb-service');
         indexResult = await indexGoogleDriveDocumentsToLanceDB(successfulFileIds);
         console.log(`✅ LanceDBへのインデックス化が完了: ${indexResult.indexed}件成功, ${indexResult.errors}件失敗`);
       } catch (error: any) {

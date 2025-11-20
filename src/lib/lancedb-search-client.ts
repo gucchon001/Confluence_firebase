@@ -540,7 +540,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         }
         
         if (added.length > 0) {
+          console.log(`[Title Rescue Search] Added ${added.length} title-exact results to vectorResults`);
           vectorResults = vectorResults.concat(added);
+        } else {
+          console.log(`[Title Rescue Search] No title-exact results added (titles searched: ${titles.length})`);
         }
       }
     } catch (e) {
@@ -619,7 +622,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         resultWithScore._keywordScore = keywordScore;
         resultWithScore._labelScore = labelMatches;
         resultWithScore._hybridScore = hybridScore;
-        resultWithScore._sourceType = keywordScore > 0 ? 'hybrid' : 'vector';
+        // タイトル救済検索（_sourceType: 'title-exact'）の場合は保持、それ以外は通常のロジック
+        if (!resultWithScore._sourceType || resultWithScore._sourceType !== 'title-exact') {
+          resultWithScore._sourceType = keywordScore > 0 ? 'hybrid' : 'vector';
+        }
         resultWithScore._matchDetails = {
           titleMatches,
           labelMatches,

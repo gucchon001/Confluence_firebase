@@ -659,7 +659,12 @@ const AdminDashboard: React.FC = () => {
   };
 
   const getDataSourceForLog = (log: PostLog): 'confluence' | 'jira' | 'mixed' | 'unknown' => {
-    return getDataSource(log.metadata, log.references);
+    const dataSource = getDataSource(log.metadata, log.references);
+    // google_driveはunknownとして扱う（管理画面では表示しない）
+    if (dataSource === 'google_drive') {
+      return 'unknown';
+    }
+    return dataSource;
   };
 
   // パフォーマンス分析用データ処理

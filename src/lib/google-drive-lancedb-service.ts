@@ -4,7 +4,7 @@
 
 import * as lancedb from '@lancedb/lancedb';
 import * as path from 'path';
-import { connectLanceDB } from './lancedb-connection';
+import { getLanceDBDatabase } from './lancedb-client';
 import { getEmbeddings } from './embeddings';
 import { chunkText } from './text-chunking';
 import { getAllGoogleDriveDocuments, type GoogleDriveDocumentRecord } from './google-drive-firestore-service';
@@ -23,6 +23,7 @@ interface GoogleDriveLanceDBRecord {
   mime_type: string;
   vector: number[];
   source: 'google_drive';
+  [key: string]: unknown;
 }
 
 /**
@@ -32,11 +33,7 @@ export async function indexGoogleDriveDocumentsToLanceDB(
   fileIds?: string[]
 ): Promise<{ indexed: number; errors: number }> {
   try {
-    const dbPath = appConfig.deployment.useInMemoryFS 
-      ? '/dev/shm/.lancedb' 
-      : path.resolve(process.cwd(), '.lancedb');
-    
-    const db = await connectLanceDB(dbPath);
+    const db = await getLanceDBDatabase();
     const tableNames = await db.tableNames();
     
     let table = tableNames.includes(TABLE_NAME)
@@ -136,11 +133,7 @@ export async function indexGoogleDriveDocumentsToLanceDB(
  */
 export async function removeGoogleDriveDocumentsFromLanceDB(fileIds: string[]): Promise<void> {
   try {
-    const dbPath = appConfig.deployment.useInMemoryFS 
-      ? '/dev/shm/.lancedb' 
-      : path.resolve(process.cwd(), '.lancedb');
-    
-    const db = await connectLanceDB(dbPath);
+    const db = await getLanceDBDatabase();
     const tableNames = await db.tableNames();
     
     if (!tableNames.includes(TABLE_NAME)) {

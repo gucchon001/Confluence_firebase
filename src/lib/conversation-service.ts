@@ -177,13 +177,16 @@ export async function getConversations(
         
         // データソースを判定（共通ユーティリティを使用）
         const dataSource = getDataSourceFromSources(sources);
+        // google_driveはunknownとして扱う（会話履歴では表示しない）
+        const normalizedDataSource: 'confluence' | 'jira' | 'mixed' | 'unknown' = 
+          dataSource === 'google_drive' ? 'unknown' : dataSource;
         
         return {
           id: doc.id,
           title: doc.data().title,
           lastMessage: doc.data().messages?.slice(-1)[0]?.content || '',
           timestamp: doc.data().updatedAt.toDate().toISOString(),
-          dataSource // データソース情報を追加
+          dataSource: normalizedDataSource // データソース情報を追加
         };
       });
       

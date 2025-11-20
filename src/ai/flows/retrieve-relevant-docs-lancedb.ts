@@ -257,6 +257,11 @@ async function lancedbRetrieverTool(
           status: (r as any).status,
           priority: (r as any).priority,
           assignee: (r as any).assignee,
+          // タイトル救済検索のフラグ（テストとデバッグ用）
+          _sourceType: (r as any)._sourceType,
+          _titleBoosted: (r as any)._titleBoosted,
+          _titleMatchRatio: (r as any)._titleMatchRatio,
+          _titleMatchedKeywords: (r as any)._titleMatchedKeywords,
         };
       } else {
         // Confluenceの場合: page_idを使用
@@ -298,6 +303,11 @@ async function lancedbRetrieverTool(
           scoreText: r.scoreText,
           // スコアを設定（_compositeScore > _rrfScore > distance の優先順位）
           score: (r as any)._compositeScore ?? (r as any)._rrfScore ?? (r as any).distance ?? 0,
+          // タイトル救済検索のフラグ（テストとデバッグ用）
+          _sourceType: (r as any)._sourceType,
+          _titleBoosted: (r as any)._titleBoosted,
+          _titleMatchRatio: (r as any)._titleMatchRatio,
+          _titleMatchedKeywords: (r as any)._titleMatchedKeywords,
         };
       }
     });
