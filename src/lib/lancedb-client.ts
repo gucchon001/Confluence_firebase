@@ -146,9 +146,19 @@ export class LanceDBClient {
     try {
       console.log(`[LanceDBClient] Connecting to database at: ${this.config.dbPath}`);
       
+      // メモリ使用量の監視: 接続前
+      const { logMemoryUsage, getMemoryUsage, logMemoryDelta } = await import('./memory-monitor');
+      const memoryBefore = getMemoryUsage();
+      logMemoryUsage(`Before LanceDB connection (${this.config.tableName})`);
+      
       // LanceDBデータベースに接続
       const db = await lancedb.connect(this.config.dbPath!);
       console.log(`[LanceDBClient] Database connected in ${Date.now() - startTime}ms`);
+      
+      // メモリ使用量の監視: 接続後
+      const memoryAfterConnect = getMemoryUsage();
+      logMemoryUsage(`After LanceDB connection (${this.config.tableName})`);
+      logMemoryDelta(`LanceDB connection (${this.config.tableName})`, memoryBefore, memoryAfterConnect);
 
       // テーブル存在確認
       const tableNames = await db.tableNames();
@@ -210,6 +220,12 @@ export class LanceDBClient {
       };
 
       const connectionTime = Date.now() - startTime;
+      
+      // メモリ使用量の監視: テーブルオープン後
+      const memoryAfter = getMemoryUsage();
+      logMemoryUsage(`After opening table (${this.config.tableName})`);
+      logMemoryDelta(`LanceDB connection + table open (${this.config.tableName})`, memoryBefore, memoryAfter);
+      
       console.log(`[LanceDBClient] Connection established in ${connectionTime}ms`);
       
       return connection;

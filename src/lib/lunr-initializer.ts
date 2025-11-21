@@ -104,6 +104,11 @@ export class LunrInitializer {
       console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Starting Lunr index initialization for ${tableName}...`);
       const startTime = Date.now();
       
+      // メモリ使用量の監視: 初期化開始時
+      const { logMemoryUsage, getMemoryUsage } = await import('./memory-monitor');
+      const memoryBefore = getMemoryUsage();
+      logMemoryUsage(`Lunr initialization start (${tableName})`);
+      
       // ⚡ 最適化: まずキャッシュからロードを試みる（kuromoji初期化の前に実行）
       // キャッシュがあれば、kuromoji初期化をスキップして高速化
       const lunrSearchClient = LunrSearchClient.getInstance();
@@ -130,6 +135,13 @@ export class LunrInitializer {
         this.status.documentCount = await lunrSearchClient.getDocumentCount(tableName);
         this.status.lastUpdated = new Date();
         const duration = Date.now() - startTime;
+        
+        // メモリ使用量の監視: キャッシュからロード完了時
+        const { logMemoryUsage, logMemoryDelta } = await import('./memory-monitor');
+        const memoryAfter = getMemoryUsage();
+        logMemoryUsage(`Lunr initialization complete (cache, ${tableName})`);
+        logMemoryDelta(`Lunr initialization (cache, ${tableName})`, memoryBefore, memoryAfter);
+        
         console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Loaded ${tableName} Lunr from cache in ${duration}ms (count: ${this.status.initializationCount})`);
         return;
       }
@@ -157,9 +169,20 @@ export class LunrInitializer {
       
       const tbl = await db.openTable(tableName);
       
+      // メモリ使用量の監視: データ取得前
+      const { logMemoryUsage, getMemoryUsage, logMemoryDelta } = await import('./memory-monitor');
+      const memoryBeforeFetch = getMemoryUsage();
+      logMemoryUsage(`Before fetching documents from LanceDB (${tableName})`);
+      
       // 全ドキュメントを取得
       const docs = await tbl.query().limit(10000).toArray();
       const dbDuration = Date.now() - dbStartTime;
+      
+      // メモリ使用量の監視: データ取得後
+      const memoryAfterFetch = getMemoryUsage();
+      logMemoryUsage(`After fetching documents from LanceDB (${tableName}, ${docs.length} docs)`);
+      logMemoryDelta(`Fetching documents from LanceDB (${tableName})`, memoryBeforeFetch, memoryAfterFetch);
+      
       console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Retrieved ${docs.length} documents in ${dbDuration}ms`);
 
       // ドキュメントをLunr形式に変換（日本語トークン化を含む）
@@ -273,8 +296,19 @@ export class LunrInitializer {
       // Lunrインデックスを初期化
       console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Building Lunr index for ${tableName}...`);
       const indexStartTime = Date.now();
+      
+      // メモリ使用量の監視: インデックス構築前
+      const memoryBeforeIndex = getMemoryUsage();
+      logMemoryUsage(`Before building Lunr index (${tableName})`);
+      
       await lunrSearchClient.initialize(lunrDocs, tableName);
       const indexDuration = Date.now() - indexStartTime;
+      
+      // メモリ使用量の監視: インデックス構築後
+      const memoryAfterIndex = getMemoryUsage();
+      logMemoryUsage(`After building Lunr index (${tableName})`);
+      logMemoryDelta(`Building Lunr index (${tableName})`, memoryBeforeIndex, memoryAfterIndex);
+      
       console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ ${tableName} index built in ${indexDuration}ms`);
       
       // キャッシュに保存
@@ -292,6 +326,11 @@ export class LunrInitializer {
       this.status.initializationCount++;
       this.status.documentCount = lunrDocs.length;
       this.status.lastUpdated = new Date();
+      
+      // メモリ使用量の監視: 初期化完了時
+      const memoryAfter = getMemoryUsage();
+      logMemoryUsage(`Lunr initialization complete (rebuild, ${tableName})`);
+      logMemoryDelta(`Lunr initialization (rebuild, ${tableName})`, memoryBefore, memoryAfter);
 
       const totalDocs = await lunrSearchClient.getDocumentCount(tableName);
       const avgdl = await lunrSearchClient.getAverageTitleLength(tableName);

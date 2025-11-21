@@ -6,6 +6,19 @@
 
 export async function register() {
   console.log('🚀 [Instrumentation] register() 呼び出し検知');
+  
+  // メモリ使用量の監視: サーバー起動時
+  try {
+    const { logMemoryUsage, startMemoryMonitoring } = await import('./src/lib/memory-monitor.ts');
+    logMemoryUsage('Server startup - instrumentation.register()');
+    
+    // 定期的なメモリ監視を開始（1分ごと）
+    startMemoryMonitoring(60000);
+    console.log('📊 [Memory] Periodic memory monitoring started (every 60s)');
+  } catch (error) {
+    console.warn('⚠️ [Memory] Failed to initialize memory monitoring:', error);
+  }
+  
   // サーバーサイドでのみ実行
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     console.log('🚀 [Instrumentation] サーバー起動検知 - バックグラウンド初期化開始 (NEXT_RUNTIME=nodejs)');

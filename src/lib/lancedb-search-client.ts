@@ -190,6 +190,10 @@ export interface LanceDBSearchResult {
  * LanceDBで検索を実行する
  */
 export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceDBSearchResult[]> {
+  // メモリ使用量の監視: 検索開始時
+  const { logMemoryUsage, getMemoryUsage, logMemoryDelta } = await import('./memory-monitor');
+  const memoryBeforeSearch = getMemoryUsage();
+  logMemoryUsage(`Search start: ${params.query.substring(0, 50)}...`);
   const searchFunctionStartTime = Date.now();
   try {
     
@@ -897,6 +901,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // 総計時間の計測
     const searchFunctionDuration = Date.now() - searchFunctionStartTime;
+    
+    // メモリ使用量の監視: 検索完了時
+    const memoryAfterSearch = getMemoryUsage();
+    logMemoryUsage(`Search complete: ${params.query.substring(0, 50)}...`);
+    logMemoryDelta(`Search execution (${params.query.substring(0, 50)}...)`, memoryBeforeSearch, memoryAfterSearch);
     
     // 10秒以上かかった場合のみログ（パフォーマンス問題の検知）
     if (searchFunctionDuration > 10000) {

@@ -199,6 +199,11 @@ export class LunrSearchClient {
         const loadTime = Date.now() - startTime;
         console.log(`[Phase 6 LunrCache] MessagePack読み込み完了: ${(buffer.length / 1024 / 1024).toFixed(2)}MB, ${loadTime}ms`);
         
+        // メモリ使用量の監視: ファイル読み込み後
+        const { logMemoryUsage, getMemoryUsage, logMemoryDelta } = await import('./memory-monitor');
+        const memoryBeforeParse = getMemoryUsage();
+        logMemoryUsage(`After loading MessagePack file (${tableName})`);
+        
         const parseStartTime = Date.now();
         const data = unpack(buffer) as {
           index: any;
@@ -208,6 +213,11 @@ export class LunrSearchClient {
         const parseTime = Date.now() - parseStartTime;
         console.log(`[Phase 6 LunrCache] MessagePack解析完了: ${parseTime}ms`);
 
+        // メモリ使用量の監視: パース後
+        const memoryAfterParse = getMemoryUsage();
+        logMemoryUsage(`After parsing MessagePack (${tableName}, ${data.documents.length} docs)`);
+        logMemoryDelta(`Parsing MessagePack (${tableName})`, memoryBeforeParse, memoryAfterParse);
+
         const indexLoadStartTime = Date.now();
         const index = lunr.Index.load(data.index);
         if (!this.documents.has(tableName)) {
@@ -216,6 +226,10 @@ export class LunrSearchClient {
         const tableDocuments = this.documents.get(tableName)!;
         tableDocuments.clear();
         
+        // メモリ使用量の監視: インデックスロード後、ドキュメント追加前
+        const memoryBeforeDocs = getMemoryUsage();
+        logMemoryUsage(`After loading Lunr index, before adding documents (${tableName})`);
+        
         // ⚡ 最適化: ドキュメントの復元を高速化
         // Mapへの追加は順次実行（Mapはスレッドセーフではないため）
         // MessagePackからロードしたデータは既に準備済みのため、そのまま追加
@@ -223,6 +237,12 @@ export class LunrSearchClient {
           tableDocuments.set(doc.id, doc);
         }
         const indexLoadTime = Date.now() - indexLoadStartTime;
+        
+        // メモリ使用量の監視: ドキュメント追加後
+        const memoryAfterDocs = getMemoryUsage();
+        logMemoryUsage(`After adding documents to Map (${tableName}, ${tableDocuments.size} docs)`);
+        logMemoryDelta(`Adding documents to Map (${tableName})`, memoryBeforeDocs, memoryAfterDocs);
+        
         console.log(`[Phase 6 LunrCache] Lunrインデックス復元完了: ${indexLoadTime}ms (docs=${tableDocuments.size})`);
         
         this.indices.set(tableName, index);

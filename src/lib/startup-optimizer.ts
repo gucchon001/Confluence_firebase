@@ -141,6 +141,10 @@ export async function initializeStartupOptimizations(): Promise<void> {
  * 実際の初期化処理を実行（非同期バックグラウンド版）
  */
 async function performInitializationAsync(): Promise<void> {
+  // メモリ使用量の監視: 初期化開始時
+  const { logMemoryUsage } = await import('./memory-monitor');
+  logMemoryUsage('Application startup - initialization start');
+  
   const optimizations = [
     {
       name: 'Japanese Tokenizer',
@@ -283,6 +287,12 @@ async function performInitializationAsync(): Promise<void> {
   });
 
   await Promise.all(otherPromises);
+  
+  // メモリ使用量の監視: 初期化完了時
+  logMemoryUsage('Application startup - initialization complete');
+  
+  isInitialized = true;
+  console.log('[StartupOptimizer] ✅ All initialization completed');
 }
 
 /**

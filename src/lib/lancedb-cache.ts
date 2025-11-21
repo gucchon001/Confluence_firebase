@@ -103,6 +103,15 @@ export class LanceDBCache {
     
     this.stats.totalSize += size;
     this.stats.entryCount++;
+    
+    // メモリ使用量の監視: キャッシュサイズが大きい場合（非同期で実行、エラーは無視）
+    if (this.stats.totalSize > this.config.maxCacheSize * 0.8) {
+      import('./memory-monitor').then(({ logMemoryUsage }) => {
+        logMemoryUsage(`Chunk cache size warning (${(this.stats.totalSize / 1024 / 1024).toFixed(2)}MB / ${(this.config.maxCacheSize / 1024 / 1024).toFixed(2)}MB)`);
+      }).catch(() => {
+        // エラーは無視（メモリ監視の失敗でキャッシュ処理を止めない）
+      });
+    }
   }
 
   /**

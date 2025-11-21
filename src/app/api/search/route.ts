@@ -10,6 +10,10 @@ import { APIErrorHandler, withAPIErrorHandling } from '../../../lib/api-error-ha
 import { screenTestLogger } from '@/lib/screen-test-logger';
 
 export const POST = withAPIErrorHandling(async (req: NextRequest) => {
+  // メモリ使用量の監視: リクエスト受信時
+  const { logMemoryUsage } = await import('../../../lib/memory-monitor');
+  logMemoryUsage('Search API request received');
+  
   // 統一初期化サービスを使用
   const lunrReady = await APIErrorHandler.handleUnifiedInitialization();
   
