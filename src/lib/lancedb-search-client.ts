@@ -1358,23 +1358,42 @@ async function executeBM25Search(
         });
         
         // タイムアウトまたは初期化完了を待つ
-        await Promise.race([initPromise, timeoutPromise]);
+        const raceResult = await Promise.race([
+          initPromise.then(() => 'completed'),
+          timeoutPromise.then(() => 'timeout')
+        ]);
         
-        // 初期化が完了するまでポーリングで待つ（最大60秒追加、合計最大120秒）
-        const maxPollingTime = 60000; // 10秒 → 60秒に延長（合計最大120秒）
+        if (raceResult === 'completed') {
+          console.log(`[BM25 Search] ✅ Lunr initialization completed for ${tableName}`);
+        } else {
+          console.log(`[BM25 Search] ⏳ Lunr initialization timeout for ${tableName}, polling for readiness...`);
+        }
+        
+        // 初期化が完了するまでポーリングで待つ（最大120秒追加、合計最大180秒）
+        const maxPollingTime = 120000; // 60秒 → 120秒に延長（合計最大180秒）
         const pollingInterval = 500; // ポーリング間隔（100ms → 500msに変更、CPU負荷軽減）
         const pollingStartTime = Date.now();
+        let lastLogTime = pollingStartTime;
         
         while (!lunrSearchClient.isReady(tableName)) {
-          if (Date.now() - pollingStartTime > maxPollingTime) {
+          const elapsed = Date.now() - pollingStartTime;
+          if (elapsed > maxPollingTime) {
             console.warn(`[BM25 Search] Lunr still not ready for ${tableName} after ${maxPollingTime}ms polling, skipping BM25`);
             console.warn(`[BM25 Search] ⚠️ BM25検索が無効化されます。検索精度が低下する可能性があります。`);
             return [];
           }
+          
+          // 10秒ごとに進行状況をログ出力
+          if (Date.now() - lastLogTime > 10000) {
+            console.log(`[BM25 Search] ⏳ Still waiting for Lunr initialization (${Math.floor(elapsed / 1000)}s elapsed)...`);
+            lastLogTime = Date.now();
+          }
+          
           await new Promise(resolve => setTimeout(resolve, pollingInterval));
         }
         
-        console.log(`[BM25 Search] ✅ Lunr ready for ${tableName} after initialization`);
+        const totalWaitTime = Date.now() - pollingStartTime;
+        console.log(`[BM25 Search] ✅ Lunr ready for ${tableName} after ${totalWaitTime}ms total wait time`);
       } catch (error) {
         console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
         console.warn(`[BM25 Search] ⚠️ BM25検索が無効化されます。検索精度が低下する可能性があります。`);
