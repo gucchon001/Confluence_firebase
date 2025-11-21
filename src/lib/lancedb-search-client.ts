@@ -1157,7 +1157,19 @@ async function executeVectorSearch(
     // 修正: 20倍 → 30倍に拡大（Phase 0A-4設定に復帰）
     const searchLimit = topK * 30;
     console.log(`[Vector Search] 🔍 DEBUG: Search limit: ${searchLimit} (topK=${topK})`);
+    
+    // メモリ使用量の監視: ベクトル検索実行前
+    const { getMemoryUsage: getMemoryUsage2, logMemoryUsage: logMemoryUsage2, logMemoryDelta: logMemoryDelta2 } = await import('./memory-monitor');
+    const memoryBeforeVectorSearch = getMemoryUsage2();
+    logMemoryUsage2(`Before vector search toArray() (limit=${searchLimit})`);
+    
     let vectorResults = await vectorQuery.limit(searchLimit).toArray(); // 30倍に復帰（Phase 0A-4設定）
+    
+    // メモリ使用量の監視: ベクトル検索実行後
+    const memoryAfterVectorSearch = getMemoryUsage2();
+    logMemoryUsage2(`After vector search toArray() (results=${vectorResults.length})`);
+    logMemoryDelta2(`Vector search toArray() (limit=${searchLimit})`, memoryBeforeVectorSearch, memoryAfterVectorSearch);
+    
     const vectorSearchDuration = Date.now() - vectorSearchStart;
     
     console.log(`[PERF] 🔍 Vector search completed in ${vectorSearchDuration}ms`);
