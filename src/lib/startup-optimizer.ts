@@ -221,10 +221,14 @@ async function performInitializationAsync(): Promise<void> {
           const availableTables = await db.tableNames();
           console.log(`[StartupOptimizer] Available LanceDB tables: ${availableTables.join(', ')}`);
           
-          // ConfluenceとJiraの両方のインデックスをロード（存在するテーブルのみ）
-          const tables = ['confluence', 'jira_issues'];
+          // ⚡ 最適化: メモリ使用量を削減するため、起動時には主要テーブル（confluence）のみ初期化
+          // Jiraテーブルは必要時（検索リクエスト時）にオンデマンドで初期化される
+          // これにより、メモリ使用量を約半分に削減できる
+          const tablesToPreload = ['confluence']; // 主要テーブルのみ起動時に初期化
+          const tablesToLazyLoad = ['jira_issues']; // 遅延初期化するテーブル
           
-          for (const tableName of tables) {
+          // 主要テーブル（confluence）を優先的に初期化
+          for (const tableName of tablesToPreload) {
             // テーブルが存在しない場合はスキップ
             if (!availableTables.includes(tableName)) {
               console.log(`[StartupOptimizer] ⏭️ Skipping ${tableName} (table not found in LanceDB)`);
@@ -239,6 +243,14 @@ async function performInitializationAsync(): Promise<void> {
             } catch (tableError: any) {
               console.warn(`[StartupOptimizer] ⚠️ Lunr index preload failed for ${tableName}: ${tableError?.message || tableError}`);
               // エラーをスローしない（他のテーブルのロードを継続）
+            }
+          }
+          
+          // 遅延初期化するテーブル（jira_issues）は起動時には初期化しない
+          // 検索リクエストが来た時にオンデマンドで初期化される
+          for (const tableName of tablesToLazyLoad) {
+            if (availableTables.includes(tableName)) {
+              console.log(`[StartupOptimizer] ⏭️ Skipping ${tableName} (will be initialized on-demand when needed)`);
             }
           }
           
