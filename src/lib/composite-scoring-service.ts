@@ -175,12 +175,6 @@ export class CompositeScoringService {
         if (matchedTagCount > 0) {
           // 1つのタグマッチ: 3.0倍、2つ以上: 6.0倍（Composite Scoreに直接反映、タグマッチングを極めて重視）
           const tagBoost = matchedTagCount === 1 ? 3.0 : 6.0;
-          const pageId = (result as any).page_id || (result as any).pageId;
-          const beforeScore = compositeScore.finalScore;
-          // デバッグログ: 特に045ページを追跡
-          if (pageId === 703594590 || pageId === '703594590' || (result as any).title?.includes('045') || (result as any).title?.includes('パスワード再設定')) {
-            console.log(`[Tag Boost Composite] pageId=${pageId}, title=${(result as any).title}, tags=[${tagsArray.join(', ')}], matchedTags=[${matchedTagsList.join(', ')}], matchedCount=${matchedTagCount}, boost=${tagBoost}, score=${beforeScore.toFixed(4)} → ${(beforeScore * tagBoost).toFixed(4)}`);
-          }
           compositeScore.finalScore *= tagBoost;
         }
       }

@@ -87,38 +87,79 @@ export async function getEmbeddings(text: string): Promise<number[]> {
   // Phase 0A-4: 埋め込み生成の開始ログ（本番環境でも遅延検知のため）
   const generationStartTime = Date.now();
   
-  const EMBEDDING_TIMEOUT = 60000; // 60秒（大量処理時のタイムアウトを延長）
-  const embedding = await Promise.race([
-    getGeminiEmbeddings(finalTextForEmbedding),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(
-            new Error(
-              `Embedding generation timeout after ${EMBEDDING_TIMEOUT}ms`
-            )
-          ),
-        EMBEDDING_TIMEOUT
-      )
-    )
-  ]);
+  // ⚡ 最適化: リトライ機構を追加（最大3回、指数バックオフ）
+  // タイムアウトはcallGeminiEmbeddingApi内で10秒に設定されているため、ここではリトライのみを処理
+  // 429エラー（レート制限）の特別処理を含むカスタムリトライ
+  let retryCount = 0;
+  const maxRetries = 3;
+  let lastError: any = null;
   
-  const generationDuration = Date.now() - generationStartTime;
-  // Phase 0A-4: 遅い埋め込み生成を警告（1秒以上）
-  if (generationDuration > 1000) {
-    console.warn(`⚠️ [Embedding] Slow generation: ${generationDuration}ms for text: ${text.substring(0, 100)}...`);
+  while (retryCount <= maxRetries) {
+    try {
+      // 429エラーの場合は、Retry-Afterヘッダーに従って待機
+      if (lastError?.status === 429 && lastError?.retryAfter) {
+        const retryAfterMs = lastError.retryAfter * 1000;
+        console.warn(`⚠️ [Embedding] Rate limited (429), waiting ${retryAfterMs}ms before retry (attempt ${retryCount + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+        lastError = null; // リセット
+      }
+      
+      const embedding = await getGeminiEmbeddings(finalTextForEmbedding);
+      const generationDuration = Date.now() - generationStartTime;
+      
+      // Phase 0A-4: 遅い埋め込み生成を警告（1秒以上）
+      if (generationDuration > 1000) {
+        console.warn(`⚠️ [Embedding] Slow generation: ${generationDuration}ms for text: ${text.substring(0, 100)}...`);
+      }
+      
+      // キャッシュに保存（BOM除去後のテキストで生成したキャッシュキーを使用）
+      embeddingCache.set(cacheKey, { embedding, timestamp: Date.now() });
+      
+      // キャッシュサイズが大きくなりすぎないように制限（1000エントリ）
+      if (embeddingCache.size > 1000) {
+        const firstKey = embeddingCache.keys().next().value;
+        embeddingCache.delete(firstKey);
+      }
+      
+      return embedding;
+    } catch (error: any) {
+      lastError = error;
+      retryCount++;
+      
+      // 最大リトライ回数に達した場合はエラーをスロー
+      if (retryCount > maxRetries) {
+        throw error;
+      }
+      
+      // リトライ不可能なエラーの場合は即座にスロー
+      // 403エラー（APIキー漏洩）や400エラー（バッドリクエスト）はリトライ不可
+      if (error?.status === 403 || error?.status === 400 || error?.status === 401) {
+        throw error;
+      }
+      
+      // 429エラー（レート制限）の場合は、Retry-Afterヘッダーを優先（次のループで処理）
+      if (error?.status === 429) {
+        // Retry-Afterヘッダーがない場合は、指数バックオフを使用
+        if (!error?.retryAfter) {
+          const baseDelay = 500;
+          const delay = Math.min(baseDelay * Math.pow(2, retryCount - 1), 5000);
+          console.warn(`⚠️ [Embedding] Rate limited (429) without Retry-After, waiting ${delay}ms (attempt ${retryCount}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        continue;
+      }
+      
+      // その他のリトライ可能なエラーの場合は、指数バックオフで待機
+      const baseDelay = 500;
+      const delay = Math.min(baseDelay * Math.pow(2, retryCount - 1), 5000);
+      console.warn(`⚠️ [Embedding] Retrying after ${delay}ms (attempt ${retryCount}/${maxRetries}): ${error?.message || error}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
   
-  // キャッシュに保存（BOM除去後のテキストで生成したキャッシュキーを使用）
-  embeddingCache.set(cacheKey, { embedding, timestamp: Date.now() });
+  // ここに到達することはないはずだが、型安全性のため
+  throw lastError || new Error('Failed to generate embedding after retries');
   
-  // キャッシュサイズが大きくなりすぎないように制限（1000エントリ）
-  if (embeddingCache.size > 1000) {
-    const firstKey = embeddingCache.keys().next().value;
-    embeddingCache.delete(firstKey);
-  }
-  
-  return embedding;
 }
 
 // デフォルトエクスポートも追加
@@ -205,26 +246,43 @@ async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
     throw new Error('GEMINI_API_KEY is empty after trimming');
   }
 
+  // ⚡ 最適化: タイムアウトを10秒に短縮（60秒から変更）
+  const EMBEDDING_API_TIMEOUT = 10000; // 10秒
+
   let response: Response;
   let responseBody: string | undefined;
   try {
-    response = await fetch(`${GEMINI_EMBEDDING_ENDPOINT}?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    responseBody = await response.text();
+    // AbortControllerを使用してタイムアウトを実装
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), EMBEDDING_API_TIMEOUT);
+
+    try {
+      response = await fetch(`${GEMINI_EMBEDDING_ENDPOINT}?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      responseBody = await response.text();
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        throw new Error(`Embedding API timeout after ${EMBEDDING_API_TIMEOUT}ms`);
+      }
+      throw fetchError;
+    }
   } catch (networkError) {
+    // ネットワークエラーやタイムアウトエラーはリトライ可能として扱う
+    const errorMessage = networkError instanceof Error ? networkError.message : String(networkError);
     console.error('❌ [Embedding] Network error while calling Gemini REST API', {
-      error: networkError instanceof Error ? networkError.message : networkError
+      error: errorMessage
     });
-    throw new Error(
-      `Failed to call Gemini REST API: ${
-        networkError instanceof Error ? networkError.message : String(networkError)
-      }`
-    );
+    const retryableError = new Error(`Failed to call Gemini REST API: ${errorMessage}`);
+    (retryableError as any).code = 'network_error';
+    throw retryableError;
   }
 
   let json: any;
@@ -250,7 +308,7 @@ async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
       responseJson: json
     });
     
-    // 403エラー（APIキー漏洩）の場合は特別なエラーを投げる
+    // 403エラー（APIキー漏洩）の場合は特別なエラーを投げる（リトライ不可）
     if (response.status === 403) {
       const errorMessage = json?.error?.message || json?.message || 'API key was reported as leaked';
       const isLeakedError = 
@@ -265,8 +323,19 @@ async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
       }
     }
     
-    // その他の致命的なエラー（400, 401, 429など）も特別なエラーとして扱う
-    if (response.status >= 400 && response.status < 500) {
+    // 429エラー（レート制限）の場合はリトライ可能として扱う
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After');
+      const errorMessage = json?.error?.message || json?.message || 'Rate limit exceeded';
+      const error = new Error(`Gemini REST API rate limit (429): ${errorMessage}`);
+      (error as any).code = 'rate_limit_error';
+      (error as any).status = 429;
+      (error as any).retryAfter = retryAfter ? parseInt(retryAfter) : null;
+      throw error;
+    }
+    
+    // 400, 401エラーはリトライ不可（致命的なエラー）
+    if (response.status === 400 || response.status === 401) {
       throw new GeminiApiFatalError(
         `Gemini REST API error ${response.status}: ${JSON.stringify(json)}`,
         response.status,
@@ -274,6 +343,15 @@ async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
       );
     }
     
+    // 500番台のエラーはリトライ可能として扱う
+    if (response.status >= 500) {
+      const error = new Error(`Gemini REST API server error ${response.status}: ${JSON.stringify(json)}`);
+      (error as any).code = 'server_error';
+      (error as any).status = response.status;
+      throw error;
+    }
+    
+    // その他のエラーはリトライ不可として扱う
     throw new Error(
       `Gemini REST API error ${response.status}: ${JSON.stringify(json)}`
     );

@@ -3,7 +3,8 @@
 
 runConfig:
   # インスタンス設定
-  minInstances: 0
+  # ⚡ 最適化: minInstances: 1に設定してCold Startを回避（埋め込み生成の遅延を削減）
+  minInstances: 1
   maxInstances: 2
   
   # メモリ設定（埋め込みモデルのため増やす）

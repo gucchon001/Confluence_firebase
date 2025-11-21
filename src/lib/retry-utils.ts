@@ -12,6 +12,8 @@ const RETRYABLE_ERROR_CODES = [
   'vector_search_error',    // ベクトル検索関連のエラー
   'network_error',          // ネットワーク関連のエラー
   'timeout_error',          // タイムアウト関連のエラー
+  'rate_limit_error',       // レート制限エラー（429）
+  'server_error',           // サーバーエラー（500番台）
 ];
 
 // リトライ不可能なエラーコードのリスト
@@ -51,9 +53,15 @@ function isRetryableError(error: any): boolean {
     }
   }
   
+  // HTTPステータスコードに基づいて判定
+  const statusCode = error.status || error.response?.status;
+  if (statusCode === 429 || (statusCode >= 500 && statusCode < 600)) {
+    return true; // レート制限（429）とサーバーエラー（500番台）はリトライ可能
+  }
+  
   // エラーメッセージに基づいて判定
   const errorMessage = error.message || error.error?.message || '';
-  const retryableKeywords = ['timeout', 'network', 'connection', 'temporary', 'retry'];
+  const retryableKeywords = ['timeout', 'network', 'connection', 'temporary', 'retry', 'rate limit'];
   
   return retryableKeywords.some(keyword => 
     errorMessage.toLowerCase().includes(keyword)
