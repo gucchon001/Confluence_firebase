@@ -221,18 +221,43 @@ async function performInitializationAsync(): Promise<void> {
           const availableTables = await db.tableNames();
           console.log(`[StartupOptimizer] Available LanceDB tables: ${availableTables.join(', ')}`);
           
-          // ⚡ 最適化: メモリ使用量を最小化するため、すべてのテーブルをオンデマンド初期化に統一
-          // 起動時にはテーブルを初期化せず、検索リクエストが来た時にオンデマンドで初期化される
-          // これにより、起動時のメモリ使用量を最小化し、メモリ制限エラーを回避できる
-          // 初回検索は遅くなる可能性があるが、2回目以降は高速（既に初期化済み）
-          const allTables = availableTables.filter(name => name === 'confluence' || name === 'jira_issues');
+          // ⚡ 最適化: メモリ使用量とパフォーマンスのバランスを取る
+          // - confluence: 起動時に非同期で初期化（バックグラウンド、非ブロッキング）
+          //   → 初回検索を高速化（BM25検索が利用可能）
+          //   → メモリ使用量は約12GB（1テーブルのみ）
+          // - jira_issues: オンデマンド初期化（検索リクエスト時に初期化）
+          //   → メモリ使用量を最小化（必要時のみ読み込む）
+          const tablesToPreload = ['confluence']; // 主要テーブルのみ起動時に非同期初期化
+          const tablesToLazyLoad = ['jira_issues']; // 遅延初期化するテーブル
           
-          console.log(`[StartupOptimizer] ⚡ All tables will be initialized on-demand to minimize memory usage`);
-          console.log(`[StartupOptimizer] Available tables: ${allTables.join(', ')}`);
-          console.log(`[StartupOptimizer] Tables will be initialized when first search request comes for each table`);
+          console.log(`[StartupOptimizer] ⚡ Starting background initialization for: ${tablesToPreload.join(', ')}`);
+          console.log(`[StartupOptimizer] ⏭️  Lazy loading tables: ${tablesToLazyLoad.join(', ')}`);
+          console.log(`[StartupOptimizer] Available tables: ${availableTables.join(', ')}`);
           
-          // 起動時には初期化しない（オンデマンド初期化）
-          // 検索リクエストが来た時に、必要なテーブルが自動的に初期化される
+          // 主要テーブル（confluence）をバックグラウンドで非同期初期化（非ブロッキング）
+          // 初期化が完了する前に検索リクエストが来ても、ベクトル検索のみで即座に返す
+          for (const tableName of tablesToPreload) {
+            if (!availableTables.includes(tableName)) {
+              console.log(`[StartupOptimizer] ⏭️ Skipping ${tableName} (table not found in LanceDB)`);
+              continue;
+            }
+            
+            // 非同期で初期化を開始（結果を待たない）
+            console.log(`[StartupOptimizer] 🚀 Starting background initialization for ${tableName}...`);
+            lunrInitializer.initializeAsync(tableName).then(() => {
+              console.log(`[StartupOptimizer] ✅ Background initialization completed for ${tableName}`);
+            }).catch((error: any) => {
+              console.warn(`[StartupOptimizer] ⚠️ Background initialization failed for ${tableName}: ${error?.message || error}`);
+            });
+          }
+          
+          // 遅延初期化するテーブル（jira_issues）は起動時には初期化しない
+          // 検索リクエストが来た時にオンデマンドで初期化される
+          for (const tableName of tablesToLazyLoad) {
+            if (availableTables.includes(tableName)) {
+              console.log(`[StartupOptimizer] ⏭️ Skipping ${tableName} (will be initialized on-demand when needed)`);
+            }
+          }
           
           const endTime = Date.now();
           const totalTime = endTime - startTime;
