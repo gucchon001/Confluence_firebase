@@ -285,55 +285,106 @@ const LAZY_LOAD_TABLES = process.env.LAZY_LOAD_TABLES?.split(',') || ['jira_issu
 
 ## 🔍 根本原因分析
 
-### 1. Lunrインデックスのメモリ使用量 🔴 **最重要**
+### 1. BM25（Lunr）初期化時のメモリ使用量 🔴 **最重要（LanceDBメモリマップドファイル読み込み）**
 
 #### 問題
-- **全ドキュメントをメモリに保持**: `lunr-search-client.ts`で全ドキュメント（最大10,000件）を`Map`に保持
-- **Lunrインデックス自体**: インデックス構造もメモリに保持
-- **ドキュメントデータ**: タイトル、コンテンツ、ラベルなどの全データをメモリに保持
+BM25（Lunr）の初期化時に、**LanceDBからデータを取得する際にメモリマップドファイルが読み込まれる**ため、同じメモリ問題を引き起こしています。
+
+**2つのメモリ消費源**:
+
+1. **Lunrインデックス自体のメモリ使用量**（約260MB/テーブル）
+   - 全ドキュメントをメモリに保持: `lunr-search-client.ts`で全ドキュメント（最大10,000件）を`Map`に保持
+   - Lunrインデックス自体: インデックス構造もメモリに保持
+   - ドキュメントデータ: タイトル、コンテンツ、ラベルなどの全データをメモリに保持
+
+2. **LanceDBメモリマップドファイルの読み込み**（約12GB/テーブル）🔴 **主要な問題**
+   - Lunr初期化時にLanceDBから全データを取得する際に、LanceDBのメモリマップドファイルが読み込まれる
+   - `tbl.query().limit(10000).toArray()`や`tbl.query().limit(500).offset(offset).toArray()`を実行すると、LanceDBのネイティブライブラリがデータファイルをメモリマップドファイルとして読み込む
+   - これが`external`と`arrayBuffers`が12GB以上という異常な値の主な原因
 
 #### コード箇所
 
 ```typescript
-// src/lib/lunr-search-client.ts (213-224行目)
-const tableDocuments = this.documents.get(tableName)!;
-tableDocuments.clear();
+// src/lib/lunr-initializer.ts (158-194行目)
+const db = await import('@lancedb/lancedb').then(m => m.connect(dbPath));
+const tbl = await db.openTable(tableName);
 
+// ⚠️ この時点でLanceDBのメモリマップドファイルが読み込まれる可能性
+const batchDocs = await (tbl.query().limit(FETCH_BATCH_SIZE) as any).offset(offset).toArray();
+// または
+allDocs = await tbl.query().limit(10000).toArray(); // フォールバック時
+
+// src/lib/lunr-search-client.ts (236-238行目)
 // 全ドキュメントをMapに保持（メモリに常駐）
 for (const doc of data.documents) {
   tableDocuments.set(doc.id, doc);
 }
 ```
 
-#### 推定メモリ使用量
+#### 推定メモリ使用量（1テーブルあたり）
 
-| 項目 | 件数 | 1件あたりのサイズ | 合計 |
-|------|------|------------------|------|
-| ドキュメントデータ | 1,229件 | 約50KB（タイトル+コンテンツ+ラベル） | **約60MB** |
-| Lunrインデックス | 1件 | 約200MB | **約200MB** |
-| **合計（Lunr関連）** | - | - | **約260MB** |
+| 項目 | サイズ | 備考 |
+|------|--------|------|
+| **LanceDBメモリマップドファイル** | **約12GB** | 🔴 **主要な問題** - `external`と`arrayBuffers`としてカウント |
+| Lunrインデックス | 約200MB | インデックス構造 |
+| ドキュメントデータ（Map） | 約60MB | タイトル+コンテンツ+ラベル |
+| **合計（1テーブル）** | **約12.26GB** | - |
+| **合計（2テーブル: confluence + jira_issues）** | **約24.52GB** | - |
+| **合計（2インスタンス × 2テーブル）** | **約49GB** | - |
 
-### 2. LanceDBデータのメモリ読み込み 🟡 **重要**
+#### 複数テーブルでの影響
+
+- **1テーブル（confluenceのみ）**: 約12GB
+- **2テーブル（confluence + jira_issues）**: 約24GB（**2倍**）
+- **2インスタンス × 2テーブル**: 約48GB（**4倍**）
+
+**結論**: BM25（Lunr）の初期化自体は約260MB程度だが、**初期化時にLanceDBからデータを取得する際にLanceDBのメモリマップドファイルが読み込まれるため、同じメモリ問題を引き起こしている**。
+
+#### 対策（実装済み）
+
+1. ✅ **バッチ処理でデータを取得**（`FETCH_BATCH_SIZE = 500`）
+   - 一度に全データを取得するのではなく、小さなバッチで順次取得
+   - ただし、LanceDBのメモリマップドファイルは依然として読み込まれる可能性がある
+
+2. ✅ **データベース接続を明示的に閉じる**
+   - データ取得後に`db.close()`を呼び出してメモリマップドファイルの参照を解除
+   - ただし、OSレベルでのメモリ解放は保証されない
+
+3. ✅ **主要テーブルのみ起動時に初期化**
+   - `confluence`テーブルのみ起動時に初期化
+   - `jira_issues`テーブルはオンデマンドで初期化（遅延初期化）
+
+**注意**: バッチ処理や接続のクローズは、メモリマップドファイルの読み込みを完全に防ぐことはできません。LanceDBのネイティブライブラリの実装に依存するため、根本的な解決にはテーブル数の削減やインスタンス数の削減が必要です。
+
+### 2. LanceDBデータのメモリ読み込み 🟡 **重要（BM25初期化時に発生）**
 
 #### 問題
 - **初期化時の全データ読み込み**: `lunr-initializer.ts`で`limit(10000).toArray()`により全データをメモリに読み込む
-- **ベクトルデータ**: 768次元 × 4バイト × 1,229件 = 約3.8MB（ベクトルのみ）
-- **メタデータ**: タイトル、コンテンツ、ラベルなど = 約60MB
+- **メモリマップドファイル**: LanceDBのネイティブライブラリがデータファイルをメモリマップドファイルとして読み込む（約12GB/テーブル）
+- **ベクトルデータ**: 768次元 × 4バイト × 1,229件 = 約3.8MB（ベクトルのみ、メモリマップドファイルに含まれる）
+- **メタデータ**: タイトル、コンテンツ、ラベルなど = 約60MB（メモリマップドファイルに含まれる）
 
 #### コード箇所
 
 ```typescript
-// src/lib/lunr-initializer.ts (161行目)
-const docs = await tbl.query().limit(10000).toArray();
+// src/lib/lunr-initializer.ts (158-194行目)
+const db = await import('@lancedb/lancedb').then(m => m.connect(dbPath));
+const tbl = await db.openTable(tableName); // ⚠️ この時点でメモリマップドファイルが読み込まれる可能性
+
+// バッチ処理でデータを取得（メモリマップドファイルの使用を最小化を試みる）
+const batchDocs = await (tbl.query().limit(FETCH_BATCH_SIZE) as any).offset(offset).toArray();
+// または
+allDocs = await tbl.query().limit(10000).toArray(); // フォールバック時
 ```
 
 #### 推定メモリ使用量
 
 | 項目 | 件数 | 1件あたりのサイズ | 合計 |
 |------|------|------------------|------|
-| ベクトルデータ | 1,229件 | 約3KB（768次元 × 4バイト） | **約3.8MB** |
-| メタデータ | 1,229件 | 約50KB | **約60MB** |
-| **合計（LanceDB読み込み時）** | - | - | **約64MB** |
+| **LanceDBメモリマップドファイル** | - | - | **約12GB** 🔴 |
+| ベクトルデータ（メモリマップドファイル内） | 1,229件 | 約3KB（768次元 × 4バイト） | 約3.8MB |
+| メタデータ（メモリマップドファイル内） | 1,229件 | 約50KB | 約60MB |
+| **合計（LanceDB読み込み時）** | - | - | **約12GB** |
 
 ### 3. キャッシュのメモリ使用量 🟡 **重要**
 
