@@ -1697,6 +1697,7 @@ async function executeBM25Search(
         title: (r.title || '').replace(/\uFEFF/g, ''),
         content: (r.content || '').replace(/\uFEFF/g, ''),
         labels: normalizedLabels,
+        score: boostedScore, // タイトルブースト適用後のスコア（表示用）
         pageId: finalPageId,
         page_id: finalPage_id, // ★★★ 修正: page_idを確実に設定（enrichedRecordから優先的に取得） ★★★
         isChunked: r.isChunked,
@@ -1725,10 +1726,10 @@ async function executeBM25Search(
     // ★★★ 修正: 元のBM25スコアで再ソート（タイトルブーストを無視） ★★★
     // 理由: タイトルブーストは表示用であり、RRF段階では元のBM25スコアを使用する必要がある
     //       045ページのようにタグでマッチする重要なページが除外されないようにする
-    bm25Results.sort((a, b) => {
+    bm25Results.sort((a: any, b: any) => {
       // 元のBM25スコア（タイトルブースト適用前）で比較
-      const scoreA = a._bm25Score || a.score || 0;
-      const scoreB = b._bm25Score || b.score || 0;
+      const scoreA = (a as any)._bm25Score || (a as any).score || 0;
+      const scoreB = (b as any)._bm25Score || (b as any).score || 0;
       return scoreB - scoreA;
     });
     
