@@ -221,38 +221,18 @@ async function performInitializationAsync(): Promise<void> {
           const availableTables = await db.tableNames();
           console.log(`[StartupOptimizer] Available LanceDB tables: ${availableTables.join(', ')}`);
           
-          // ⚡ 最適化: メモリ使用量を削減するため、起動時には主要テーブル（confluence）のみ初期化
-          // Jiraテーブルは必要時（検索リクエスト時）にオンデマンドで初期化される
-          // これにより、メモリ使用量を約半分に削減できる
-          const tablesToPreload = ['confluence']; // 主要テーブルのみ起動時に初期化
-          const tablesToLazyLoad = ['jira_issues']; // 遅延初期化するテーブル
+          // ⚡ 最適化: メモリ使用量を最小化するため、すべてのテーブルをオンデマンド初期化に統一
+          // 起動時にはテーブルを初期化せず、検索リクエストが来た時にオンデマンドで初期化される
+          // これにより、起動時のメモリ使用量を最小化し、メモリ制限エラーを回避できる
+          // 初回検索は遅くなる可能性があるが、2回目以降は高速（既に初期化済み）
+          const allTables = availableTables.filter(name => name === 'confluence' || name === 'jira_issues');
           
-          // 主要テーブル（confluence）を優先的に初期化
-          for (const tableName of tablesToPreload) {
-            // テーブルが存在しない場合はスキップ
-            if (!availableTables.includes(tableName)) {
-              console.log(`[StartupOptimizer] ⏭️ Skipping ${tableName} (table not found in LanceDB)`);
-              continue;
-            }
-            
-            try {
-              console.log(`[StartupOptimizer] Preloading Lunr index for ${tableName}...`);
-              await lunrInitializer.initializeAsync(tableName);
-              const tableTime = Date.now() - startTime;
-              console.log(`[StartupOptimizer] ✅ Lunr index for ${tableName} preloaded in ${tableTime}ms`);
-            } catch (tableError: any) {
-              console.warn(`[StartupOptimizer] ⚠️ Lunr index preload failed for ${tableName}: ${tableError?.message || tableError}`);
-              // エラーをスローしない（他のテーブルのロードを継続）
-            }
-          }
+          console.log(`[StartupOptimizer] ⚡ All tables will be initialized on-demand to minimize memory usage`);
+          console.log(`[StartupOptimizer] Available tables: ${allTables.join(', ')}`);
+          console.log(`[StartupOptimizer] Tables will be initialized when first search request comes for each table`);
           
-          // 遅延初期化するテーブル（jira_issues）は起動時には初期化しない
-          // 検索リクエストが来た時にオンデマンドで初期化される
-          for (const tableName of tablesToLazyLoad) {
-            if (availableTables.includes(tableName)) {
-              console.log(`[StartupOptimizer] ⏭️ Skipping ${tableName} (will be initialized on-demand when needed)`);
-            }
-          }
+          // 起動時には初期化しない（オンデマンド初期化）
+          // 検索リクエストが来た時に、必要なテーブルが自動的に初期化される
           
           const endTime = Date.now();
           const totalTime = endTime - startTime;
