@@ -180,6 +180,86 @@ const docs = await tbl.query().limit(10000).toArray();
 
 ---
 
+## 🔧 **メモリマップドファイルを避ける方法**
+
+### 問題
+
+LanceDBのJavaScript APIでは、メモリマップドファイルを直接無効にするオプションは提供されていません。しかし、以下の対策を実装することで、メモリ使用量を削減できます。
+
+### 実装済みの対策
+
+#### 1. **バッチ処理でデータを取得** ✅
+
+**Lunr初期化時の改善**:
+- `limit(10000).toArray()`を小さなバッチ（500件ずつ）に分割
+- `offset()`がサポートされている場合はバッチ処理を使用
+- サポートされていない場合はフォールバックで全データを一度に取得
+
+**コード箇所**: `src/lib/lunr-initializer.ts`
+
+```typescript
+// バッチ処理でデータを取得（メモリマップドファイルの使用を最小化）
+const FETCH_BATCH_SIZE = 500;
+let offset = 0;
+while (hasMore) {
+  const batchDocs = await tbl.query().limit(FETCH_BATCH_SIZE).offset(offset).toArray();
+  // 処理...
+  offset += batchDocs.length;
+}
+```
+
+#### 2. **データベース接続を閉じてメモリを解放** ✅
+
+**Lunr初期化時の改善**:
+- データ取得後にデータベース接続を明示的に閉じる
+- これにより、メモリマップドファイルの参照を解除
+
+**コード箇所**: `src/lib/lunr-initializer.ts`
+
+```typescript
+// データベース接続を閉じてメモリを解放（メモリマップドファイルの参照を解除）
+await db.close();
+```
+
+### 今後の対策案
+
+#### 1. **プロジェクションを使用して必要なフィールドのみを取得**
+
+```typescript
+// 必要なフィールドのみを取得（メモリ使用量を削減）
+const docs = await tbl.query()
+  .select(['id', 'title', 'content', 'labels']) // 必要なフィールドのみ
+  .limit(10000)
+  .toArray();
+```
+
+#### 2. **ストリーミング処理（LanceDBがサポートしている場合）**
+
+```typescript
+// ストリーミングでデータを処理（メモリマップドファイルの使用を最小化）
+const stream = await tbl.query().limit(10000).stream();
+for await (const batch of stream) {
+  // バッチごとに処理
+}
+```
+
+#### 3. **データ取得後の明示的なメモリ解放**
+
+```typescript
+// データ処理後に変数をnullに設定してガベージコレクションを促す
+let docs = await tbl.query().limit(10000).toArray();
+// 処理...
+docs = null; // 明示的にメモリを解放
+```
+
+### 制限事項
+
+- **LanceDBのネイティブライブラリ**: Rustで書かれたネイティブライブラリがメモリマップドファイルを使用している場合、JavaScript側から直接制御することはできません
+- **`toArray()`の動作**: `toArray()`は内部的に全データをメモリに読み込む可能性があります
+- **接続の管理**: 接続を閉じても、メモリマップドファイルがすぐに解放されるとは限りません（OSのメモリ管理に依存）
+
+---
+
 ## 🚨 考えられる追加の原因
 
 ### 1. **メモリリーク** 🔴 **最有力**

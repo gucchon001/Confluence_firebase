@@ -172,16 +172,71 @@ export class LunrInitializer {
       const memoryBeforeFetch = getMemoryUsage();
       logMemoryUsage(`Before fetching documents from LanceDB (${tableName})`);
       
-      // 全ドキュメントを取得
-      const docs = await tbl.query().limit(10000).toArray();
-      const dbDuration = Date.now() - dbStartTime;
+      // ⚡ 最適化: メモリマップドファイルの使用を避けるため、バッチ処理でデータを取得
+      // 一度に全データを取得するのではなく、小さなバッチで順次取得して処理
+      // これにより、LanceDBがメモリマップドファイルとして全データを読み込むことを避ける
+      const TOKENIZE_BATCH_SIZE = 100; // トークン化処理のバッチサイズ
       
-      // メモリ使用量の監視: データ取得後
+      let allDocs: any[] = [];
+      let dbDuration: number;
+      
+      // offset()がサポートされているかどうかを試行
+      try {
+        const FETCH_BATCH_SIZE = 500; // 一度に取得するドキュメント数（メモリ使用量を制限）
+        console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Attempting to fetch documents in batches of ${FETCH_BATCH_SIZE}...`);
+        
+        let offset = 0;
+        let hasMore = true;
+        
+        while (hasMore) {
+          // バッチでデータを取得（メモリマップドファイルの使用を最小化）
+          // offset()がサポートされていない場合はエラーが発生する
+          const batchDocs = await (tbl.query().limit(FETCH_BATCH_SIZE) as any).offset(offset).toArray();
+          
+          if (batchDocs.length === 0) {
+            hasMore = false;
+            break;
+          }
+          
+          allDocs.push(...batchDocs);
+          offset += batchDocs.length;
+          
+          // メモリ使用量の監視: バッチ取得後
+          if (offset % (FETCH_BATCH_SIZE * 2) === 0) {
+            const memoryAfterBatch = getMemoryUsage();
+            logMemoryUsage(`After fetching batch (${tableName}, ${offset} docs so far)`);
+          }
+          
+          // バッチサイズ未満の場合は最後のバッチ
+          if (batchDocs.length < FETCH_BATCH_SIZE) {
+            hasMore = false;
+          }
+        }
+        
+        dbDuration = Date.now() - dbStartTime;
+        console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Retrieved ${allDocs.length} documents in batches in ${dbDuration}ms`);
+      } catch (offsetError: any) {
+        // offset()がサポートされていない場合は、全データを一度に取得（フォールバック）
+        console.warn(`[LunrInitializer] Instance ${INSTANCE_ID}: offset() not supported, falling back to single query: ${offsetError?.message || offsetError}`);
+        console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Fetching all documents at once...`);
+        
+        allDocs = await tbl.query().limit(10000).toArray();
+        dbDuration = Date.now() - dbStartTime;
+        console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Retrieved ${allDocs.length} documents in ${dbDuration}ms`);
+      }
+      
+      // メモリ使用量の監視: 全データ取得後
       const memoryAfterFetch = getMemoryUsage();
-      logMemoryUsage(`After fetching documents from LanceDB (${tableName}, ${docs.length} docs)`);
+      logMemoryUsage(`After fetching all documents from LanceDB (${tableName}, ${allDocs.length} docs)`);
       logMemoryDelta(`Fetching documents from LanceDB (${tableName})`, memoryBeforeFetch, memoryAfterFetch);
       
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: ✅ Retrieved ${docs.length} documents in ${dbDuration}ms`);
+      // データベース接続を閉じてメモリを解放（メモリマップドファイルの参照を解除）
+      try {
+        await db.close();
+        console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Database connection closed to free memory`);
+      } catch (closeError) {
+        console.warn(`[LunrInitializer] Instance ${INSTANCE_ID}: Failed to close database connection: ${closeError}`);
+      }
 
       // ドキュメントをLunr形式に変換（日本語トークン化を含む）
       console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Tokenizing documents...`);
@@ -189,14 +244,15 @@ export class LunrInitializer {
       const lunrDocs: LunrDocument[] = [];
       
       // ⚡ 最適化: トークン化処理を並列化（バッチ処理でメモリ使用量を制限）
-      // バッチサイズを100に増やして並列度を向上（初期化時間の短縮）
-      const BATCH_SIZE = 100; // 並列処理するドキュメント数（50 → 100に増加）
-      const batches: typeof docs[] = [];
-      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-        batches.push(docs.slice(i, i + BATCH_SIZE));
+      const batches: typeof allDocs[] = [];
+      for (let i = 0; i < allDocs.length; i += TOKENIZE_BATCH_SIZE) {
+        batches.push(allDocs.slice(i, i + TOKENIZE_BATCH_SIZE));
       }
       
-      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Processing ${docs.length} documents in ${batches.length} batches (${BATCH_SIZE} per batch)`);
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Processing ${allDocs.length} documents in ${batches.length} batches (${TOKENIZE_BATCH_SIZE} per batch)`);
+      
+      // 元のdocs配列への参照を削除してメモリを解放
+      const docs = allDocs;
       
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batch = batches[batchIndex];
