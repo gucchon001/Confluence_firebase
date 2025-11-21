@@ -1342,31 +1342,33 @@ async function executeBM25Search(
       // 初期化を開始
       const { lunrInitializer } = await import('./lunr-initializer');
       
-      // ⚡ 修正: 初期化を待つ（タイムアウトを10秒に設定、その後ポーリングで待つ）
-      // BM25検索が動作するように初期化完了を待つ
+      // ⚡ 修正: 初期化を待つ（タイムアウトを60秒に設定、その後ポーリングで待つ）
+      // BM25検索が動作するように初期化完了を待つ（精度向上のため）
       try {
         // 初期化を開始（バックグラウンドで実行される）
         const initPromise = lunrInitializer.initializeAsync(tableName);
         
-        // 10秒でタイムアウト、その後ポーリングで待つ（初期化が遅い場合に対応）
+        // 60秒でタイムアウト、その後ポーリングで待つ（初期化が遅い場合に対応）
+        // メモリ使用量が高い環境では初期化に時間がかかる可能性があるため、タイムアウトを延長
         const timeoutPromise = new Promise<void>((resolve) => {
           setTimeout(() => {
-            console.warn(`[BM25 Search] Lunr initialization timeout for ${tableName} after 10s, polling for readiness...`);
+            console.warn(`[BM25 Search] Lunr initialization timeout for ${tableName} after 60s, polling for readiness...`);
             resolve();
-          }, 10000); // 3秒 → 10秒に延長
+          }, 60000); // 10秒 → 60秒に延長（メモリ使用量が高い環境に対応）
         });
         
         // タイムアウトまたは初期化完了を待つ
         await Promise.race([initPromise, timeoutPromise]);
         
-        // 初期化が完了するまでポーリングで待つ（最大10秒追加）
-        const maxPollingTime = 10000; // 2秒 → 10秒に延長（合計最大20秒）
-        const pollingInterval = 100; // ポーリング間隔（100ms）
+        // 初期化が完了するまでポーリングで待つ（最大60秒追加、合計最大120秒）
+        const maxPollingTime = 60000; // 10秒 → 60秒に延長（合計最大120秒）
+        const pollingInterval = 500; // ポーリング間隔（100ms → 500msに変更、CPU負荷軽減）
         const pollingStartTime = Date.now();
         
         while (!lunrSearchClient.isReady(tableName)) {
           if (Date.now() - pollingStartTime > maxPollingTime) {
             console.warn(`[BM25 Search] Lunr still not ready for ${tableName} after ${maxPollingTime}ms polling, skipping BM25`);
+            console.warn(`[BM25 Search] ⚠️ BM25検索が無効化されます。検索精度が低下する可能性があります。`);
             return [];
           }
           await new Promise(resolve => setTimeout(resolve, pollingInterval));
@@ -1375,6 +1377,7 @@ async function executeBM25Search(
         console.log(`[BM25 Search] ✅ Lunr ready for ${tableName} after initialization`);
       } catch (error) {
         console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
+        console.warn(`[BM25 Search] ⚠️ BM25検索が無効化されます。検索精度が低下する可能性があります。`);
         return [];
       }
     }

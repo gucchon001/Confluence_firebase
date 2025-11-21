@@ -98,17 +98,18 @@ export async function initializeStartupOptimizations(): Promise<void> {
   initializationPromise = performInitializationAsync();
   
   try {
-    // ⚡ 最適化: 最大5秒でタイムアウト（Lunrインデックスのロードを待つ）
-    // キャッシュからのロードは通常1-2秒で完了するため、5秒あれば十分
+    // ⚡ 最適化: 最大60秒でタイムアウト（Lunrインデックスのロードを待つ）
+    // メモリ使用量が高い環境では初期化に時間がかかる可能性があるため、タイムアウトを延長
+    // キャッシュからのロードは通常1-2秒で完了するが、メモリ不足時は遅延する可能性がある
     // 重い初期化処理（Lunrインデックスの再構築など）はバックグラウンドで継続
     await Promise.race([
       initializationPromise,
       new Promise<void>((resolve) => {
         setTimeout(() => {
-          console.log('[StartupOptimizer] ⚡ Background initialization started (timeout reached after 5s)');
+          console.log('[StartupOptimizer] ⚡ Background initialization started (timeout reached after 60s)');
           console.log('[StartupOptimizer] Heavy initialization (Lunr index rebuild, etc.) will continue in background');
           resolve();
-        }, 5000); // 1秒 → 5秒に延長（キャッシュロードを待つ）
+        }, 60000); // 5秒 → 60秒に延長（メモリ使用量が高い環境に対応）
       })
     ]);
     
