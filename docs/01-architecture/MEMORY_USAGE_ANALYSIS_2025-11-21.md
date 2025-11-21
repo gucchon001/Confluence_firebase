@@ -25,30 +25,48 @@ Cloud Runのメトリクスによると、11月12日以降、特に11月19日に
 
 ### 🔍 **急上昇の原因分析**
 
-#### 1. **Jiraテーブル（`jira_issues`）の追加** 🔴 **最有力**
+#### 1. **Jiraテーブル（`jira_issues`）の追加と起動時の不要な初期化** 🔴 **最有力**
+
+**問題の本質**:
+- **横断検索は実装されていない**ため、Confluence検索をする際にJiraテーブルは使用されない
+- しかし、**以前のコードでは起動時に両方のテーブルを初期化していた**（不要な初期化）
+- これにより、Confluence検索だけをする場合でも、Jiraテーブルのメモリマップドファイルが読み込まれていた
 
 **変更内容**:
 - Jiraテーブル（`jira_issues`）が追加された
 - 実装完了日: **2025-11-17**（ドキュメントより）
-- 起動時に`['confluence', 'jira_issues']`の両方のテーブルのLunrインデックスをロード
+- **以前のコード**: 起動時に`['confluence', 'jira_issues']`の両方のテーブルのLunrインデックスをロード
+- **現在のコード**: 起動時には`confluence`のみ初期化、`jira_issues`はオンデマンドで初期化 ✅ **修正済み**
 
 **影響**:
 - **テーブル数が1つから2つに増加**（confluence → confluence + jira_issues）
-- 各テーブルがメモリマップドファイルとして読み込まれる
-- **メモリ使用量が実質的に2倍になる可能性**
+- **起動時に両方のテーブルを初期化していたため**、各テーブルがメモリマップドファイルとして読み込まれる
+- **メモリ使用量が実質的に2倍になる可能性**（Confluence検索だけでもJiraテーブルがメモリに読み込まれていた）
 
 **計算**:
 - 1テーブル（confluenceのみ）: 約12GB（メモリマップドファイル）
-- 2テーブル（confluence + jira_issues）: 約24GB（メモリマップドファイルが共有されない場合）
+- 2テーブル（confluence + jira_issues、両方起動時に初期化）: 約24GB（メモリマップドファイルが共有されない場合）
 
-**コード箇所**:
+**以前のコード（問題のあったコード）**:
 ```typescript
-// src/lib/startup-optimizer.ts (225行目)
-const tables = ['confluence', 'jira_issues'];
+// src/lib/startup-optimizer.ts (以前のコード)
+const tables = ['confluence', 'jira_issues']; // ⚠️ 両方のテーブルを起動時に初期化
 
 for (const tableName of tables) {
   await lunrInitializer.initializeAsync(tableName);
 }
+```
+
+**現在のコード（修正済み）**:
+```typescript
+// src/lib/startup-optimizer.ts (現在のコード)
+const tablesToPreload = ['confluence']; // ✅ 主要テーブルのみ起動時に初期化
+const tablesToLazyLoad = ['jira_issues']; // ✅ 遅延初期化
+
+for (const tableName of tablesToPreload) {
+  await lunrInitializer.initializeAsync(tableName);
+}
+// jira_issuesは検索リクエストが来た時にオンデマンドで初期化される
 ```
 
 **タイミングの一致**:
@@ -189,6 +207,8 @@ for (const tableName of tables) {
 ## 🚀 **複数テーブルの効率的な運用方法**
 
 ### 問題
+
+**重要な点**: 横断検索は実装されていないため、Confluence検索をする際にJiraテーブルは使用されません。しかし、**以前のコードでは起動時に両方のテーブルを初期化していた**ため、Confluence検索だけをする場合でも、Jiraテーブルのメモリマップドファイルが読み込まれていました。
 
 たった2つのテーブル（confluence + jira_issues）でも、起動時に両方を初期化するとメモリ使用量が約2倍になります。
 
