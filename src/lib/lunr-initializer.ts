@@ -105,7 +105,7 @@ export class LunrInitializer {
       const startTime = Date.now();
       
       // メモリ使用量の監視: 初期化開始時
-      const { logMemoryUsage, getMemoryUsage } = await import('./memory-monitor');
+      const { logMemoryUsage, getMemoryUsage, logMemoryDelta } = await import('./memory-monitor');
       const memoryBefore = getMemoryUsage();
       logMemoryUsage(`Lunr initialization start (${tableName})`);
       
@@ -137,7 +137,6 @@ export class LunrInitializer {
         const duration = Date.now() - startTime;
         
         // メモリ使用量の監視: キャッシュからロード完了時
-        const { logMemoryUsage, logMemoryDelta } = await import('./memory-monitor');
         const memoryAfter = getMemoryUsage();
         logMemoryUsage(`Lunr initialization complete (cache, ${tableName})`);
         logMemoryDelta(`Lunr initialization (cache, ${tableName})`, memoryBefore, memoryAfter);
@@ -170,7 +169,6 @@ export class LunrInitializer {
       const tbl = await db.openTable(tableName);
       
       // メモリ使用量の監視: データ取得前
-      const { logMemoryUsage, getMemoryUsage, logMemoryDelta } = await import('./memory-monitor');
       const memoryBeforeFetch = getMemoryUsage();
       logMemoryUsage(`Before fetching documents from LanceDB (${tableName})`);
       
