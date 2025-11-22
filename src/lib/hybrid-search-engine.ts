@@ -13,6 +13,7 @@ import { lancedbClient } from './lancedb-client';
 import { LabelFilterOptions } from './search-weights';
 import { getLabelsAsArray } from './label-utils';
 import { labelManager } from './label-manager';
+import { buildConfluenceUrl } from './url-utils';
 
 export interface HybridSearchParams {
   query: string;
@@ -145,6 +146,7 @@ export class HybridSearchEngine {
           content: result.content,
           labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
           url: url, // URLを再構築
+          space_key: result.space_key, // space_keyを保持
           source: 'vector' as const,
           scoreKind: 'vector' as const,
           scoreRaw: result.distance ?? 0,
@@ -223,6 +225,7 @@ export class HybridSearchEngine {
           content: result.content,
           labels: getLabelsAsArray(result.labels), // Arrow Vector型を配列に変換
           url: url, // URLを再構築
+          space_key: result.space_key, // space_keyを保持
           source: 'bm25' as const,
           scoreKind: 'bm25' as const,
           scoreRaw: result.score,
@@ -285,8 +288,35 @@ export class HybridSearchEngine {
         // 両方の結果がある場合：ハイブリッドスコアを計算
         // BM25結果のJira特有フィールドを優先（より正確な情報）
         const hybridScore = this.calculateHybridScore(vectorResult.scoreRaw, bm25Result.scoreRaw);
+        
+        // pageIdを確実に保持（BM25結果にもpageIdがある場合、それも考慮）
+        const finalPageId = vectorResult.pageId || bm25Result.pageId || pageId;
+        
+        // space_keyを適切に選択（存在する方を優先、両方ある場合はBM25を優先）
+        const bestSpaceKey = bm25Result.space_key || vectorResult.space_key;
+        
+        // URLを適切に選択（より正確なURLを持つ結果を優先）
+        // 有効なURL（#でない、httpで始まる）を優先
+        const vectorUrl = vectorResult.url && vectorResult.url !== '#' && vectorResult.url.startsWith('http') 
+          ? vectorResult.url 
+          : undefined;
+        const bm25Url = bm25Result.url && bm25Result.url !== '#' && bm25Result.url.startsWith('http') 
+          ? bm25Result.url 
+          : undefined;
+        let bestUrl = bm25Url || vectorUrl || vectorResult.url || bm25Result.url;
+        
+        // URLが#の場合、pageIdとspace_keyから再構築を試行
+        if ((!bestUrl || bestUrl === '#') && finalPageId && finalPageId > 0) {
+          bestUrl = buildConfluenceUrl(finalPageId, bestSpaceKey, undefined);
+        }
+        
         hybridResults.push({
           ...vectorResult,
+          // URLとspace_keyを適切に保持
+          url: bestUrl,
+          space_key: bestSpaceKey,
+          // pageIdを確実に保持
+          pageId: finalPageId,
           // Jira特有フィールドはBM25結果から取得（より正確）
           issue_key: bm25Result.issue_key || vectorResult.issue_key,
           status: bm25Result.status || vectorResult.status,
@@ -301,10 +331,26 @@ export class HybridSearchEngine {
         });
       } else if (vectorResult) {
         // ベクトル検索のみの場合
-        hybridResults.push(vectorResult);
+        // URLが#の場合、pageIdとspace_keyから再構築を試行
+        let vectorUrl = vectorResult.url;
+        if ((!vectorUrl || vectorUrl === '#') && vectorResult.pageId && vectorResult.pageId > 0) {
+          vectorUrl = buildConfluenceUrl(vectorResult.pageId, vectorResult.space_key, undefined);
+        }
+        hybridResults.push({
+          ...vectorResult,
+          url: vectorUrl
+        });
       } else if (bm25Result) {
         // BM25検索のみの場合
-        hybridResults.push(bm25Result);
+        // URLが#の場合、pageIdとspace_keyから再構築を試行
+        let bm25Url = bm25Result.url;
+        if ((!bm25Url || bm25Url === '#') && bm25Result.pageId && bm25Result.pageId > 0) {
+          bm25Url = buildConfluenceUrl(bm25Result.pageId, bm25Result.space_key, undefined);
+        }
+        hybridResults.push({
+          ...bm25Result,
+          url: bm25Url
+        });
       }
     }
 

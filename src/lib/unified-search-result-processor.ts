@@ -151,10 +151,10 @@ export class UnifiedSearchResultProcessor {
   /**
    * 検索結果を処理・フォーマット
    */
-  public processSearchResults(
+  public async processSearchResults(
     rawResults: RawSearchResult[],
     options: ScoreCalculationOptions = {}
-  ): ProcessedSearchResult[] {
+  ): Promise<ProcessedSearchResult[]> {
     const opts = {
       vectorWeight: 0.4,
       keywordWeight: 0.4,
@@ -167,7 +167,11 @@ export class UnifiedSearchResultProcessor {
       ...options
     };
 
-    console.log(`[UnifiedSearchResultProcessor] Processing ${rawResults.length} results`);
+    // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
+    const DEBUG_SEARCH = process.env.NODE_ENV === 'development' && process.env.DEBUG_SEARCH === 'true';
+    if (DEBUG_SEARCH) {
+      console.log(`[UnifiedSearchResultProcessor] Processing ${rawResults.length} results`);
+    }
 
     // 1. 基本スコア計算
     const resultsWithScores = this.calculateBasicScores(rawResults, opts);
@@ -178,7 +182,7 @@ export class UnifiedSearchResultProcessor {
       : resultsWithScores;
 
     // 3. 結果フォーマット
-    return this.formatResults(finalResults);
+    return await this.formatResults(finalResults);
   }
 
   /**
@@ -349,8 +353,10 @@ export class UnifiedSearchResultProcessor {
   /**
    * 結果フォーマット
    */
-  private formatResults(results: RawSearchResult[]): ProcessedSearchResult[] {
-    return results.map(result => {
+  private async formatResults(results: RawSearchResult[]): Promise<ProcessedSearchResult[]> {
+    const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+    
+    return Promise.all(results.map(async (result) => {
       const sourceType = (result._sourceType || 'vector') as 'vector' | 'keyword' | 'hybrid' | 'bm25';
       const distance = result._distance ?? 1;
       const bm25Score = result._bm25Score ?? result._keywordScore ?? 0;
@@ -421,18 +427,31 @@ export class UnifiedSearchResultProcessor {
       const cleanTitle = (result.title || 'No Title').replace(/\uFEFF/g, '');
       const cleanContent = (result.content || '').replace(/\uFEFF/g, '');
       
+      // pageIdを確実に取得（複数のフィールドから取得を試行）
+      const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+      const pageIdFromRecord = getPageIdFromRecord(result);
+      const pageId = pageIdFromRecord ?? result.pageId ?? result.page_id;
+      const spaceKey = result.space_key;
+      
+      // URL構築: result.urlが#または無効な場合、pageIdから再構築
+      let url = buildConfluenceUrl(pageId, spaceKey, result.url);
+      // URLが#の場合、pageIdが存在すれば再構築を試行
+      if ((!url || url === '#') && pageId && (typeof pageId === 'number' ? pageId > 0 : true)) {
+        url = buildConfluenceUrl(pageId, spaceKey, undefined);
+      }
+      
       return {
         id: result.id,
-        pageId: result.pageId ?? result.page_id, // ★★★ MIGRATION: page_idをフォールバックとして使用 ★★★
+        pageId: pageId, // ★★★ MIGRATION: page_idをフォールバックとして使用 ★★★
         page_id: result.page_id ?? result.pageId, // ★★★ MIGRATION: page_idを保持 ★★★
         title: cleanTitle,
         content: cleanContent,
         isChunked: result.isChunked,  // Phase 0A-3: チャンク統合判定フラグ
         distance: distance,
         score: finalScore, // Composite Scoreが利用可能な場合はそれを使用、それ以外は従来の計算
-        space_key: result.space_key,
+        space_key: spaceKey,
         labels: getLabelsAsArray(result.labels),
-        url: buildConfluenceUrl(result.pageId || result.page_id, result.space_key, result.url),
+        url: url,
         lastUpdated: result.lastUpdated || '',
         source: sourceType,
         matchDetails: result._matchDetails || {},
@@ -474,7 +493,7 @@ export class UnifiedSearchResultProcessor {
         issue_type: result.issue_type,
         updated_at: result.updated_at,
       };
-    });
+    }));
   }
 
 
