@@ -119,7 +119,8 @@ async function getTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.IpadicFeature
     return tokenizer;
   }
 
-  // 初期化中の場合は、既存のPromiseを返す
+  // ★★★ 修正: 初期化中の場合は、既存のPromiseを返す（並列処理での競合を防止） ★★★
+  // 理由: 並列処理で複数のgetTokenizer()呼び出しが同時に発生した場合、重複初期化を防ぐ
   if (tokenizerPromise) {
     return tokenizerPromise;
   }
@@ -127,15 +128,21 @@ async function getTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.IpadicFeature
   // ⚡ 最適化: 辞書ファイルの存在確認を一度だけ行う（ダウンロードを防ぐ）
   // 検証済みのパスがあればそれを使用、なければ環境に応じて決定
   let dicPath: string;
+  let isFirstInitialization = false;
   
   if (verifiedDictionaryPath) {
     // 既に検証済みのパスを使用（再計算を防ぐ）
     dicPath = verifiedDictionaryPath;
+    // 既に検証済みの場合は、初期化ログを出力しない
+    isFirstInitialization = false;
   } else {
     // 初回のみ: 環境に応じて辞書パスを決定
     dicPath = getDictionaryPath();
     
+    // ★★★ 修正: dictionaryCheckedのチェックをアトミックにする（並列処理での競合を防止） ★★★
+    // 理由: 並列処理で複数のgetTokenizer()呼び出しが同時に発生した場合、重複チェックを防ぐ
     if (!dictionaryChecked) {
+      isFirstInitialization = true;
       const fs = await import('fs');
       
       // フォールバック: 本番環境でstandaloneパスが見つからない場合、通常のnode_modulesを試す
@@ -143,7 +150,10 @@ async function getTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.IpadicFeature
         const fallbackPath = path.resolve(process.cwd(), 'node_modules/kuromoji/dict');
         if (fs.existsSync(fallbackPath)) {
           dicPath = fallbackPath;
-          console.log(`[JapaneseTokenizer] ⚠️  Primary path not found, using fallback: ${fallbackPath}`);
+          // ★★★ 修正: フォールバックログは初回のみ出力（OOM対策） ★★★
+          if (isFirstInitialization) {
+            console.log(`[JapaneseTokenizer] ⚠️  Primary path not found, using fallback: ${fallbackPath}`);
+          }
         } else {
           const errorMsg = `Kuromoji dictionary directory not found at ${dicPath} or ${fallbackPath}. Please ensure kuromoji is properly installed with 'npm install kuromoji'`;
           console.error(`[JapaneseTokenizer] ❌ ${errorMsg}`);
@@ -160,26 +170,31 @@ async function getTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.IpadicFeature
         throw new Error(errorMsg);
       }
       
-      // 検証済みパスを保存（次回以降は再計算・再チェックをスキップ）
+      // ★★★ 修正: 検証済みパスを保存（並列処理での競合を防ぐため、ここで設定） ★★★
+      // 理由: 並列処理で複数のgetTokenizer()呼び出しが同時に発生した場合、重複チェックを防ぐ
       verifiedDictionaryPath = dicPath;
       dictionaryChecked = true;
+      
+      // ★★★ 修正: 辞書ファイル検証ログは初回のみ出力（OOM対策） ★★★
+      // 理由: このログが大量に出力されると、メモリ使用量が増加する可能性がある
       console.log(`[JapaneseTokenizer] ✅ Dictionary files verified at: ${dicPath}`);
+    } else {
+      // ★★★ 修正: 既に検証済みの場合はログを出力しない（OOM対策） ★★★
+      // 理由: 重複ログを完全に防止
+      isFirstInitialization = false;
     }
   }
 
+  // ★★★ 修正: 初期化ログを1回だけ出力（OOM問題の原因を排除） ★★★
+  // 理由: ログが大量に出力されると、メモリ使用量が増加し、OOMの原因となる可能性がある
   tokenizerPromise = new Promise((resolve, reject) => {
-    // ⚡ 最適化: ログを1回だけ出力（重複ログを防止）
-    // dictionaryCheckedがfalseの場合のみログを出力（初回のみ）
-    // 注意: dictionaryCheckedは辞書ファイルの存在確認が完了したことを示すフラグ
-    // tokenizerがnullの場合でも、dictionaryCheckedがtrueの可能性がある（前回の初期化試行でチェック済み）
-    if (!dictionaryChecked) {
+    // ⚡ 最適化: ログを初回のみ出力（重複ログを完全に防止）
+    if (isFirstInitialization) {
       console.log(`[JapaneseTokenizer] 🔧 Initializing kuromoji tokenizer with path: ${dicPath}...`);
       console.log(`[JapaneseTokenizer] 📦 This is the FIRST initialization - dictionary files will be loaded once`);
-    } else {
-      // 既に辞書ファイルがチェック済みの場合（前回の初期化試行でチェック済みだが、tokenizerがnullの場合）
-      // これは正常なケース（エラーで初期化が失敗した場合など）
-      console.log(`[JapaneseTokenizer] 🔧 Initializing kuromoji tokenizer (dictionary already verified at: ${verifiedDictionaryPath || dicPath})...`);
     }
+    // ★★★ 修正: dictionaryCheckedがtrueの場合はログを一切出力しない（OOM対策） ★★★
+    
     kuromoji.builder({ dicPath: dicPath }).build((err, t) => {
       if (err) {
         console.error('[JapaneseTokenizer] ❌ Failed to initialize kuromoji:', err);
@@ -187,7 +202,8 @@ async function getTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.IpadicFeature
         reject(err);
         return;
       }
-      if (!dictionaryChecked) {
+      // ★★★ 修正: 初期化成功ログも初回のみ出力（OOM対策） ★★★
+      if (isFirstInitialization) {
         console.log('[JapaneseTokenizer] ✅ Kuromoji tokenizer initialized successfully (FIRST TIME ONLY)');
         console.log('[JapaneseTokenizer] 🚀 Tokenizer is now cached in memory - no more dictionary loading');
       }

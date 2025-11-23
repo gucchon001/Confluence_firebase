@@ -175,7 +175,9 @@ export class LunrInitializer {
       // ⚡ 最適化: メモリマップドファイルの使用を避けるため、バッチ処理でデータを取得
       // 一度に全データを取得するのではなく、小さなバッチで順次取得して処理
       // これにより、LanceDBがメモリマップドファイルとして全データを読み込むことを避ける
-      const TOKENIZE_BATCH_SIZE = 100; // トークン化処理のバッチサイズ
+      // ★★★ 修正: バッチサイズを削減（OOM対策） ★★★
+      // 理由: 並列処理数を減らすことで、メモリ使用量を削減
+      const TOKENIZE_BATCH_SIZE = 50; // トークン化処理のバッチサイズ（100→50に削減）
       
       let allDocs: any[] = [];
       let dbDuration: number;
@@ -238,6 +240,14 @@ export class LunrInitializer {
         console.warn(`[LunrInitializer] Instance ${INSTANCE_ID}: Failed to close database connection: ${closeError}`);
       }
 
+      // ★★★ 修正: トークナイザーを事前初期化（OOM対策） ★★★
+      // 理由: 並列処理で大量のgetTokenizer()呼び出しが発生する前に、トークナイザーを1回だけ初期化
+      // これにより、重複初期化ログの出力を防ぎ、メモリ使用量を削減
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Pre-initializing tokenizer before batch processing...`);
+      const { preInitializeTokenizer } = await import('./japanese-tokenizer');
+      await preInitializeTokenizer();
+      console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Tokenizer pre-initialized successfully`);
+      
       // ドキュメントをLunr形式に変換（日本語トークン化を含む）
       console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Tokenizing documents...`);
       const tokenizeStartTime = Date.now();

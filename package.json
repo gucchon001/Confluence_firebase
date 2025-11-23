@@ -133,7 +133,8 @@
     "test:data-integrity": "tsx scripts/test-data-integrity.ts",
     "test:data-integrity:local": "tsx scripts/test-data-integrity.ts --env local",
     "test:data-integrity:production": "tsx scripts/test-data-integrity.ts --env production",
-    "test:data-integrity:both": "tsx scripts/test-data-integrity.ts --env both"
+    "test:data-integrity:both": "tsx scripts/test-data-integrity.ts --env both",
+    "test:oom-fixes": "tsx scripts/test-oom-fixes.ts"
   },
   "dependencies": {
     "@genkit-ai/google-cloud": "^1.23.0",
