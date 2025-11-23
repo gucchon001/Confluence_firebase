@@ -114,7 +114,7 @@ export async function searchReferencesByTitles(
   titles: string[],
   tableName: string = 'confluence',
   maxSearches: number = 5,
-  timeout: number = 2000 // ★★★ 修正: 500ms → 2000ms（検索が完了するまで待つ） ★★★
+  timeout: number = 5000 // ★★★ パフォーマンス改善: 2秒 → 5秒（BM25検索が完了するまで待つ） ★★★
 ): Promise<Reference[]> {
   // 検索数を制限
   const titlesToSearch = titles.slice(0, maxSearches);
@@ -147,66 +147,85 @@ export async function searchReferencesByTitles(
     return cachedResults;
   }
   
-  // キャッシュミスのタイトルを検索（タイムアウト付き）
-  const searchPromises = uncachedTitles.map(async (title) => {
-    try {
-      console.log(`[reference-enhancer] Searching for title: "${title}"`);
-      const searchPromise = searchLanceDB({
-        query: title,
-        exactTitleCandidates: [title],
-        topK: 3, // ★★★ 修正: 1件 → 3件（より柔軟なマッチング） ★★★
-        tableName: tableName as 'confluence' | 'jira_issues'
-      });
-      
-      const timeoutPromise = new Promise<Reference[]>((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout')), timeout);
-      });
-      
-      const results = await Promise.race([searchPromise, timeoutPromise]);
-      
-      // 検索結果のログ出力（デバッグ用）
-      if (results && results.length > 0) {
-        console.log(`[reference-enhancer] Found ${results.length} results for "${title}":`, results.map(r => r.title).join(', '));
-      } else {
-        console.warn(`[reference-enhancer] No results found for title "${title}"`);
-      }
-      
-      // 検索結果をキャッシュに保存
-      const cacheKey = `title-search:${title.toLowerCase().trim()}`;
-      titleSearchCache.set(cacheKey, results);
-      
-      // 参照元形式に変換（最も関連性の高い1件のみを返す）
-      // ただし、タイトルが完全一致または非常に近い場合は優先的に選択
-      const converted = results.map((doc: any) => ({
-        title: doc.title || 'No Title',
-        url: doc.url || '',
-        distance: doc.distance || 0.5,
-        source: doc.source || 'vector',
-        dataSource: tableName === 'jira_issues' ? 'jira' : 'confluence',
-        issue_key: doc.issue_key,
-        _originalSearchTitle: title // デバッグ用
-      }));
-      
-      // タイトルが完全一致または非常に近いものを優先
-      const exactMatch = converted.find(r => {
-        const refTitle = (r.title || '').trim();
-        const searchTitle = title.trim();
-        return refTitle === searchTitle || 
-               refTitle.replace(/^\d+_/, '') === searchTitle.replace(/^\d+_/, '') ||
-               refTitle.includes(searchTitle) || 
-               searchTitle.includes(refTitle);
-      });
-      
-      return exactMatch ? [exactMatch] : converted.slice(0, 1); // 完全一致があればそれを、なければ最初の1件
-    } catch (error) {
-      // タイムアウトやエラー時は空配列を返す
-      console.warn(`[reference-enhancer] Search failed for title "${title}":`, error instanceof Error ? error.message : error);
-      return [];
-    }
-  });
+  // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
+  const DEBUG_SEARCH = process.env.NODE_ENV === 'development' && process.env.DEBUG_SEARCH === 'true';
   
-  // 並列実行
-  const searchResults = await Promise.all(searchPromises);
+  // ★★★ パフォーマンス改善: 順次実行に変更（並行実行によるリソース競合を回避） ★★★
+  // 同時実行数を2件に制限してリソース競合を削減
+  const MAX_CONCURRENT_SEARCHES = 2;
+  const searchResults: Reference[][] = [];
+  
+  // バッチ処理: 最大2件ずつ順次実行
+  for (let i = 0; i < uncachedTitles.length; i += MAX_CONCURRENT_SEARCHES) {
+    const batch = uncachedTitles.slice(i, i + MAX_CONCURRENT_SEARCHES);
+    
+    // バッチ内は並列実行（最大2件）
+    const batchPromises = batch.map(async (title) => {
+      try {
+        if (DEBUG_SEARCH) {
+          console.log(`[reference-enhancer] Searching for title: "${title}"`);
+        }
+        const searchPromise = searchLanceDB({
+          query: title,
+          exactTitleCandidates: [title],
+          topK: 3, // ★★★ 修正: 1件 → 3件（より柔軟なマッチング） ★★★
+          tableName: tableName as 'confluence' | 'jira_issues'
+        });
+        
+        const timeoutPromise = new Promise<Reference[]>((_, reject) => {
+          setTimeout(() => reject(new Error('Timeout')), timeout);
+        });
+        
+        const results = await Promise.race([searchPromise, timeoutPromise]);
+        
+        // 検索結果のログ出力（デバッグ用）
+        if (DEBUG_SEARCH) {
+          if (results && results.length > 0) {
+            console.log(`[reference-enhancer] Found ${results.length} results for "${title}":`, results.map(r => r.title).join(', '));
+          } else {
+            console.warn(`[reference-enhancer] No results found for title "${title}"`);
+          }
+        }
+        
+        // 検索結果をキャッシュに保存
+        const cacheKey = `title-search:${title.toLowerCase().trim()}`;
+        titleSearchCache.set(cacheKey, results);
+        
+        // 参照元形式に変換（最も関連性の高い1件のみを返す）
+        // ただし、タイトルが完全一致または非常に近い場合は優先的に選択
+        const converted = results.map((doc: any) => ({
+          title: doc.title || 'No Title',
+          url: doc.url || '',
+          distance: doc.distance || 0.5,
+          source: doc.source || 'vector',
+          dataSource: tableName === 'jira_issues' ? 'jira' : 'confluence',
+          issue_key: doc.issue_key,
+          _originalSearchTitle: title // デバッグ用
+        }));
+        
+        // タイトルが完全一致または非常に近いものを優先
+        const exactMatch = converted.find(r => {
+          const refTitle = (r.title || '').trim();
+          const searchTitle = title.trim();
+          return refTitle === searchTitle || 
+                 refTitle.replace(/^\d+_/, '') === searchTitle.replace(/^\d+_/, '') ||
+                 refTitle.includes(searchTitle) || 
+                 searchTitle.includes(refTitle);
+        });
+        
+        return exactMatch ? [exactMatch] : converted.slice(0, 1); // 完全一致があればそれを、なければ最初の1件
+      } catch (error) {
+        // タイムアウトやエラー時は空配列を返す
+        console.warn(`[reference-enhancer] Search failed for title "${title}":`, error instanceof Error ? error.message : error);
+        return [];
+      }
+    });
+    
+    // バッチの結果を待機
+    const batchResults = await Promise.all(batchPromises);
+    searchResults.push(...batchResults);
+  }
+  
   const newReferences = searchResults.flat();
   
   // キャッシュヒット分と検索結果を結合

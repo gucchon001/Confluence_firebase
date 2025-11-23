@@ -10,6 +10,9 @@ const nextConfig = {
   // ★★★ Firebase App Hosting用のスタンドアロン出力設定 ★★★
   output: 'standalone',
   
+  // ★★★ instrumentation.jsはNext.js 15でデフォルトで有効 ★★★
+  // experimental.instrumentationHook は不要（Next.js 15以降）
+  
   // 環境変数のマッピング: GEMINI_API_KEYをNEXT_PUBLIC_GOOGLE_API_KEYとして公開
   // これにより、Google APIキーをGEMINI_API_KEYに一元化できます
   env: {

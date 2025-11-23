@@ -355,7 +355,11 @@ export class LunrSearchClient {
       // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
       // 日本語クエリをトークン化（kuromojiを使用）
       const tokenizedQuery = await tokenizeJapaneseText(query);
-      console.log(`[LunrSearchClient] Searching with tokenized query: '${tokenizedQuery}'`);
+      // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
+      const DEBUG_ENABLED = process.env.NODE_ENV === 'development' && process.env.DEBUG_BM25 === 'true';
+      if (DEBUG_ENABLED) {
+        console.log(`[LunrSearchClient] Searching with tokenized query: '${tokenizedQuery}'`);
+      }
 
       // Phase 2最適化: 動的閾値とフィールド重みの調整
       // ★★★ 修正: thresholdとlimitを調整して、自動オファー関連ドキュメントの検出精度向上 ★★★

@@ -291,16 +291,16 @@ export async function* streamingSummarizeConfluenceDocs(
   
   try {
     // コンテキストの準備（参照元として表示される全件を使用）
-    // MAX_CONTEXT_DOCS=12件すべてをLLMに渡すことで、参照元として表示される情報が回答に反映される
+    // MAX_CONTEXT_DOCS=10件すべてをLLMに渡すことで、参照元として表示される情報が回答に反映される
     // パフォーマンス最適化: 同期処理でコンテンツ抽出を高速化（extractRelevantContentMultiKeywordは同期関数）
-    const contextDocs = context.slice(0, 12); // 上位12件（参照元として表示される全件）
+    const contextDocs = context.slice(0, 10); // 上位10件（参照元として表示される全件）
     
     // 同期処理でコンテンツ抽出を実行（パフォーマンス最適化）
     const contextParts = contextDocs.map((doc, index) => {
         // ランキングに基づく動的な文字数制限（1位のドキュメントに十分な文字数を確保）
         // パフォーマンス最適化: 処理時間短縮のため文字数を削減（-30%）
-        // 1位: 1400文字、2位: 1260文字、3位: 1120文字、4-6位: 800文字、7-10位: 700文字、11-12位: 500文字
-        const maxLength = index === 0 ? 1400 : index === 1 ? 1260 : index === 2 ? 1120 : index < 6 ? 800 : index < 10 ? 700 : 500;
+        // 1位: 1400文字、2位: 1260文字、3位: 1120文字、4-5位: 800文字、6-8位: 700文字、9-10位: 500文字
+        const maxLength = index === 0 ? 1400 : index === 1 ? 1260 : index === 2 ? 1120 : index < 5 ? 800 : index < 8 ? 700 : 500;
         
         // 理想的なハイブリッド方式によるコンテンツ抽出
         // 先頭取得（固定800文字）とキーワード周辺取得（固定600文字）を組み合わせ、
@@ -505,45 +505,49 @@ ${truncatedContent}`;
       : allReferences;
     
     // 回答内で言及されているページを参照元に追加（バックグラウンド処理）
+    // ★★★ パフォーマンス改善: enhanceReferencesを1回だけ呼び出し（2回呼び出しによるリソース競合を回避） ★★★
     let enhancedReferences: any[] = [];
     try {
       const { enhanceReferences } = await import('../../lib/reference-enhancer');
       const isJira = params.source === 'jira' || context.some((doc: any) => doc.issue_key);
       const tableName = isJira ? 'jira_issues' : 'confluence';
       
-      // 参照元を拡張（キャッシュヒット分のみ即座に追加）
-      // allReferencesに対して拡張を実行（リンク変換で使用されるため）
+      // 参照元を拡張（allReferencesに対して一度だけ実行し、結果をfinalReferencesにも適用）
       console.log(`[reference-enhancer] Enhancing allReferences (${allReferences.length} references)`);
       const enhanced = await enhanceReferences(
         answer,
-        allReferences, // ★★★ 修正: finalReferencesではなくallReferencesに対して拡張 ★★★
+        allReferences,
         tableName,
         {
           maxSearches: 5,
-          timeout: 2000, // ★★★ 修正: 500ms → 2000ms ★★★
+          timeout: 5000, // ★★★ パフォーマンス改善: 2秒 → 5秒（BM25検索が完了するまで待つ） ★★★
           enableBackgroundSearch: true
         }
       );
       
-      // 拡張された参照元を保存（allReferencesに追加された新しい参照元）
+      // 拡張された参照元を保存
       enhancedReferences = enhanced.immediateReferences;
       console.log(`[reference-enhancer] Enhanced allReferences: ${allReferences.length} → ${enhancedReferences.length} references`);
       
-      // finalReferencesも拡張（表示用の参照元リスト）
-      console.log(`[reference-enhancer] Enhancing finalReferences (${finalReferences.length} references)`);
-      const enhancedFinal = await enhanceReferences(
-        answer,
-        finalReferences,
-        tableName,
-        {
-          maxSearches: 5,
-          timeout: 2000, // ★★★ 修正: 500ms → 2000ms ★★★
-          enableBackgroundSearch: true
-        }
+      // finalReferencesにも拡張結果を適用（finalReferencesに含まれる参照元を拡張結果から取得）
+      const finalReferenceIds = new Set(finalReferences.map((ref: any) => ref.id || ref.title));
+      const enhancedFinalRefs = enhancedReferences.filter((ref: any) => 
+        finalReferenceIds.has(ref.id || ref.title)
       );
       
-      // 拡張された参照元を使用（型を適合）
-      finalReferences = enhancedFinal.immediateReferences.map((ref: any) => ({
+      // 型を適合
+      enhancedReferences = enhancedReferences.map((ref: any) => ({
+        id: ref.id || ref.issue_key || '',
+        title: ref.title || 'No Title',
+        url: ref.url || '',
+        distance: ref.distance || 0,
+        score: ref.score || 0,
+        source: ref.source || 'vector',
+        dataSource: ref.dataSource || (tableName === 'jira_issues' ? 'jira' : 'confluence'),
+        issue_key: ref.issue_key
+      }));
+      
+      finalReferences = enhancedFinalRefs.map((ref: any) => ({
         id: ref.id || ref.issue_key || '',
         title: ref.title || 'No Title',
         url: ref.url || '',
@@ -555,8 +559,8 @@ ${truncatedContent}`;
       }));
       
       // バックグラウンド検索が必要なタイトルがある場合はログ出力（将来の拡張用）
-      if (enhanced.backgroundSearchTitles.length > 0 || enhancedFinal.backgroundSearchTitles.length > 0) {
-        console.log(`[reference-enhancer] Background search needed for ${enhanced.backgroundSearchTitles.length + enhancedFinal.backgroundSearchTitles.length} titles`);
+      if (enhanced.backgroundSearchTitles.length > 0) {
+        console.log(`[reference-enhancer] Background search needed for ${enhanced.backgroundSearchTitles.length} titles`);
       }
     } catch (error) {
       // 参照元拡張に失敗しても処理は継続

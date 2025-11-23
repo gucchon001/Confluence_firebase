@@ -74,19 +74,32 @@ export async function initializeStartupOptimizations(): Promise<void> {
     console.log('[StartupOptimizer] 🚀 Ultra-fast startup: Using cached optimizations');
     console.log('[StartupOptimizer] Cache stats:', getCacheStats());
     
+    // ⚡ 最適化: 起動時に初期化を完了させる（開発環境・本番環境共通）
+    // これにより、初回リクエストでも初期化済みで、検索開始時に初期化待ちが発生しない
+    console.log('[StartupOptimizer] 🔧 Completing initialization on startup...');
+    initializationPromise = performInitializationAsync();
+    
+    try {
+      // 初期化が完了するまで待つ（最大60秒）
+      await Promise.race([
+        initializationPromise,
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            console.warn('[StartupOptimizer] ⚠️ Initialization timeout after 60s, continuing in background');
+            resolve();
+          }, 60000);
+        })
+      ]);
+      
+      console.log('[StartupOptimizer] ✅ Initialization completed on startup');
+    } catch (error) {
+      console.error('[StartupOptimizer] ❌ Initialization failed:', error);
+      // エラーでも起動は継続
+    }
+    
     isInitialized = true;
     const endTime = Date.now();
     console.log(`[StartupOptimizer] 🚀 Ultra-fast startup completed in ${endTime - startTime}ms`);
-    
-    // バックグラウンドで最新状態を確認
-    setTimeout(() => {
-      console.log('[StartupOptimizer] 🔄 Background refresh started');
-      performInitializationAsync().then(() => {
-        console.log('[StartupOptimizer] ✅ Background refresh completed');
-      }).catch((error) => {
-        console.error('[StartupOptimizer] ❌ Background refresh failed:', error);
-      });
-    }, 1000);
     
     return;
   }
@@ -94,24 +107,24 @@ export async function initializeStartupOptimizations(): Promise<void> {
   // 初回起動またはキャッシュなしの場合
   console.log('[StartupOptimizer] 🔧 Cold start: Performing full initialization...');
   
-  // ⚡ 最適化: 重い処理をバックグラウンドで実行
+  // ⚡ 最適化: 起動時に初期化を完了させる（開発環境・本番環境共通）
+  // これにより、初回リクエストでも初期化済みで、検索開始時に初期化待ちが発生しない
   initializationPromise = performInitializationAsync();
   
   try {
-    // ⚡ 最適化: 最大60秒でタイムアウト（Lunrインデックスのロードを待つ）
-    // メモリ使用量が高い環境では初期化に時間がかかる可能性があるため、タイムアウトを延長
-    // キャッシュからのロードは通常1-2秒で完了するが、メモリ不足時は遅延する可能性がある
-    // 重い初期化処理（Lunrインデックスの再構築など）はバックグラウンドで継続
+    // 初期化が完了するまで待つ（最大60秒）
+    console.log('[StartupOptimizer] 🔧 Waiting for initialization to complete...');
     await Promise.race([
       initializationPromise,
       new Promise<void>((resolve) => {
         setTimeout(() => {
-          console.log('[StartupOptimizer] ⚡ Background initialization started (timeout reached after 60s)');
-          console.log('[StartupOptimizer] Heavy initialization (Lunr index rebuild, etc.) will continue in background');
+          console.warn('[StartupOptimizer] ⚠️ Initialization timeout after 60s, continuing in background');
           resolve();
-        }, 60000); // 5秒 → 60秒に延長（メモリ使用量が高い環境に対応）
+        }, 60000);
       })
     ]);
+    
+    console.log('[StartupOptimizer] ✅ Initialization completed on startup');
     
     isInitialized = true;
     const endTime = Date.now();
@@ -122,13 +135,6 @@ export async function initializeStartupOptimizations(): Promise<void> {
       'japanese_tokenizer': true,
       'cold_start': false,
       'initialization_time': endTime - startTime
-    });
-    
-    // バックグラウンドで完全初期化を継続
-    initializationPromise.then(() => {
-      console.log('[StartupOptimizer] ✅ Background initialization completed');
-    }).catch((error) => {
-      console.error('[StartupOptimizer] ❌ Background initialization failed:', error);
     });
     
   } catch (error) {

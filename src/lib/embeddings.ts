@@ -201,7 +201,8 @@ async function getGeminiEmbeddings(text: string): Promise<number[]> {
   };
 
   try {
-    const embeddingValues = await callGeminiEmbeddingApi(requestPayload);
+    // リトライ機構付きで埋め込み生成を実行
+    const embeddingValues = await callGeminiEmbeddingApiWithRetry(requestPayload);
     return embeddingValues;
   } catch (error) {
     const bomDiagnostics = (() => {
@@ -366,4 +367,106 @@ async function callGeminiEmbeddingApi(payload: unknown): Promise<number[]> {
   }
 
   return embeddingValues as number[];
+}
+
+/**
+ * リトライ機構付きのGemini Embeddings API呼び出し
+ * 指数バックオフによるリトライ（最大3回）、429エラー（レート制限）の特別処理、タイムアウトエラーのリトライを実装
+ * 
+ * @param payload APIリクエストペイロード
+ * @param maxRetries 最大リトライ回数（デフォルト: 3）
+ * @returns 埋め込みベクトル
+ */
+async function callGeminiEmbeddingApiWithRetry(
+  payload: unknown,
+  maxRetries: number = 3
+): Promise<number[]> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const startTime = Date.now();
+      const embeddingValues = await callGeminiEmbeddingApi(payload);
+      const duration = Date.now() - startTime;
+      
+      // 成功した場合、リトライ回数をログに記録
+      if (attempt > 0) {
+        console.log(`✅ [Embedding] Successfully generated embedding after ${attempt} retry(ies) (${duration}ms)`);
+      }
+      
+      return embeddingValues;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // リトライ不可なエラー（403, 400, 401など）は即座にスロー
+      if (error instanceof GeminiApiKeyLeakedError || error instanceof GeminiApiFatalError) {
+        throw error;
+      }
+      
+      // リトライ可能なエラーの場合
+      const errorCode = (error as any).code;
+      const errorStatus = (error as any).status;
+      
+      // 429エラー（レート制限）の特別処理
+      if (errorStatus === 429 || errorCode === 'rate_limit_error') {
+        const retryAfter = (error as any).retryAfter;
+        const waitTime = retryAfter 
+          ? retryAfter * 1000 
+          : Math.pow(2, attempt) * 1000; // 指数バックオフ: 1秒, 2秒, 4秒
+        
+        if (attempt < maxRetries) {
+          console.warn(`⚠️ [Embedding] Rate limited (429), retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+      }
+      
+      // タイムアウトエラーのリトライ
+      if (error instanceof Error && (
+        error.message.includes('timeout') || 
+        error.message.includes('AbortError') ||
+        error.name === 'AbortError'
+      )) {
+        if (attempt < maxRetries) {
+          const waitTime = Math.pow(2, attempt) * 1000; // 指数バックオフ: 1秒, 2秒, 4秒
+          console.warn(`⚠️ [Embedding] Timeout error, retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+      }
+      
+      // ネットワークエラーのリトライ
+      if (errorCode === 'network_error') {
+        if (attempt < maxRetries) {
+          const waitTime = Math.pow(2, attempt) * 1000; // 指数バックオフ: 1秒, 2秒, 4秒
+          console.warn(`⚠️ [Embedding] Network error, retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+      }
+      
+      // 500番台エラー（サーバーエラー）のリトライ
+      if (errorStatus >= 500 || errorCode === 'server_error') {
+        if (attempt < maxRetries) {
+          const waitTime = Math.pow(2, attempt) * 1000; // 指数バックオフ: 1秒, 2秒, 4秒
+          console.warn(`⚠️ [Embedding] Server error (${errorStatus}), retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+      }
+      
+      // 最後の試行で失敗した場合、またはリトライ不可なエラーの場合はエラーをスロー
+      if (attempt === maxRetries) {
+        console.error(`❌ [Embedding] Failed to generate embedding after ${maxRetries + 1} attempts`, {
+          lastError: lastError.message,
+          errorCode,
+          errorStatus
+        });
+        throw lastError;
+      }
+    }
+  }
+  
+  // このコードには到達しないはずだが、型安全性のために追加
+  throw lastError || new Error('Failed to generate embedding after retries');
 }

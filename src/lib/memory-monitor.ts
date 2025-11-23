@@ -54,24 +54,29 @@ export function formatMemoryUsage(usage: MemoryUsage): MemoryUsageFormatted {
  * @param usage メモリ使用量（省略時は現在の使用量を取得）
  */
 export function logMemoryUsage(label: string, usage?: MemoryUsage): void {
+  // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
+  const DEBUG_MEMORY = process.env.NODE_ENV === 'development' && process.env.DEBUG_MEMORY === 'true';
+  
   const currentUsage = usage || getMemoryUsage();
   const formatted = formatMemoryUsage(currentUsage);
   
-  console.log(`[Memory] ${label}:`, {
-    heapUsed: formatted.heapUsed,
-    heapTotal: formatted.heapTotal,
-    rss: formatted.rss,
-    external: formatted.external,
-    arrayBuffers: formatted.arrayBuffers,
-    total: formatted.total
-  });
+  if (DEBUG_MEMORY) {
+    console.log(`[Memory] ${label}:`, {
+      heapUsed: formatted.heapUsed,
+      heapTotal: formatted.heapTotal,
+      rss: formatted.rss,
+      external: formatted.external,
+      arrayBuffers: formatted.arrayBuffers,
+      total: formatted.total
+    });
+  }
   
-  // RSS（実メモリ使用量）が4GBを超えている場合は警告
+  // RSS（実メモリ使用量）が4GBを超えている場合は警告（常に出力）
   if (currentUsage.rss > 4 * 1024 * 1024 * 1024) {
     console.warn(`⚠️ [Memory] ${label}: RSS exceeds 4GB (${formatted.rss})`);
   }
   
-  // ヒープ使用量が2GBを超えている場合は警告
+  // ヒープ使用量が2GBを超えている場合は警告（常に出力）
   if (currentUsage.heapUsed > 2 * 1024 * 1024 * 1024) {
     console.warn(`⚠️ [Memory] ${label}: Heap used exceeds 2GB (${formatted.heapUsed})`);
   }
@@ -84,6 +89,9 @@ export function logMemoryUsage(label: string, usage?: MemoryUsage): void {
  * @param after 処理後のメモリ使用量（省略時は現在の使用量を取得）
  */
 export function logMemoryDelta(label: string, before: MemoryUsage, after?: MemoryUsage): void {
+  // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
+  const DEBUG_MEMORY = process.env.NODE_ENV === 'development' && process.env.DEBUG_MEMORY === 'true';
+  
   const afterUsage = after || getMemoryUsage();
   const delta = {
     heapUsed: afterUsage.heapUsed - before.heapUsed,
@@ -101,16 +109,23 @@ export function logMemoryDelta(label: string, before: MemoryUsage, after?: Memor
     arrayBuffers: `${delta.arrayBuffers >= 0 ? '+' : ''}${(delta.arrayBuffers / 1024 / 1024).toFixed(2)}MB`
   };
   
-  console.log(`[Memory] ${label} (delta):`, formattedDelta);
-  
-  // RSSの増加が100MBを超えている場合は警告
-  if (delta.rss > 100 * 1024 * 1024) {
-    console.warn(`⚠️ [Memory] ${label}: RSS increased by ${formattedDelta.rss}`);
+  if (DEBUG_MEMORY) {
+    console.log(`[Memory] ${label} (delta):`, formattedDelta);
   }
   
-  // ヒープ使用量の増加が50MBを超えている場合は警告
-  if (delta.heapUsed > 50 * 1024 * 1024) {
-    console.warn(`⚠️ [Memory] ${label}: Heap used increased by ${formattedDelta.heapUsed}`);
+  // ★★★ メモリ最適化: 警告閾値を調整（検索実行時の一時的なメモリ増加は正常な動作） ★★★
+  // RSSの増加が500MBを超えている場合は警告（常に出力）
+  // 注意: 検索実行時はLanceDBメモリマップドファイルやLunrインデックスの読み込みにより、400-500MB程度の増加は正常
+  const RSS_WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
+  if (delta.rss > RSS_WARNING_THRESHOLD) {
+    console.warn(`⚠️ [Memory] ${label}: RSS increased by ${formattedDelta.rss} (threshold: 500MB)`);
+  }
+  
+  // ヒープ使用量の増加が200MBを超えている場合は警告（常に出力）
+  // 注意: 検索実行時は検索結果の配列やキャッシュにより、100-200MB程度の増加は正常
+  const HEAP_WARNING_THRESHOLD = 200 * 1024 * 1024; // 200MB
+  if (delta.heapUsed > HEAP_WARNING_THRESHOLD) {
+    console.warn(`⚠️ [Memory] ${label}: Heap used increased by ${formattedDelta.heapUsed} (threshold: 200MB)`);
   }
 }
 

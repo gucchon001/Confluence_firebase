@@ -115,9 +115,16 @@ export class HybridSearchEngine {
       // URLを再構築（共通ユーティリティを使用）
       const { buildConfluenceUrl } = await import('./url-utils');
       const { buildJiraUrl } = await import('./jira-url-utils');
+
+      const { getPageIdFromRecord } = await import('./pageid-migration-helper');
       
       return vectorResults.map(result => {
-        const pageId = result.pageId || result.page_id;
+        // ★★★ 重要: getPageIdFromRecordはpage_idのみを使用（唯一の信頼できる情報源） ★★★
+        // pageIdはAPI用のため、データベースレコードから取得する際には使用しない
+        const pageIdFromRecord = getPageIdFromRecord(result);
+        const pageId: number | undefined = typeof pageIdFromRecord === 'number' 
+          ? pageIdFromRecord 
+          : (typeof pageIdFromRecord === 'string' ? (Number.isFinite(Number(pageIdFromRecord)) ? Number(pageIdFromRecord) : undefined) : undefined);
         const issueKey = result.issue_key || result.id; // Jiraの場合はissue_keyを使用
         
         // JiraとConfluenceでURL構築を分離

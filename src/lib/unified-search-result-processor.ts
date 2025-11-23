@@ -427,23 +427,31 @@ export class UnifiedSearchResultProcessor {
       const cleanTitle = (result.title || 'No Title').replace(/\uFEFF/g, '');
       const cleanContent = (result.content || '').replace(/\uFEFF/g, '');
       
-      // pageIdを確実に取得（複数のフィールドから取得を試行）
-      const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+      // pageIdを確実に取得
+      // ★★★ 重要: getPageIdFromRecordはpage_idのみを使用（唯一の信頼できる情報源） ★★★
+      // pageIdはAPI用のため、データベースレコードから取得する際には使用しない
       const pageIdFromRecord = getPageIdFromRecord(result);
-      const pageId = pageIdFromRecord ?? result.pageId ?? result.page_id;
+      // pageIdをnumber型に変換（getPageIdFromRecordはnumber | string | undefinedを返す可能性がある）
+      const pageId: number | undefined = typeof pageIdFromRecord === 'number' 
+        ? pageIdFromRecord 
+        : (typeof pageIdFromRecord === 'string' ? (Number.isFinite(Number(pageIdFromRecord)) ? Number(pageIdFromRecord) : undefined) : undefined);
+      // page_idはデータベース用のフィールド（内部処理用に保持）
+      const page_id: number | undefined = typeof result.page_id === 'number' 
+        ? result.page_id 
+        : (typeof result.page_id === 'string' ? (Number.isFinite(Number(result.page_id)) ? Number(result.page_id) : undefined) : undefined);
       const spaceKey = result.space_key;
       
       // URL構築: result.urlが#または無効な場合、pageIdから再構築
       let url = buildConfluenceUrl(pageId, spaceKey, result.url);
       // URLが#の場合、pageIdが存在すれば再構築を試行
-      if ((!url || url === '#') && pageId && (typeof pageId === 'number' ? pageId > 0 : true)) {
+      if ((!url || url === '#') && pageId && pageId > 0) {
         url = buildConfluenceUrl(pageId, spaceKey, undefined);
       }
       
       return {
         id: result.id,
-        pageId: pageId, // ★★★ MIGRATION: page_idをフォールバックとして使用 ★★★
-        page_id: result.page_id ?? result.pageId, // ★★★ MIGRATION: page_idを保持 ★★★
+        pageId: pageId, // ★★★ API用: page_idから取得した値をpageIdに設定 ★★★
+        page_id: page_id, // ★★★ データベース用: page_idを保持（内部処理用） ★★★
         title: cleanTitle,
         content: cleanContent,
         isChunked: result.isChunked,  // Phase 0A-3: チャンク統合判定フラグ

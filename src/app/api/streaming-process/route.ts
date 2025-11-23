@@ -421,7 +421,7 @@ export const POST = async (req: NextRequest) => {
             description: `検索結果 ${relevantDocs.length} 件を分析・整理しています...`,
             totalSteps: 4,
             icon: '📊',
-            references: relevantDocs.slice(0, 12).map((doc, index) => {
+            references: relevantDocs.slice(0, 10).map((doc, index) => {
               // JiraとConfluenceを判定（issue_keyの存在で判定）
               const isJira = !!(doc as any).issue_key;
               const dataSource: 'confluence' | 'jira' = isJira ? 'jira' : 'confluence';
@@ -480,7 +480,7 @@ export const POST = async (req: NextRequest) => {
           const aiStartTime = searchEndTime;
 
           // LLMに渡すcontextの件数を制限（実際に使用される参照元のみを表示）
-          const MAX_CONTEXT_DOCS = 12; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
+          const MAX_CONTEXT_DOCS = 10; // LLMに渡すドキュメント数（回答生成に実際に使用される件数、参照元の表示数）
           const contextDocsForLLM = relevantDocs.slice(0, MAX_CONTEXT_DOCS);
           // LLMコンテキスト用ドキュメント準備完了（ログ削減）
           

@@ -293,12 +293,15 @@ export class CompositeScoringService {
       
       const functionalQuery = this.isFunctionalQuery(query);
       
+      // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
+      const DEBUG_SEARCH = process.env.NODE_ENV === 'development' && process.env.DEBUG_SEARCH === 'true';
+      
       // 機能クエリ時はspecカテゴリをブースト（仕様ドキュメントを優先）
       if (functionalQuery && structuredCategory === 'spec') {
         const scoreBefore = score;
         score *= 1.5; // 50%ブースト（機能クエリ時は仕様ドキュメントを優先）
         // デバッグログ（上位10件のみ）
-        if (scoreBefore > 1.0) {
+        if (scoreBefore > 1.0 && DEBUG_SEARCH) {
           console.log(`[Spec Boost] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x1.5, functional query)`);
         }
       }
@@ -314,13 +317,13 @@ export class CompositeScoringService {
           const decayFactor = emailLikeQuery ? 0.05 : 0.02; // 95%〜98%減衰（極めて強化）
           score *= decayFactor;
           // デバッグログ（上位10件のみ）
-          if (scoreBefore > 1.0) {
+          if (scoreBefore > 1.0 && DEBUG_SEARCH) {
             console.log(`[Template Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x${decayFactor}, functional=${functionalQuery}, emailLike=${emailLikeQuery})`);
           }
         } else if (!emailLikeQuery) {
           score *= 0.15;  // 通常の質問でも85%減衰（強化）
           // デバッグログ（上位10件のみ）
-          if (scoreBefore > 1.0) {
+          if (scoreBefore > 1.0 && DEBUG_SEARCH) {
             console.log(`[Template Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x0.15, non-email query)`);
           }
         }
@@ -333,7 +336,7 @@ export class CompositeScoringService {
           // 機能仕様系の質問では、データ定義よりも仕様ドキュメントを優先
           score *= 0.15; // 85%減衰（強化）
           // デバッグログ（上位10件のみ）
-          if (scoreBefore > 1.0) {
+          if (scoreBefore > 1.0 && DEBUG_SEARCH) {
             console.log(`[Data Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x0.15, functional query)`);
           }
         }
@@ -346,7 +349,7 @@ export class CompositeScoringService {
           // 機能仕様系の質問では、ワークフローよりも仕様ドキュメントを優先
           score *= 0.3; // 70%減衰
           // デバッグログ（上位10件のみ）
-          if (scoreBefore > 1.0) {
+          if (scoreBefore > 1.0 && DEBUG_SEARCH) {
             console.log(`[Workflow Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x0.3, functional query)`);
           }
         }
@@ -362,7 +365,7 @@ export class CompositeScoringService {
         // 非推奨ドキュメントは95%減衰（ほぼ除外、フィルターで除外される前提）
         score *= 0.05;
         // デバッグログ（上位10件のみ）
-        if (scoreBefore > 1.0) {
+        if (scoreBefore > 1.0 && DEBUG_SEARCH) {
           console.log(`[Deprecated Decay] "${title.substring(0, 50)}": ${scoreBefore.toFixed(4)} → ${score.toFixed(4)} (x0.05, deprecated status)`);
         }
       }

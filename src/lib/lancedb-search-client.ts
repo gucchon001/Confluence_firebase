@@ -27,7 +27,8 @@ const getSearchCache = () => {
   if (!globalThis.__searchCache) {
     globalThis.__searchCache = new GenericCache<any[]>({
       ttl: 15 * 60 * 1000, // Phase 5: 5分 → 15分に拡大（キャッシュヒット率向上）
-      maxSize: 5000,       // Phase 5: 1000 → 5000に拡大（より多くのクエリをキャッシュ）
+      // ★★★ メモリ最適化: 5000 → 2000に削減（メモリ使用量を約60%削減） ★★★
+      maxSize: 2000,       // メモリ最適化: 5000 → 2000（メモリ使用量削減）
       evictionStrategy: 'lru'
     });
     
@@ -79,7 +80,8 @@ const getTitleSearchCache = () => {
   if (!globalThis.__titleSearchCache) {
     globalThis.__titleSearchCache = new GenericCache<any[]>({
       ttl: 30 * 60 * 1000, // タイトル検索は30分キャッシュ（頻繁に検索されるため長めに）
-      maxSize: 1000,       // タイトル候補は1000件までキャッシュ
+      // ★★★ メモリ最適化: 1000 → 500に削減（メモリ使用量を約50%削減） ★★★
+      maxSize: 500,        // メモリ最適化: 1000 → 500（メモリ使用量削減）
       evictionStrategy: 'lru'
     });
   }
