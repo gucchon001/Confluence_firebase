@@ -326,7 +326,7 @@ async function main() {
     console.log('🔄 Step 7: FirestoreからStructuredLabelを同期中...\n');
     
     try {
-      const { flattenStructuredLabel } = await import('../src/lib/lancedb-schema-extended');
+      const { flattenStructuredLabel } = await import('../../../src/lib/lancedb-schema-extended');
       
       // LanceDBの全データを取得（データが存在する場合のみ）
       const rowCount = await newTable.countRows();
