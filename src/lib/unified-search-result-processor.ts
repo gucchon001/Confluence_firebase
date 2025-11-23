@@ -443,17 +443,60 @@ export class UnifiedSearchResultProcessor {
       const cleanContent = (result.content || '').replace(/\uFEFF/g, '');
       
       // pageIdを確実に取得
-      // ★★★ 重要: getPageIdFromRecordはpage_idのみを使用（唯一の信頼できる情報源） ★★★
-      // pageIdはAPI用のため、データベースレコードから取得する際には使用しない
-      const pageIdFromRecord = getPageIdFromRecord(result);
-      // pageIdをnumber型に変換（getPageIdFromRecordはnumber | string | undefinedを返す可能性がある）
-      const pageId: number | undefined = typeof pageIdFromRecord === 'number' 
-        ? pageIdFromRecord 
-        : (typeof pageIdFromRecord === 'string' ? (Number.isFinite(Number(pageIdFromRecord)) ? Number(pageIdFromRecord) : undefined) : undefined);
-      // page_idはデータベース用のフィールド（内部処理用に保持）
-      const page_id: number | undefined = typeof result.page_id === 'number' 
-        ? result.page_id 
-        : (typeof result.page_id === 'string' ? (Number.isFinite(Number(result.page_id)) ? Number(result.page_id) : undefined) : undefined);
+      // ★★★ 修正: BigInt対応とロバストな取得ロジック ★★★
+      // page_idフィールドを複数のパターンで試す（snake_case, camelCase, BigInt対応）
+      const rawPageId = result.page_id ?? result['page_id'] ?? result.pageId;
+      
+      // BigInt, Number, Stringのいずれでも確実に処理
+      let pageId: number | undefined;
+      let page_id: number | undefined;
+      
+      if (rawPageId !== undefined && rawPageId !== null) {
+        if (typeof rawPageId === 'bigint') {
+          // BigIntをNumberに変換
+          const num = Number(rawPageId);
+          pageId = Number.isSafeInteger(num) ? num : undefined;
+          page_id = pageId;
+        } else if (typeof rawPageId === 'number') {
+          pageId = Number.isFinite(rawPageId) ? rawPageId : undefined;
+          page_id = pageId;
+        } else if (typeof rawPageId === 'string') {
+          const parsed = Number(rawPageId);
+          pageId = Number.isFinite(parsed) ? parsed : undefined;
+          page_id = pageId;
+        } else {
+          // その他の型の場合は文字列に変換してから数値化を試みる
+          try {
+            const parsed = Number(String(rawPageId));
+            pageId = Number.isFinite(parsed) ? parsed : undefined;
+            page_id = pageId;
+          } catch {
+            pageId = undefined;
+            page_id = undefined;
+          }
+        }
+      }
+      
+      // getPageIdFromRecordも試す（フォールバック）
+      if (pageId === undefined) {
+        const pageIdFromRecord = getPageIdFromRecord(result);
+        if (pageIdFromRecord !== undefined) {
+          pageId = typeof pageIdFromRecord === 'number' 
+            ? pageIdFromRecord 
+            : (typeof pageIdFromRecord === 'string' ? (Number.isFinite(Number(pageIdFromRecord)) ? Number(pageIdFromRecord) : undefined) : undefined);
+          page_id = pageId;
+        }
+      }
+      
+      // page_idが見つからない場合はエラーログを出力
+      if (pageId === undefined || page_id === undefined) {
+        console.error(`[UnifiedSearchResultProcessor] ❌ page_id not found for result: ${result.title || result.id}. Raw data:`, {
+          hasPage_id: result.page_id !== undefined,
+          hasPageId: result.pageId !== undefined,
+          rawPageId: rawPageId,
+          resultKeys: Object.keys(result)
+        });
+      }
       const spaceKey = result.space_key;
       
       // URL構築: result.urlが#または無効な場合、pageIdから再構築

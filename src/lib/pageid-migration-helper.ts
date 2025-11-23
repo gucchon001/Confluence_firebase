@@ -74,14 +74,54 @@ export function mapAPIToDatabaseRecord(record: any): any {
 /**
  * データベースレコードからpage_idを取得
  * page_idフィールドのみを使用（フォールバックなし）
+ * ★★★ 修正: BigInt対応とロバストな取得ロジック ★★★
  */
 export function getPageIdFromRecord(record: any): number | string | undefined {
-  // page_idフィールドのみを使用（唯一の信頼できる情報源）
-  if (record.page_id !== undefined) {
-    const numericPageId = Number(record.page_id);
-    return Number.isFinite(numericPageId) ? numericPageId : record.page_id;
+  if (!record) {
+    return undefined;
   }
-  // page_idが存在しない場合はundefinedを返す（フォールバックしない）
-  return undefined;
+  
+  // page_idフィールドを優先的に使用（複数のパターンを試す）
+  const rawPageId = record.page_id ?? record['page_id'];
+  
+  if (rawPageId === undefined || rawPageId === null) {
+    // page_idが存在しない場合はundefinedを返す（フォールバックしない）
+    return undefined;
+  }
+  
+  // BigInt, Number, Stringのいずれでも確実に処理
+  if (typeof rawPageId === 'bigint') {
+    // BigIntをNumberに変換（安全な範囲内の場合）
+    const num = Number(rawPageId);
+    if (Number.isSafeInteger(num)) {
+      return num;
+    }
+    // 安全な範囲を超える場合は文字列に変換
+    return rawPageId.toString();
+  }
+  
+  if (typeof rawPageId === 'number') {
+    // Number型の場合はそのまま返す
+    return Number.isFinite(rawPageId) ? rawPageId : undefined;
+  }
+  
+  if (typeof rawPageId === 'string') {
+    // String型の場合は数値に変換を試みる
+    const parsed = Number(rawPageId);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+    // 数値に変換できない場合は文字列のまま返す
+    return rawPageId;
+  }
+  
+  // その他の型の場合は文字列に変換
+  try {
+    const str = String(rawPageId);
+    const parsed = Number(str);
+    return Number.isFinite(parsed) ? parsed : str;
+  } catch {
+    return undefined;
+  }
 }
 

@@ -1484,66 +1484,44 @@ async function executeBM25Search(
     }
     
     if (!isLunrReady) {
-      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing...`);
+      console.log(`[BM25 Search] Lunr not ready for ${tableName}, initializing in background...`);
       
-      // 初期化を開始
+      // ★★★ 修正: 初期化をバックグラウンドで開始し、タイムアウトを短縮 ★★★
+      // 理由: ユーザーを30秒以上待たせるより、ベクトル検索のみで即座に返す方がUXが良い
       const { lunrInitializer } = await import('./lunr-initializer');
       
-      // ⚡ 修正: 初期化を待つ（タイムアウトを60秒に設定、その後ポーリングで待つ）
-      // BM25検索が動作するように初期化完了を待つ（精度向上のため）
+      // バックグラウンドで初期化を開始（結果を待たない）
+      lunrInitializer.initializeAsync(tableName).catch((error) => {
+        console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
+      });
+      
+      // 短いタイムアウト（500ms）で初期化完了を待つ
+      // 500ms以内に準備できなければ、BM25検索をスキップしてベクトル検索のみで返す
+      const timeoutPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          resolve();
+        }, 500); // 500msでタイムアウト
+      });
+      
       try {
-        // 初期化を開始（バックグラウンドで実行される）
+        // 初期化完了またはタイムアウトを待つ
         const initPromise = lunrInitializer.initializeAsync(tableName);
-        
-        // 60秒でタイムアウト、その後ポーリングで待つ（初期化が遅い場合に対応）
-        // メモリ使用量が高い環境では初期化に時間がかかる可能性があるため、タイムアウトを延長
-        const timeoutPromise = new Promise<void>((resolve) => {
-          setTimeout(() => {
-            console.warn(`[BM25 Search] Lunr initialization timeout for ${tableName} after 60s, polling for readiness...`);
-            resolve();
-          }, 60000); // 10秒 → 60秒に延長（メモリ使用量が高い環境に対応）
-        });
-        
-        // タイムアウトまたは初期化完了を待つ
         const raceResult = await Promise.race([
           initPromise.then(() => 'completed'),
           timeoutPromise.then(() => 'timeout')
         ]);
         
         if (raceResult === 'completed') {
-          console.log(`[BM25 Search] ✅ Lunr initialization completed for ${tableName}`);
+          console.log(`[BM25 Search] ✅ Lunr initialization completed for ${tableName} within timeout`);
         } else {
-          console.log(`[BM25 Search] ⏳ Lunr initialization timeout for ${tableName}, polling for readiness...`);
+          // タイムアウトした場合は、BM25検索をスキップ
+          console.warn(`[BM25 Search] ⏳ Lunr initialization timeout for ${tableName} (500ms), skipping BM25 search`);
+          console.warn(`[BM25 Search] ⚠️ BM25検索が無効化されます。ベクトル検索のみで結果を返します。`);
+          return [];
         }
-        
-        // 初期化が完了するまでポーリングで待つ（最大120秒追加、合計最大180秒）
-        const maxPollingTime = 120000; // 60秒 → 120秒に延長（合計最大180秒）
-        const pollingInterval = 500; // ポーリング間隔（100ms → 500msに変更、CPU負荷軽減）
-        const pollingStartTime = Date.now();
-        let lastLogTime = pollingStartTime;
-        
-        while (!lunrSearchClient.isReady(tableName)) {
-          const elapsed = Date.now() - pollingStartTime;
-          if (elapsed > maxPollingTime) {
-            console.warn(`[BM25 Search] Lunr still not ready for ${tableName} after ${maxPollingTime}ms polling, skipping BM25`);
-            console.warn(`[BM25 Search] ⚠️ BM25検索が無効化されます。検索精度が低下する可能性があります。`);
-      return [];
-        }
-          
-          // 10秒ごとに進行状況をログ出力
-          if (Date.now() - lastLogTime > 10000) {
-            console.log(`[BM25 Search] ⏳ Still waiting for Lunr initialization (${Math.floor(elapsed / 1000)}s elapsed)...`);
-            lastLogTime = Date.now();
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, pollingInterval));
-        }
-        
-        const totalWaitTime = Date.now() - pollingStartTime;
-        console.log(`[BM25 Search] ✅ Lunr ready for ${tableName} after ${totalWaitTime}ms total wait time`);
       } catch (error) {
         console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
-        console.warn(`[BM25 Search] ⚠️ BM25検索が無効化されます。検索精度が低下する可能性があります。`);
+        console.warn(`[BM25 Search] ⚠️ BM25検索が無効化されます。ベクトル検索のみで結果を返します。`);
         return [];
       }
     }
