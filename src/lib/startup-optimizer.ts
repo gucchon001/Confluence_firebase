@@ -80,14 +80,15 @@ export async function initializeStartupOptimizations(): Promise<void> {
     initializationPromise = performInitializationAsync();
     
     try {
-      // 初期化が完了するまで待つ（最大60秒）
+      // 初期化が完了するまで待つ（最大120秒）
+      // ⚡ 最適化: Lunr初期化に約30秒かかるため、タイムアウトを120秒に延長
       await Promise.race([
         initializationPromise,
         new Promise<void>((resolve) => {
           setTimeout(() => {
-            console.warn('[StartupOptimizer] ⚠️ Initialization timeout after 60s, continuing in background');
+            console.warn('[StartupOptimizer] ⚠️ Initialization timeout after 120s, continuing in background');
             resolve();
-          }, 60000);
+          }, 120000); // 60秒 → 120秒に延長
         })
       ]);
       
@@ -112,15 +113,16 @@ export async function initializeStartupOptimizations(): Promise<void> {
   initializationPromise = performInitializationAsync();
   
   try {
-    // 初期化が完了するまで待つ（最大60秒）
+    // 初期化が完了するまで待つ（最大120秒）
+    // ⚡ 最適化: Lunr初期化に約30秒かかるため、タイムアウトを120秒に延長
     console.log('[StartupOptimizer] 🔧 Waiting for initialization to complete...');
     await Promise.race([
       initializationPromise,
       new Promise<void>((resolve) => {
         setTimeout(() => {
-          console.warn('[StartupOptimizer] ⚠️ Initialization timeout after 60s, continuing in background');
+          console.warn('[StartupOptimizer] ⚠️ Initialization timeout after 120s, continuing in background');
           resolve();
-        }, 60000);
+        }, 120000); // 60秒 → 120秒に延長
       })
     ]);
     
@@ -240,21 +242,23 @@ async function performInitializationAsync(): Promise<void> {
           console.log(`[StartupOptimizer] ⏭️  Lazy loading tables: ${tablesToLazyLoad.join(', ')}`);
           console.log(`[StartupOptimizer] Available tables: ${availableTables.join(', ')}`);
           
-          // 主要テーブル（confluence）をバックグラウンドで非同期初期化（非ブロッキング）
-          // 初期化が完了する前に検索リクエストが来ても、ベクトル検索のみで即座に返す
+          // 主要テーブル（confluence）を起動時に初期化（完了を待つ）
+          // ⚡ 最適化: 起動時に初期化を完了させることで、検索リクエスト時の初期化待ちを回避
           for (const tableName of tablesToPreload) {
             if (!availableTables.includes(tableName)) {
               console.log(`[StartupOptimizer] ⏭️ Skipping ${tableName} (table not found in LanceDB)`);
               continue;
             }
             
-            // 非同期で初期化を開始（結果を待たない）
-            console.log(`[StartupOptimizer] 🚀 Starting background initialization for ${tableName}...`);
-            lunrInitializer.initializeAsync(tableName).then(() => {
-              console.log(`[StartupOptimizer] ✅ Background initialization completed for ${tableName}`);
-            }).catch((error: any) => {
-              console.warn(`[StartupOptimizer] ⚠️ Background initialization failed for ${tableName}: ${error?.message || error}`);
-            });
+            // 初期化を開始して完了を待つ（起動時に確実に初期化を完了させる）
+            console.log(`[StartupOptimizer] 🚀 Starting initialization for ${tableName} (awaiting completion)...`);
+            try {
+              await lunrInitializer.initializeAsync(tableName);
+              console.log(`[StartupOptimizer] ✅ Initialization completed for ${tableName}`);
+            } catch (error: any) {
+              console.warn(`[StartupOptimizer] ⚠️ Initialization failed for ${tableName}: ${error?.message || error}`);
+              // エラーでも処理を継続（他のテーブルの初期化を続行）
+            }
           }
           
           // 遅延初期化するテーブル（jira_issues）は起動時には初期化しない

@@ -480,8 +480,17 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
               
               // ★★★ 最適化: 複数のpage_idを一度に取得（個別クエリ → バッチ処理） ★★★
               if (lunrResults.length > 0) {
-                // ユニークなpage_idを抽出
-                const uniquePageIds = [...new Set(lunrResults.map(r => r.pageId).filter(Boolean))];
+                // ★★★ MIGRATION: page_idを優先的に使用（Lunr検索結果にpage_idが含まれるようになった） ★★★
+                const { getPageIdFromRecord } = await import('./pageid-migration-helper');
+                const uniquePageIds = [...new Set(
+                  lunrResults
+                    .map(r => {
+                      // page_idを優先的に使用
+                      const pageId = getPageIdFromRecord(r) || r.page_id || r.pageId;
+                      return pageId ? Number(pageId) : null;
+                    })
+                    .filter((id): id is number => id !== null && Number.isFinite(id) && id > 0)
+                )];
                 
                 // すべてのpage_idを一度に取得（IN句を使用）
                 try {
@@ -498,21 +507,38 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
                     pageRowsMap.get(pageId)!.push(row);
                   }
                   
-                  // Lunr結果の順序を保持してマッチング
+                  // Lunr結果の順序を保持してマッチング（page_idを優先的に使用）
                   searchResults = lunrResults
-                    .map(result => pageRowsMap.get(result.pageId) || [])
+                    .map(result => {
+                      const pageId = getPageIdFromRecord(result) || result.page_id || result.pageId;
+                      const numericPageId = pageId ? Number(pageId) : null;
+                      return numericPageId && Number.isFinite(numericPageId) && numericPageId > 0
+                        ? (pageRowsMap.get(numericPageId) || [])
+                        : [];
+                    })
                     .flat()
                     .slice(0, 15); // 最大15件に制限（フェーズ3最適化: 20 → 15、25%削減）
                 } catch (e) {
                   console.warn('[searchLanceDB] Failed to batch fetch LanceDB records:', e);
                   // フォールバック: 個別クエリ
+                  const { getPageIdFromRecord } = await import('./pageid-migration-helper');
                   const lanceDbResults = await Promise.all(lunrResults.map(async (result) => {
                     try {
-                      const pageId = result.pageId;
-                      const pageRows = await tbl.query().where(`\`page_id\` = ${pageId}`).limit(10).toArray();
+                      // ★★★ MIGRATION: page_idを優先的に使用 ★★★
+                      const pageId = getPageIdFromRecord(result) || result.page_id || result.pageId;
+                      if (!pageId) {
+                        console.warn('[searchLanceDB] No pageId/page_id found in Lunr result:', result.id);
+                        return [];
+                      }
+                      const numericPageId = Number(pageId);
+                      if (!Number.isFinite(numericPageId) || numericPageId <= 0) {
+                        console.warn('[searchLanceDB] Invalid pageId/page_id in Lunr result:', pageId);
+                        return [];
+                      }
+                      const pageRows = await tbl.query().where(`\`page_id\` = ${numericPageId}`).limit(10).toArray();
                       return pageRows;
                     } catch (err) {
-                      console.warn('[searchLanceDB] Failed to fetch LanceDB record for pageId:', result.pageId, err);
+                      console.warn('[searchLanceDB] Failed to fetch LanceDB record for pageId:', result.pageId || result.page_id, err);
                       return [];
                     }
                   }));
@@ -1734,16 +1760,17 @@ async function executeBM25Search(
         }
       } else {
         // Confluenceテーブル: page_idで取得（既存の処理）
-        // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
+        // ★★★ MIGRATION: page_idを優先的に使用（Lunr検索結果にpage_idが含まれるようになった） ★★★
         const { getPageIdFromRecord } = await import('./pageid-migration-helper');
         const uniquePageIds = Array.from(
           new Set(
             allLunrResults
               .map(result => {
-                const pageId = getPageIdFromRecord(result) || result.pageId;
-                return Number(pageId);
+                // page_idを優先的に使用（Lunr検索結果にpage_idが含まれるようになった）
+                const pageId = getPageIdFromRecord(result) || result.page_id || result.pageId;
+                return pageId ? Number(pageId) : null;
               })
-              .filter(id => Number.isFinite(id) && id > 0)
+              .filter((id): id is number => id !== null && Number.isFinite(id) && id > 0)
           )
         );
 
@@ -1800,17 +1827,19 @@ async function executeBM25Search(
         boostedScore *= 2.0; // 3.0倍 → 2.0倍に削減
       }
       
+      // ★★★ MIGRATION: page_idを優先的に使用（Lunr検索結果にpage_idが含まれるようになった） ★★★
       const pageId = getPageIdFromRecord(r) || r.pageId;
-      const numericPageId = Number(pageId);
+      const page_id = r.page_id ?? (getPageIdFromRecord(r) || r.pageId); // Lunr検索結果のpage_idを優先
+      const numericPageId = Number(page_id ?? pageId);
       
       // Jiraテーブルの場合、id（issue_key）で取得、Confluenceテーブルの場合、page_idで取得
       const enrichedRecord = tableName === 'jira_issues'
         ? lanceDbRecordMap.get(r.id || r.issue_key)
         : (Number.isFinite(numericPageId) ? lanceDbRecordMap.get(numericPageId) : undefined);
       
-      // ★★★ 修正: page_idを確実に設定（enrichedRecordから優先的に取得） ★★★
-      const finalPageId = enrichedRecord?.page_id ?? enrichedRecord?.pageId ?? r.pageId ?? pageId;
-      const finalPage_id = enrichedRecord?.page_id ?? r.page_id ?? finalPageId;
+      // ★★★ 修正: page_idを確実に設定（優先順位: enrichedRecord > Lunr検索結果 > pageId） ★★★
+      const finalPageId = enrichedRecord?.page_id ?? enrichedRecord?.pageId ?? pageId;
+      const finalPage_id = enrichedRecord?.page_id ?? page_id ?? finalPageId;
 
       const normalizedLabels = enrichedRecord
         ? getLabelsAsArray(enrichedRecord.labels)

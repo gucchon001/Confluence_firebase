@@ -22,6 +22,7 @@ export interface LunrDocument {
   content: string;
   labels: string[];
   pageId: number;
+  page_id: number; // ★★★ MIGRATION: page_idフィールドを追加（データベース互換性） ★★★
   // 日本語分かち書き用フィールド
   tokenizedTitle: string;
   tokenizedContent: string;
@@ -47,6 +48,7 @@ export interface LunrSearchResult {
   content: string;
   labels: string[];
   pageId: number;
+  page_id: number; // ★★★ MIGRATION: page_idフィールドを追加（データベース互換性） ★★★
   score: number;
   // URLとメタデータ
   url: string;
@@ -355,6 +357,13 @@ export class LunrSearchClient {
       // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
       // 日本語クエリをトークン化（kuromojiを使用）
       const tokenizedQuery = await tokenizeJapaneseText(query);
+      
+      // ★★★ 修正: 空のトークン化結果をチェック（QueryParseErrorを防ぐ） ★★★
+      if (!tokenizedQuery || tokenizedQuery.trim().length === 0) {
+        console.warn(`[LunrSearchClient] Empty tokenized query for: "${query.substring(0, 50)}..." - skipping search`);
+        return [];
+      }
+      
       // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
       const DEBUG_ENABLED = process.env.NODE_ENV === 'development' && process.env.DEBUG_BM25 === 'true';
       if (DEBUG_ENABLED) {
@@ -394,6 +403,7 @@ export class LunrSearchClient {
             content: doc.originalContent,
             labels: doc.labels,
             pageId: doc.pageId,
+            page_id: doc.page_id ?? doc.pageId, // ★★★ MIGRATION: page_idを確実に設定 ★★★
             score: result.score,
             url: doc.url,
             space_key: doc.space_key,
@@ -416,7 +426,19 @@ export class LunrSearchClient {
       
       return validResults;
     } catch (error) {
-      console.error('[LunrSearchClient] Search failed:', error);
+      // ★★★ 修正: エラーメッセージを詳細化（QueryParseErrorの原因特定を容易に） ★★★
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isQueryParseError = errorMessage.includes('QueryParseError') || errorMessage.includes('unrecognised field');
+      
+      if (isQueryParseError) {
+        console.error(`[LunrSearchClient] QueryParseError for query: "${query.substring(0, 100)}..."`, {
+          error: errorMessage,
+          queryLength: query.length,
+          queryPreview: query.substring(0, 50)
+        });
+      } else {
+        console.error(`[LunrSearchClient] Search failed for query: "${query.substring(0, 100)}..."`, error);
+      }
       return [];
     }
   }
@@ -451,6 +473,13 @@ export class LunrSearchClient {
 
     try {
       const tokenizedQuery = await tokenizeJapaneseText(query);
+      
+      // ★★★ 修正: 空のトークン化結果をチェック（QueryParseErrorを防ぐ） ★★★
+      if (!tokenizedQuery || tokenizedQuery.trim().length === 0) {
+        console.warn(`[LunrSearchClient] Empty tokenized query for: "${query.substring(0, 50)}..." - skipping search`);
+        return [];
+      }
+      
       const searchResults = index.search(tokenizedQuery, {
         fields: {
           tokenizedTitle: { boost: 2.0 },
@@ -493,6 +522,7 @@ export class LunrSearchClient {
             content: doc.originalContent,
             labels: doc.labels,
             pageId: doc.pageId,
+            page_id: doc.page_id ?? doc.pageId, // ★★★ MIGRATION: page_idを確実に設定 ★★★
             score: result.score,
             url: doc.url,
             space_key: doc.space_key,
@@ -513,7 +543,20 @@ export class LunrSearchClient {
         })
         .filter((result): result is LunrSearchResult => result !== null);
     } catch (error) {
-      console.error('[LunrSearchClient] Filtered search failed:', error);
+      // ★★★ 修正: エラーメッセージを詳細化（QueryParseErrorの原因特定を容易に） ★★★
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isQueryParseError = errorMessage.includes('QueryParseError') || errorMessage.includes('unrecognised field');
+      
+      if (isQueryParseError) {
+        console.error(`[LunrSearchClient] QueryParseError in searchWithFilters for query: "${query.substring(0, 100)}..."`, {
+          error: errorMessage,
+          queryLength: query.length,
+          queryPreview: query.substring(0, 50),
+          filters
+        });
+      } else {
+        console.error(`[LunrSearchClient] Filtered search failed for query: "${query.substring(0, 100)}..."`, error);
+      }
       return [];
     }
   }

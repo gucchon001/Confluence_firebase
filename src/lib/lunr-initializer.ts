@@ -296,12 +296,18 @@ export class LunrInitializer {
               spaceKey = doc.space_key || '';
             }
             
+            // ★★★ MIGRATION: page_idを確実に設定（データベース互換性） ★★★
+            const page_id = tableName === 'jira_issues' 
+              ? 0  // Jiraではpage_idは使用しない
+              : (doc.page_id ?? pageId);  // page_idを優先、なければpageIdを使用
+            
             const lunrDoc: any = {
               id: docId,
               title: cleanTitle,
               content: cleanContent,
               labels,
               pageId: pageId,
+              page_id: page_id, // ★★★ MIGRATION: page_idを確実に設定 ★★★
               tokenizedTitle,
               tokenizedContent,
               originalTitle: doc.title || '',
