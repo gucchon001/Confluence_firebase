@@ -807,6 +807,10 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         return (a._hybridScore ?? 0) - (b._hybridScore ?? 0);
       });
       
+      // ★★★ メモリ最適化: tryブロック内の大きな配列を明示的に解放（本番環境でも効果あり） ★★★
+      // resultsWithHybridScoreはtryブロック内で宣言されているため、ここでnullに設定
+      resultsWithHybridScore = null as any;
+      
       if (DEBUG_SEARCH) {
       console.log(`[searchLanceDB] Found ${keywordMatchCount} keyword/hybrid matches in results`);
       console.log(`[searchLanceDB] Applied RRF fusion to ${vectorResults.length} results`);
@@ -967,6 +971,32 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     const memoryAfterSearch = getMemoryUsage();
     logMemoryUsage(`Search complete: ${params.query.substring(0, 50)}...`);
     logMemoryDelta(`Search execution (${params.query.substring(0, 50)}...)`, memoryBeforeSearch, memoryAfterSearch);
+    
+    // ★★★ メモリ最適化: 検索完了後に不要なデータを明示的に解放 ★★★
+    // 大きな配列やオブジェクトをnullに設定してメモリを解放（本番環境でも効果あり）
+    try {
+      // 中間結果の配列を解放（既にprocessedResultsに変換済みのため不要）
+      // letで宣言された変数はnullに再代入可能（本番環境でも効果あり）
+      // 明示的にnullに設定することで、ガベージコレクションを促進
+      vectorResults = null as any;
+      bm25Results = null as any;
+      keywordResults = null as any;
+      finalResults = null as any;
+      // 注意: resultsWithHybridScoreはtryブロック内で既にnullに設定済み（812行目）
+      // combinedResults, deduplicated, filteredはconstのため、スコープ終了時に自動解放
+      
+      // 開発環境のみ、ガベージコレクションを促進（メモリ解放の効果を確認・測定）
+      if (process.env.NODE_ENV === 'development' && typeof global.gc === 'function') {
+        // ガベージコレクションを実行
+        global.gc();
+        const memoryAfterGC = getMemoryUsage();
+        logMemoryUsage(`After GC: ${params.query.substring(0, 50)}...`);
+        logMemoryDelta(`After GC (${params.query.substring(0, 50)}...)`, memoryAfterSearch, memoryAfterGC);
+      }
+    } catch (memoryCleanupError) {
+      // メモリ解放エラーは無視（検索結果には影響しない）
+      console.warn('[searchLanceDB] Memory cleanup error (ignored):', memoryCleanupError);
+    }
     
     // 10秒以上かかった場合のみログ（パフォーマンス問題の検知）
     if (searchFunctionDuration > 10000) {

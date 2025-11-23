@@ -182,7 +182,22 @@ export class UnifiedSearchResultProcessor {
       : resultsWithScores;
 
     // 3. 結果フォーマット
-    return await this.formatResults(finalResults);
+    const formattedResults = await this.formatResults(finalResults);
+    
+    // ★★★ メモリ最適化: 検索結果処理完了後に不要なデータを解放 ★★★
+    // 注意: resultsWithScoresとfinalResultsはconstで宣言されているため、nullに再代入できない
+    // しかし、関数終了時に自動的に解放されるため、明示的な解放は不要
+    // 開発環境のみ、ガベージコレクションを促進（メモリ解放の効果を確認）
+    try {
+      if (process.env.NODE_ENV === 'development' && typeof global.gc === 'function') {
+        global.gc();
+      }
+    } catch (memoryCleanupError) {
+      // メモリ解放エラーは無視（検索結果には影響しない）
+      // エラーログは出力しない（パフォーマンスへの影響を最小化）
+    }
+    
+    return formattedResults;
   }
 
   /**
