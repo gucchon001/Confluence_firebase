@@ -68,6 +68,21 @@ export class SearchLogger {
   }
 
   /**
+   * BigIntをNumberまたはStringに変換するヘルパー関数
+   * ★★★ 修正: BigIntのシリアライズ問題を解決 ★★★
+   */
+  private bigIntReplacer(key: string, value: any): any {
+    if (typeof value === 'bigint') {
+      const num = Number(value);
+      if (Number.isSafeInteger(num)) {
+        return num;
+      }
+      return value.toString();
+    }
+    return value;
+  }
+
+  /**
    * 検索ログを保存
    */
   public saveSearchLog(query: string, results: any[]): void {
@@ -77,7 +92,8 @@ export class SearchLogger {
         query,
         results: results.slice(0, 10).map(r => ({
           title: r.title || 'No Title',
-          page_id: r.page_id,
+          // ★★★ 修正: page_idがBigIntの場合にNumberに変換 ★★★
+          page_id: typeof r.page_id === 'bigint' ? Number(r.page_id) : r.page_id,
           compositeScore: r._compositeScore,
           rrfScore: r._rrfScore,
           structuredLabel: r.structured_feature ? {
@@ -90,7 +106,8 @@ export class SearchLogger {
         debugLogs: this.debugLogs.length > 0 ? [...this.debugLogs] : undefined,
       };
 
-      const logLine = JSON.stringify(logEntry) + '\n';
+      // ★★★ 修正: JSON.stringifyにreplacer関数を追加（BigInt対応） ★★★
+      const logLine = JSON.stringify(logEntry, this.bigIntReplacer.bind(this)) + '\n';
       fs.appendFileSync(this.logFile, logLine, 'utf8');
       
       // デバッグログをクリア

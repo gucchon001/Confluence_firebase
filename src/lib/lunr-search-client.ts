@@ -295,6 +295,50 @@ export class LunrSearchClient {
     }
   }
 
+  /**
+   * BigIntをNumberまたはStringに変換するヘルパー関数
+   * ★★★ 修正: BigIntのシリアライズ問題を解決 ★★★
+   * 理由: JSON.stringify()はBigIntを扱えないため、事前に変換が必要
+   */
+  private convertBigIntToNumber(value: any): any {
+    if (typeof value === 'bigint') {
+      // BigIntをNumberに変換（安全な範囲内の場合）
+      const num = Number(value);
+      if (Number.isSafeInteger(num)) {
+        return num;
+      }
+      // 安全な範囲を超える場合は文字列に変換
+      return value.toString();
+    }
+    if (Array.isArray(value)) {
+      return value.map(item => this.convertBigIntToNumber(item));
+    }
+    if (value !== null && typeof value === 'object') {
+      const converted: any = {};
+      for (const [key, val] of Object.entries(value)) {
+        converted[key] = this.convertBigIntToNumber(val);
+      }
+      return converted;
+    }
+    return value;
+  }
+
+  /**
+   * JSON.stringify用のBigInt変換replacer関数
+   */
+  private bigIntReplacer(key: string, value: any): any {
+    if (typeof value === 'bigint') {
+      // BigIntをNumberに変換（安全な範囲内の場合）
+      const num = Number(value);
+      if (Number.isSafeInteger(num)) {
+        return num;
+      }
+      // 安全な範囲を超える場合は文字列に変換
+      return value.toString();
+    }
+    return value;
+  }
+
   async saveToDisk(documents: LunrDocument[], cachePath: string = this.defaultCachePath, tableName: string = 'confluence'): Promise<void> {
     const index = this.indices.get(tableName);
     if (!index) return;
@@ -302,9 +346,12 @@ export class LunrSearchClient {
     const dir = path.dirname(path.resolve(cachePath));
     await fs.mkdir(dir, { recursive: true });
     
+    // ★★★ 修正: BigIntを事前に変換（MessagePackとJSONの両方で安全にシリアライズ可能） ★★★
+    const sanitizedDocuments = this.convertBigIntToNumber(documents);
+    
     const data = {
       index: index.toJSON(),
-      documents: documents,
+      documents: sanitizedDocuments,
       version: '2.0',  // Phase 6: MessagePack形式
       tableName: tableName  // テーブル名を保存
     };
@@ -314,6 +361,7 @@ export class LunrSearchClient {
     const startTime = Date.now();
     
     try {
+      // ★★★ 修正: MessagePackでもBigIntを変換済みのデータを使用 ★★★
       const buffer = pack(data);
       await fs.writeFile(msgpackPath, buffer);
       const saveTime = Date.now() - startTime;
@@ -322,7 +370,8 @@ export class LunrSearchClient {
       
       // 互換性のため、JSON形式も保存（将来的に削除可能）
       const jsonPath = path.resolve(cachePath);
-      const jsonPayload = JSON.stringify(data, null, 0);
+      // ★★★ 修正: JSON.stringifyにreplacer関数を追加（二重の安全策） ★★★
+      const jsonPayload = JSON.stringify(data, this.bigIntReplacer.bind(this), 0);
       await fs.writeFile(jsonPath, jsonPayload, 'utf-8');
       console.log(`[LunrSearchClient] Saved JSON cache for compatibility: ${jsonPath}`);
       
@@ -330,7 +379,8 @@ export class LunrSearchClient {
       console.error('[Phase 6 LunrCache] MessagePack save failed, using JSON:', error);
       // フォールバック: JSON形式で保存
       const filePath = path.resolve(cachePath);
-      const payload = JSON.stringify(data, null, 0);
+      // ★★★ 修正: JSON.stringifyにreplacer関数を追加（二重の安全策） ★★★
+      const payload = JSON.stringify(data, this.bigIntReplacer.bind(this), 0);
       await fs.writeFile(filePath, payload, 'utf-8');
       console.log(`[LunrSearchClient] Saved index cache (JSON fallback): ${filePath}`);
     }
