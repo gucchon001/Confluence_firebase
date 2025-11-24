@@ -368,12 +368,30 @@ export class LunrSearchClient {
       const sizeMB = (buffer.length / 1024 / 1024).toFixed(2);
       console.log(`[Phase 6 LunrCache] ✅ MessagePack形式で保存: ${msgpackPath} (${sizeMB}MB, ${saveTime}ms)`);
       
+      // ★★★ 追加: GCSへの自動アップロード（本番環境のみ） ★★★
+      try {
+        const { uploadLunrCacheToGCS } = await import('./gcs-cache-helper');
+        await uploadLunrCacheToGCS(msgpackPath, tableName);
+      } catch (gcsError) {
+        // GCSアップロードエラーは警告のみ（オプション機能）
+        console.warn(`[LunrSearchClient] GCS upload failed (non-critical): ${gcsError instanceof Error ? gcsError.message : String(gcsError)}`);
+      }
+      
       // 互換性のため、JSON形式も保存（将来的に削除可能）
       const jsonPath = path.resolve(cachePath);
       // ★★★ 修正: JSON.stringifyにreplacer関数を追加（二重の安全策） ★★★
       const jsonPayload = JSON.stringify(data, this.bigIntReplacer.bind(this), 0);
       await fs.writeFile(jsonPath, jsonPayload, 'utf-8');
       console.log(`[LunrSearchClient] Saved JSON cache for compatibility: ${jsonPath}`);
+      
+      // ★★★ 追加: JSON形式もGCSにアップロード（本番環境のみ） ★★★
+      try {
+        const { uploadLunrCacheToGCS } = await import('./gcs-cache-helper');
+        await uploadLunrCacheToGCS(jsonPath, tableName);
+      } catch (gcsError) {
+        // GCSアップロードエラーは警告のみ（オプション機能）
+        console.warn(`[LunrSearchClient] GCS upload failed for JSON (non-critical): ${gcsError instanceof Error ? gcsError.message : String(gcsError)}`);
+      }
       
     } catch (error) {
       console.error('[Phase 6 LunrCache] MessagePack save failed, using JSON:', error);
@@ -383,6 +401,15 @@ export class LunrSearchClient {
       const payload = JSON.stringify(data, this.bigIntReplacer.bind(this), 0);
       await fs.writeFile(filePath, payload, 'utf-8');
       console.log(`[LunrSearchClient] Saved index cache (JSON fallback): ${filePath}`);
+      
+      // ★★★ 追加: JSON形式もGCSにアップロード（本番環境のみ） ★★★
+      try {
+        const { uploadLunrCacheToGCS } = await import('./gcs-cache-helper');
+        await uploadLunrCacheToGCS(filePath, tableName);
+      } catch (gcsError) {
+        // GCSアップロードエラーは警告のみ（オプション機能）
+        console.warn(`[LunrSearchClient] GCS upload failed for JSON fallback (non-critical): ${gcsError instanceof Error ? gcsError.message : String(gcsError)}`);
+      }
     }
   }
 

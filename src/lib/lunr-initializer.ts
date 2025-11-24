@@ -125,7 +125,25 @@ export class LunrInitializer {
         : path.join(cacheDir, `lunr-index-${tableName}.json`);
       
       console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Checking cache at: ${cachePath}`);
-      const loaded = await lunrSearchClient.loadFromCache(cachePath, tableName);
+      let loaded = await lunrSearchClient.loadFromCache(cachePath, tableName);
+      
+      // ★★★ 追加: ローカルキャッシュがない場合、GCSからダウンロードを試みる ★★★
+      if (!loaded && isCloudRun) {
+        console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: Local cache not found, trying to download from GCS...`);
+        try {
+          const { tryDownloadLunrCacheFromGCS } = await import('./gcs-cache-helper');
+          const downloaded = await tryDownloadLunrCacheFromGCS(cacheDir, tableName);
+          if (downloaded) {
+            // GCSからダウンロード成功後、再度ローカルキャッシュからロードを試みる
+            console.log(`[LunrInitializer] Instance ${INSTANCE_ID}: GCS download successful, loading from local cache...`);
+            loaded = await lunrSearchClient.loadFromCache(cachePath, tableName);
+          }
+        } catch (gcsError) {
+          // GCSダウンロードエラーは警告のみ（オプション機能）
+          console.warn(`[LunrInitializer] GCS download failed (non-critical): ${gcsError instanceof Error ? gcsError.message : String(gcsError)}`);
+        }
+      }
+      
       if (loaded) {
         // キャッシュからロード成功時は、LunrSearchClientの状態を信頼
         // LunrSearchClientがinitializedTablesに追加しているため、ここでも同期
