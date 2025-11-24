@@ -130,6 +130,7 @@
     "test:memory-analysis:dev": "tsx scripts/test-memory-analysis-dev.ts",
     "test:memory-analysis:production-data": "tsx --env-file=.env.local scripts/test-memory-analysis-with-production-data.ts",
     "test:search-quality-limit-comparison": "tsx --env-file=.env.local scripts/test-search-quality-limit-comparison.ts",
+    "test:rrf-early-filtering": "tsx --env-file=.env.local scripts/test-rrf-early-filtering.ts",
     "backup:production-data": "tsx scripts/backup-production-data.ts",
     "sync:and:upload": "npm run sync:confluence:differential && npm run upload:production-data",
     "sync:full:and:upload": "npm run sync:confluence:batch && npm run upload:production-data",
