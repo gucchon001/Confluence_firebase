@@ -820,9 +820,20 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         return bScore - aScore; // 降順（スコアが高い順）
       });
       
+      // Jiraテーブルの場合はissue_keyで重複判定、Confluenceテーブルの場合はpageIdで重複判定
+      const isJiraTable = tableName === 'jira_issues';
+      
       for (const r of sortedForDedup) {
-        const pageId = getPageIdFromRecord(r) || '';
-        const key = `${pageId}::${(r.title || '').toLowerCase()}`;
+        let key: string;
+        if (isJiraTable) {
+          // Jiraテーブルの場合: issue_keyで重複判定
+          const issueKey = r.issue_key || r.id || '';
+          key = `jira:${issueKey}`;
+        } else {
+          // Confluenceテーブルの場合: pageIdで重複判定
+          const pageId = getPageIdFromRecord(r) || '';
+          key = `${pageId}::${(r.title || '').toLowerCase()}`;
+        }
         // 既に存在する場合はスキップ（事前ソートにより最良スコアが先に処理される）
         if (!dedupMap.has(key)) {
           dedupMap.set(key, r);
@@ -991,7 +1002,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // Phase 0A-1.5: ページ単位の重複排除
     // ★★★ MIGRATION: 非同期対応 ★★★
-    const deduplicated = await deduplicateByPageId(finalResults);
+    // ★★★ Jira対応: tableNameパラメータを渡す ★★★
+    const deduplicated = await deduplicateByPageId(finalResults, tableName);
     
     // Phase 0A-1.5: 空ページフィルター（コンテンツ長ベース、StructuredLabel不要）
     const contentFiltered = filterInvalidPagesByContent(deduplicated);
@@ -1096,27 +1108,41 @@ export const defaultLanceDBSearchClient = createLanceDBSearchClient();
 /**
  * ページ単位の重複排除（Phase 0A-1.5）
  * 同じpageIdの複数チャンクから、ベストスコアのチャンクのみを選択
+ * ★★★ Jira対応: Jiraテーブルの場合はissue_keyで重複判定 ★★★
  */
-async function deduplicateByPageId(results: any[]): Promise<any[]> {
+async function deduplicateByPageId(results: any[], tableName: string = 'confluence'): Promise<any[]> {
   const pageMap = new Map<string, any>();
+  
+  // Jiraテーブルの場合はissue_keyで重複判定、Confluenceテーブルの場合はpageIdで重複判定
+  const isJiraTable = tableName === 'jira_issues';
   
   // ★★★ MIGRATION: pageId取得を両方のフィールド名に対応 ★★★
   const { getPageIdFromRecord } = await import('./pageid-migration-helper');
   for (const result of results) {
-    const pageId = String(getPageIdFromRecord(result) || result.pageId || 'unknown');
-    const existing = pageMap.get(pageId);
+    let key: string;
+    if (isJiraTable) {
+      // Jiraテーブルの場合: issue_keyで重複判定
+      const issueKey = result.issue_key || result.id || 'unknown';
+      key = `jira:${issueKey}`;
+    } else {
+      // Confluenceテーブルの場合: pageIdで重複判定
+      const pageId = String(getPageIdFromRecord(result) || result.pageId || 'unknown');
+      key = pageId;
+    }
+    
+    const existing = pageMap.get(key);
     
     if (!existing) {
-      // 初出のページ
-      pageMap.set(pageId, result);
+      // 初出のページ/課題
+      pageMap.set(key, result);
     } else {
-      // 既に同じpageIdが存在する場合、ベストスコアを保持
+      // 既に同じpageId/issue_keyが存在する場合、ベストスコアを保持
       const currentDistance = result._distance || 999;
       const existingDistance = existing._distance || 999;
       
       if (currentDistance < existingDistance) {
         // より良いチャンクで上書き
-        pageMap.set(pageId, result);
+        pageMap.set(key, result);
         console.log(`[Deduplicator] Updated best chunk for ${result.title}: chunk ${result.chunkIndex || 0}`);
       }
     }

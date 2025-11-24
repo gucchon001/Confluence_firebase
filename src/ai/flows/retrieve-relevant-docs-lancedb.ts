@@ -266,7 +266,8 @@ async function lancedbRetrieverTool(
       } else {
         // Confluenceの場合: page_idを使用
         const pageId = getPageIdFromRecord(r);
-        if (!pageId) {
+        // ★★★ Jira対応: Jiraレコードにはpage_idがないため、警告を出力しない ★★★
+        if (!pageId && !r.issue_key) {
           console.error(`[lancedbRetrieverTool] ❌ page_id not found for result: ${r.title}. This is a data integrity issue.`);
         }
         const pageIdValue = pageId ? String(pageId) : '';
@@ -574,9 +575,20 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
         // ★★★ MIGRATION: page_idフィールドのみを使用（フォールバックなし） ★★★
         const { getPageIdFromRecord } = await import('../../lib/pageid-migration-helper');
         const pageId = getPageIdFromRecord(result);
-        if (!pageId) {
+        // ★★★ Jira対応: Jiraレコードにはpage_idがないため、警告を出力しない ★★★
+        const isJiraRecord = !!(result.issue_key || (result as any).issueKey);
+        if (!pageId && !isJiraRecord) {
           console.error(`[ChunkMerger] ❌ page_id not found for result: ${result.title}. Skipping chunk enrichment.`);
           // pageIdが見つからない場合もBOM除去は適用する
+          return {
+            ...result,
+            content: removeBOM(result.content || ''),
+            title: removeBOM(result.title || ''),
+          };
+        }
+        
+        // Jiraレコードの場合はチャンク統合をスキップ（Jiraはチャンク分割されていない）
+        if (isJiraRecord) {
           return {
             ...result,
             content: removeBOM(result.content || ''),

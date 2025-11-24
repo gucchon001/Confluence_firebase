@@ -89,7 +89,7 @@ export class HybridSearchEngine {
       console.log(`[HybridSearchEngine] Vector results: ${vectorResults.length}, BM25 results: ${bm25Results.length}`);
 
       // 3. 結果の統合と再ランキング
-      const hybridResults = this.combineAndRerankResults(vectorResults, bm25Results, topK);
+      const hybridResults = this.combineAndRerankResults(vectorResults, bm25Results, topK, tableName);
 
       console.log(`[HybridSearchEngine] Final results: ${hybridResults.length}`);
       return hybridResults;
@@ -259,35 +259,46 @@ export class HybridSearchEngine {
 
   /**
    * 結果を統合して再ランキング
+   * ★★★ Jira対応: Jiraテーブルの場合はissue_keyでグループ化 ★★★
    */
   private combineAndRerankResults(
     vectorResults: HybridSearchResult[],
     bm25Results: HybridSearchResult[],
-    topK: number
+    topK: number,
+    tableName: string = 'confluence'
   ): HybridSearchResult[] {
-    // 1. ページIDでグループ化
-    const pageGroups = new Map<number, HybridSearchResult[]>();
+    // Jiraテーブルの場合はissue_keyでグループ化、Confluenceテーブルの場合はpageIdでグループ化
+    const isJiraTable = tableName === 'jira_issues';
+    
+    // 1. ページID/Issue Keyでグループ化
+    const pageGroups = new Map<string | number, HybridSearchResult[]>();
 
     // ベクトル検索結果を追加
     vectorResults.forEach(result => {
-      if (!pageGroups.has(result.pageId)) {
-        pageGroups.set(result.pageId, []);
+      const key = isJiraTable 
+        ? (result.issue_key || result.id || 'unknown')
+        : (result.pageId || 0);
+      if (!pageGroups.has(key)) {
+        pageGroups.set(key, []);
       }
-      pageGroups.get(result.pageId)!.push(result);
+      pageGroups.get(key)!.push(result);
     });
 
     // BM25検索結果を追加
     bm25Results.forEach(result => {
-      if (!pageGroups.has(result.pageId)) {
-        pageGroups.set(result.pageId, []);
+      const key = isJiraTable 
+        ? (result.issue_key || result.id || 'unknown')
+        : (result.pageId || 0);
+      if (!pageGroups.has(key)) {
+        pageGroups.set(key, []);
       }
-      pageGroups.get(result.pageId)!.push(result);
+      pageGroups.get(key)!.push(result);
     });
 
     // 2. ハイブリッドスコアを計算
     const hybridResults: HybridSearchResult[] = [];
     
-    for (const [pageId, results] of pageGroups) {
+    for (const [key, results] of pageGroups) {
       const vectorResult = results.find(r => r.source === 'vector');
       const bm25Result = results.find(r => r.source === 'bm25');
 
@@ -296,8 +307,10 @@ export class HybridSearchEngine {
         // BM25結果のJira特有フィールドを優先（より正確な情報）
         const hybridScore = this.calculateHybridScore(vectorResult.scoreRaw, bm25Result.scoreRaw);
         
-        // pageIdを確実に保持（BM25結果にもpageIdがある場合、それも考慮）
-        const finalPageId = vectorResult.pageId || bm25Result.pageId || pageId;
+        // pageId/issue_keyを確実に保持（BM25結果にもpageIdがある場合、それも考慮）
+        const finalPageId = isJiraTable 
+          ? (vectorResult.pageId || bm25Result.pageId || 0) // Jiraの場合はpageIdは0またはundefined
+          : (vectorResult.pageId || bm25Result.pageId || (typeof key === 'number' ? key : 0));
         
         // space_keyを適切に選択（存在する方を優先、両方ある場合はBM25を優先）
         const bestSpaceKey = bm25Result.space_key || vectorResult.space_key;

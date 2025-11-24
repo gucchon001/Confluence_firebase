@@ -113,14 +113,52 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
             return baseResult;
           });
 
+        // Firestoreから追加情報を取得して補完（Jira検索の場合のみ）
+        let enrichedResults = formattedResults;
+        if (effectiveSource === 'jira') {
+          try {
+            const { JiraFirestoreEnrichmentService } = await import('@/lib/jira-firestore-enrichment-service');
+            const enrichmentService = JiraFirestoreEnrichmentService.getInstance();
+            enrichedResults = await enrichmentService.enrichSearchResults(
+              formattedResults.map(r => ({
+                id: r.id,
+                issue_key: r.issueKey || r.id,
+                title: r.title,
+                content: r.content,
+                status: (r as any).status || '',
+                status_category: (r as any).statusCategory || '',
+                priority: (r as any).priority || '',
+                assignee: (r as any).assignee || '',
+                issue_type: (r as any).issueType || ''
+              })),
+              10 // 最大10件まで補完
+            ) as any[];
+
+            // 補完されたデータをレスポンスに反映
+            enrichedResults = enrichedResults.map((enriched, index) => {
+              const original = formattedResults[index];
+              return {
+                ...original,
+                // カスタムフィールドを追加
+                ...(enriched.customFields && { customFields: enriched.customFields }),
+                // コメント履歴を追加
+                ...(enriched.comments && { comments: enriched.comments })
+              };
+            });
+          } catch (error) {
+            // エラーが発生した場合、LanceDBのデータのみを返す（フォールバック）
+            console.warn('[Search API] Failed to enrich results from Firestore:', error);
+          }
+        }
+
         // パフォーマンスログを記録
-        screenTestLogger.logSearchPerformance(query, searchTime, formattedResults.length, {
+        screenTestLogger.logSearchPerformance(query, searchTime, enrichedResults.length, {
           source: 'hybrid',
           useLunrIndex: lunrReady,
-          results: formattedResults.slice(0, 3).map(r => ({ title: r.title, source: r.source }))
+          results: enrichedResults.slice(0, 3).map(r => ({ title: r.title, source: r.source }))
         });
 
-        return NextResponse.json({ results: formattedResults });
+        return NextResponse.json({ results: enrichedResults });
       } catch (hybridError: any) {
         console.error('Hybrid search failed, falling back to vector search:', hybridError);
         // フォールバック: ベクトル検索のみ
@@ -217,8 +255,46 @@ export const POST = withAPIErrorHandling(async (req: NextRequest) => {
           return baseResult;
         });
 
-      // 7. レスポンス返却
-      return NextResponse.json({ results: formattedResults });
+      // 7. Firestoreから追加情報を取得して補完（Jira検索の場合のみ）
+      let enrichedResults = formattedResults;
+      if (effectiveSource === 'jira') {
+        try {
+          const { JiraFirestoreEnrichmentService } = await import('@/lib/jira-firestore-enrichment-service');
+          const enrichmentService = JiraFirestoreEnrichmentService.getInstance();
+          enrichedResults = await enrichmentService.enrichSearchResults(
+            formattedResults.map(r => ({
+              id: r.id,
+              issue_key: r.issueKey || r.id,
+              title: r.title,
+              content: r.content,
+              status: r.status,
+              status_category: r.statusCategory,
+              priority: r.priority,
+              assignee: r.assignee,
+              issue_type: r.issueType
+            })),
+            10 // 最大10件まで補完
+          ) as any[];
+
+          // 補完されたデータをレスポンスに反映
+          enrichedResults = enrichedResults.map((enriched, index) => {
+            const original = formattedResults[index];
+            return {
+              ...original,
+              // カスタムフィールドを追加
+              ...(enriched.customFields && { customFields: enriched.customFields }),
+              // コメント履歴を追加
+              ...(enriched.comments && { comments: enriched.comments })
+            };
+          });
+        } catch (error) {
+          // エラーが発生した場合、LanceDBのデータのみを返す（フォールバック）
+          console.warn('[Search API] Failed to enrich results from Firestore:', error);
+        }
+      }
+
+      // 8. レスポンス返却
+      return NextResponse.json({ results: enrichedResults });
     } catch (lanceDbError: any) {
       console.error('LanceDB error:', lanceDbError);
       return APIErrorHandler.internalServerError(

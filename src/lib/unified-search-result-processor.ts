@@ -488,8 +488,10 @@ export class UnifiedSearchResultProcessor {
         }
       }
       
-      // page_idが見つからない場合はエラーログを出力
-      if (pageId === undefined || page_id === undefined) {
+      // page_idが見つからない場合はエラーログを出力（Jiraレコードの場合は不要）
+      // ★★★ Jira対応: Jiraレコードにはpage_idがないため、警告を出力しない ★★★
+      const isJiraRecord = !!(result.issue_key || (result as any).issueKey);
+      if ((pageId === undefined || page_id === undefined) && !isJiraRecord) {
         console.error(`[UnifiedSearchResultProcessor] ❌ page_id not found for result: ${result.title || result.id}. Raw data:`, {
           hasPage_id: result.page_id !== undefined,
           hasPageId: result.pageId !== undefined,

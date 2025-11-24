@@ -103,10 +103,18 @@ type LanceDbRecord = Record<string, unknown> & {
   issue_type: string;
   project_key: string;
   project_name: string;
-  impact_domain: string;
-  impact_level: string;
-  dev_validation: string;
-  prod_validation: string;
+  // カスタムフィールド
+  month: string; // 月 (customfield_10276)
+  custom_assignee: string; // 担当 (customfield_10277)
+  gig_status: string; // GIG状況 (customfield_10278)
+  dev_validation: string; // 開発検証 (customfield_10279)
+  prod_validation: string; // 本番検証 (customfield_10280)
+  release_date: string; // リリース予定日 (customfield_10281)
+  completed_date: string; // 完了日 (customfield_10282)
+  desired_release_date: string; // 希望リリース日 (customfield_10283)
+  deadline_release_date: string; // 限界リリース日 (customfield_10284)
+  impact_domain: string; // 影響業務 (customfield_10291)
+  impact_level: string; // 業務影響度 (customfield_10292)
   url: string;
 }
 
@@ -167,6 +175,18 @@ export class JiraSyncService {
     // バッチ処理用に正規化されたissueを収集
     const normalizedIssues: Array<{ issue: ReturnType<typeof this.normalizeIssue>; original: JiraIssueResponse }> = [];
     
+    // コメントが20件以上ある課題を特定（/rest/api/3/search/jqlでは20件に制限されている）
+    const issuesNeedingFullComments: string[] = [];
+    for (const issue of issues) {
+      if (issue?.fields?.comment?.comments && issue.fields.comment.comments.length >= 20) {
+        issuesNeedingFullComments.push(issue.key);
+      }
+    }
+
+    if (issuesNeedingFullComments.length > 0) {
+      console.log(`📝 ${issuesNeedingFullComments.length}件の課題について、全コメントを個別に取得します...`);
+    }
+
     for (let i = 0; i < issues.length; i++) {
       const issue = issues[i];
       try {
@@ -176,6 +196,16 @@ export class JiraSyncService {
           continue;
         }
         const normalized = this.normalizeIssue(issue);
+        
+        // コメントが20件以上ある場合は、個別に全コメントを取得
+        if (issuesNeedingFullComments.includes(issue.key)) {
+          const allComments = await this.fetchAllCommentsForIssue(issue.key);
+          if (allComments.length > 0) {
+            normalized.allComments = allComments;
+            console.log(`  ✅ ${issue.key}: ${allComments.length}件のコメントを取得しました`);
+          }
+        }
+        
         normalizedIssues.push({ issue: normalized, original: issue });
       } catch (error) {
         const issueKey = issue?.key || 'unknown';
@@ -242,16 +272,14 @@ export class JiraSyncService {
           }
           
           if (shouldUpdate) {
-            // 全コメント履歴を抽出
-            const allComments = this.extractAllComments(original.fields?.comment?.comments || []);
-            
             batch.set(docRef, {
               ...normalized,
               // rawデータをJSON文字列として保存（20レベル制限を回避）
               // 必要に応じて JSON.parse() で復元可能
               rawJson: JSON.stringify(original),
               // 全コメント履歴を配列としても保存（検索しやすくするため）
-              comments: allComments,
+              // normalizeIssueで既にallCommentsが取得されているため、それを使用
+              comments: normalized.allComments || [],
               syncedAt: admin.firestore.FieldValue.serverTimestamp(),
               url: this.buildIssueUrl(normalized.key)
             }, { merge: true });
@@ -443,12 +471,18 @@ export class JiraSyncService {
     const fields = issue.fields;
     const description = this.extractTextFromADF(fields.description);
     const latestComment = this.extractLatestComment(fields.comment?.comments || []);
+    // 注意: /rest/api/3/search/jqlではコメントが20件に制限されているため、
+    // 全コメントを取得するには個別に/rest/api/3/issue/{issueKey}/commentを呼び出す必要がある
+    // ただし、normalizeIssueは同期的な処理のため、ここではsearch/jqlから取得したコメントを使用
+    // 全コメントは後でfetchAllCommentsForIssueメソッドで取得する
+    const allComments = this.extractAllComments(fields.comment?.comments || []);
 
     return {
       key: issue.key,
       summary: fields.summary || '',
       description,
-      latestComment,
+      latestComment, // 後方互換性のため保持
+      allComments, // 全コメント履歴を追加
       status: fields.status?.name || '',
       statusCategory: fields.status?.statusCategory?.name || '',
       priority: fields.priority?.name || '',
@@ -492,17 +526,35 @@ export class JiraSyncService {
       `優先度: ${issue.priority}`,
       `担当: ${issue.assignee}`,
       `報告者: ${issue.reporter}`,
+      // カスタムフィールドをメタデータに追加（ベクトル検索に含めるため）
+      ...(issue.month ? [`月: ${issue.month}`] : []),
+      ...(issue.customAssignee ? [`カスタム担当: ${issue.customAssignee}`] : []),
+      ...(issue.gigStatus ? [`GIG状況: ${issue.gigStatus}`] : []),
       `影響業務: ${issue.impactDomain || '(未設定)'}`,
       `業務影響度: ${issue.impactLevel || '(未設定)'}`,
       `開発検証: ${issue.devValidation || '(未設定)'}`,
-      `本番検証: ${issue.prodValidation || '(未設定)'}`
+      `本番検証: ${issue.prodValidation || '(未設定)'}`,
+      ...(issue.releaseDate ? [`リリース予定日: ${issue.releaseDate}`] : []),
+      ...(issue.completedDate ? [`完了日: ${issue.completedDate}`] : []),
+      ...(issue.desiredReleaseDate ? [`希望リリース日: ${issue.desiredReleaseDate}`] : []),
+      ...(issue.deadlineReleaseDate ? [`限界リリース日: ${issue.deadlineReleaseDate}`] : [])
     ].join('\n');
 
     const sections = [metadata];
     if (issue.description) {
       sections.push('', issue.description);
     }
-    if (issue.latestComment) {
+    
+    // 全コメント履歴を追加（最新の1件ではなく、すべてのコメント）
+    if (issue.allComments && issue.allComments.length > 0) {
+      const commentsText = issue.allComments
+        .map((comment, index) => {
+          return `コメント${index + 1}:\n投稿者: ${comment.author}\n投稿日: ${comment.created}\n${comment.body}`;
+        })
+        .join('\n\n');
+      sections.push('', `コメント履歴:\n${commentsText}`);
+    } else if (issue.latestComment) {
+      // 後方互換性のため、allCommentsがない場合はlatestCommentを使用
       sections.push('', `最新コメント:\n${issue.latestComment}`);
     }
 
@@ -526,10 +578,18 @@ export class JiraSyncService {
       issue_type: issue.issueType,
       project_key: issue.projectKey,
       project_name: issue.projectName,
-      impact_domain: issue.impactDomain,
-      impact_level: issue.impactLevel,
+      // カスタムフィールドをLanceDBレコードに追加
+      month: issue.month,
+      custom_assignee: issue.customAssignee,
+      gig_status: issue.gigStatus,
       dev_validation: issue.devValidation,
       prod_validation: issue.prodValidation,
+      release_date: issue.releaseDate,
+      completed_date: issue.completedDate,
+      desired_release_date: issue.desiredReleaseDate,
+      deadline_release_date: issue.deadlineReleaseDate,
+      impact_domain: issue.impactDomain,
+      impact_level: issue.impactLevel,
       url: this.buildIssueUrl(issue.key),
       _vectorText: vectorText // ベクトル生成用テキスト（一時的なフィールド）
     } as LanceDbRecord & { _vectorText: string };
@@ -778,6 +838,55 @@ export class JiraSyncService {
     const created = latest.created || '';
     const text = this.extractTextFromADF(latest.body);
     return `投稿者: ${author}\n投稿日: ${created}\n${text}`.trim();
+  }
+
+  /**
+   * 特定の課題の全コメントを取得（/rest/api/3/issue/{issueKey}/commentエンドポイントを使用）
+   * /rest/api/3/search/jqlではコメントが20件に制限されているため、全コメントを取得するには個別に取得する必要がある
+   */
+  private async fetchAllCommentsForIssue(issueKey: string): Promise<Array<{
+    id?: string;
+    author: string;
+    created: string;
+    body: string;
+  }>> {
+    try {
+      const commentUrl = `${this.baseUrl}/rest/api/3/issue/${issueKey}/comment`;
+      const headers = {
+        Authorization: `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`,
+        Accept: 'application/json'
+      };
+
+      const res = await fetch(commentUrl, {
+        method: 'GET',
+        headers
+      });
+
+      if (!res.ok) {
+        // エラーが発生した場合は、search/jqlから取得したコメントを使用（フォールバック）
+        console.warn(`⚠️ 課題 ${issueKey} のコメント取得に失敗: ${res.status} ${res.statusText}`);
+        return [];
+      }
+
+      const data = (await res.json()) as any;
+      const comments = data.comments || [];
+
+      // 作成日時でソート（古い順）
+      const sorted = comments
+        .slice()
+        .sort((a: any, b: any) => new Date(a.created || 0).getTime() - new Date(b.created || 0).getTime());
+
+      return sorted.map((comment: any) => ({
+        id: comment.id,
+        author: comment.updateAuthor?.displayName || comment.author?.displayName || '(unknown)',
+        created: comment.created || '',
+        body: this.extractTextFromADF(comment.body)
+      }));
+    } catch (error) {
+      // エラーが発生した場合は、search/jqlから取得したコメントを使用（フォールバック）
+      console.warn(`⚠️ 課題 ${issueKey} のコメント取得中にエラー:`, error instanceof Error ? error.message : String(error));
+      return [];
+    }
   }
 
   /**

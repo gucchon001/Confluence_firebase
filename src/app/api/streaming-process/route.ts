@@ -354,6 +354,43 @@ export const POST = async (req: NextRequest) => {
           }
           
           relevantDocs = searchResults;
+          
+          // Firestoreから追加情報を取得して補完（Jira検索の場合のみ）
+          if (source === 'jira' && relevantDocs.length > 0) {
+            try {
+              const { JiraFirestoreEnrichmentService } = await import('@/lib/jira-firestore-enrichment-service');
+              const enrichmentService = JiraFirestoreEnrichmentService.getInstance();
+              const enrichedDocs = await enrichmentService.enrichSearchResults(
+                relevantDocs.map(doc => ({
+                  id: doc.id,
+                  issue_key: (doc as any).issue_key || doc.id,
+                  title: doc.title,
+                  content: doc.content,
+                  status: (doc as any).status || '',
+                  status_category: (doc as any).status_category || '',
+                  priority: (doc as any).priority || '',
+                  assignee: (doc as any).assignee || '',
+                  issue_type: (doc as any).issue_type || ''
+                })),
+                10 // 最大10件まで補完
+              );
+
+              // 補完されたデータをrelevantDocsに反映
+              relevantDocs = enrichedDocs.map((enriched, index) => {
+                const original = relevantDocs[index];
+                return {
+                  ...original,
+                  // カスタムフィールドを追加
+                  ...(enriched.customFields && { customFields: enriched.customFields }),
+                  // コメント履歴を追加
+                  ...(enriched.comments && { comments: enriched.comments })
+                };
+              });
+            } catch (enrichmentError) {
+              // エラーが発生した場合、LanceDBのデータのみを使用（フォールバック）
+              console.warn('[Streaming API] Failed to enrich results from Firestore:', enrichmentError);
+            }
+          }
           // ユーザーがボタンを押してから検索完了までの時間（リクエスト受信時点から検索完了まで）
           const searchEndTime = Date.now();
           searchTime = searchEndTime - searchStartTime;
