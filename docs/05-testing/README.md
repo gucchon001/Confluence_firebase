@@ -47,7 +47,8 @@
 - **[05.72-performance-optimization-test-2025-11-23.md](./05.72-performance-optimization-test-2025-11-23.md)**: パフォーマンス最適化テスト結果レポート (2025-11-23)
   - **内容**: BM25検索タイムアウト処理、メモリ最適化バッチ処理のテスト結果
   - **実行方法**: 
-    - 開発環境（環境変数不要）: `npm run test:memory-analysis:dev` または `npm run test:batch-processing`
+    - 開発環境（環境変数不要、モックデータ）: `npm run test:memory-analysis:dev` または `npm run test:batch-processing`
+    - 開発環境（本番データ使用）: `npm run download:production-data` → `npm run test:memory-analysis:production-data`
     - 本番環境（環境変数必要）: `npm run test:performance-optimizations`
 
 ### メモリ最適化レポート

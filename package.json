@@ -128,6 +128,7 @@
     "test:batch-processing": "tsx scripts/test-batch-processing-logic.ts",
     "test:performance-optimizations": "tsx scripts/test-performance-optimizations.ts",
     "test:memory-analysis:dev": "tsx scripts/test-memory-analysis-dev.ts",
+    "test:memory-analysis:production-data": "tsx scripts/test-memory-analysis-with-production-data.ts",
     "backup:production-data": "tsx scripts/backup-production-data.ts",
     "sync:and:upload": "npm run sync:confluence:differential && npm run upload:production-data",
     "sync:full:and:upload": "npm run sync:confluence:batch && npm run upload:production-data",
