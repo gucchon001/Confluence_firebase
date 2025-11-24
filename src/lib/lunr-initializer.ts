@@ -474,6 +474,16 @@ export class LunrInitializer {
   }
 
   /**
+   * 指定されたテーブルの初期化状態を確認
+   * @param tableName テーブル名
+   * @returns 初期化中かどうか
+   */
+  isInitializing(tableName: string = 'confluence'): boolean {
+    // 初期化中のPromiseが存在する場合は初期化中
+    return this.initializationPromises.has(tableName);
+  }
+
+  /**
    * 初期化状態をリセット（キャッシュクリア時などに使用）
    * 注意: このメソッドはメモリ状態のみをリセットします
    * キャッシュファイルが存在する場合、次回の初期化時に自動的にロードされます

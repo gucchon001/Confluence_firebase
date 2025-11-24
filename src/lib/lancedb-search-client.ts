@@ -968,8 +968,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     
     // ★★★ メモリ最適化: 上位結果のみcontentを復元（メモリ使用量を削減） ★★★
     // 理由: ランキング後に上位結果のみcontentが必要なため、ここで復元する
-    // バッチサイズ: 50件ずつ処理してメモリを節約
-    const CONTENT_RESTORE_BATCH_SIZE = 50;
+    // バッチサイズ: 20件ずつ処理してメモリを節約（50 → 20に削減：メモリピークを下げるため）
+    const CONTENT_RESTORE_BATCH_SIZE = 20;
     const topResultsForContentRestore = finalResults.slice(0, Math.min(finalResults.length, topK * 2)); // 上位結果のみ
     
     for (let i = 0; i < topResultsForContentRestore.length; i += CONTENT_RESTORE_BATCH_SIZE) {
@@ -1023,6 +1023,18 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // メモリ使用量の監視: 検索完了時
     const memoryAfterSearch = getMemoryUsage();
     logMemoryUsage(`Search complete: ${params.query.substring(0, 50)}...`);
+    
+    // ★★★ メモリ分析強化: インデックス構築と検索処理を分離して記録 ★★★
+    // 理由: 検索処理中にLunrインデックスの構築が走っている場合、そのメモリ消費が検索処理の増加分として計測されてしまう
+    // 対策: Lunr初期化状態を確認し、初期化中であれば警告を追加
+    const searchTableName = params.tableName || 'confluence';
+    const isLunrInitializing = lunrInitializer.isInitializing(searchTableName);
+    const isLunrReady = lunrSearchClient.isReady(searchTableName);
+    
+    if (isLunrInitializing) {
+      console.warn(`⚠️ [Memory] Lunr index is initializing during search execution (${searchTableName}) - memory increase may include index construction`);
+    }
+    
     logMemoryDelta(`Search execution (${params.query.substring(0, 50)}...)`, memoryBeforeSearch, memoryAfterSearch);
     
     // ★★★ メモリ最適化: 検索完了後に不要なデータを明示的に解放 ★★★
@@ -1332,8 +1344,8 @@ async function executeVectorSearch(
     // 理由: contentフィールドは大きいため、ランキング時は不要（タイトルとラベルのみでスコア計算可能）
     // 注意: calculateKeywordScoreでcontentを使用しているが、重みは低い（タイトル5、ラベル2、コンテンツ1）
     //       そのため、ランキング時はcontentなしでスコア計算し、上位結果のみcontentを再取得
-    // バッチサイズ: 100件ずつ処理してメモリを節約
-    const BATCH_SIZE = 100;
+    // バッチサイズ: 50件ずつ処理してメモリを節約（100 → 50に削減：メモリピークを下げるため）
+    const BATCH_SIZE = 50;
     const vectorResultsLightweight: any[] = [];
     
     for (let i = 0; i < vectorResults.length; i += BATCH_SIZE) {
