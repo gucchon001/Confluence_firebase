@@ -18,16 +18,41 @@ export function mapLanceDBRecordToAPI(record: any): any {
   const cleanContent = (record.content || '').replace(/\uFEFF/g, '');
   
   // page_idが存在する場合は、pageIdに変換
-  if (record.page_id !== undefined) {
+  // ★★★ 修正: BigInt対応を追加（page_id消失問題の根本原因を修正） ★★★
+  if (record.page_id !== undefined && record.page_id !== null) {
     const { page_id, spaceKey, ...rest } = record;
-    const numericPageId = Number(page_id);
+    
+    // BigInt, Number, Stringのいずれでも確実にNumberに変換
+    let numericPageId: number;
+    if (typeof page_id === 'bigint') {
+      // BigIntをNumberに変換（安全な範囲内の場合）
+      const num = Number(page_id);
+      numericPageId = Number.isSafeInteger(num) ? num : Number(page_id.toString());
+    } else if (typeof page_id === 'number') {
+      numericPageId = Number.isFinite(page_id) ? page_id : 0;
+    } else if (typeof page_id === 'string') {
+      const parsed = Number(page_id);
+      numericPageId = Number.isFinite(parsed) ? parsed : 0;
+    } else {
+      // その他の型の場合は文字列に変換してから数値化
+      try {
+        const parsed = Number(String(page_id));
+        numericPageId = Number.isFinite(parsed) ? parsed : 0;
+      } catch {
+        numericPageId = 0;
+      }
+    }
+    
+    // 有効な数値の場合のみ設定（0は無効とみなす）
+    const finalPageId = numericPageId > 0 ? numericPageId : undefined;
+    
     return {
       ...rest,
       title: cleanTitle,
       content: cleanContent,
-      pageId: Number.isFinite(numericPageId) ? numericPageId : page_id,  // page_idをpageIdに変換（Numberへ正規化）
-      // page_idも残す（内部処理用）
-      page_id: Number.isFinite(numericPageId) ? numericPageId : page_id,
+      pageId: finalPageId,  // page_idをpageIdに変換（Numberへ正規化）
+      // page_idも残す（内部処理用、確実にNumber型に変換）
+      page_id: finalPageId,
       // spaceKey → space_key に変換（LanceDBスキーマはspaceKeyだが、APIではspace_keyを使用）
       space_key: record.space_key ?? spaceKey ?? ''
     };

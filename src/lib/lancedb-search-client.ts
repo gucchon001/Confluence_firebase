@@ -411,8 +411,11 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     if (vectorResults.length === 0 && params.filter) {
       try {
         const filterOnlyResults = await tbl.query().where(params.filter).limit(topK).toArray();
+        // ★★★ 修正: mapLanceDBRecordsToAPIで変換（BigInt対応） ★★★
+        const { mapLanceDBRecordsToAPI } = await import('./pageid-migration-helper');
+        const mappedFilterResults = mapLanceDBRecordsToAPI(filterOnlyResults);
         // ベクトル距離がないため、ダミーの距離を設定
-        vectorResults = filterOnlyResults.map(r => ({ ...r, _distance: 1.0, _sourceType: 'filter' }));
+        vectorResults = mappedFilterResults.map(r => ({ ...r, _distance: 1.0, _sourceType: 'filter' }));
       } catch (fallbackErr) {
         console.error('[searchLanceDB] Filter-only query error:', fallbackErr);
       }
@@ -1290,6 +1293,11 @@ async function executeVectorSearch(
     logMemoryUsage2(`Before vector search toArray() (limit=${searchLimit})`);
     
     let vectorResults = await vectorQuery.limit(searchLimit).toArray(); // 30倍に復帰（Phase 0A-4設定）
+    
+    // ★★★ 修正: LanceDBから取得したデータをmapLanceDBRecordToAPIで変換（BigInt対応） ★★★
+    // 理由: page_idがBigIntのまま残っていると、後続の処理で問題が発生する
+    const { mapLanceDBRecordsToAPI } = await import('./pageid-migration-helper');
+    vectorResults = mapLanceDBRecordsToAPI(vectorResults);
     
     // メモリ使用量の監視: ベクトル検索実行後
     const memoryAfterVectorSearch = getMemoryUsage2();
