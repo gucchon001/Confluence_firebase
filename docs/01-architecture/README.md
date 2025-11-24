@@ -3,8 +3,8 @@
 このディレクトリには、Confluence Firebase RAGシステムのアーキテクチャ設計書を格納しています。
 
 **App Name**: Confluence Spec-Finder  
-**最終更新**: 2025年11月10日  
-**現在のPhase**: Phase 5完了 + page_idマイグレーション完了 + BOM除去処理・トークン化修正完了
+**最終更新**: 2025年11月24日  
+**現在のPhase**: Phase 5完了 + page_idマイグレーション完了 + BOM除去処理・トークン化修正完了 + Confluence最適化完了
 
 ---
 
@@ -79,10 +79,9 @@
 6. [UI/UX設計](#6-uiux設計) (6.1)
 7. [将来計画](#7-将来計画)
    - 7.1 [Confluence/Jira統合計画](#71-confluencejira統合計画) (7.1.1)
-8. [アーカイブ](#8-アーカイブ)
-9. [分析・検証レポート](#9-分析検証レポート)
+8. [分析・検証レポート](#8-分析検証レポート)
    - 8.1 [パフォーマンス分析](#81-パフォーマンス分析) (8.1.1)
-   - 8.2 [仕様検証](#82-仕様検証) (8.2.1)
+9. [アーカイブ](#9-アーカイブ)
    - 7.1 [完了レポート](#71-完了レポート) (7.1.1)
    - 7.2 [非推奨ドキュメント](#72-非推奨ドキュメント) (7.2.1-7.2.4)
    - 7.3 [統合・移動済みファイル](#73-統合移動済みファイル) (7.3.1-7.3.18)
@@ -289,7 +288,7 @@
 
 ---
 
-## 7. 将来計画（旧）
+## 7. 将来計画
 
 ### 7.1 Confluence/Jira統合計画
 
@@ -323,22 +322,11 @@
 - メモリ使用量分析
 - コンテキスト抽出分析
 
-### 8.2 仕様検証
-
-| # | ドキュメント | 説明 | 最終更新 |
-|---|------------|------|---------|
-| 8.2.1 | [08.02.01-spec-verification-report.md](./08.02.01-spec-verification-report.md) | **仕様書とコードの整合性確認レポート**<br>仕様書と実装コードの照合結果、不整合の修正 | 2025-01-27 |
-
-**内容**:
-- 確認結果サマリー
-- 実行した修正
-- 不整合レポート
-- 詳細確認結果
-- 推奨される追加修正
+**注意**: 2025年1月の仕様検証レポートは`docs/99-archive/architecture/analysis-reports/`にアーカイブ済み（内容は他のドキュメントに反映済み）
 
 ---
 
-## 7. アーカイブ
+## 9. アーカイブ
 
 ### 7.1 完了レポート
 
@@ -376,9 +364,9 @@
 - 9ファイルを統合
 
 **仕様検証関連** (2025-01-27):
-- **場所**: `docs/99-archive/architecture/spec-verification/`
-- **統合先**: `08.02.01-spec-verification-report.md`
-- 4ファイルを統合
+- **場所**: `docs/99-archive/architecture/analysis-reports/`
+- **ファイル**: `08.02.01-spec-verification-report.md`（内容は他のドキュメントに反映済み）
+- 4ファイルを統合済み
 
 **Structured Label分析関連**:
 - **場所**: `docs/99-archive/architecture/structured-label-analysis/`
@@ -389,15 +377,17 @@
 - **場所**: `docs/99-archive/architecture/other-analysis/`
 - 複数の分析ドキュメントをアーカイブ
 
-**最近統合したファイル** (2025年11月):
-| # | ファイル名 | 統合先 |
-|---|-----------|--------|
+**最近統合・アーカイブしたファイル** (2025年11月):
+| # | ファイル名 | 統合先/アーカイブ先 |
+|---|-----------|-------------------|
 | 7.3.1 | `hybrid-search-logic-current.md` | → `hybrid-search-specification.md`に統合済み |
 | 7.3.2 | `hybrid-search-specification-latest.md` | → `hybrid-search-specification.md`にリネーム |
 | 7.3.3 | `blueprint.md` | → `README.md`に統合済み |
 | 7.3.4 | `jira-data-flow-lancedb.md` | → `confluence-jira-integration-plan.md`に統合済み |
 | 7.3.5 | `jira-env-differences-and-migration.md` | → `confluence-jira-integration-plan.md`に統合済み |
 | 7.3.6 | `jira-dashboard-indicators.md` | → `confluence-jira-integration-plan.md`に統合済み |
+| 7.3.19 | `08.02.01-spec-verification-report.md` | → `docs/99-archive/architecture/analysis-reports/`にアーカイブ |
+| 7.3.20 | `06.01.02-hybrid-cross-source-search-with-genkit.md` | → `docs/99-archive/architecture/future-plans/`にアーカイブ |
 
 **その他のアーカイブファイル:**
 | # | ファイル名 |
@@ -431,6 +421,7 @@
 - ✅ トークン化修正（kuromoji統一使用）
 - ✅ データベース再構築（2,088行）
 - ✅ page_idマイグレーション完了（スカラーインデックス対応）
+- ✅ Confluence最適化完了（メモリ最適化、パフォーマンス改善、GCSキャッシュ統合）
 
 ---
 

@@ -99,14 +99,51 @@ jobs:
       - name: Check if sync step was executed
         if: always()
         run: |
-          if [ "${{ steps.differential_sync.outcome }}" != "success" ] && [ "${{ steps.full_sync.outcome }}" != "success" ]; then
-            echo "❌ 同期ステップが実行されませんでした"
-            echo "Event name: ${{ github.event_name }}"
-            echo "Sync type: ${{ github.event.inputs.sync_type }}"
-            echo "Differential sync outcome: ${{ steps.differential_sync.outcome }}"
-            echo "Full sync outcome: ${{ steps.full_sync.outcome }}"
+          # 差分同期スクリプトは、差分がない場合も正常終了（exit code 0）するため、
+          # success として扱われます。これは正常な動作です。
+          differential_outcome="${{ steps.differential_sync.outcome }}"
+          full_outcome="${{ steps.full_sync.outcome }}"
+          
+          echo "📊 同期ステップの実行結果:"
+          echo "  Differential sync outcome: $differential_outcome"
+          echo "  Full sync outcome: $full_outcome"
+          echo "  Event name: ${{ github.event_name }}"
+          echo "  Sync type: ${{ github.event.inputs.sync_type }}"
+          
+          # どちらかが成功している場合はOK（差分がない場合も含む）
+          if [ "$differential_outcome" == "success" ] || [ "$full_outcome" == "success" ]; then
+            echo "✅ 同期ステップが正常に実行されました"
+            echo "   差分がない場合も正常終了として扱われます"
+            exit 0
+          fi
+          
+          # 両方とも skipped の場合は、条件を満たさなかった（これは問題）
+          if [ "$differential_outcome" == "skipped" ] && [ "$full_outcome" == "skipped" ]; then
+            echo "❌ 同期ステップが実行されませんでした（条件を満たしていません）"
+            echo "   スケジュール実行時は差分同期が実行されるべきです"
             exit 1
           fi
+          
+          # cancelled または failure の場合はエラー
+          if [ "$differential_outcome" == "cancelled" ] || [ "$differential_outcome" == "failure" ] || \
+             [ "$full_outcome" == "cancelled" ] || [ "$full_outcome" == "failure" ]; then
+            echo "❌ 同期ステップがキャンセルまたは失敗しました"
+            echo ""
+            echo "考えられる原因:"
+            echo "1. 前のステップ（npm install、認証など）でエラーが発生した"
+            echo "2. タイムアウトが発生した（現在のタイムアウト: 720分）"
+            echo "3. ワークフローが手動でキャンセルされた"
+            echo "4. GitHub Actionsのリソース制約"
+            echo ""
+            echo "確認事項:"
+            echo "- 前のステップ（特に 'Install dependencies' や 'Debug workflow context'）のログを確認してください"
+            echo "- 差分同期ステップが実行される前にエラーが発生していないか確認してください"
+            exit 1
+          fi
+          
+          # その他の予期しない状態
+          echo "⚠️ 予期しない状態です"
+          exit 1
       
       - name: Notify completion
         if: steps.upload_data.outcome == 'success'
