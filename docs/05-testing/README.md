@@ -51,6 +51,10 @@
     - 開発環境（本番データ使用）: `npm run download:production-data` → `npm run test:memory-analysis:production-data`
     - 本番環境（環境変数必要）: `npm run test:performance-optimizations`
 
+- **[05.73-performance-test-results-production-data-2025-11-23.md](./05.73-performance-test-results-production-data-2025-11-23.md)**: パフォーマンステスト結果レポート（本番データ使用）(2025-11-23)
+  - **内容**: 本番データを使った開発環境でのパフォーマンステスト結果
+  - **結果**: 平均メモリ増加92.27MB（約90%削減）、平均検索時間2148ms（目標達成）
+
 ### メモリ最適化レポート
 
 - **[05.71-memory-optimization-2025-11-22.md](./05.71-memory-optimization-2025-11-22.md)**: メモリ最適化レポート (2025-11-22)
