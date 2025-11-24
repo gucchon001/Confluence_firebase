@@ -168,15 +168,80 @@ await downloadFromGCS(gcsCachePath, localCachePath);
 - ✅ 起動時初期化の非同期化（ユーザーを待たせない）
 - ✅ 検索時のタイムアウトを500msに短縮
 
+### 既存の実装（部分的）
+
+#### 1. **GCSへのアップロード機能（実装済み）**
+**ファイル**: `scripts/upload-production-data.ts`
+
+**実装内容**:
+- `uploadLunrCache()`関数でLunrキャッシュをGCSにアップロード
+- ローカルの`.cache/lunr-index*.msgpack`と`.cache/lunr-index*.json`をGCSの`.cache/`パスにアップロード
+- 手動実行スクリプトとして実装済み
+
+**コード**:
+```typescript
+async function uploadLunrCache(bucket: any): Promise<number> {
+  // Lunrインデックスファイルを検索
+  const cacheFiles = fs.readdirSync(LOCAL_CACHE_PATH).filter(file => 
+    file.startsWith('lunr-index') && (file.endsWith('.msgpack') || file.endsWith('.json'))
+  );
+  
+  // GCSにアップロード
+  const gcsPath = `.cache/${file}`;
+  await bucket.upload(localFilePath, {
+    destination: gcsPath,
+    metadata: { cacheControl: 'public, max-age=3600' }
+  });
+}
+```
+
+#### 2. **GCSからのダウンロード機能（実装済み）**
+**ファイル**: `scripts/download-production-data.ts`
+
+**実装内容**:
+- `downloadLunrCache()`関数でGCSからLunrキャッシュをダウンロード
+- GCSの`.cache/lunr-index*`パスからローカルの`.cache/`ディレクトリにダウンロード
+- 手動実行スクリプトとして実装済み
+
+**コード**:
+```typescript
+async function downloadLunrCache(bucket: any): Promise<number> {
+  // Lunrインデックスファイルを検索
+  const [files] = await bucket.getFiles({ prefix: '.cache/lunr-index' });
+  
+  // ローカルにダウンロード
+  for (const file of files) {
+    const fileName = path.basename(file.name);
+    const localFilePath = path.join(LOCAL_CACHE_PATH, fileName);
+    await file.download({ destination: localFilePath });
+  }
+}
+```
+
+#### 3. **自動保存機能（未実装）**
+**問題**: `lunr-search-client.ts`の`saveToDisk()`はローカルファイルシステムにのみ保存
+- GCSへの自動アップロード機能がない
+- キャッシュ保存後にGCSにアップロードする処理が実装されていない
+
+#### 4. **起動時自動ダウンロード機能（未実装）**
+**問題**: `lunr-initializer.ts`の`_performInitialization()`はローカルキャッシュのみチェック
+- GCSからキャッシュをダウンロードする処理がない
+- ローカルキャッシュが存在しない場合、GCSからダウンロードを試みる処理が実装されていない
+
 ### 残っている問題
 - ⚠️ Cloud Runのローカルファイルシステムの制約
   - インスタンスがスケールダウンするとキャッシュが失われる
   - コールドスタート時は毎回再構築が必要
+- ⚠️ 手動実行のみで自動化されていない
+  - アップロード/ダウンロードは手動スクリプトのみ
+  - 起動時の自動ダウンロードが実装されていない
+  - キャッシュ保存後の自動アップロードが実装されていない
 
 ### 推奨される改善
-1. **GCSへのキャッシュ保存**: インスタンス終了後もキャッシュが保持される
-2. **キャッシュの有効期限管理**: データ更新時にキャッシュを無効化
-3. **複数インスタンス間でのキャッシュ共有**: GCSを使用して共有
+1. **起動時自動ダウンロード**: `lunr-initializer.ts`でローカルキャッシュがない場合、GCSからダウンロードを試みる
+2. **自動アップロード**: `lunr-search-client.ts`の`saveToDisk()`で、ローカル保存後にGCSにもアップロード
+3. **キャッシュの有効期限管理**: データ更新時にキャッシュを無効化
+4. **複数インスタンス間でのキャッシュ共有**: GCSを使用して共有（既にGCSに保存されているため、共有可能）
 
 ## まとめ
 
