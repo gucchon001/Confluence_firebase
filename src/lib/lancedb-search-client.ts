@@ -1317,8 +1317,9 @@ async function executeVectorSearch(
     // ★★★ 近似検索（IVF_PQ）の誤差を考慮して、より多くの結果を取得 ★★★
     // 理由: 距離が100位以内に入るはずのドキュメントが検索結果に含まれない問題に対処
     // 参考: docs/analysis/auto-offer-search-issue-root-cause.md
-    // 修正: 20倍 → 30倍に拡大（Phase 0A-4設定に復帰）
-    const searchLimit = topK * 30;
+    // 修正: 30倍 → 15倍に削減（メモリ使用量と検索速度の改善）
+    //       150件（topK=5*30）→ 75件（topK=5*15）に削減して、メモリ消費と検索時間を約50%削減
+    const searchLimit = topK * 15;
     if (DEBUG_SEARCH) {
     console.log(`[Vector Search] 🔍 DEBUG: Search limit: ${searchLimit} (topK=${topK})`);
     }
@@ -1340,20 +1341,31 @@ async function executeVectorSearch(
     logMemoryUsage2(`After vector search toArray() (results=${vectorResults.length})`);
     logMemoryDelta2(`Vector search toArray() (limit=${searchLimit})`, memoryBeforeVectorSearch, memoryAfterVectorSearch);
     
-    // ★★★ メモリ最適化: バッチ処理でcontentフィールドを削除（メモリ使用量を削減） ★★★
-    // 理由: contentフィールドは大きいため、ランキング時は不要（タイトルとラベルのみでスコア計算可能）
+    // ★★★ メモリ最適化: 取得直後に不要なフィールドを削除（メモリ使用量を大幅削減） ★★★
+    // 理由: 
+    //   - vectorフィールド: ランキングに不要（既に_distanceで距離が計算済み）
+    //   - contentフィールド: ランキング時は不要（タイトルとラベルのみでスコア計算可能）
+    //   - その他の大きなフィールド: ランキングに不要なものは削除
     // 注意: calculateKeywordScoreでcontentを使用しているが、重みは低い（タイトル5、ラベル2、コンテンツ1）
     //       そのため、ランキング時はcontentなしでスコア計算し、上位結果のみcontentを再取得
-    // バッチサイズ: 50件ずつ処理してメモリを節約（100 → 50に削減：メモリピークを下げるため）
+    // バッチサイズ: 50件ずつ処理してメモリを節約（メモリピークを下げるため）
     const BATCH_SIZE = 50;
     const vectorResultsLightweight: any[] = [];
     
     for (let i = 0; i < vectorResults.length; i += BATCH_SIZE) {
       const batch = vectorResults.slice(i, i + BATCH_SIZE);
       const processedBatch = batch.map(r => {
-        // contentフィールドを一時的に削除（メモリ節約）
-        // _originalContentに保持して、後で再設定可能にする
-        const { content, ...rest } = r;
+        // ランキングに必要なフィールドのみを保持
+        // 削除するフィールド: vector（大きな配列）、content（大きな文字列）、その他の不要なフィールド
+        const { 
+          vector,           // ベクトル配列（ランキングに不要、_distanceで距離は既に計算済み）
+          content,          // コンテンツ（ランキング後に上位結果のみ再取得）
+          url,              // URL（ランキングに不要、後で再構築可能）
+          originalTitle,    // 元のタイトル（ランキングに不要）
+          originalContent,  // 元のコンテンツ（ランキングに不要）
+          ...rest           // その他の必要なフィールド（id, page_id, title, labels, _distance, etc.）
+        } = r;
+        
         return {
           ...rest,
           _originalContent: content, // 元のcontentを保持（ランキング後に上位結果のみ再設定）
@@ -1369,9 +1381,9 @@ async function executeVectorSearch(
       }
     }
     
-    // メモリ使用量の監視: content削除後
+    // メモリ使用量の監視: 不要フィールド削除後
     const memoryAfterContentRemoval = getMemoryUsage2();
-    logMemoryDelta2(`After removing content fields (${vectorResults.length} results, batch size=${BATCH_SIZE})`, memoryAfterVectorSearch, memoryAfterContentRemoval);
+    logMemoryDelta2(`After removing unnecessary fields (${vectorResults.length} results, batch size=${BATCH_SIZE})`, memoryAfterVectorSearch, memoryAfterContentRemoval);
     
     // 軽量版の結果を使用（ランキング後に上位結果のみcontentを再設定）
     vectorResults = vectorResultsLightweight;
