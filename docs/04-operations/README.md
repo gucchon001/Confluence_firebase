@@ -86,6 +86,13 @@ npm run sync:confluence:diff-no-delete
 **内容**: 必須環境変数一覧、検証ルール、設定方法  
 **重要度**: ⭐⭐⭐
 
+#### 18. LunrキャッシュGCS運用ガイド
+**ファイル**: [`18-lunr-cache-gcs-operation-guide.md`](./04.18-lunr-cache-gcs-operation-guide.md)  
+**目的**: LunrキャッシュのGCS統合機能の運用  
+**内容**: 動作確認、手動操作、トラブルシューティング、メンテナンス  
+**重要度**: ⭐⭐⭐  
+**関連**: [アーキテクチャ設計](../01-architecture/01.05.01-lunr-cache-gcs-integration.md)
+
 ### 【履歴ドキュメント】過去のデプロイ記録（09-10）
 
 #### 04.09. 緊急デプロイ手順 (2025-10-20)
