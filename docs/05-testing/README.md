@@ -44,6 +44,10 @@
 - **[05.70-performance-tests-2025-11-22.md](./05.70-performance-tests-2025-11-22.md)**: パフォーマンステスト結果レポート (2025-11-22)
   - **内容**: 検索パフォーマンス詳細分析、Cold Start分析、パフォーマンス回帰分析
 
+- **[05.72-performance-optimization-test-2025-11-23.md](./05.72-performance-optimization-test-2025-11-23.md)**: パフォーマンス最適化テスト結果レポート (2025-11-23)
+  - **内容**: BM25検索タイムアウト処理、メモリ最適化バッチ処理のテスト結果
+  - **実行方法**: `npm run test:performance-optimizations` または `npm run test:batch-processing`
+
 ### メモリ最適化レポート
 
 - **[05.71-memory-optimization-2025-11-22.md](./05.71-memory-optimization-2025-11-22.md)**: メモリ最適化レポート (2025-11-22)
