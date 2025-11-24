@@ -1589,13 +1589,16 @@ async function executeBM25Search(
         console.warn(`[BM25 Search] Lunr initialization failed for ${tableName}:`, error);
       });
       
-      // ★★★ 修正: タイムアウトを500msに短縮し、初期化を待たずに即座に空配列を返す ★★★
-      // 理由: 初期化が完了するまで待つと36秒かかるため、500msでタイムアウトして
-      //       ベクトル検索のみで結果を返す
+      // ★★★ 修正: タイムアウトを2000msに延長（GCSからのキャッシュダウンロードを考慮） ★★★
+      // 理由: 
+      //   - GCSからのキャッシュダウンロード: 300-1000ms程度
+      //   - MessagePackファイルの解析: 200-500ms程度
+      //   - 合計: 500-1500ms程度かかる可能性があるため、2000ms（2秒）に延長
+      //   - これにより、コールドスタート時でもGCSキャッシュからロードできる可能性が高まる
       // 注意: initializeAsync()が既存のPromiseを返す場合、そのPromiseを待つと完了まで待ってしまう
-      //       そのため、isReady()をポーリングして、500ms以内に準備できなければスキップする
+      //       そのため、isReady()をポーリングして、2000ms以内に準備できなければスキップする
       const startTime = Date.now();
-      const timeoutMs = 500;
+      const timeoutMs = 2000; // 500ms → 2000msに延長（GCSダウンロード時間を考慮）
       
       // ポーリング間隔（50msごとにチェック）
       const pollInterval = 50;
