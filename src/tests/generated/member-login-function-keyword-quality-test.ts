@@ -123,7 +123,7 @@ async function testMemberLoginFunctionKeywordExtraction() {
 }
 
 function isMemberLoginFunctionRelated(keyword: string): boolean {
-  const member-login-functionTerms = [
+  const memberLoginFunctionTerms = [
       "会員ログイン",
       "ログイン機能",
       "会員",
@@ -137,7 +137,7 @@ function isMemberLoginFunctionRelated(keyword: string): boolean {
       "会員認証"
 ];
   
-  return member-login-functionTerms.some(term => keyword.includes(term));
+  return memberLoginFunctionTerms.some(term => keyword.includes(term));
 }
 
 // テスト実行

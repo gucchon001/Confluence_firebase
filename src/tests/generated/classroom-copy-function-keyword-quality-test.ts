@@ -127,7 +127,7 @@ async function testClassroomCopyFunctionKeywordExtraction() {
 }
 
 function isClassroomCopyFunctionRelated(keyword: string): boolean {
-  const classroom-copy-functionTerms = [
+  const classroomCopyFunctionTerms = [
       "教室コピー",
       "コピー機能",
       "教室",
@@ -145,7 +145,7 @@ function isClassroomCopyFunctionRelated(keyword: string): boolean {
       "上書き"
 ];
   
-  return classroom-copy-functionTerms.some(term => keyword.includes(term));
+  return classroomCopyFunctionTerms.some(term => keyword.includes(term));
 }
 
 // テスト実行

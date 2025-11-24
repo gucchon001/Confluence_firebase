@@ -124,7 +124,7 @@ async function testClassroomDeletionIssueKeywordExtraction() {
 }
 
 function isClassroomDeletionIssueRelated(keyword: string): boolean {
-  const classroom-deletion-issueTerms = [
+  const classroomDeletionIssueTerms = [
       "教室削除",
       "削除できない",
       "削除問題",
@@ -139,7 +139,7 @@ function isClassroomDeletionIssueRelated(keyword: string): boolean {
       "削除制限条件"
 ];
   
-  return classroom-deletion-issueTerms.some(term => keyword.includes(term));
+  return classroomDeletionIssueTerms.some(term => keyword.includes(term));
 }
 
 // テスト実行

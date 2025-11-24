@@ -121,7 +121,7 @@ async function testOfferFunctionKeywordExtraction() {
 }
 
 function isOfferFunctionRelated(keyword: string): boolean {
-  const offer-functionTerms = [
+  const offerFunctionTerms = [
       "オファー",
       "機能",
       "詳細",
@@ -133,7 +133,7 @@ function isOfferFunctionRelated(keyword: string): boolean {
       "オファー登録"
 ];
   
-  return offer-functionTerms.some(term => keyword.includes(term));
+  return offerFunctionTerms.some(term => keyword.includes(term));
 }
 
 // テスト実行

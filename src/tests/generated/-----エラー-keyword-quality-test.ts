@@ -121,7 +121,7 @@ async function testエラーKeywordExtraction() {
 }
 
 function isエラーRelated(keyword: string): boolean {
-  const -----エラーTerms = [
+  const エラーTerms = [
       "応募管理",
       "エラー",
       "応募管理エラー",
@@ -133,7 +133,7 @@ function isエラーRelated(keyword: string): boolean {
       "対処"
 ];
   
-  return -----エラーTerms.some(term => keyword.includes(term));
+  return エラーTerms.some(term => keyword.includes(term));
 }
 
 // テスト実行

@@ -187,8 +187,14 @@ class BatchQualityTestGenerator {
     // ドメイン×機能の組み合わせテストケース
     for (const domain of domains.slice(0, 5)) { // 最初の5個のドメイン
       for (const func of functions.slice(0, 3)) { // 最初の3個の機能
+        const domainName = domain.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const funcName = func.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        // 無効な名前（空文字列やハイフンのみ）をスキップ
+        if (!domainName || !funcName || domainName === '-' || funcName === '-') {
+          continue;
+        }
         const testCase: TestCase = {
-          name: `${domain.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${func}`,
+          name: `${domainName}-${funcName}`,
           query: `${domain}の${func}機能の詳細を教えて`,
           idealKeywords: [
             domain, func, `${domain}${func}`, `${domain}機能`, `${func}機能`,
@@ -218,8 +224,14 @@ class BatchQualityTestGenerator {
     // 問題解決系テストケース
     for (const domain of domains.slice(0, 3)) {
       for (const issue of issues.slice(0, 2)) {
+        const domainName = domain.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const issueName = issue.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        // 無効な名前（空文字列やハイフンのみ）をスキップ
+        if (!domainName || !issueName || domainName === '-' || issueName === '-') {
+          continue;
+        }
         const testCase: TestCase = {
-          name: `${domain.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${issue}`,
+          name: `${domainName}-${issueName}`,
           query: `${domain}で${issue}のは何が原因ですか`,
           idealKeywords: [
             domain, issue, `${domain}${issue}`, `${domain}問題`, `${issue}原因`,
@@ -258,12 +270,25 @@ class BatchQualityTestGenerator {
     }
 
     // 各テストケースのファイル生成
+    let validTestCount = 0;
     for (let i = 0; i < this.testCases.length; i++) {
       const testCase = this.testCases[i];
+      
+      // 無効なテストケース名をスキップ（ハイフンのみ、空文字列、または無効な文字を含む）
+      if (!testCase.name || 
+          testCase.name === '-' || 
+          testCase.name.startsWith('-----') || 
+          /^[-]+$/.test(testCase.name) ||
+          !/^[a-z0-9-]+$/.test(testCase.name)) {
+        console.log(`[${i + 1}/${this.testCases.length}] スキップ: ${testCase.name} (無効な名前)`);
+        continue;
+      }
+      
+      validTestCount++;
       const fileName = `${testCase.name}-keyword-quality-test.ts`;
       const filePath = path.join(this.outputDir, fileName);
       
-      console.log(`[${i + 1}/${this.testCases.length}] 生成中: ${fileName}`);
+      console.log(`[${validTestCount}/${this.testCases.length}] 生成中: ${fileName}`);
       
       const testContent = this.generateTestContent(testCase);
       fs.writeFileSync(filePath, testContent);
@@ -275,7 +300,7 @@ class BatchQualityTestGenerator {
     console.log('');
     console.log('✅ バッチ品質テスト生成完了');
     console.log(`📁 出力ディレクトリ: ${this.outputDir}`);
-    console.log(`📄 生成ファイル数: ${this.testCases.length}`);
+    console.log(`📄 生成ファイル数: ${validTestCount} (無効なテストケースをスキップ)`);
   }
 
   private generateTestContent(testCase: TestCase): string {
@@ -392,9 +417,9 @@ async function test${this.toPascalCase(testCase.name)}KeywordExtraction() {
 }
 
 function is${this.toPascalCase(testCase.name)}Related(keyword: string): boolean {
-  const ${testCase.name}Terms = ${JSON.stringify(testCase.idealKeywords, null, 6)};
+  const ${this.toCamelCase(testCase.name)}Terms = ${JSON.stringify(testCase.idealKeywords, null, 6)};
   
-  return ${testCase.name}Terms.some(term => keyword.includes(term));
+  return ${this.toCamelCase(testCase.name)}Terms.some(term => keyword.includes(term));
 }
 
 // テスト実行
@@ -672,6 +697,13 @@ main().catch(console.error);
 
   private toPascalCase(str: string): string {
     return str.split('-').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join('');
+  }
+
+  private toCamelCase(str: string): string {
+    const words = str.split('-');
+    return words[0] + words.slice(1).map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join('');
   }

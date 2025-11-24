@@ -121,7 +121,7 @@ async function test登録KeywordExtraction() {
 }
 
 function is登録Related(keyword: string): boolean {
-  const -----登録Terms = [
+  const 登録Terms = [
       "企業管理",
       "登録",
       "企業管理登録",
@@ -133,7 +133,7 @@ function is登録Related(keyword: string): boolean {
       "システム"
 ];
   
-  return -----登録Terms.some(term => keyword.includes(term));
+  return 登録Terms.some(term => keyword.includes(term));
 }
 
 // テスト実行

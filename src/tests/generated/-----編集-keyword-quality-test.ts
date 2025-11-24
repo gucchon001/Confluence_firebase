@@ -121,7 +121,7 @@ async function test編集KeywordExtraction() {
 }
 
 function is編集Related(keyword: string): boolean {
-  const -----編集Terms = [
+  const 編集Terms = [
       "企業管理",
       "編集",
       "企業管理編集",
@@ -133,7 +133,7 @@ function is編集Related(keyword: string): boolean {
       "システム"
 ];
   
-  return -----編集Terms.some(term => keyword.includes(term));
+  return 編集Terms.some(term => keyword.includes(term));
 }
 
 // テスト実行

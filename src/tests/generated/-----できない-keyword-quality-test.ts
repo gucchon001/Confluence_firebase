@@ -121,7 +121,7 @@ async function testできないKeywordExtraction() {
 }
 
 function isできないRelated(keyword: string): boolean {
-  const -----できないTerms = [
+  const できないTerms = [
       "応募管理",
       "できない",
       "応募管理できない",
@@ -133,7 +133,7 @@ function isできないRelated(keyword: string): boolean {
       "対処"
 ];
   
-  return -----できないTerms.some(term => keyword.includes(term));
+  return できないTerms.some(term => keyword.includes(term));
 }
 
 // テスト実行

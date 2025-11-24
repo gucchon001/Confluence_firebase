@@ -121,7 +121,7 @@ async function test一覧KeywordExtraction() {
 }
 
 function is一覧Related(keyword: string): boolean {
-  const -----一覧Terms = [
+  const 一覧Terms = [
       "企業管理",
       "一覧",
       "企業管理一覧",
@@ -133,7 +133,7 @@ function is一覧Related(keyword: string): boolean {
       "システム"
 ];
   
-  return -----一覧Terms.some(term => keyword.includes(term));
+  return 一覧Terms.some(term => keyword.includes(term));
 }
 
 // テスト実行

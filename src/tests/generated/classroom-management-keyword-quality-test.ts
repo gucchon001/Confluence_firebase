@@ -122,7 +122,7 @@ async function testClassroomManagementKeywordExtraction() {
 }
 
 function isClassroomManagementRelated(keyword: string): boolean {
-  const classroom-managementTerms = [
+  const classroomManagementTerms = [
       "教室管理",
       "教室",
       "教室一覧",
@@ -135,7 +135,7 @@ function isClassroomManagementRelated(keyword: string): boolean {
       "詳細"
 ];
   
-  return classroom-managementTerms.some(term => keyword.includes(term));
+  return classroomManagementTerms.some(term => keyword.includes(term));
 }
 
 // テスト実行

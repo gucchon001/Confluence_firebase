@@ -245,6 +245,14 @@
 |---|------------|------|---------|
 | 5.1.1 | [01.05.01-lunr-cache-gcs-integration.md](./01.05.01-lunr-cache-gcs-integration.md) | **LunrキャッシュGCS統合アーキテクチャ**<br>GCSへの自動保存・読み込み機能、コールドスタート時の高速化 | 2025-11-23 |
 
+### 5.2 Confluence最適化完了
+
+| # | ドキュメント | 説明 | 最終更新 |
+|---|------------|------|---------|
+| 5.2.1 | [01.06.01-confluence-optimization-completion-summary.md](./01.06.01-confluence-optimization-completion-summary.md) | **Confluence検索最適化完了サマリー**<br>実装済みの最適化内容、効果、Jiraへの適用計画 | 2025-11-24 |
+| 5.2.2 | [01.06.02-degradation-prevention-guide.md](./01.06.02-degradation-prevention-guide.md) | **デグレード防止ガイド**<br>デグレード防止の原則、チェックリスト、コード規約 | 2025-11-24 |
+| 5.2.3 | [01.06.03-jira-optimization-plan.md](./01.06.03-jira-optimization-plan.md) | **Jira検索最適化計画**<br>Confluence最適化のJiraへの適用計画 | 2025-11-24 |
+
 **概要**:
 - Cloud Runのコールドスタート時にGCSからキャッシュを読み込み、再構築時間（35秒）を約90%短縮
 - 複数インスタンス間でキャッシュを共有
