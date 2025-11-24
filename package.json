@@ -122,6 +122,8 @@
     "backup:emergency-now": "tsx src/scripts/schedule-backups.ts emergency",
     "upload:production-data": "tsx scripts/upload-production-data.ts",
     "download:production-data": "tsx scripts/download-production-data.ts",
+    "test:gcs-cache-helper": "tsx scripts/test-gcs-cache-helper.ts",
+    "test:lunr-gcs-integration": "tsx scripts/test-lunr-gcs-integration.ts",
     "backup:production-data": "tsx scripts/backup-production-data.ts",
     "sync:and:upload": "npm run sync:confluence:differential && npm run upload:production-data",
     "sync:full:and:upload": "npm run sync:confluence:batch && npm run upload:production-data",
