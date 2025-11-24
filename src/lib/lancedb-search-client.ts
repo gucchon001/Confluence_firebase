@@ -628,7 +628,8 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
         // キーワードマッチングスコアを計算
         // 🔧 BOM文字（U+FEFF）を削除（データベースから読み込んだデータにBOM文字が含まれている可能性を考慮）
         const title = (originalResult.title || '').replace(/\uFEFF/g, '');
-        const content = (originalResult.content || '').replace(/\uFEFF/g, '');
+        // ★★★ メモリ最適化: contentが空の場合は_originalContentを使用 ★★★
+        const content = (originalResult.content || originalResult._originalContent || '').replace(/\uFEFF/g, '');
         const labels = getLabelsAsArray(originalResult.labels);
         
         // Phase 6最適化: デバッグログを削減（パフォーマンス改善）
@@ -964,6 +965,29 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
     // Phase 4最適化: 結果数制限を緩和（topK * 3）
     // 理由: 重複排除とフィルタリング後に十分な結果を確保
     let finalResults = combinedResults.slice(0, topK * 3);
+    
+    // ★★★ メモリ最適化: 上位結果のみcontentを復元（メモリ使用量を削減） ★★★
+    // 理由: ランキング後に上位結果のみcontentが必要なため、ここで復元する
+    // バッチサイズ: 50件ずつ処理してメモリを節約
+    const CONTENT_RESTORE_BATCH_SIZE = 50;
+    const topResultsForContentRestore = finalResults.slice(0, Math.min(finalResults.length, topK * 2)); // 上位結果のみ
+    
+    for (let i = 0; i < topResultsForContentRestore.length; i += CONTENT_RESTORE_BATCH_SIZE) {
+      const batch = topResultsForContentRestore.slice(i, i + CONTENT_RESTORE_BATCH_SIZE);
+      for (const result of batch) {
+        // _originalContentが存在する場合は、contentを復元
+        if (result._originalContent !== undefined && result.content === '') {
+          result.content = result._originalContent;
+          // メモリ節約のため、_originalContentは削除（不要になったため）
+          delete result._originalContent;
+        }
+      }
+      
+      // バッチ処理の間でGCを促す（メモリ使用量を削減）
+      if (i + CONTENT_RESTORE_BATCH_SIZE < topResultsForContentRestore.length) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
     
     // Phase 0A-1.5: ページ単位の重複排除
     // ★★★ MIGRATION: 非同期対応 ★★★
@@ -1303,6 +1327,42 @@ async function executeVectorSearch(
     const memoryAfterVectorSearch = getMemoryUsage2();
     logMemoryUsage2(`After vector search toArray() (results=${vectorResults.length})`);
     logMemoryDelta2(`Vector search toArray() (limit=${searchLimit})`, memoryBeforeVectorSearch, memoryAfterVectorSearch);
+    
+    // ★★★ メモリ最適化: バッチ処理でcontentフィールドを削除（メモリ使用量を削減） ★★★
+    // 理由: contentフィールドは大きいため、ランキング時は不要（タイトルとラベルのみでスコア計算可能）
+    // 注意: calculateKeywordScoreでcontentを使用しているが、重みは低い（タイトル5、ラベル2、コンテンツ1）
+    //       そのため、ランキング時はcontentなしでスコア計算し、上位結果のみcontentを再取得
+    // バッチサイズ: 100件ずつ処理してメモリを節約
+    const BATCH_SIZE = 100;
+    const vectorResultsLightweight: any[] = [];
+    
+    for (let i = 0; i < vectorResults.length; i += BATCH_SIZE) {
+      const batch = vectorResults.slice(i, i + BATCH_SIZE);
+      const processedBatch = batch.map(r => {
+        // contentフィールドを一時的に削除（メモリ節約）
+        // _originalContentに保持して、後で再設定可能にする
+        const { content, ...rest } = r;
+        return {
+          ...rest,
+          _originalContent: content, // 元のcontentを保持（ランキング後に上位結果のみ再設定）
+          content: '' // メモリ節約のため空文字列に
+        };
+      });
+      vectorResultsLightweight.push(...processedBatch);
+      
+      // バッチ処理の間でGCを促す（メモリ使用量を削減）
+      if (i + BATCH_SIZE < vectorResults.length && i % (BATCH_SIZE * 5) === 0) {
+        // 5バッチごとに少し待機してGCを促す
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+    
+    // メモリ使用量の監視: content削除後
+    const memoryAfterContentRemoval = getMemoryUsage2();
+    logMemoryDelta2(`After removing content fields (${vectorResults.length} results, batch size=${BATCH_SIZE})`, memoryAfterVectorSearch, memoryAfterContentRemoval);
+    
+    // 軽量版の結果を使用（ランキング後に上位結果のみcontentを再設定）
+    vectorResults = vectorResultsLightweight;
     
     const vectorSearchDuration = Date.now() - vectorSearchStart;
     
