@@ -292,7 +292,10 @@ export function convertReferencesToNumberedLinks(markdown: string, references: A
  * @param references 参照元リスト（title, urlを含む）
  * @returns 使用された参照元のインデックス（0ベース）のセット
  */
-export function extractUsedReferenceIndices(markdown: string, references: Array<{title: string, url?: string}>): Set<number> {
+export function extractUsedReferenceIndices(
+  markdown: string,
+  references: Array<{title: string, url?: string, issue_key?: string}>
+): Set<number> {
   const usedIndices = new Set<number>();
   
   if (!markdown || !references || references.length === 0) {
@@ -379,6 +382,26 @@ export function extractUsedReferenceIndices(markdown: string, references: Array<
     const referenceNumber = parseInt(match[1], 10);
     if (referenceNumber >= 1 && referenceNumber <= references.length) {
       usedIndices.add(referenceNumber - 1); // 1ベースから0ベースに変換
+    }
+  }
+  
+  // Issue Key（例: CTJ-1234）の明示的な記述も検出
+  const issueKeyPattern = /\b[A-Z][A-Z0-9]+-\d+\b/g;
+  const issueKeyMatches = Array.from(markdown.matchAll(issueKeyPattern));
+  for (const match of issueKeyMatches) {
+    const issueKey = match[0].toUpperCase();
+    const matchedIndex = references.findIndex(ref => {
+      const refIssueKey = (ref.issue_key || '').toUpperCase();
+      if (refIssueKey) {
+        return refIssueKey === issueKey;
+      }
+      // タイトル内にIssue Keyが含まれている場合も対応
+      const titleUpper = (ref.title || '').toUpperCase();
+      return titleUpper.includes(issueKey);
+    });
+
+    if (matchedIndex >= 0) {
+      usedIndices.add(matchedIndex);
     }
   }
   

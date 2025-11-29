@@ -299,6 +299,11 @@ export class LunrInitializer {
               tokenizeJapaneseText(cleanContent)
             ]);
             
+            // ★★★ 修正: トークン化後のテキストを小文字に変換（大文字小文字の不一致を解決） ★★★
+            // 理由: 「indeed」と「Indeed」を同じトークンとして扱うため
+            const normalizedTokenizedTitle = tokenizedTitle.toLowerCase();
+            const normalizedTokenizedContent = tokenizedContent.toLowerCase();
+            
             // ラベルを配列として処理
             let labels: string[] = [];
             if (doc.labels) {
@@ -336,8 +341,8 @@ export class LunrInitializer {
               labels,
               pageId: pageId,
               page_id: page_id, // ★★★ MIGRATION: page_idを確実に設定 ★★★
-              tokenizedTitle,
-              tokenizedContent,
+              tokenizedTitle: normalizedTokenizedTitle, // ★★★ 修正: 小文字に変換したトークン化テキストを使用 ★★★
+              tokenizedContent: normalizedTokenizedContent, // ★★★ 修正: 小文字に変換したトークン化テキストを使用 ★★★
               originalTitle: doc.title || '',
               originalContent: doc.content || '',
               url: doc.url || '',

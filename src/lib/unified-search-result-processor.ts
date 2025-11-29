@@ -253,7 +253,10 @@ export class UnifiedSearchResultProcessor {
     const byVector = [...results].sort((a, b) => (a._distance ?? 1) - (b._distance ?? 1));
     const byKeyword = [...results].sort((a, b) => (b._keywordScore ?? 0) - (a._keywordScore ?? 0));
     const byTitleExact = results.filter(r => r._sourceType === 'title-exact');
-    const byBm25 = results.filter(r => r._sourceType === 'bm25');
+    // ★★★ 修正: _bm25Scoreが定義されている結果をBM25順位に含める（_sourceTypeに関係なく） ★★★
+    // 理由: title-exact検索の結果でもBM25スコアが設定されている場合があるため
+    const byBm25 = results.filter(r => r._bm25Score !== undefined && r._bm25Score !== null)
+      .sort((a, b) => (b._bm25Score ?? 0) - (a._bm25Score ?? 0)); // BM25スコアでソート
 
     const vecRank = new Map<string, number>();
     const kwRank = new Map<string, number>();
@@ -265,24 +268,65 @@ export class UnifiedSearchResultProcessor {
     byTitleExact.forEach((r, idx) => titleRank.set(r.id, idx + 1));
     byBm25.forEach((r, idx) => bm25Rank.set(r.id, idx + 1));
 
+    // ★★★ デバッグ: indeed関連チケットの各検索方法での順位を確認 ★★★
+    const DEBUG_RRF_DETAIL = process.env.NODE_ENV === 'development' && process.env.DEBUG_SEARCH === 'true';
+    const isIndeedQuery = options.query?.toLowerCase().includes('indeed');
+    
     // RRFスコア計算
     return results.map(result => {
+      // ★★★ 修正: Issue Key完全一致検索の結果は最優先（RRFスコアを保持）
+      if ((result as any)._issueKeyExact === true && typeof (result as any)._rrfScore === 'number') {
+        // Issue Key完全一致の結果は既に最高のRRFスコアが設定されているため、そのまま保持
+        return {
+          ...result,
+          _rrfScore: (result as any)._rrfScore // 最優先を保証（通常は1.0）
+        };
+      }
+      
       const vr = vecRank.get(result.id) ?? 1000000;
       const kr = kwRank.get(result.id) ?? 1000000;
       const tr = titleRank.get(result.id);
       const br = bm25Rank.get(result.id);
 
       // 重み: vector=1.0, keyword=0.8, title-exact=1.2, bm25=0.6
-      let rrf = (1.0 / (kRrf + vr)) + 0.8 * (1 / (kRrf + kr)) + 
-                (tr ? 1.2 * (1 / (kRrf + tr)) : 0) + 
-                (br ? 0.6 * (1 / (kRrf + br)) : 0);
+      const vectorContribution = 1.0 / (kRrf + vr);
+      const keywordContribution = 0.8 * (1 / (kRrf + kr));
+      const titleContribution = tr ? 1.2 * (1 / (kRrf + tr)) : 0;
+      const bm25Contribution = br ? 0.6 * (1 / (kRrf + br)) : 0;
+      
+      let rrf = vectorContribution + keywordContribution + titleContribution + bm25Contribution;
+
+      // ★★★ デバッグ: indeed関連チケットのRRFスコア計算の詳細を出力 ★★★
+      if (DEBUG_RRF_DETAIL && isIndeedQuery && (result as any).issue_key && 
+          String((result as any).title || '').toLowerCase().includes('indeed')) {
+        console.log(`[RRF Detail] ${(result as any).issue_key}: ${(result as any).title?.substring(0, 50)}`);
+        console.log(`  Vector順位: ${vr === 1000000 ? 'N/A' : vr} (寄与: ${vectorContribution.toFixed(6)})`);
+        console.log(`  Keyword順位: ${kr === 1000000 ? 'N/A' : kr} (寄与: ${keywordContribution.toFixed(6)})`);
+        console.log(`  Title順位: ${tr ? tr : 'N/A'} (寄与: ${titleContribution.toFixed(6)})`);
+        console.log(`  BM25順位: ${br ? br : 'N/A'} (寄与: ${bm25Contribution.toFixed(6)})`);
+        console.log(`  RRFスコア（減衰前）: ${rrf.toFixed(6)}`);
+      }
 
       // ドメイン減衰・ブースト・タグマッチングボーナス適用
+      const rrfBeforePenalty = rrf;
       rrf = this.applyDomainPenalty(rrf, result, options.query, options.keywords);
+      
+      // ★★★ デバッグ: ドメイン減衰・ブースト後のRRFスコアを出力 ★★★
+      if (DEBUG_RRF_DETAIL && isIndeedQuery && (result as any).issue_key && 
+          String((result as any).title || '').toLowerCase().includes('indeed')) {
+        if (Math.abs(rrfBeforePenalty - rrf) > 1e-6) {
+          console.log(`  RRFスコア（減衰後）: ${rrf.toFixed(6)} (変化: ${(rrf - rrfBeforePenalty).toFixed(6)})`);
+        } else {
+          console.log(`  RRFスコア（減衰後）: ${rrf.toFixed(6)} (変化なし)`);
+        }
+      }
 
+      const isIssueKeyExact = (result as any)._issueKeyExact === true;
       return {
         ...result,
-        _rrfScore: rrf
+        _rrfScore: rrf,
+        // Issue Key完全一致のフラグを保持
+        _issueKeyExact: isIssueKeyExact ? true : (result as any)._issueKeyExact
       };
     });
   }
@@ -299,6 +343,12 @@ export class UnifiedSearchResultProcessor {
     keywords?: string[]
   ): number {
     try {
+      // ★★★ デバッグ: indeed関連チケットのタグマッチングボーナス適用状況を確認 ★★★
+      const DEBUG_RRF_PENALTY = process.env.NODE_ENV === 'development' && process.env.DEBUG_SEARCH === 'true';
+      const isIndeedResult = (result as any).issue_key && 
+                             String(result.title || '').toLowerCase().includes('indeed');
+      const isIndeedQueryForPenalty = query?.toLowerCase().includes('indeed');
+      
       const titleStr = String(result.title || '').toLowerCase();
       const labelsArr = getLabelsAsArray(result.labels);
       const lowerLabels = labelsArr.map((x) => String(x).toLowerCase());
@@ -316,18 +366,48 @@ export class UnifiedSearchResultProcessor {
       
       // Phase 5改善: クエリとタイトルの両方に含まれるドメイン固有キーワードのみをブースト
       if (query && !isGenericDoc) {
-        const matchingKeywordCount = CommonTermsHelper.countMatchingDomainKeywords(query, String(result.title || ''));
+        // ★★★ デバッグ: マッチしたドメインキーワードを具体的に出力 ★★★
+        const { getDomainSpecificKeywordsSet } = require('./common-terms-config');
+        const keywordsSet = getDomainSpecificKeywordsSet();
+        const queryLower = query.toLowerCase();
+        const titleLower = String(result.title || '').toLowerCase();
+        const matchedKeywords: string[] = [];
+        
+        for (const keyword of keywordsSet) {
+          const keywordLower = keyword.toLowerCase();
+          if (queryLower.includes(keywordLower) && titleLower.includes(keywordLower)) {
+            matchedKeywords.push(keyword);
+          }
+        }
+        
+        const matchingKeywordCount = matchedKeywords.length;
         
         if (matchingKeywordCount > 0) {
           // マッチしたキーワード数に応じてブースト（最大2倍）
           const boostFactor = 1.0 + (matchingKeywordCount * 0.5);
+          const rrfBeforeDomainBoost = rrf;
           rrf *= Math.min(boostFactor, 2.0);
+          
+          if (DEBUG_RRF_PENALTY && isIndeedResult && isIndeedQueryForPenalty) {
+            console.log(`[RRF Penalty] ${(result as any).issue_key}: ${result.title?.substring(0, 50)}`);
+            console.log(`  ドメインキーワードブースト: ${matchingKeywordCount}件マッチ [${matchedKeywords.join(', ')}] → ${boostFactor.toFixed(2)}倍 (${rrfBeforeDomainBoost.toFixed(6)} → ${rrf.toFixed(6)})`);
+          }
+        } else if (DEBUG_RRF_PENALTY && isIndeedResult && isIndeedQueryForPenalty) {
+          console.log(`[RRF Penalty] ${(result as any).issue_key}: ${result.title?.substring(0, 50)}`);
+          console.log(`  ドメインキーワードブースト: マッチなし`);
         }
       }
       
       // タグマッチングボーナス（StructuredLabelのtagsとクエリキーワードの一致）
+      
       if (keywords && keywords.length > 0) {
         const tagsArray = getLabelsAsArray((result as any).structured_tags);
+        
+        if (DEBUG_RRF_PENALTY && isIndeedResult && isIndeedQueryForPenalty) {
+          console.log(`[RRF Penalty] ${(result as any).issue_key}: ${result.title?.substring(0, 50)}`);
+          console.log(`  タグ: [${tagsArray.join(', ')}]`);
+          console.log(`  キーワード: [${keywords.join(', ')}]`);
+        }
         
         if (tagsArray.length > 0) {
           const tagsLower = tagsArray.map((t: string) => String(t).toLowerCase());
@@ -352,8 +432,18 @@ export class UnifiedSearchResultProcessor {
           if (matchedTagCount > 0) {
             // 1つのタグマッチ: 2.0倍、2つ以上: 3.0倍（複数タグマッチで大幅ボーナス、タグマッチングを大幅に重視）
             const tagBoost = matchedTagCount === 1 ? 2.0 : 3.0;
+            const rrfBeforeTagBoost = rrf;
             rrf *= tagBoost;
+            
+            if (DEBUG_RRF_PENALTY && isIndeedResult && isIndeedQueryForPenalty) {
+              console.log(`  マッチしたタグ: [${matchedTagsList.join(', ')}] (${matchedTagCount}件)`);
+              console.log(`  タグブースト: ${tagBoost}倍 (${rrfBeforeTagBoost.toFixed(6)} → ${rrf.toFixed(6)})`);
+            }
+          } else if (DEBUG_RRF_PENALTY && isIndeedResult && isIndeedQueryForPenalty) {
+            console.log(`  マッチしたタグ: なし`);
           }
+        } else if (DEBUG_RRF_PENALTY && isIndeedResult && isIndeedQueryForPenalty) {
+          console.log(`  タグ: なし`);
         }
       }
       
@@ -437,6 +527,9 @@ export class UnifiedSearchResultProcessor {
       const scoreKind = sourceType;
       const scoreRaw = sourceType === 'bm25' || sourceType === 'keyword' ? bm25Score : distance;
       const scoreText = generateScoreText(sourceType, bm25Score, distance, compositeScore);
+
+      // ★★★ 修正: Issue Key完全一致のフラグを保持
+      const isIssueKeyExact = (result as any)._issueKeyExact === true;
 
       // 🔧 BOM文字（U+FEFF）を削除（データベースからのデータにBOM文字が含まれている可能性を考慮）
       const cleanTitle = (result.title || 'No Title').replace(/\uFEFF/g, '');
@@ -560,7 +653,9 @@ export class UnifiedSearchResultProcessor {
         assignee: result.assignee,
         issue_type: result.issue_type,
         updated_at: result.updated_at,
-      };
+        // ★★★ 修正: Issue Key完全一致のフラグを保持
+        _issueKeyExact: isIssueKeyExact ? true : undefined,
+      } as ProcessedSearchResult & { _issueKeyExact?: boolean };
     }));
   }
 

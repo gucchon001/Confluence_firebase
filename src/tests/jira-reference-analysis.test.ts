@@ -112,8 +112,8 @@ describe('Jira検索時の参照元分析', () => {
     console.log(`[extractUsedReferenceIndices テスト3] 使用された参照元インデックス:`, Array.from(usedIndices3));
     console.log(`[extractUsedReferenceIndices テスト3] 使用された参照元数: ${usedIndices3.size}`);
     
-    // Issue Keyのみでは抽出されないことを確認（括弧内にタイトルがないため）
-    expect(usedIndices3.size).toBe(0);
+    // Issue Keyのみでも抽出できるようになったことを確認
+    expect(usedIndices3.size).toBeGreaterThanOrEqual(2);
   });
 
   it('enhanceReferencesの動作確認', async () => {
@@ -239,9 +239,17 @@ describe('Jira検索時の参照元分析', () => {
     console.log(`[streamingSummarizeConfluenceDocs] 使用された参照元数: ${usedIndices.size}`);
     
     // finalReferencesの準備
-    let finalReferences = usedIndices.size > 0
-      ? Array.from(usedIndices).map(index => allReferences[index]).filter(Boolean)
-      : allReferences;
+    let finalReferences: any[];
+    if (usedIndices.size > 0) {
+      // 抽出できた場合は、抽出された件数をそのまま使用（1件でも複数件でもOK）
+      finalReferences = Array.from(usedIndices).map(index => allReferences[index]).filter(Boolean);
+      console.log(`[streamingSummarizeConfluenceDocs] 抽出された参照元を使用: ${finalReferences.length}件`);
+    } else {
+      // 抽出が0件の場合のみフォールバック（検索結果の上位N件を表示）
+      const fallbackCount = Math.min(5, allReferences.length);
+      finalReferences = allReferences.slice(0, fallbackCount);
+      console.log(`[streamingSummarizeConfluenceDocs] Fallback適用: 抽出が0件のため、上位${fallbackCount}件を表示`);
+    }
     
     console.log(`[streamingSummarizeConfluenceDocs] finalReferences数（extractUsedReferenceIndices後）: ${finalReferences.length}`);
     
@@ -268,9 +276,12 @@ describe('Jira検索時の参照元分析', () => {
     console.log(`[streamingSummarizeConfluenceDocs] enhancedFinalRefs数: ${enhancedFinalRefs.length}`);
     console.log(`[streamingSummarizeConfluenceDocs] 最終的な参照元数: ${enhancedFinalRefs.length}`);
     
-    // 問題: usedIndicesが1件の場合、finalReferencesも1件になり、enhancedFinalRefsも1件になる
-    // これが参照元が1件になる原因
-    expect(enhancedFinalRefs.length).toBe(1);
+    // 抽出された件数がそのまま反映されることを確認（1件でも複数件でもOK）
+    expect(enhancedFinalRefs.length).toBeGreaterThanOrEqual(1);
+    // 抽出が成功した場合は、抽出された件数と一致することを確認
+    if (usedIndices.size > 0) {
+      expect(enhancedFinalRefs.length).toBe(usedIndices.size);
+    }
   }, 30000);
 
   it('Jira検索時の最低限の実装確認', async () => {

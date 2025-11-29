@@ -5,7 +5,6 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { DynamicPriorityManager } from './dynamic-priority-manager';
 import { GENERIC_FUNCTION_TERMS, DOMAIN_SPECIFIC_KEYWORDS, organizeKeywordsByCategory } from './common-terms-config';
 
 export interface KeywordLists {
@@ -46,11 +45,18 @@ export class KeywordListsLoader {
   private keywordLists: KeywordLists | null = null;
   private keywordCategories: KeywordCategory | null = null;
   private lastLoaded: Date | null = null;
-  private dynamicPriorityManager: DynamicPriorityManager;
 
-  private constructor() {
-    this.dynamicPriorityManager = DynamicPriorityManager.getInstance();
-  }
+  // 静的優先順位（dynamic-priority-manager.tsのbasePriorityと同じ値）
+  private readonly basePriority = {
+    domainNames: 100,
+    functionNames: 80,
+    operationNames: 60,
+    systemFields: 40,
+    systemTerms: 30,
+    relatedKeywords: 20
+  };
+
+  private constructor() {}
 
   static getInstance(): KeywordListsLoader {
     if (!KeywordListsLoader.instance) {
@@ -414,33 +420,33 @@ export class KeywordListsLoader {
       return 'low';
     }
 
-    // クエリが指定されている場合は動的優先順位を使用
+    // クエリが指定されている場合はbasePriorityを使用（rulesが空のため実質的に同じ）
     if (query) {
       let priority: number;
       
       // ドメイン名
       if (this.keywordCategories.domainNames.includes(keyword)) {
-        priority = this.dynamicPriorityManager.adjustPriority(query, 'domainNames');
+        priority = this.basePriority.domainNames;
       }
       // 機能名
       else if (this.keywordCategories.functionNames.includes(keyword)) {
-        priority = this.dynamicPriorityManager.adjustPriority(query, 'functionNames');
+        priority = this.basePriority.functionNames;
       }
       // 操作名
       else if (this.keywordCategories.operationNames.includes(keyword)) {
-        priority = this.dynamicPriorityManager.adjustPriority(query, 'operationNames');
+        priority = this.basePriority.operationNames;
       }
       // システム項目
       else if (this.keywordCategories.systemFields.includes(keyword)) {
-        priority = this.dynamicPriorityManager.adjustPriority(query, 'systemFields');
+        priority = this.basePriority.systemFields;
       }
       // システム用語
       else if (this.keywordCategories.systemTerms.includes(keyword)) {
-        priority = this.dynamicPriorityManager.adjustPriority(query, 'systemTerms');
+        priority = this.basePriority.systemTerms;
       }
       // 関連キーワード
       else if (this.keywordCategories.relatedKeywords.includes(keyword)) {
-        priority = this.dynamicPriorityManager.adjustPriority(query, 'relatedKeywords');
+        priority = this.basePriority.relatedKeywords;
       }
       else {
         return 'low'; // デフォルト

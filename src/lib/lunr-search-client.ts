@@ -441,14 +441,36 @@ export class LunrSearchClient {
         return [];
       }
       
+      // ★★★ 修正: トークン化後のクエリを小文字に変換（大文字小文字の不一致を解決） ★★★
+      // 理由: インデックス構築時に小文字に変換しているため、検索時も小文字に変換する必要がある
+      const normalizedTokenizedQuery = tokenizedQuery.toLowerCase();
+      
+      // Phase 2最適化: 動的閾値とフィールド重みの調整
+      // ★★★ 修正: thresholdとlimitを調整して、自動オファー関連ドキュメントの検出精度向上 ★★★
+      // ★★★ 修正: 単一トークンの検索に対応するため、thresholdを動的に調整 ★★★
+      // 理由: 単一トークン（例: "indeed"）の検索では、thresholdが高すぎると結果が0件になる
+      //       トークン数に応じてthresholdを調整することで、単一トークンでも検索できるようにする
+      const tokenCount = normalizedTokenizedQuery.trim().split(/\s+/).length;
+      const dynamicThreshold = tokenCount === 1 ? 0.0 : 0.1; // 単一トークンの場合はthresholdを0に設定
+      
+      // ★★★ 修正: 単一トークンの検索に対応するため、ワイルドカード検索を使用 ★★★
+      // 理由: 単一トークン（例: "indeed"）の検索では、通常の検索では0件になるが、
+      //       ワイルドカード検索（例: "*indeed*"）では正しく検索できる
+      //       ワイルドカード検索を使用することで、単一トークンでも検索できるようにする
+      const searchQuery = tokenCount === 1 
+        ? `*${normalizedTokenizedQuery.trim()}*` // 単一トークンの場合はワイルドカード検索を使用
+        : normalizedTokenizedQuery; // 複数トークンの場合は通常の検索を使用
+      
       // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
       const DEBUG_ENABLED = process.env.NODE_ENV === 'development' && process.env.DEBUG_BM25 === 'true';
       if (DEBUG_ENABLED) {
-        console.log(`[LunrSearchClient] Searching with tokenized query: '${tokenizedQuery}'`);
+        console.log(`[LunrSearchClient] Searching with tokenized query: '${normalizedTokenizedQuery}' (original: '${tokenizedQuery}')`);
+        console.log(`[LunrSearchClient] Token count: ${tokenCount}, Dynamic threshold: ${dynamicThreshold}`);
+        if (tokenCount === 1) {
+          console.log(`[LunrSearchClient] Using wildcard search: '${searchQuery}'`);
+        }
       }
-
-      // Phase 2最適化: 動的閾値とフィールド重みの調整
-      // ★★★ 修正: thresholdとlimitを調整して、自動オファー関連ドキュメントの検出精度向上 ★★★
+      
       const searchOptions = {
         fields: {
           tokenizedTitle: { boost: 3.0 }, // タイトル重みを強化
@@ -458,13 +480,28 @@ export class LunrSearchClient {
         // 検索結果数を事前に制限（パフォーマンス向上）
         // 修正: 最大50件 → 100件に増加（自動オファー関連ドキュメントの検出精度向上）
         limit: Math.min(limit * 2, 100), // 必要数の2倍、最大100件に制限
-        // 動的スコア閾値（クエリの長さに応じて調整）
-        // 修正: thresholdを下げて、関連性の高い結果が除外されないようにする
-        // 短いクエリ（「自動オファー」など）でも関連性の高い結果を含めるため、0.25 → 0.1に下げる
-        threshold: query.length > 10 ? 0.1 : 0.1 // すべてのクエリで0.1に統一（検出精度向上）
+        // 動的スコア閾値（トークン数に応じて調整）
+        // 修正: 単一トークンの場合はthresholdを0に設定して、すべての結果を含める
+        threshold: dynamicThreshold
       };
 
-      const searchResults = index.search(tokenizedQuery, searchOptions);
+      const searchResults = index.search(searchQuery, searchOptions);
+      
+      // ★★★ デバッグ: 検索結果の詳細を出力 ★★★
+      if (DEBUG_ENABLED) {
+        console.log(`[LunrSearchClient] Search results count: ${searchResults.length}`);
+        if (searchResults.length === 0 && normalizedTokenizedQuery.trim().split(/\s+/).length === 1) {
+          console.warn(`[LunrSearchClient] ⚠️ 単一トークン検索で結果が0件: '${normalizedTokenizedQuery}'`);
+          // インデックス内に該当トークンが存在するか確認
+          try {
+            const testQuery = `*${normalizedTokenizedQuery}*`; // ワイルドカード検索を試す
+            const wildcardResults = index.search(testQuery, searchOptions);
+            console.log(`[LunrSearchClient] ワイルドカード検索結果: ${wildcardResults.length}件`);
+          } catch (e) {
+            console.log(`[LunrSearchClient] ワイルドカード検索エラー: ${e}`);
+          }
+        }
+      }
 
       // Phase 2最適化: 効率的な結果処理
       const validResults: LunrSearchResult[] = [];
@@ -557,7 +594,10 @@ export class LunrSearchClient {
         return [];
       }
       
-      const searchResults = index.search(tokenizedQuery, {
+      // ★★★ 修正: トークン化後のクエリを小文字に変換（大文字小文字の不一致を解決） ★★★
+      const normalizedTokenizedQuery = tokenizedQuery.toLowerCase();
+      
+      const searchResults = index.search(normalizedTokenizedQuery, {
         fields: {
           tokenizedTitle: { boost: 2.0 },
           tokenizedContent: { boost: 1.0 },

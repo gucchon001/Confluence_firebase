@@ -187,6 +187,9 @@ async function lancedbRetrieverTool(
     const searchLanceDBDuration = Date.now() - searchLanceDBStartTime;
     console.log(`[PERF] 🔍 searchLanceDB完了: ${searchLanceDBDuration}ms (累計: ${Date.now() - functionStartTime}ms)`);
     
+    // 検索結果のタイトルをログ出力（デバッグ用）
+    console.log(`[retrieveRelevantDocs] 検索結果（上位10件）:`, unifiedResults.slice(0, 10).map((r, i) => `${i + 1}. ${(r as any).issue_key || r.id}: ${r.title?.substring(0, 60)}`).join('\n'));
+    
     // Phase 0A-4 ROLLBACK: ログ出力を開発環境のみに制限（前のバージョンと同じ）
     if (process.env.NODE_ENV === 'development' && searchLanceDBDuration > 10000) {
       console.warn(`⚠️ [lancedbRetrieverTool] SLOW searchLanceDB: ${searchLanceDBDuration}ms for query: "${query}"`);

@@ -43,6 +43,12 @@ const STREAMING_PROMPT_TEMPLATE = `
    - 必要な場合のみ、カッコ内に元のタイトルを記載: 「会員のアカウント情報（【FIX】会員:アカウント情報）が利用されます」
 7. **回答の完全性**: 質問に対して可能な限り詳細で包括的な回答を提供してください。簡潔すぎる回答は避け、関連する情報を全て含めてください。
 8. **情報の明確化**: 「詳細な情報は見つかりませんでした」とだけ回答するのではなく、提供された資料に基づいて可能な限り情報を整理して回答してください。資料に直接的な記載がない場合でも、関連する情報があればそれを含めてください。
+9. **参照の明示（必須）**: 回答内で利用した資料を必ず明示してください。以下のいずれかの形式で参照元を記載してください：
+   - 括弧付きタイトル: （CTJ-5452: feedforce連携用CSV拡張）
+   - Issue Key: CTJ-5452 や CTJ-4683 などのチケット番号
+   - 参照番号: [1] や [2] のような番号リンク
+   - 複数の資料を参照する場合は、それぞれを明示してください（例: 「CTJ-4683（indeedエントリー対応）とCTJ-5452（feedforce連携CSV拡張）が関連しています」）
+   - 参照可能な資料が複数ある場合は、最低でも3件を引用してください
 
 ## 項目リスト質問の場合
 「項目は」「一覧」「リスト」などのキーワードを含む質問には箇条書きリスト形式で回答：
@@ -294,6 +300,7 @@ export async function* streamingSummarizeConfluenceDocs(
     // MAX_CONTEXT_DOCS=10件すべてをLLMに渡すことで、参照元として表示される情報が回答に反映される
     // パフォーマンス最適化: 同期処理でコンテンツ抽出を高速化（extractRelevantContentMultiKeywordは同期関数）
     const contextDocs = context.slice(0, 10); // 上位10件（参照元として表示される全件）
+    console.log(`[streaming-summarize] LLMに渡される検索結果（上位10件）:`, contextDocs.map((doc, i) => `${i + 1}. ${(doc as any).issue_key || doc.id}: ${doc.title?.substring(0, 60)}`).join('\n'));
     
     // 同期処理でコンテンツ抽出を実行（パフォーマンス最適化）
     const contextParts = contextDocs.map((doc, index) => {
@@ -496,13 +503,27 @@ ${truncatedContent}`;
     }
 
     // LLMの出力から実際に使用された参照元のインデックスを抽出（完了時に実行）
+    console.log(`[streaming-summarize] LLM回答内容（デバッグ）: ${answer.substring(0, 500)}${answer.length > 500 ? '...' : ''}`);
+    console.log(`[streaming-summarize] LLM回答長: ${answer.length}文字`);
     const usedIndices = extractUsedReferenceIndices(answer, allReferences);
+    console.log(`[streaming-summarize] extractUsedReferenceIndices結果: ${usedIndices.size}件 (allReferences: ${allReferences.length}件)`);
+    if (usedIndices.size === 0 && allReferences.length > 0) {
+      console.log(`[streaming-summarize] ⚠️ 参照抽出失敗: 回答内に参照元が検出されませんでした。上位5件の参照元タイトル:`, allReferences.slice(0, 5).map((r: any) => r.title || r.issue_key).join(', '));
+    }
     
     // 使用された参照元のみをフィルタリング
-    // 使用された参照元がない場合は、全ての参照元を表示（フォールバック）
-    let finalReferences = usedIndices.size > 0
-      ? Array.from(usedIndices).map(index => allReferences[index]).filter(Boolean)
-      : allReferences;
+    let finalReferences: any[];
+    if (usedIndices.size > 0) {
+      // 抽出できた場合は、抽出された件数をそのまま使用（1件でも複数件でもOK）
+      finalReferences = Array.from(usedIndices).map(index => allReferences[index]).filter(Boolean);
+      console.log(`[streaming-summarize] 抽出された参照元を使用: ${finalReferences.length}件`);
+    } else {
+      // 抽出が0件の場合のみフォールバック（検索結果の上位N件を表示）
+      const fallbackCount = Math.min(5, allReferences.length);
+      finalReferences = allReferences.slice(0, fallbackCount);
+      console.log(`[reference-extraction] Fallback: 抽出が0件のため、上位${fallbackCount}件を表示`);
+    }
+    console.log(`[streaming-summarize] finalReferences（extractUsedReferenceIndices後）: ${finalReferences.length}件`);
     
     // 回答内で言及されているページを参照元に追加（バックグラウンド処理）
     // ★★★ パフォーマンス改善: enhanceReferencesを1回だけ呼び出し（2回呼び出しによるリソース競合を回避） ★★★
@@ -530,10 +551,19 @@ ${truncatedContent}`;
       console.log(`[reference-enhancer] Enhanced allReferences: ${allReferences.length} → ${enhancedReferences.length} references`);
       
       // finalReferencesにも拡張結果を適用（finalReferencesに含まれる参照元を拡張結果から取得）
-      const finalReferenceIds = new Set(finalReferences.map((ref: any) => ref.id || ref.title));
-      const enhancedFinalRefs = enhancedReferences.filter((ref: any) => 
-        finalReferenceIds.has(ref.id || ref.title)
-      );
+      const finalReferenceIds = new Set(finalReferences.map((ref: any) => ref.id || ref.issue_key || ref.title));
+      console.log(`[streaming-summarize] finalReferenceIds: ${finalReferenceIds.size}件 (finalReferences: ${finalReferences.length}件, enhancedReferences: ${enhancedReferences.length}件)`);
+      console.log(`[streaming-summarize] finalReferenceIdsの内容（上位5件）: ${Array.from(finalReferenceIds).slice(0, 5).join(', ')}`);
+      console.log(`[streaming-summarize] enhancedReferencesのID（上位5件）: ${enhancedReferences.slice(0, 5).map((r: any) => r.id || r.issue_key || r.title).join(', ')}`);
+      const enhancedFinalRefs = enhancedReferences.filter((ref: any) => {
+        const refId = ref.id || ref.issue_key || ref.title;
+        const matched = finalReferenceIds.has(refId);
+        if (!matched && enhancedReferences.indexOf(ref) < 3) {
+          console.log(`[streaming-summarize] ⚠️  ID不一致: ref.id=${ref.id}, ref.issue_key=${ref.issue_key}, ref.title=${ref.title?.substring(0, 30)}`);
+        }
+        return matched;
+      });
+      console.log(`[streaming-summarize] enhancedFinalRefs（フィルタリング後）: ${enhancedFinalRefs.length}件`);
       
       // 型を適合
       enhancedReferences = enhancedReferences.map((ref: any) => ({
@@ -557,6 +587,7 @@ ${truncatedContent}`;
         dataSource: ref.dataSource || (tableName === 'jira_issues' ? 'jira' : 'confluence'),
         issue_key: ref.issue_key
       }));
+      console.log(`[streaming-summarize] finalReferences（最終）: ${finalReferences.length}件`);
       
       // バックグラウンド検索が必要なタイトルがある場合はログ出力（将来の拡張用）
       if (enhanced.backgroundSearchTitles.length > 0) {

@@ -186,15 +186,34 @@ export class CompositeScoringService {
         searchQuery  // クエリを渡す
       );
       
-      return {
+      // ★★★ 修正: Issue Key完全一致のフラグを保持
+      const returnValue = {
         ...result,
         _compositeScore: compositeScore.finalScore,
         _scoreBreakdown: compositeScore.breakdown,
       };
+      
+      // Issue Key完全一致のフラグを確実に保持
+      if ((result as any)._issueKeyExact === true) {
+        (returnValue as any)._issueKeyExact = true;
+      }
+      
+      return returnValue;
     });
     
     // 複合スコアでソート（降順）
-    return scoredResults.sort((a, b) => b._compositeScore - a._compositeScore);
+    // ★★★ 修正: Issue Key完全一致の結果を最優先に配置
+    return scoredResults.sort((a, b) => {
+      // Issue Key完全一致の結果を最優先
+      const aIsIssueKeyExact = (a as any)._issueKeyExact === true;
+      const bIsIssueKeyExact = (b as any)._issueKeyExact === true;
+      
+      if (aIsIssueKeyExact && !bIsIssueKeyExact) return -1; // aを優先
+      if (!aIsIssueKeyExact && bIsIssueKeyExact) return 1;  // bを優先
+      
+      // どちらもIssue Key完全一致、またはどちらも違う場合はComposite Scoreでソート
+      return b._compositeScore - a._compositeScore;
+    });
   }
   
   /**
