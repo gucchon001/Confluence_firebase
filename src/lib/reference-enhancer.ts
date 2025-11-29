@@ -167,9 +167,12 @@ export async function searchReferencesByTitles(
         }
         
         // ★★★ 修正: Issue Key（CTJ-####形式）を除去してLunr検索エラーを回避 ★★★
-        // Issue Keyパターン: 大文字2-5文字 + ハイフン + 数字
-        const issueKeyPattern = /^[A-Z]{2,5}-\d+[:\s]*/;
-        const cleanedTitle = title.replace(issueKeyPattern, '').trim();
+        // Issue Keyパターン: 大文字2-5文字 + ハイフン + 数字 + コロン/スペース
+        // より包括的なパターンで、タイトル内の任意の位置のIssue Keyも除去
+        const issueKeyPattern = /[A-Z]{2,5}-\d+[:\s]*/g;
+        let cleanedTitle = title.replace(issueKeyPattern, '').trim();
+        // 連続するスペースやハイフンを除去
+        cleanedTitle = cleanedTitle.replace(/\s+/g, ' ').replace(/^[-:\s]+|[-:\s]+$/g, '').trim();
         const searchQuery = cleanedTitle || title; // Issue Keyのみの場合は元のタイトルを使用
         
         const searchPromise = searchLanceDB({

@@ -558,8 +558,9 @@ ${truncatedContent}`;
       const enhancedFinalRefs = enhancedReferences.filter((ref: any) => {
         const refId = ref.id || ref.issue_key || ref.title;
         const matched = finalReferenceIds.has(refId);
+        // デバッグログ: finalReferencesに含まれていないenhancedReferencesを表示（正常な動作）
         if (!matched && enhancedReferences.indexOf(ref) < 3) {
-          console.log(`[streaming-summarize] ⚠️  ID不一致: ref.id=${ref.id}, ref.issue_key=${ref.issue_key}, ref.title=${ref.title?.substring(0, 30)}`);
+          console.log(`[streaming-summarize] ℹ️  enhancedReferencesに含まれるがfinalReferencesに含まれていない参照元（正常）: ref.id=${ref.id}, ref.issue_key=${ref.issue_key}, ref.title=${ref.title?.substring(0, 30)}`);
         }
         return matched;
       });
