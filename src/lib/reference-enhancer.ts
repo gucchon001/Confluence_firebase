@@ -165,9 +165,16 @@ export async function searchReferencesByTitles(
         if (DEBUG_SEARCH) {
           console.log(`[reference-enhancer] Searching for title: "${title}"`);
         }
+        
+        // ★★★ 修正: Issue Key（CTJ-####形式）を除去してLunr検索エラーを回避 ★★★
+        // Issue Keyパターン: 大文字2-5文字 + ハイフン + 数字
+        const issueKeyPattern = /^[A-Z]{2,5}-\d+[:\s]*/;
+        const cleanedTitle = title.replace(issueKeyPattern, '').trim();
+        const searchQuery = cleanedTitle || title; // Issue Keyのみの場合は元のタイトルを使用
+        
         const searchPromise = searchLanceDB({
-          query: title,
-          exactTitleCandidates: [title],
+          query: searchQuery,
+          exactTitleCandidates: [title], // 完全一致検索には元のタイトルを使用
           topK: 3, // ★★★ 修正: 1件 → 3件（より柔軟なマッチング） ★★★
           tableName: tableName as 'confluence' | 'jira_issues'
         });

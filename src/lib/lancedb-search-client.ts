@@ -604,8 +604,14 @@ export async function searchLanceDB(params: LanceDBSearchParams): Promise<LanceD
                 const jiraLunrReady = lunrInitializer.isReady('jira_issues');
                 
                 if (jiraLunrReady && lunrSearchClient.isReady('jira_issues')) {
+                  // ★★★ 修正: Issue Key（CTJ-####形式）を除去してLunr検索エラーを回避 ★★★
+                  // Issue Keyパターン: 大文字2-5文字 + ハイフン + 数字 + コロン/スペース
+                  const issueKeyPattern = /^[A-Z]{2,5}-\d+[:\s]*/;
+                  const cleanedTitle = t.replace(issueKeyPattern, '').trim();
+                  const searchTitle = cleanedTitle || t; // Issue Keyのみの場合は元のタイトルを使用
+                  
                   // Lunr検索を使用（Jira専用インデックス）
-                  const lunrResults = await lunrSearchClient.searchCandidates(t, 20, 'jira_issues');
+                  const lunrResults = await lunrSearchClient.searchCandidates(searchTitle, 20, 'jira_issues');
                   
                   if (lunrResults.length > 0) {
                     // issue_key（id）のリストを収集
