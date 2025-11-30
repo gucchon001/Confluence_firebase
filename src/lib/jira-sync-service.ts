@@ -27,6 +27,38 @@ interface JiraUser {
   displayName?: string;
 }
 
+interface ChangelogHistory {
+  id: string;
+  created: string;
+  author: {
+    displayName?: string;
+  };
+  items: Array<{
+    field: string;
+    fieldtype: string;
+    from?: string | null;
+    fromString?: string | null;
+    to?: string | null;
+    toString?: string | null;
+  }>;
+}
+
+interface ChangelogResponse {
+  histories?: ChangelogHistory[];
+  maxResults?: number;
+  startAt?: number;
+  total?: number;
+}
+
+interface NormalizedChangelogItem {
+  id: string;
+  field: string;
+  from: string;
+  to: string;
+  changedAt: string;
+  changedBy: string;
+}
+
 interface JiraStatus {
   name?: string;
   statusCategory?: {
@@ -187,6 +219,8 @@ export class JiraSyncService {
       console.log(`📝 ${issuesNeedingFullComments.length}件の課題について、全コメントを個別に取得します...`);
     }
 
+    console.log(`📜 全課題について、変更履歴を個別に取得します (${issues.length}件)...`);
+
     for (let i = 0; i < issues.length; i++) {
       const issue = issues[i];
       try {
@@ -204,6 +238,17 @@ export class JiraSyncService {
             normalized.allComments = allComments;
             console.log(`  ✅ ${issue.key}: ${allComments.length}件のコメントを取得しました`);
           }
+        }
+        
+        // 変更履歴を個別に取得
+        const changelog = await this.fetchChangelogForIssue(issue.key);
+        if (changelog.length > 0) {
+          normalized.changelog = changelog;
+        }
+        
+        // 進捗ログ（50件ごと）
+        if ((i + 1) % 50 === 0) {
+          console.log(`  📊 進捗: ${i + 1} / ${issues.length}件処理完了`);
         }
         
         normalizedIssues.push({ issue: normalized, original: issue });
@@ -280,6 +325,8 @@ export class JiraSyncService {
               // 全コメント履歴を配列としても保存（検索しやすくするため）
               // normalizeIssueで既にallCommentsが取得されているため、それを使用
               comments: normalized.allComments || [],
+              // 変更履歴を配列として保存
+              changelog: normalized.changelog || [],
               syncedAt: admin.firestore.FieldValue.serverTimestamp(),
               url: this.buildIssueUrl(normalized.key)
             }, { merge: true });
@@ -483,6 +530,7 @@ export class JiraSyncService {
       description,
       latestComment, // 後方互換性のため保持
       allComments, // 全コメント履歴を追加
+      changelog: undefined as NormalizedChangelogItem[] | undefined, // 後で設定
       status: fields.status?.name || '',
       statusCategory: fields.status?.statusCategory?.name || '',
       priority: fields.priority?.name || '',
@@ -556,6 +604,16 @@ export class JiraSyncService {
     } else if (issue.latestComment) {
       // 後方互換性のため、allCommentsがない場合はlatestCommentを使用
       sections.push('', `最新コメント:\n${issue.latestComment}`);
+    }
+
+    // 変更履歴を追加（時系列順：古い順）
+    if (issue.changelog && issue.changelog.length > 0) {
+      const changelogText = issue.changelog
+        .map((change, index) => {
+          return `変更${index + 1}:\n変更日時: ${change.changedAt}\n変更者: ${change.changedBy}\nフィールド: ${change.field}\n変更前: ${change.from}\n変更後: ${change.to}`;
+        })
+        .join('\n\n');
+      sections.push('', `変更履歴:\n${changelogText}`);
     }
 
     // ベクトル生成用のテキスト（タイトル + コンテンツ）
@@ -917,6 +975,98 @@ export class JiraSyncService {
       // bodyRawは20レベル制限を回避するため含めない
       // 必要に応じてrawJsonから復元可能
     }));
+  }
+
+  /**
+   * 特定の課題の変更履歴を取得（/rest/api/3/issue/{issueKey}/changelogエンドポイントを使用）
+   * ステータス変更履歴、フィールド変更履歴などを取得
+   */
+  private async fetchChangelogForIssue(issueKey: string): Promise<NormalizedChangelogItem[]> {
+    try {
+      const changelogUrl = `${this.baseUrl}/rest/api/3/issue/${issueKey}/changelog`;
+      const headers = {
+        Authorization: `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`,
+        Accept: 'application/json'
+      };
+
+      const res = await fetch(changelogUrl, {
+        method: 'GET',
+        headers
+      });
+
+      if (!res.ok) {
+        // エラーが発生した場合は空配列を返す（フォールバック）
+        console.warn(`⚠️ 課題 ${issueKey} の変更履歴取得に失敗: ${res.status} ${res.statusText}`);
+        return [];
+      }
+
+      const data = (await res.json()) as ChangelogResponse;
+      const histories = data.histories || [];
+
+      // 作成日時でソート（古い順）
+      const sorted = histories
+        .slice()
+        .sort((a, b) => new Date(a.created || 0).getTime() - new Date(b.created || 0).getTime());
+
+      // 変更履歴を正規化
+      const changelogItems: NormalizedChangelogItem[] = [];
+      for (const history of sorted) {
+        for (const item of history.items || []) {
+          // フィールド名を日本語化（主要なフィールドのみ）
+          const fieldName = this.translateFieldName(item.field);
+          const fromValue = item.fromString || item.from || '(未設定)';
+          const toValue = item.toString || item.to || '(未設定)';
+          const changedBy = history.author?.displayName || '(unknown)';
+          const changedAt = history.created || '';
+
+          changelogItems.push({
+            id: history.id,
+            field: fieldName,
+            from: String(fromValue),
+            to: String(toValue),
+            changedAt,
+            changedBy
+          });
+        }
+      }
+
+      return changelogItems;
+    } catch (error) {
+      // エラーが発生した場合は空配列を返す（フォールバック）
+      console.warn(`⚠️ 課題 ${issueKey} の変更履歴取得中にエラー:`, error instanceof Error ? error.message : String(error));
+      return [];
+    }
+  }
+
+  /**
+   * フィールド名を日本語に翻訳
+   */
+  private translateFieldName(fieldName: string): string {
+    const fieldNameMap: Record<string, string> = {
+      'status': 'ステータス',
+      'priority': '優先度',
+      'assignee': '担当者',
+      'reporter': '報告者',
+      'summary': 'タイトル',
+      'description': '説明',
+      'labels': 'ラベル',
+      'resolution': '解決',
+      'created': '作成日時',
+      'updated': '更新日時',
+      'customfield_10276': '月',
+      'customfield_10277': '担当',
+      'customfield_10278': 'GIG状況',
+      'customfield_10279': '開発検証',
+      'customfield_10280': '本番検証',
+      'customfield_10281': 'リリース予定日',
+      'customfield_10282': '完了日',
+      'customfield_10283': '希望リリース日',
+      'customfield_10284': '限界リリース日',
+      'customfield_10291': '影響業務',
+      'customfield_10292': '業務影響度'
+    };
+
+    return fieldNameMap[fieldName] || fieldName;
   }
 
   /**

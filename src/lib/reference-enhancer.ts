@@ -30,6 +30,69 @@ export interface Reference {
 }
 
 /**
+ * 参照元の重複判定キーを生成
+ * @param ref 参照元
+ * @param tableName テーブル名（'confluence' または 'jira_issues'）
+ * @returns 重複判定キー
+ */
+function getReferenceDedupKey(ref: Reference, tableName: string): string {
+  const isJira = tableName === 'jira_issues';
+  
+  if (isJira) {
+    // Jiraの場合: issue_keyで重複判定
+    const issueKey = (ref as any).issue_key || ref.id || '';
+    return `jira:${issueKey}`;
+  } else {
+    // Confluenceの場合: idまたはpageIdで重複判定
+    const id = ref.id || (ref as any).pageId || '';
+    return id || `url:${ref.url || ''}`;
+  }
+}
+
+/**
+ * 参照元リストから重複を除去
+ * @param references 参照元リスト
+ * @param tableName テーブル名（'confluence' または 'jira_issues'）
+ * @returns 重複除去後の参照元リスト
+ */
+function deduplicateReferences(
+  references: Reference[],
+  tableName: string = 'confluence'
+): Reference[] {
+  const dedupMap = new Map<string, Reference>();
+  
+  for (const ref of references) {
+    const key = getReferenceDedupKey(ref, tableName);
+    const existing = dedupMap.get(key);
+    
+    if (!existing) {
+      // 初出の参照元
+      dedupMap.set(key, ref);
+    } else {
+      // 既に存在する場合、より良いスコア（距離が小さい）を優先
+      const currentDistance = (ref as any).distance || 999;
+      const existingDistance = (existing as any).distance || 999;
+      
+      if (currentDistance < existingDistance) {
+        // より良いスコアで置き換え
+        dedupMap.set(key, ref);
+      }
+    }
+  }
+  
+  const deduplicated = Array.from(dedupMap.values());
+  
+  // デバッグログ（開発環境のみ）
+  if (process.env.NODE_ENV === 'development' && process.env.DEBUG_SEARCH === 'true') {
+    if (deduplicated.length < references.length) {
+      console.log(`[reference-enhancer] Deduplicated references: ${references.length} → ${deduplicated.length} (removed ${references.length - deduplicated.length} duplicates)`);
+    }
+  }
+  
+  return deduplicated;
+}
+
+/**
  * 回答内の参照元言及を抽出
  * @param answer 回答テキスト
  * @returns 抽出されたタイトルリスト
@@ -142,9 +205,10 @@ export async function searchReferencesByTitles(
     }
   }
   
-  // キャッシュヒットしたものは即座に返す
+  // キャッシュヒットしたものは即座に返す（ただし重複除去を実行）
   if (uncachedTitles.length === 0) {
-    return cachedResults;
+    // ★★★ 修正: キャッシュ結果内の重複も除去 ★★★
+    return deduplicateReferences(cachedResults, tableName);
   }
   
   // ⚡ ログ削減: デバッグ時のみ詳細ログを出力
@@ -239,7 +303,10 @@ export async function searchReferencesByTitles(
   const newReferences = searchResults.flat();
   
   // キャッシュヒット分と検索結果を結合
-  return [...cachedResults, ...newReferences];
+  const combinedResults = [...cachedResults, ...newReferences];
+  
+  // ★★★ 修正: 検索結果内の重複も除去 ★★★
+  return deduplicateReferences(combinedResults, tableName);
 }
 
 /**
@@ -297,8 +364,12 @@ export async function enhanceReferences(
     timeout
   );
   
-  // 即座に追加できる参照元（キャッシュヒット分）
-  const immediateReferences = [...existingReferences, ...immediateResults];
+  // ★★★ 修正: 重複除去を追加 ★★★
+  // 既存の参照元と新しい検索結果を結合
+  const combinedReferences = [...existingReferences, ...immediateResults];
+  
+  // 重複除去を実行
+  const immediateReferences = deduplicateReferences(combinedReferences, tableName);
   
   // バックグラウンドで検索する必要があるタイトル（キャッシュミス分）
   // 実際の実装では、このリストを返してクライアント側でバックグラウンド検索を実行

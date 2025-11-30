@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain, Shield, BarChart3, Menu } from 'lucide-react';
+import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain, Shield, BarChart3, Menu, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -408,6 +408,20 @@ export default function ChatPage({ user }: ChatPageProps) {
 
   const handleSignOut = async () => {
     await signOut();
+  };
+
+  // ストリーミング処理を停止するハンドラー
+  const handleStopStreaming = () => {
+    streamingProcessClient.stopStreaming();
+    setIsStreaming(false);
+    setIsStreamingComplete(false);
+    setCurrentStep(null);
+    setStreamingError(null);
+    // ストリーミング中の回答は保持（部分的に表示された内容を残す）
+    // 必要に応じて以下を有効化してクリア
+    // setStreamingAnswer('');
+    // setStreamingReferences([]);
+    // setStreamingAllReferences([]);
   };
 
 
@@ -1220,14 +1234,26 @@ export default function ChatPage({ user }: ChatPageProps) {
                 }}
                 disabled={isLoading || isStreaming}
               />
-              <Button 
-                type="submit" 
-                disabled={isLoading || isStreaming || !input.trim()} 
-                size="icon" 
-                className={`${isLoading || isStreaming ? 'bg-muted' : 'bg-accent hover:bg-accent/90'}`}
-              >
-                {isLoading || isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
+              {isStreaming ? (
+                <Button 
+                  type="button"
+                  onClick={handleStopStreaming}
+                  size="icon" 
+                  className="bg-red-500 hover:bg-red-600 text-white"
+                  title="処理を停止"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button 
+                  type="submit" 
+                  disabled={isLoading || !input.trim()} 
+                  size="icon" 
+                  className="bg-accent hover:bg-accent/90"
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              )}
             </form>
           </div>
         )}
