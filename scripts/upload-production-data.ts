@@ -11,6 +11,10 @@
  * - Jiraテーブル（jira_issues.lance）のアップロード（存在する場合）
  * - Lunrキャッシュ（.cache/lunr-index*.msgpack）のアップロード
  * - 古いバージョンの自動削除（オプション）
+ * 
+ * 環境変数:
+ * - UPLOAD_TABLE_FILTER: アップロードするテーブルを指定（例: "jira_issues", "confluence"）
+ *   指定しない場合、全てのテーブルをアップロード
  */
 
 import { Storage } from '@google-cloud/storage';
@@ -144,8 +148,10 @@ async function uploadTable(
 
 /**
  * Lunrキャッシュをアップロード
+ * @param bucket GCSバケット
+ * @param tableFilter テーブルフィルター（指定されている場合、該当するキャッシュのみアップロード）
  */
-async function uploadLunrCache(bucket: any): Promise<number> {
+async function uploadLunrCache(bucket: any, tableFilter?: string): Promise<number> {
   console.log(`\n📤 Lunrキャッシュをアップロード中...`);
 
   if (!fs.existsSync(LOCAL_CACHE_PATH)) {
@@ -154,12 +160,30 @@ async function uploadLunrCache(bucket: any): Promise<number> {
   }
 
   // Lunrインデックスファイルを検索
-  const cacheFiles = fs.readdirSync(LOCAL_CACHE_PATH).filter(file => 
+  let cacheFiles = fs.readdirSync(LOCAL_CACHE_PATH).filter(file => 
     file.startsWith('lunr-index') && (file.endsWith('.msgpack') || file.endsWith('.json'))
   );
 
+  // テーブルフィルターが指定されている場合、該当するキャッシュのみをフィルター
+  if (tableFilter) {
+    const originalCount = cacheFiles.length;
+    if (tableFilter === 'jira_issues') {
+      cacheFiles = cacheFiles.filter(file => file.includes('jira_issues'));
+      console.log(`   🔍 テーブルフィルター適用: "jira_issues"`);
+      console.log(`   ${originalCount}個 → ${cacheFiles.length}個のキャッシュファイル`);
+    } else if (tableFilter === 'confluence') {
+      cacheFiles = cacheFiles.filter(file => file.includes('confluence') || !file.includes('jira_issues'));
+      console.log(`   🔍 テーブルフィルター適用: "confluence"`);
+      console.log(`   ${originalCount}個 → ${cacheFiles.length}個のキャッシュファイル`);
+    }
+    console.log('');
+  }
+
   if (cacheFiles.length === 0) {
     console.log(`   ⚠️  Lunrキャッシュファイルが見つかりません`);
+    if (tableFilter) {
+      console.log(`   （テーブルフィルター "${tableFilter}" に一致するキャッシュが存在しない可能性があります）`);
+    }
     return 0;
   }
 
@@ -245,6 +269,21 @@ async function uploadProductionData(): Promise<void> {
       tableNames.forEach(name => console.log(`      - ${name}`));
     }
 
+    // テーブルフィルター（環境変数で指定可能）
+    const tableFilter = process.env.UPLOAD_TABLE_FILTER;
+    if (tableFilter) {
+      const originalCount = tableNames.length;
+      tableNames = tableNames.filter(name => name === tableFilter);
+      console.log(`\n🔍 テーブルフィルター適用: "${tableFilter}"`);
+      console.log(`   ${originalCount}個 → ${tableNames.length}個のテーブル`);
+      if (tableNames.length === 0) {
+        console.log(`   ⚠️  フィルターに一致するテーブルが見つかりませんでした`);
+      } else {
+        tableNames.forEach(name => console.log(`      - ${name}`));
+      }
+      console.log('');
+    }
+
     // テーブルが見つからない場合（差分がない場合など）は警告として処理
     let totalUploaded = 0;
     if (tableNames.length === 0) {
@@ -260,8 +299,9 @@ async function uploadProductionData(): Promise<void> {
       }
     }
 
-    // Lunrキャッシュをアップロード
-    const cacheCount = await uploadLunrCache(bucket);
+    // Lunrキャッシュをアップロード（テーブルフィルターが指定されている場合は該当キャッシュのみ）
+    const tableFilter = process.env.UPLOAD_TABLE_FILTER;
+    const cacheCount = await uploadLunrCache(bucket, tableFilter);
 
     // サマリー
     console.log('\n' + '='.repeat(80));

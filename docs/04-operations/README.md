@@ -44,6 +44,13 @@ npm run sync:confluence:differential
 npm run sync:confluence:diff-no-delete
 ```
 
+#### 19. 完全再構築スクリプト運用ガイド
+**ファイル**: [`19-full-rebuild-scripts-guide.md`](./04.19-full-rebuild-scripts-guide.md)  
+**目的**: データ同期・インデックス作成・GCSアップロードの確実な実行  
+**内容**: 完全再構築スクリプトの使用方法、ConfluenceとJiraの完全再構築手順、トラブルシューティング  
+**重要度**: ⭐⭐⭐  
+**⚠️ 重要**: データ同期、インデックス作成、GCSアップロードを行う場合は、**必ず完全再構築スクリプトを使用してください**。
+
 #### 04. バックアップ管理
 **ファイル**: [`04-backup-management-guide.md`](./04-backup-management-guide.md)  
 **目的**: データバックアップと復元  

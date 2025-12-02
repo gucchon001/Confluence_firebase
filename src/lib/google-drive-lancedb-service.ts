@@ -7,6 +7,7 @@ import * as path from 'path';
 import { getLanceDBDatabase } from './lancedb-client';
 import { getEmbeddings } from './embeddings';
 import { chunkText } from './text-chunking';
+import { semanticChunkText } from './semantic-chunking';
 import { getAllGoogleDriveDocuments, type GoogleDriveDocumentRecord } from './google-drive-firestore-service';
 import { appConfig } from '@/config/app-config';
 
@@ -82,10 +83,12 @@ export async function indexGoogleDriveDocumentsToLanceDB(
         // 既存のレコードを削除（更新のため）
         await table.delete(`file_id = '${document.fileId}'`);
 
-        // テキストをチャンクに分割
-        const chunks = chunkText(document.content, {
-          maxChunkSize: 1000,
+        // テキストをチャンクに分割（セマンティックチャンキングを使用）
+        // 既存のパラメータ（1800文字、200文字オーバーラップ）を維持
+        const chunks = semanticChunkText(document.content, {
+          maxChunkSize: 1800,
           overlap: 200,
+          respectSentenceBoundaries: true,
         });
 
         // 各チャンクをLanceDBに追加

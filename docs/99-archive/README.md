@@ -153,6 +153,21 @@ Operations関連のアーカイブドキュメント
 - `latest-bucket-status.md` - バケット状態の最新情報（2025-10-19、古い状態情報）
 - `cloud-storage-region-analysis.md` - Cloud Storageリージョン分析（2025-10-19、分析完了）
 
+### 🧪 Testing関連アーカイブ (`05-testing/`)
+
+Testing関連のアーカイブドキュメント
+
+#### 完全再構築スクリプト関連（古い情報）
+**アーカイブ日**: 2025-01-28  
+**理由**: 完全再構築スクリプトが実装されたため、古い情報を含むドキュメント
+
+以下のドキュメントは古い情報を含むため、アーカイブに移動されました：
+- `05.104-confluence-jira-sync-complete-status.md` - Confluence完全再構築スクリプトが「ない」と記載されていた古い情報
+- `05.108-full-rebuild-scripts-verification.md` - `rebuild:lunr`について記載されていた古い情報
+- `05.109-full-rebuild-scripts-action-items.md` - アクション項目（一部解決済み）
+
+**最新情報**: [完全再構築スクリプト運用ガイド](../04-operations/04.19-full-rebuild-scripts-guide.md) を参照してください。
+
 ---
 
 ### 🎯 完了した計画書（2025-10-15追加）

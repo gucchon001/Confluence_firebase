@@ -6,9 +6,9 @@ import * as z from 'zod';
 import { searchLanceDB } from '@/lib/lancedb-search-client';
 import * as admin from 'firebase-admin';
 import { getStructuredLabels } from '@/lib/structured-label-service-admin';
-import { lancedbClient } from '@/lib/lancedb-client';
+import { lancedbClient, LanceDBClient } from '@/lib/lancedb-client';
 import { getLanceDBCache } from '@/lib/lancedb-cache';
-import { getAllChunksByPageId as getAllChunksByPageIdUtil } from '@/lib/lancedb-utils';
+import { getAllChunksByPageId as getAllChunksByPageIdUtil, getAllChunksByIssueKey as getAllChunksByIssueKeyUtil } from '@/lib/lancedb-utils';
 import { removeBOM } from '@/lib/bom-utils';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -590,18 +590,9 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
           };
         }
         
-        // Jiraレコードの場合はチャンク統合をスキップ（Jiraはチャンク分割されていない）
-        if (isJiraRecord) {
-          return {
-            ...result,
-            content: removeBOM(result.content || ''),
-            title: removeBOM(result.title || ''),
-          };
-        }
-
         // Phase 0A-3最適化: isChunkedフラグによる条件分岐
         if (result.isChunked === false) {
-          // チャンク分割されていないページ → 統合不要（66.3%）
+          // チャンク分割されていないページ/Issue → 統合不要
           // ただし、本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
           skippedCount++;
           return {
@@ -611,9 +602,31 @@ export async function enrichWithAllChunks(results: any[]): Promise<any[]> {
           };
         }
 
-        // ★★★ PERF LOG: 個別ページのチャンク取得時間 ★★★
+        // ★★★ PERF LOG: 個別ページ/Issueのチャンク取得時間 ★★★
         const chunkFetchStart = Date.now();
-        const allChunks = await getAllChunksByPageId(String(pageId));
+        let allChunks: any[];
+        
+        if (isJiraRecord) {
+          // Jiraレコードの場合: issue_keyで全チャンクを取得
+          const issueKey = result.issue_key || (result as any).issueKey;
+          if (!issueKey) {
+            console.error(`[ChunkMerger] ❌ issue_key not found for Jira result: ${result.title}. Skipping chunk enrichment.`);
+            return {
+              ...result,
+              content: removeBOM(result.content || ''),
+              title: removeBOM(result.title || ''),
+            };
+          }
+          
+          // Jiraテーブルを取得（tableName='jira_issues'で別のインスタンスを使用）
+          const jiraClient = LanceDBClient.getInstance({ tableName: 'jira_issues' });
+          const jiraConnection = await jiraClient.getConnection();
+          allChunks = await getAllChunksByIssueKeyUtil(jiraConnection.table, String(issueKey));
+        } else {
+          // Confluenceレコードの場合: pageIdで全チャンクを取得
+          allChunks = await getAllChunksByPageId(String(pageId));
+        }
+        
         const chunkFetchDuration = Date.now() - chunkFetchStart;
         
         if (chunkFetchDuration > 1000) {

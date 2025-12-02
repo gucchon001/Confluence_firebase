@@ -123,4 +123,53 @@ export async function getAllChunksByPageId(tbl: any, pageId: string): Promise<an
   }
 }
 
+/**
+ * Issue Keyで全チャンクを取得（Jira用）
+ * @param tbl LanceDBテーブル
+ * @param issueKey Issue Key（string型: "CTJ-1234"）
+ * @returns チャンク配列（chunkIndexでソート済み）
+ */
+export async function getAllChunksByIssueKey(tbl: any, issueKey: string): Promise<any[]> {
+  try {
+    if (!issueKey || issueKey === 'undefined') {
+      console.error(`[getAllChunksByIssueKey] Invalid issueKey: ${issueKey}`);
+      return [];
+    }
+
+    // issue_keyで完全一致検索
+    // issue_keyは文字列型のため、クォートで囲む
+    const escapedIssueKey = issueKey.replace(/'/g, "''");
+    const results = await tbl
+      .query()
+      .where(`\`issue_key\` = '${escapedIssueKey}'`)
+      .limit(1000)
+      .toArray();
+    
+    if (results.length > 0) {
+      // chunkIndexでソート
+      results.sort((a: any, b: any) => {
+        const aIndex = a.chunkIndex || 0;
+        const bIndex = b.chunkIndex || 0;
+        return aIndex - bIndex;
+      });
+      
+      // 本番環境でLanceDBから取得したデータにBOMが含まれている場合に備える
+      // チャンクのコンテンツとタイトルにBOM除去を適用
+      const cleanedResults = results.map((chunk: any) => ({
+        ...chunk,
+        content: removeBOM(chunk.content || ''),
+        title: removeBOM(chunk.title || ''),
+      }));
+      
+      return cleanedResults;
+    }
+    
+    // 見つからない場合は空配列を返す
+    return [];
+  } catch (error) {
+    console.error(`[getAllChunksByIssueKey] Error fetching chunks for issueKey ${issueKey}:`, error instanceof Error ? error.message : String(error));
+    return [];
+  }
+}
+
 

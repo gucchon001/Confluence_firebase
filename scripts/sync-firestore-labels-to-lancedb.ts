@@ -135,6 +135,11 @@ async function main() {
       }
       
       // 既存レコードとマージ
+      // スキーマ互換性: spaceKey (古い) または space_key (新しい) のどちらかから取得
+      const spaceKeyValue = (record as any).space_key || (record as any).spaceKey || '';
+      // URLフィールドも同様に互換性を確保
+      const urlValue = (record as any).url || '';
+      
       return {
         id: record.id,
         page_id: numericPageId,
@@ -145,7 +150,8 @@ async function main() {
         chunkIndex: record.chunkIndex || 0,
         totalChunks: record.totalChunks || 1,
         labels: cleanLabels,
-        spaceKey: record.spaceKey || '',
+        space_key: spaceKeyValue, // 新しいスキーマに統一
+        url: urlValue, // URLフィールドを追加
         lastUpdated: record.lastUpdated || '',
         ...flatLabel,
       } as ExtendedLanceDBRecord;

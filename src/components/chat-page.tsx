@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain, Shield, BarChart3, Menu, X } from 'lucide-react';
+import { Bot, Send, User as UserIcon, LogOut, Loader2, FileText, Link as LinkIcon, AlertCircle, Plus, MessageSquare, Settings, ChevronDown, Clock, Search, Brain, Shield, BarChart3, Menu, X, Copy, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -67,20 +67,57 @@ import {
   getDataSourceName
 } from '@/lib/environment-utils';
 
-const MessageCard = ({ msg }: { msg: Message }) => {
+const MessageCard = ({ msg, onCopy }: { msg: Message; onCopy?: (text: string) => void }) => {
     const isAssistant = msg.role === 'assistant';
     const env = getEnvironmentFromSources(msg.sources);
     const dataSource = getDataSourceFromSources(msg.sources);
+    const [isCopied, setIsCopied] = React.useState(false);
+    const [showCopyButton, setShowCopyButton] = React.useState(false);
+    
+    // メッセージ内容をプレーンテキストに変換
+    const getPlainText = () => {
+      return stripMarkdown(msg.content);
+    };
+    
+    // コピー処理
+    const handleCopy = async (e?: React.MouseEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      
+      const plainText = getPlainText();
+      try {
+        await navigator.clipboard.writeText(plainText);
+        setIsCopied(true);
+        if (onCopy) {
+          onCopy(plainText);
+        }
+        setTimeout(() => setIsCopied(false), 2000);
+      } catch (error) {
+        console.error('Failed to copy text:', error);
+      }
+    };
+    
+    // 右クリックでコピー
+    const handleContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      handleCopy(e);
+    };
     
     return (
-      <div className={`flex items-start gap-4 ${isAssistant ? '' : 'justify-end'} max-w-full`}>
+      <div 
+        className={`flex items-start gap-4 ${isAssistant ? '' : 'justify-end'} max-w-full group`}
+        onMouseEnter={() => setShowCopyButton(true)}
+        onMouseLeave={() => setShowCopyButton(false)}
+      >
         {isAssistant && (
           <Avatar className="h-8 w-8 border shrink-0">
             <AvatarFallback><Bot className="h-4 w-4" /></AvatarFallback>
           </Avatar>
         )}
-        <div className={`flex flex-col gap-2 ${isAssistant ? 'items-start' : 'items-end'} max-w-[85%] sm:max-w-[75%]`}>
-            <Card className={`w-full ${isAssistant ? 'bg-white' : 'bg-primary text-primary-foreground'}`}>
+        <div className={`flex flex-col gap-2 ${isAssistant ? 'items-start' : 'items-end'} max-w-[85%] sm:max-w-[75%] relative`}>
+            <Card 
+              className={`w-full ${isAssistant ? 'bg-white' : 'bg-primary text-primary-foreground'} relative`}
+            >
             {/* 環境とデータソースのバッジ（アシスタントメッセージのみ） */}
             {isAssistant && (
               <CardHeader className="pb-2 pt-4">
@@ -94,19 +131,50 @@ const MessageCard = ({ msg }: { msg: Message }) => {
                 </div>
               </CardHeader>
             )}
-            <CardContent className={`p-4 text-sm break-words ${isAssistant ? 'prose prose-sm max-w-none' : ''}`}>
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={createSharedMarkdownComponents(msg.sources || []) as any}
+            <CardContent className={`p-4 text-sm break-words ${isAssistant ? 'prose prose-sm max-w-none' : ''} relative`}>
+                {/* コピーボタン（ホバー時表示） */}
+                {showCopyButton && (
+                  <div className={`absolute ${isAssistant ? 'top-2 right-2' : 'top-2 left-2'} z-10`}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 bg-white/90 hover:bg-white shadow-sm"
+                      onClick={handleCopy}
+                      title={isCopied ? 'コピーしました' : 'クリックまたは右クリックでコピー'}
+                    >
+                      {isCopied ? (
+                        <Check className="h-3.5 w-3.5 text-green-600" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5 text-gray-600" />
+                      )}
+                    </Button>
+                  </div>
+                )}
+                <div 
+                  onClick={(e) => {
+                    // リンクやボタンがクリックされた場合はコピーしない
+                    const target = e.target as HTMLElement;
+                    if (target.tagName === 'A' || target.tagName === 'BUTTON' || target.closest('a') || target.closest('button')) {
+                      return;
+                    }
+                    handleCopy(e);
+                  }}
+                  onContextMenu={handleContextMenu}
+                  style={{ cursor: 'pointer' }}
                 >
-                  {formatMessageContent(
-                    msg.content, 
-                    (msg as any)._allReferences && (msg as any)._allReferences.length > 0 
-                      ? (msg as any)._allReferences 
-                      : (msg.sources || []), 
-                    isAssistant
-                  )}
-                </ReactMarkdown>
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={createSharedMarkdownComponents(msg.sources || []) as any}
+                  >
+                    {formatMessageContent(
+                      msg.content, 
+                      (msg as any)._allReferences && (msg as any)._allReferences.length > 0 
+                        ? (msg as any)._allReferences 
+                        : (msg.sources || []), 
+                      isAssistant
+                    )}
+                  </ReactMarkdown>
+                </div>
             </CardContent>
             {isAssistant && msg.sources && msg.sources.length > 0 && (
                 <CardFooter className="border-t p-4">
@@ -966,7 +1034,12 @@ export default function ChatPage({ user }: ChatPageProps) {
                     
                     return (
                       <div key={`message-${msg.id || index}`}>
-                        <MessageCard msg={msg} />
+                        <MessageCard 
+                          msg={msg} 
+                          onCopy={(text) => {
+                            showSuccessToast('コピーしました', 'メッセージをクリップボードにコピーしました');
+                          }}
+                        />
                         {/* 最後のアシスタントメッセージの後に評価フィードバックを表示 */}
                         {shouldShowFeedback && postLogIdForFeedback && (
                           <div className="ml-12 mt-4">

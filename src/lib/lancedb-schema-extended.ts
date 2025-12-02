@@ -91,7 +91,8 @@ export const EXTENDED_LANCEDB_SCHEMA = new arrow.Schema([
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // メタデータ
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  new arrow.Field('spaceKey', new arrow.Utf8(), false),                    // スペースキー
+  new arrow.Field('space_key', new arrow.Utf8(), false),                   // スペースキー（スネークケースで統一）
+  new arrow.Field('url', new arrow.Utf8(), false),                        // ページURL
   new arrow.Field('lastUpdated', new arrow.Utf8(), false),                 // 最終更新日時
 ]);
 
@@ -130,7 +131,8 @@ export interface ExtendedLanceDBRecord {
   structured_is_valid?: boolean;
   
   // メタデータ
-  spaceKey: string;
+  space_key: string;  // スネークケースで統一（ドキュメントと一致）
+  url: string;        // ページURL
   lastUpdated: string;
 }
 

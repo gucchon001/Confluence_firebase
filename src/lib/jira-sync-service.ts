@@ -8,6 +8,8 @@ import fetch from 'node-fetch';
 import { initializeFirebaseAdmin } from './firebase-admin-init';
 import { getEmbeddings } from './embeddings';
 import { appConfig } from '@/config/app-config';
+import { chunkText } from './text-chunking';
+import { semanticChunkText } from './semantic-chunking';
 
 initializeFirebaseAdmin();
 
@@ -119,7 +121,7 @@ interface JiraSearchQueryResult {
 // LanceDBのcreateTableは Record<string, unknown>[] を期待しているため、
 // 型定義を Record<string, unknown> に互換性を持たせる
 type LanceDbRecord = Record<string, unknown> & {
-  id: string; // issue_keyをidとして使用
+  id: string; // issue_keyをidとして使用（チャンク分割なし）または issue_key-chunkIndex（チャンク分割あり）
   issue_key: string;
   title: string;
   content: string;
@@ -148,6 +150,10 @@ type LanceDbRecord = Record<string, unknown> & {
   impact_domain: string; // 影響業務 (customfield_10291)
   impact_level: string; // 業務影響度 (customfield_10292)
   url: string;
+  // チャンク分割関連フィールド
+  isChunked?: boolean; // チャンク分割されているかどうか
+  chunkIndex?: number; // チャンクのインデックス（0, 1, 2, ...）
+  totalChunks?: number; // 総チャンク数
 }
 
 interface JiraSearchBatchResponse {
@@ -166,6 +172,13 @@ export class JiraSyncService {
   private readonly projectKey: string;
   private readonly pageSize = 100;
   private readonly maxIssues: number;
+  
+  // レート制限対策: リクエスト間隔（ミリ秒）
+  // 環境変数で調整可能（デフォルト: 100ms = 10 req/sec）
+  private readonly REQUEST_DELAY_MS = process.env.JIRA_REQUEST_DELAY_MS 
+    ? parseInt(process.env.JIRA_REQUEST_DELAY_MS, 10) 
+    : 100;
+  private lastRequestTime: number = 0;
 
   constructor(maxIssues?: number) {
     // 統合設定ファイルからJira設定を取得（型安全で検証済み）
@@ -330,7 +343,9 @@ export class JiraSyncService {
               syncedAt: admin.firestore.FieldValue.serverTimestamp(),
               url: this.buildIssueUrl(normalized.key)
             }, { merge: true });
-            lanceDbRecords.push(this.toLanceDbRecord(normalized));
+            // チャンク分割対応: 複数のレコードを返す可能性がある
+            const records = this.toLanceDbRecords(normalized);
+            lanceDbRecords.push(...records);
             
             if (changeType === 'added') {
               console.log(`➕ 新規追加: ${normalized.key} - ${normalized.summary.substring(0, 50)}`);
@@ -342,7 +357,9 @@ export class JiraSyncService {
             }
           } else if (needsLanceDbBootstrap) {
             // LanceDBテーブルが空の場合は、既存データも再投入する
-            lanceDbRecords.push(this.toLanceDbRecord(normalized));
+            // チャンク分割対応: 複数のレコードを返す可能性がある
+            const records = this.toLanceDbRecords(normalized);
+            lanceDbRecords.push(...records);
           } else {
             // 変更なし & LanceDBも最新の場合は何もしない
           }
@@ -567,7 +584,11 @@ export class JiraSyncService {
     }, { merge: true });
   }
 
-  private toLanceDbRecord(issue: ReturnType<typeof this.normalizeIssue>): LanceDbRecord {
+  /**
+   * IssueをLanceDBレコード（複数）に変換（チャンク分割対応）
+   * contentフィールドが3000文字以上の場合はチャンク分割される
+   */
+  private toLanceDbRecords(issue: ReturnType<typeof this.normalizeIssue>): Array<LanceDbRecord & { _vectorText: string }> {
     const metadata = [
       `ステータス: ${issue.status}`,
       `カテゴリ: ${issue.statusCategory}`,
@@ -616,15 +637,16 @@ export class JiraSyncService {
       sections.push('', `変更履歴:\n${changelogText}`);
     }
 
-    // ベクトル生成用のテキスト（タイトル + コンテンツ）
-    const vectorText = `${issue.summary}\n${sections.join('\n')}`;
+    // contentフィールドを構築
+    const content = sections.join('\n');
     
-    return {
-      id: issue.key, // issue_keyをidとして使用
+    // ベクトル生成用のテキスト（タイトル + コンテンツ）
+    const vectorText = `${issue.summary}\n${content}`;
+
+    // 共通フィールドを定義
+    const commonFields = {
       issue_key: issue.key,
       title: issue.summary,
-      content: sections.join('\n'),
-      vector: [], // 後で生成（writeLanceDbRecordsで）
       status: issue.status,
       status_category: issue.statusCategory,
       priority: issue.priority,
@@ -649,8 +671,71 @@ export class JiraSyncService {
       impact_domain: issue.impactDomain,
       impact_level: issue.impactLevel,
       url: this.buildIssueUrl(issue.key),
-      _vectorText: vectorText // ベクトル生成用テキスト（一時的なフィールド）
-    } as LanceDbRecord & { _vectorText: string };
+      vector: [] as number[], // 後で生成（writeLanceDbRecordsで）
+    };
+
+    // チャンク分割の閾値チェック（3000文字以上）
+    const CHUNK_THRESHOLD = 3000;
+    const shouldChunk = content.length >= CHUNK_THRESHOLD;
+
+    if (!shouldChunk) {
+      // チャンク分割なし（既存の実装）
+      return [{
+        ...commonFields,
+        id: issue.key, // issue_keyをidとして使用
+        content,
+        _vectorText: vectorText
+      } as LanceDbRecord & { _vectorText: string }];
+    }
+
+    // チャンク分割が必要な場合（セマンティックチャンキングを使用）
+    // 既存のパラメータ（1800文字、200文字オーバーラップ）を維持
+    const chunks = semanticChunkText(content, {
+      maxChunkSize: 1800,
+      overlap: 200,
+      respectSentenceBoundaries: true,
+    });
+
+    if (chunks.length === 0) {
+      // チャンクが生成されなかった場合（通常は発生しない）
+      return [{
+        ...commonFields,
+        id: issue.key,
+        content,
+        isChunked: false,
+        _vectorText: vectorText
+      } as LanceDbRecord & { _vectorText: string }];
+    }
+
+    // 各チャンクをレコードに変換
+    const records: Array<LanceDbRecord & { _vectorText: string }> = chunks.map((chunk, index) => {
+      // 各チャンクにタイトルを含める（Confluenceと同様）
+      const chunkVectorText = chunks.length > 1 
+        ? `${issue.summary}\n\n${issue.summary}\n\n${issue.summary}\n\n${chunk.text}`
+        : vectorText;
+
+      return {
+        ...commonFields,
+        id: chunks.length > 1 ? `${issue.key}-${index}` : issue.key,
+        content: chunk.text,
+        isChunked: chunks.length > 1,
+        chunkIndex: chunks.length > 1 ? index : undefined,
+        totalChunks: chunks.length > 1 ? chunks.length : undefined,
+        _vectorText: chunkVectorText
+      } as LanceDbRecord & { _vectorText: string };
+    });
+
+    return records;
+  }
+
+  /**
+   * IssueをLanceDBレコード（単一）に変換（後方互換性のため残す）
+   * @deprecated チャンク分割対応のため、toLanceDbRecordsを使用してください
+   */
+  private toLanceDbRecord(issue: ReturnType<typeof this.normalizeIssue>): LanceDbRecord {
+    const records = this.toLanceDbRecords(issue);
+    // 最初のレコードを返す（チャンク分割されている場合は最初のチャンク）
+    return records[0];
   }
 
   private async isJiraLanceDbEmpty(): Promise<boolean> {
@@ -670,6 +755,29 @@ export class JiraSyncService {
       const rowCount = await table.countRows();
       if (rowCount === 0) {
         console.log('🛈 LanceDB jira_issuesテーブルが空のため、全件再構築を行います');
+        return true;
+      }
+      
+      // チャンク分割フィールド（isChunked）の存在確認
+      // 1件のレコードを取得して、isChunkedフィールドが存在するかチェック
+      try {
+        const sampleRecords = await table
+          .query()
+          .limit(1)
+          .toArray();
+        
+        if (sampleRecords.length > 0) {
+          const sampleRecord = sampleRecords[0];
+          // isChunkedフィールドが存在しない場合（undefined）、チャンク分割対応前のテーブル
+          if (sampleRecord.isChunked === undefined) {
+            console.log('🛈 LanceDB jira_issuesテーブルにチャンク分割フィールド（isChunked）が存在しないため、全件再構築を行います');
+            console.log('   チャンク分割機能を適用するため、テーブルを再構築します');
+            return true;
+          }
+        }
+      } catch (schemaCheckError) {
+        // スキーマチェックでエラーが発生した場合、安全のため再構築
+        console.warn('⚠️ テーブルスキーマの確認に失敗しました。安全のため全件再構築にフォールバックします:', schemaCheckError);
         return true;
       }
       
@@ -724,7 +832,11 @@ export class JiraSyncService {
           impact_level: '',
           dev_validation: '',
           prod_validation: '',
-          url: ''
+          url: '',
+          // チャンク分割関連フィールド
+          isChunked: false,
+          chunkIndex: undefined,
+          totalChunks: undefined
         }]);
         await table.delete('id = "dummy"');
       }
@@ -824,13 +936,20 @@ export class JiraSyncService {
       for (let i = 0; i < recordsWithVectors.length; i += UPSERT_BATCH_SIZE) {
         const batch = recordsWithVectors.slice(i, i + UPSERT_BATCH_SIZE);
         
-        // 既存レコードを削除（同一IDを持つもののみ）
+        // 既存レコードを削除
+        // チャンク分割されたレコードの場合、同じissue_keyのすべてのチャンクを削除
+        const uniqueIssueKeys = new Set<string>();
         for (const record of batch) {
-          const escapedId = record.id.replace(/'/g, "''");
+          uniqueIssueKeys.add(record.issue_key as string);
+        }
+        
+        for (const issueKey of uniqueIssueKeys) {
+          const escapedIssueKey = issueKey.replace(/'/g, "''");
           try {
-            await table!.delete(`"id" = '${escapedId}'`);
+            // 同じissue_keyのすべてのレコード（チャンク含む）を削除
+            await table!.delete(`"issue_key" = '${escapedIssueKey}'`);
           } catch (error) {
-            console.warn(`⚠️ 既存レコード削除に失敗しました (id=${record.id}): ${error instanceof Error ? error.message : String(error)}`);
+            console.warn(`⚠️ 既存レコード削除に失敗しました (issue_key=${issueKey}): ${error instanceof Error ? error.message : String(error)}`);
           }
         }
         
@@ -902,6 +1021,63 @@ export class JiraSyncService {
    * 特定の課題の全コメントを取得（/rest/api/3/issue/{issueKey}/commentエンドポイントを使用）
    * /rest/api/3/search/jqlではコメントが20件に制限されているため、全コメントを取得するには個別に取得する必要がある
    */
+  /**
+   * 429エラー対応: リトライロジック付きHTTPリクエスト
+   */
+  private async fetchWithRetry(
+    url: string,
+    options: RequestInit,
+    maxRetries: number = 5,
+    baseDelay: number = 1000
+  ): Promise<Response> {
+    // スロットリング: リクエスト間隔を制御
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.REQUEST_DELAY_MS) {
+      await new Promise(resolve => setTimeout(resolve, this.REQUEST_DELAY_MS - timeSinceLastRequest));
+    }
+    this.lastRequestTime = Date.now();
+
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetch(url, options);
+        
+        // 429エラーの場合、Retry-Afterヘッダーを確認して待機
+        if (res.status === 429) {
+          const retryAfterHeader = res.headers.get('Retry-After');
+          const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null;
+          
+          if (attempt < maxRetries) {
+            // Retry-Afterヘッダーがあればその値を、なければ指数バックオフを使用
+            const waitTime = retryAfter 
+              ? retryAfter * 1000 
+              : Math.min(baseDelay * Math.pow(2, attempt), 30000); // 最大30秒
+            
+            console.warn(`⚠️ レート制限検出 (429): ${waitTime}ms待機後にリトライします (試行 ${attempt + 1}/${maxRetries + 1})`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          }
+        }
+        
+        return res;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // ネットワークエラーなどの場合はリトライ
+        if (attempt < maxRetries) {
+          const waitTime = Math.min(baseDelay * Math.pow(2, attempt), 5000);
+          console.warn(`⚠️ リクエストエラー: ${waitTime}ms待機後にリトライします (試行 ${attempt + 1}/${maxRetries + 1}): ${lastError.message}`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+      }
+    }
+    
+    throw lastError || new Error('リクエストが失敗しました');
+  }
+
   private async fetchAllCommentsForIssue(issueKey: string): Promise<Array<{
     id?: string;
     author: string;
@@ -915,7 +1091,7 @@ export class JiraSyncService {
         Accept: 'application/json'
       };
 
-      const res = await fetch(commentUrl, {
+      const res = await this.fetchWithRetry(commentUrl, {
         method: 'GET',
         headers
       });
@@ -983,13 +1159,13 @@ export class JiraSyncService {
    */
   private async fetchChangelogForIssue(issueKey: string): Promise<NormalizedChangelogItem[]> {
     try {
-      const changelogUrl = `${this.baseUrl}/rest/api/3/issue/${issueKey}/changelog`;
+      const changelogUrl = `${this.baseUrl}/rest/api/3/issue/${issueKey}?expand=changelog`;
       const headers = {
         Authorization: `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`,
         Accept: 'application/json'
       };
 
-      const res = await fetch(changelogUrl, {
+      const res = await this.fetchWithRetry(changelogUrl, {
         method: 'GET',
         headers
       });
@@ -1000,8 +1176,11 @@ export class JiraSyncService {
         return [];
       }
 
-      const data = (await res.json()) as ChangelogResponse;
-      const histories = data.histories || [];
+      const data = (await res.json()) as any;
+      // expand=changelogを使用している場合、レスポンス構造が異なる
+      // /rest/api/3/issue/{issueKey}?expand=changelog の場合、changelogはルートレベルにある
+      const changelog = data.changelog || data;
+      const histories = changelog.histories || [];
 
       // 作成日時でソート（古い順）
       const sorted = histories

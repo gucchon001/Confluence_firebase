@@ -18,6 +18,7 @@ import { removeBOM } from './bom-utils';
 import { appConfig } from '@/config/app-config';
 import { GeminiApiKeyLeakedError, GeminiApiFatalError } from './gemini-api-errors';
 import { initializeFirebaseAdmin } from './firebase-admin-init';
+import { semanticChunkText } from './semantic-chunking';
 import admin from 'firebase-admin';
 import axios from 'axios';
 
@@ -67,6 +68,16 @@ export class ConfluenceSyncService {
   // 除外するラベルのリスト
   private readonly EXCLUDED_LABELS = ['アーカイブ', 'archive', 'フォルダ', 'スコープ外'];
   private readonly EXCLUDED_TITLE_PATTERNS = ['■要件定義', 'xxx_', '【削除】', '【不要】', '【統合により削除】', '【機能廃止のため作成停止】', '【他ツールへ機能切り出しのため作成停止】'];
+  
+  // スキーマ互換性キャッシュ（既存テーブルのスキーマ情報）
+  private schemaCompatibilityCache: {
+    hasSpaceKey: boolean;
+    hasSpace_key: boolean;
+    hasUrl: boolean;
+    hasIsChunked: boolean;
+    hasTotalChunks: boolean;
+    checked: boolean;
+  } | null = null;
 
   constructor() {
     this.lancedbClient = LanceDBClient.getInstance();
@@ -821,20 +832,81 @@ export class ConfluenceSyncService {
 
         // LanceDBに追加（明示的な型変換）
         // 注意: pageIdは含めない（LanceDBスキーマはpage_idのみ）
-        const finalData = {
+        // ★★★ スキーマ互換性: 既存テーブルがspaceKeyを使用している場合はspaceKeyも含める ★★★
+        const finalData: any = {
           id: lanceData.id,
           page_id: lanceData.page_id,  // データベースフィールド名はpage_id
           title: lanceData.title,
           content: lanceData.content,
           chunkIndex: lanceData.chunkIndex,
           lastUpdated: lanceData.lastUpdated,
-          space_key: lanceData.space_key,
-          url: lanceData.url,
           labels: [...lanceData.labels], // スプレッド演算子で新しい配列を作成
           vector: [...lanceData.vector], // スプレッド演算子で新しい配列を作成
           // 【新規】Firestore StructuredLabelを統合
           ...structuredLabelFlat
         };
+
+        // 既存テーブルのスキーマに合わせてspace_key/spaceKeyを設定
+        // 既存テーブルがspaceKeyを使用している場合はspaceKeyを使用、そうでなければspace_keyを使用
+        // ★★★ スキーマ互換性: キャッシュを使用してパフォーマンスを最適化 ★★★
+        if (!this.schemaCompatibilityCache || !this.schemaCompatibilityCache.checked) {
+          try {
+            const sampleRecord = await table.query().limit(1).toArray();
+            if (sampleRecord.length > 0) {
+              this.schemaCompatibilityCache = {
+                hasSpaceKey: 'spaceKey' in sampleRecord[0],
+                hasSpace_key: 'space_key' in sampleRecord[0],
+                hasUrl: 'url' in sampleRecord[0],
+                hasIsChunked: 'isChunked' in sampleRecord[0],
+                hasTotalChunks: 'totalChunks' in sampleRecord[0],
+                checked: true
+              };
+            } else {
+              // テーブルが空の場合は新しいスキーマを使用
+              this.schemaCompatibilityCache = {
+                hasSpaceKey: false,
+                hasSpace_key: true,
+                hasUrl: true,
+                hasIsChunked: true,
+                hasTotalChunks: true,
+                checked: true
+              };
+            }
+          } catch (schemaCheckError) {
+            // スキーマチェックでエラーが発生した場合、新しいスキーマを使用
+            console.warn('⚠️ スキーマチェックに失敗しました。新しいスキーマを使用します:', schemaCheckError);
+            this.schemaCompatibilityCache = {
+              hasSpaceKey: false,
+              hasSpace_key: true,
+              hasUrl: true,
+              hasIsChunked: true,
+              hasTotalChunks: true,
+              checked: true
+            };
+          }
+        }
+        
+        // キャッシュされたスキーマ情報を使用してデータを設定
+        if (this.schemaCompatibilityCache.hasSpaceKey && !this.schemaCompatibilityCache.hasSpace_key) {
+          // 既存テーブルがspaceKeyを使用している場合
+          finalData.spaceKey = lanceData.space_key;
+        } else {
+          // 新しいスキーマ（space_keyを使用）
+          finalData.space_key = lanceData.space_key;
+        }
+        
+        // urlフィールドの処理
+        if (this.schemaCompatibilityCache.hasUrl) {
+          finalData.url = lanceData.url;
+        }
+        
+        // isChunkedとtotalChunksの処理
+        if (this.schemaCompatibilityCache.hasIsChunked) {
+          finalData.isChunked = chunks.length > 1;
+        }
+        if (this.schemaCompatibilityCache.hasTotalChunks) {
+          finalData.totalChunks = chunks.length;
+        }
         
         // 本番環境では詳細ログを抑制（パフォーマンス最適化）
         if (process.env.NODE_ENV !== 'production') {
@@ -948,7 +1020,10 @@ export class ConfluenceSyncService {
   }
 
   /**
-   * ページをチャンクに分割（1800文字程度でセット管理）
+   * ページをチャンクに分割（セマンティックチャンキングを使用）
+   * 
+   * 既存の実装パターンを維持しつつ、文の境界を考慮したセマンティックチャンキングを使用
+   * メタデータ構造（ConfluenceChunk）は既存のまま維持（保守性を確保）
    */
   private splitPageIntoChunks(page: ConfluencePage): ConfluenceChunk[] {
     // HTMLタグを除去してクリーンなテキストを取得
@@ -958,30 +1033,28 @@ export class ConfluenceSyncService {
     const lastUpdated = page.lastModified || new Date().toISOString();
     const spaceKey = page.spaceKey || 'N/A';
 
-    // 1800文字程度でチャンク分割（セット管理対応）
-    const chunkSize = 1800;
-    const chunks: ConfluenceChunk[] = [];
-    let currentText = cleanContent;
+    // セマンティックチャンキングを使用（文の境界を考慮）
+    // 既存のパラメータ（1800文字、200文字オーバーラップ）を維持
+    const semanticChunks = semanticChunkText(cleanContent, {
+      maxChunkSize: 1800,
+      overlap: 200,
+      respectSentenceBoundaries: true,
+    });
 
-    // テキストを1800文字程度で分割
-    for (let i = 0; i < currentText.length; i += chunkSize) {
-      const chunk = currentText.substring(i, i + chunkSize).trim();
-      
-      // 有効なチャンクのみを追加
-      if (chunk && this.isValidChunk(chunk)) {
-        chunks.push({
-          pageId: parseInt(pageId), // stringからnumberに変換
-          title: cleanTitle,
-          content: chunk,
-          chunkIndex: Math.floor(i / chunkSize), // 枝番（0, 1, 2, ...）
-          lastUpdated,
-          spaceKey,
-          embedding: [] // 後で埋め込みを生成
-        });
-      }
-    }
+    // ConfluenceChunk形式に変換（既存のメタデータ構造を維持）
+    const chunks: ConfluenceChunk[] = semanticChunks
+      .filter(chunk => chunk.text && this.isValidChunk(chunk.text))
+      .map((chunk, index) => ({
+        pageId: parseInt(pageId), // stringからnumberに変換
+        title: cleanTitle,
+        content: chunk.text,
+        chunkIndex: index, // チャンク番号（0, 1, 2, ...）
+        lastUpdated,
+        spaceKey,
+        embedding: [] // 後で埋め込みを生成
+      }));
 
-    // コンテンツがない場合はタイトルを1チャンクとして追加
+    // コンテンツがない場合はタイトルを1チャンクとして追加（既存の動作を維持）
     if (chunks.length === 0) {
       chunks.push({
         pageId: parseInt(pageId), // stringからnumberに変換
